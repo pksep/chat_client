@@ -23,10 +23,9 @@ import {
   getFullMessagesByTopicId,
   getMessagesByTopicId,
   getPinnedMessagesByTopicId,
-  prefetchAroundMessageContext,
   unpinLocalMessageForMe
 } from '../../services/useMessages';
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { togglePinMessageChat } from '../../services/useChat';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import PinnedMessageBanner from './PinnedMessageBanner.vue';
@@ -109,8 +108,6 @@ const pinnedPreviewKey = computed(
 );
 
 const unpinModalOpen = ref(false);
-const prefetchedPinnedContextKeys = new Set<string>();
-let pinnedContextPrefetchTimerId: ReturnType<typeof setTimeout> | null = null;
 
 const emits = defineEmits(['unmount-set-selected-message']);
 
@@ -169,41 +166,4 @@ const handleConfirmUnpinMessage = async () => {
 
   handleCloseUnpinModal();
 };
-
-watch(
-  () => ({
-    topicId: activeTopicId.value,
-    messageId: currentPinnedMessage.value?.id || ''
-  }),
-  ({ topicId, messageId }) => {
-    if (pinnedContextPrefetchTimerId) {
-      clearTimeout(pinnedContextPrefetchTimerId);
-      pinnedContextPrefetchTimerId = null;
-    }
-
-    if (!topicId || !messageId) {
-      return;
-    }
-
-    const prefetchKey = `${topicId}:${messageId}`;
-
-    if (prefetchedPinnedContextKeys.has(prefetchKey)) {
-      return;
-    }
-
-    pinnedContextPrefetchTimerId = setTimeout(() => {
-      pinnedContextPrefetchTimerId = null;
-      prefetchedPinnedContextKeys.add(prefetchKey);
-      void prefetchAroundMessageContext(messageId, topicId);
-    }, 250);
-  },
-  { immediate: true }
-);
-
-onBeforeUnmount(() => {
-  if (pinnedContextPrefetchTimerId) {
-    clearTimeout(pinnedContextPrefetchTimerId);
-    pinnedContextPrefetchTimerId = null;
-  }
-});
 </script>

@@ -209,7 +209,7 @@ export const savePersistentCustomImage = async (
   return await savePersistentCustomImageRecord(config, item);
 };
 
-const savePersistentCustomImageRecord = async (
+export const savePersistentCustomImageRecord = async (
   config: NativeImageStoreConfig,
   item: StoredPersistentCustomImage
 ): Promise<StoredPersistentCustomImage> => {

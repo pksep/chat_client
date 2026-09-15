@@ -11,6 +11,9 @@ import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
 import basicSsl from '@vitejs/plugin-basic-ssl';
 import { version } from './package.json';
+import { externalizeUiKitPdfWorker } from './scripts/externalize-ui-kit-pdf-worker';
+import { preloadStartupModules } from './scripts/preload-startup-modules';
+import { inlineStartupTheme } from './scripts/inline-startup-theme';
 
 const BUILD_OUT_DIR = 'build';
 const PUBLIC_BUILD_ENTRIES = new Set([
@@ -121,6 +124,8 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
   }) as PluginOption;
 
   const appPlugins: PluginOption[] = [
+    inlineStartupTheme(),
+    preloadStartupModules(),
     VitePWA({
       injectRegister: false,
       registerType: 'autoUpdate',
@@ -130,6 +135,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         clientsClaim: true,
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         globIgnores: [
+          '**/assets/pdf-worker-*.js',
           '**/assets/ui-kit-*.js',
           '**/assets/ai-*.js',
           '**/assets/AI*.js',
@@ -148,6 +154,15 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
           '**/video/**'
         ],
         runtimeCaching: [
+          {
+            urlPattern: /\/assets\/pdf-worker-[^/]+\.js$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'pdf-worker',
+              cacheableResponse: { statuses: [200] },
+              expiration: { maxEntries: 2, maxAgeSeconds: 60 * 60 * 24 * 30 }
+            }
+          },
           {
             urlPattern: /\/emoji\/noto\/fonts\/.*\.(?:ttf|woff2?)$/i,
             handler: 'CacheFirst',
@@ -219,22 +234,22 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         background_color: '#ffffff',
         icons: [
           {
-            src: 'images/pwa-64x64.png?v=20260904-2',
+            src: 'images/pwa-64x64.png?v=20260909-dark',
             sizes: '64x64',
             type: 'image/png'
           },
           {
-            src: 'images/pwa-192x192.png?v=20260904-2',
+            src: 'images/pwa-192x192.png?v=20260909-dark',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'images/pwa-512x512.png?v=20260904-2',
+            src: 'images/pwa-512x512.png?v=20260909-dark',
             sizes: '512x512',
             type: 'image/png'
           },
           {
-            src: 'images/maskable-icon-512x512.png?v=20260904-2',
+            src: 'images/maskable-icon-512x512.png?v=20260909-dark',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'
@@ -255,6 +270,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
   ];
 
   const plugins: PluginOption[] = [
+    externalizeUiKitPdfWorker(),
     cleanGeneratedBuildOutputPlugin(),
     vuePlugin,
     ...appPlugins,
@@ -277,6 +293,10 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
   ];
   const getManualChunk = (id: string): string | undefined => {
     const normalizedId = id.replace(/\\/g, '/');
+
+    // Общий helper иначе попадает в vendor и заставляет ранний native-startup
+    // выполнить все его библиотеки до чтения notification intent.
+    if (normalizedId.includes('vite/preload-helper')) return 'startup-preload';
 
     if (!normalizedId.includes('/node_modules/')) {
       return undefined;
@@ -351,6 +371,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
       }
     },
     build: {
+      target: 'chrome80',
       outDir: BUILD_OUT_DIR,
       emptyOutDir: false,
       sourcemap: mode !== 'production',

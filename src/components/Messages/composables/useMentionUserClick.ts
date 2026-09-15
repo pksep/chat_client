@@ -1,4 +1,5 @@
 import type { IUser } from '../../interfaces/interfaces';
+import { Capacitor } from '@capacitor/core';
 import { currentGroup } from '../../../composables/useGroup';
 import { getTopicList } from '../../../composables/useTopics';
 import { getUserById, getUsersList } from '../../../composables/useUsers';
@@ -297,7 +298,11 @@ export const useMentionUserClick = () => {
     container
       .querySelectorAll<HTMLAnchorElement>(ANCHOR_SELECTOR)
       .forEach(anchor => {
-        if (!isGroupCallInviteUrl(anchor.href)) {
+        if (
+          !isGroupCallInviteUrl(anchor.href, {
+            allowTrustedNativeOrigin: Capacitor.isNativePlatform()
+          })
+        ) {
           return;
         }
 
@@ -325,7 +330,12 @@ export const useMentionUserClick = () => {
       ANCHOR_SELECTOR
     ) as HTMLAnchorElement | null;
 
-    if (anchorElement && isGroupCallInviteUrl(anchorElement.href)) {
+    if (
+      anchorElement &&
+      isGroupCallInviteUrl(anchorElement.href, {
+        allowTrustedNativeOrigin: Capacitor.isNativePlatform()
+      })
+    ) {
       const inviteUrl = anchorElement.href;
       event.preventDefault();
       event.stopPropagation();

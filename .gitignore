@@ -41,3 +41,7 @@ dev-dist/
 # Codex local artifacts
 .codex/
 .codex-*/
+
+# Playwright generated reports
+/test-results*/
+/playwright-report/

@@ -2,23 +2,17 @@ import { createApp } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { isTauri } from '@tauri-apps/api/core';
 import App from './App.vue';
-import '@fontsource-variable/inter';
-import './assets/globals.css';
 import './assets/chat-container.css';
-import '@pksep/yui/styles';
-import {
-  installNotoEmojiFontFaces,
-  preloadNotoEmojiAssets
-} from './composables/useEmojiStyle';
+import { installNotoEmojiFontFaces } from './composables/useEmojiStyle';
 import { emojiDirective } from './directives/emoji';
 import { registerNativeFileBridge } from './services/useNativeFile';
 import { initFastNativeNotificationNavigation } from './services/usePushNotifications';
 import { LaunchStartup } from './services/launchStartup';
-import { USER_STATUS_PRESETS } from './utils/userStatus';
 import { NATIVE_STARTUP_READY_EVENT } from './utils/nativeStartup';
 import { createPinia } from 'pinia';
 
-const UNICORN_EMOJI = '\u{1F984}';
+performance.mark('chat-startup:modules-ready');
+
 const INDEXED_DB_RESET_EPOCH = 'chat-client-indexeddb-reset-2026-04-29-v1';
 const INDEXED_DB_RESET_DONE_KEY = 'chat.indexeddb.reset.done';
 const FONT_READY_TIMEOUT_MS = 1500;
@@ -194,12 +188,6 @@ const runPostMountStartupTasks = (): void => {
     void waitForAppFontReady();
     void clearTauriServiceWorkers();
     void runIndexedDbResetIfNeeded();
-    preloadNotoEmojiAssets(
-      [...USER_STATUS_PRESETS.map(option => option.icon), UNICORN_EMOJI],
-      {
-        highPriority: true
-      }
-    );
   });
 };
 
@@ -208,9 +196,12 @@ const mountApp = async (): Promise<void> => {
   // latest-page request before Vue mounts. Otherwise cached messages can paint
   // for one frame and then be replaced by the topic skeleton.
   await initFastNativeNotificationNavigation();
+  performance.mark('chat-startup:notification-ready');
   registerNativeFileBridge();
   applyRuntimeBodyClasses();
-  installNotoEmojiFontFaces();
+  installNotoEmojiFontFaces({
+    preferSystemFont: Capacitor.getPlatform() === 'android'
+  });
 
   const app = createApp(App);
 
@@ -265,6 +256,7 @@ const mountApp = async (): Promise<void> => {
     }
   );
   app.mount('#app');
+  performance.mark('chat-startup:vue-mounted');
   runPostMountStartupTasks();
 };
 

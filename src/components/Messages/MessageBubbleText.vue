@@ -71,6 +71,7 @@
             v-html="safeMessageHtml"
             :data-testid="`${props.dataTestid}-MessageText`"
             @click="handleMentionUserClick"
+            @copy="copyMessageSelection"
           ></div>
           <slot name="after-message" />
           <div
@@ -160,6 +161,7 @@ import {
   useMentionUserClick
 } from './composables/useMentionUserClick';
 import { sanitizeMessageHtml } from '../../utils/sanitizeMessageHtml';
+import { copyMessageSelection } from '../../utils/copyMessageSelection';
 
 const props = defineProps<IMessageBubbleProps>();
 const slots = useSlots();

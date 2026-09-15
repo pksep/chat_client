@@ -38,6 +38,7 @@
       v-for="(topic, index) in displayTopics"
       :key="topic.id"
       class="contact-list__li"
+      :data-topic-id="topic.id"
       role="listitem"
       tabindex="0"
       @keydown="event => handleKeyDown(topic, index, event)"
@@ -132,55 +133,6 @@
               </span>
             </div>
           </h5>
-          <div
-            v-if="topic.typingUserIds?.length"
-            class="contact-list__description contact-list__description--typing"
-            :data-testid="`${props.dataTestid}-ContactList-Typing${index + 1}`"
-          >
-            <TypingIndicator :label="getTopicTypingLabel(topic)" />
-          </div>
-          <div
-            v-else-if="!!topic.lastMessage?.text"
-            class="contact-list__description"
-            v-emoji
-            :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
-            :aria-label="`Latest message: ${stripHtml(topic.lastMessage?.text || 'No message')}`"
-          >
-            {{ stripHtml(topic.lastMessage?.text) }}
-          </div>
-          <div
-            v-else-if="
-              topic.lastMessage?.media?.length > 0 &&
-              topic.lastMessage.media[0].type === MediaType.File
-            "
-            class="contact-list__description contact-list__description__media"
-          >
-            <AttachFileIcon />
-            <p>Медиа</p>
-          </div>
-          <div
-            v-else-if="topic.lastMessage?.media?.length > 0"
-            class="contact-list__description contact-list__description__media"
-            :data-testid="`${props.dataTestid}-ContactList-Media${index + 1}`"
-          >
-            <template
-              v-for="media in topic.lastMessage.media.slice(0, 3)"
-              :key="media.id"
-              ><div>
-                <img
-                  v-if="media.type !== MediaType.File"
-                  :src="getFullMediaPath(media)"
-                />
-
-                <MiniPlayIcon
-                  v-if="media.type === MediaType.Video"
-                  class="contact-list__description__media__play"
-                />
-              </div>
-            </template>
-
-            <p>{{ getTopicLastMessageLabel(topic.lastMessage?.media) }}</p>
-          </div>
           <div v-if="!props.showCheckbox" class="contact-list__top">
             <MessageStatusIcons
               v-if="
@@ -208,54 +160,107 @@
               {{ formatListTime(new Date(topic.lastMessage?.createdAt)) }}
             </span>
           </div>
-          <div v-if="!props.showCheckbox" class="contact-list__bottom">
+          <div class="contact-list__preview">
             <div
-              v-if="
-                topic.hasUnreadReaction &&
-                getTopicUnreadReactionMessageId(topic.id)
-              "
-              class="contact-list__reaction-indicator"
-              :data-testid="`${props.dataTestid}-ContactList-Reaction${index + 1}`"
-              role="button"
-              tabindex="0"
-              aria-label="Новая реакция на ваше сообщение"
-              @click.stop="event => handleReactionClick(topic, index, event)"
-              @keydown.enter.stop="
-                event => handleReactionClick(topic, index, event)
-              "
-              @keydown.space.stop.prevent="
-                event => handleReactionClick(topic, index, event)
-              "
+              v-if="topic.typingUserIds?.length"
+              class="contact-list__description contact-list__description--typing"
+              :data-testid="`${props.dataTestid}-ContactList-Typing${index + 1}`"
             >
-              <ReactionHeartIcon />
+              <TypingIndicator :label="getTopicTypingLabel(topic)" />
             </div>
             <div
-              v-if="topic.taggedMe"
-              class="contact-list__notification contact-list__mention"
-              :data-testid="`${props.dataTestid}-ContactList-Mention${index + 1}`"
+              v-else-if="!!topic.lastMessage?.text"
+              class="contact-list__description"
+              v-emoji
+              :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
+              :aria-label="`Latest message: ${stripHtml(topic.lastMessage?.text || 'No message')}`"
             >
-              @
+              {{ stripHtml(topic.lastMessage?.text) }}
             </div>
             <div
-              v-if="hasTopicUnreadIndicator(topic, authedUser?.id)"
-              :class="{
-                'contact-list__notification': true,
-                'contact-list__notification--muted': topic.info?.isMute
-              }"
-              :data-testid="`${props.dataTestid}-ContactList-Notification${index + 1}`"
-              :aria-label="getTopicUnreadIndicatorLabel(topic)"
+              v-else-if="
+                topic.lastMessage?.media?.length > 0 &&
+                topic.lastMessage.media[0].type === MediaType.File
+              "
+              class="contact-list__description contact-list__description__media"
             >
-              <template v-if="getTopicUnreadBadgeCount(topic, authedUser?.id)">
-                {{ getTopicUnreadBadgeCount(topic, authedUser?.id) }}
+              <AttachFileIcon />
+              <p>Медиа</p>
+            </div>
+            <div
+              v-else-if="topic.lastMessage?.media?.length > 0"
+              class="contact-list__description contact-list__description__media"
+              :data-testid="`${props.dataTestid}-ContactList-Media${index + 1}`"
+            >
+              <template
+                v-for="media in topic.lastMessage.media.slice(0, 3)"
+                :key="media.id"
+                ><div>
+                  <img
+                    v-if="media.type !== MediaType.File"
+                    :src="getFullMediaPath(media)"
+                  />
+
+                  <MiniPlayIcon
+                    v-if="media.type === MediaType.Video"
+                    class="contact-list__description__media__play"
+                  />
+                </div>
               </template>
+
+              <p>{{ getTopicLastMessageLabel(topic.lastMessage?.media) }}</p>
             </div>
-            <div
-              class="contact-list__pin"
-              v-if="topic.info?.isPin"
-              :data-testid="`${props.dataTestid}-ContactList-Pin${index + 1}`"
-              :aria-label="`Pinned contact`"
-            >
-              <PinIcon v-if="topic.info?.isPin" />
+            <div v-if="!props.showCheckbox" class="contact-list__bottom">
+              <div
+                v-if="
+                  topic.hasUnreadReaction &&
+                  getTopicUnreadReactionMessageId(topic.id)
+                "
+                class="contact-list__reaction-indicator"
+                :data-testid="`${props.dataTestid}-ContactList-Reaction${index + 1}`"
+                role="button"
+                tabindex="0"
+                aria-label="Новая реакция на ваше сообщение"
+                @click.stop="event => handleReactionClick(topic, index, event)"
+                @keydown.enter.stop="
+                  event => handleReactionClick(topic, index, event)
+                "
+                @keydown.space.stop.prevent="
+                  event => handleReactionClick(topic, index, event)
+                "
+              >
+                <ReactionHeartIcon />
+              </div>
+              <div
+                v-if="topic.taggedMe"
+                class="contact-list__notification contact-list__mention"
+                :data-testid="`${props.dataTestid}-ContactList-Mention${index + 1}`"
+              >
+                @
+              </div>
+              <div
+                v-if="hasTopicUnreadIndicator(topic, authedUser?.id)"
+                :class="{
+                  'contact-list__notification': true,
+                  'contact-list__notification--muted': topic.info?.isMute
+                }"
+                :data-testid="`${props.dataTestid}-ContactList-Notification${index + 1}`"
+                :aria-label="getTopicUnreadIndicatorLabel(topic)"
+              >
+                <template
+                  v-if="getTopicUnreadBadgeCount(topic, authedUser?.id)"
+                >
+                  {{ getTopicUnreadBadgeCount(topic, authedUser?.id) }}
+                </template>
+              </div>
+              <div
+                class="contact-list__pin"
+                v-if="topic.info?.isPin"
+                :data-testid="`${props.dataTestid}-ContactList-Pin${index + 1}`"
+                :aria-label="`Pinned contact`"
+              >
+                <PinIcon v-if="topic.info?.isPin" />
+              </div>
             </div>
           </div>
         </div>
@@ -476,7 +481,12 @@ import BotAvatar from '../UI/BotAvatar.vue';
 import EmojiIcon from '../UI/EmojiIcon.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { getAuthUser } from '../../composables/useAuth';
-import { IMedia, ITopic, MessageStatusEnum } from '../interfaces/interfaces';
+import {
+  IMedia,
+  IMessage,
+  ITopic,
+  MessageStatusEnum
+} from '../interfaces/interfaces';
 import { useTopics } from '../../composables/useTopics';
 import { formatListTime } from '../../composables/useTime';
 import { useResizeState } from '../../composables/useResizeState';
@@ -528,12 +538,16 @@ import {
 import { isFavoriteTopic } from '../../utils/favorite-topic';
 import {
   getClientMessageById,
-  getFullMessagesByTopicId
+  getFullMessagesByTopicId,
+  hasKnownTopicMessagesState,
+  hydrateMessagePreviewFromCache,
+  hydrateMessagesFromCache
 } from '../../services/useMessages';
 import {
   resolveLastMessageStatus,
   resolveTopicLastMessage
 } from '../../utils/topic-last-message';
+import { preloadAvatarPath } from '../../services/avatar-image-verification';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -618,8 +632,20 @@ let descriptionOverflowRafId = 0;
 let descriptionOverflowSecondRafId = 0;
 let descriptionMutationObserver: MutationObserver | null = null;
 let descriptionResizeObserver: ResizeObserver | null = null;
+let topicCacheObserver: IntersectionObserver | null = null;
+let activeTopicCacheWarmCount = 0;
+const queuedTopicCacheWarmIds: string[] = [];
+const queuedTopicCacheWarmSet = new Set<string>();
+const activeTopicCacheWarmIds = new Set<string>();
 const TOPIC_PRESS_SCROLL_CANCEL_PX = 8;
 const TOPIC_POINTER_CLICK_MAX_DELAY_MS = 2000;
+const TOPIC_CACHE_PREVIEW_LIMIT = 48;
+const MAX_CONCURRENT_TOPIC_CACHE_WARMS = 2;
+const TOPIC_OPEN_CACHE_WAIT_MS = 80;
+// The first mobile frame only contains a few recent sender groups. Starting
+// dozens of IndexedDB reads and image decodes at once delays those visible
+// avatars on Android, so prioritize a compact recent set before navigation.
+const TOPIC_AVATAR_PRELOAD_LIMIT = 8;
 let topicPressPointerId: number | null = null;
 let topicPressStartX = 0;
 let topicPressStartY = 0;
@@ -628,6 +654,7 @@ let topicPointerDownContext: {
   topicId: string;
   timestamp: number;
 } | null = null;
+let topicOpenPreparationToken = 0;
 
 const hasSearchQuery = computed(() => props.searchQuery.trim().length > 0);
 const skeletonRows = 7;
@@ -664,6 +691,136 @@ const showSearchEmptyState = computed(
     props.topics.length === 0 &&
     props.messageResults.length === 0
 );
+
+const preloadTopicMessageAvatars = async (
+  messages: IMessage[],
+  allowNetwork: boolean
+): Promise<void> => {
+  const paths: string[] = [];
+  const knownPaths = new Set<string>();
+
+  for (
+    let index = messages.length - 1;
+    index >= 0 && paths.length < TOPIC_AVATAR_PRELOAD_LIMIT;
+    index -= 1
+  ) {
+    const path = messages[index]?.senderUser?.avatarUrl;
+    if (!path || knownPaths.has(path)) continue;
+    knownPaths.add(path);
+    paths.push(path);
+  }
+
+  await Promise.all(
+    paths.map(path => preloadAvatarPath(path, { allowNetwork }))
+  );
+};
+
+const runQueuedTopicCacheWarms = (): void => {
+  while (
+    activeTopicCacheWarmCount < MAX_CONCURRENT_TOPIC_CACHE_WARMS &&
+    queuedTopicCacheWarmIds.length > 0
+  ) {
+    const topicId = queuedTopicCacheWarmIds.shift();
+    if (!topicId) continue;
+
+    queuedTopicCacheWarmSet.delete(topicId);
+    if (hasKnownTopicMessagesState(topicId)) continue;
+
+    activeTopicCacheWarmCount += 1;
+    activeTopicCacheWarmIds.add(topicId);
+    void hydrateMessagePreviewFromCache(
+      topicId,
+      undefined,
+      TOPIC_CACHE_PREVIEW_LIMIT
+    )
+      .then(messages => {
+        // Фоновый прогрев декодирует только локальные изображения и не
+        // обращается к CDN для топика, который пользователь ещё не открыл.
+        void preloadTopicMessageAvatars(messages, false);
+      })
+      .finally(() => {
+        activeTopicCacheWarmCount -= 1;
+        activeTopicCacheWarmIds.delete(topicId);
+        runQueuedTopicCacheWarms();
+      });
+  }
+};
+
+const warmTopicMessagesFromCache = (
+  topicId: string,
+  prioritize = false
+): void => {
+  if (
+    !topicId ||
+    props.showCheckbox ||
+    hasKnownTopicMessagesState(topicId) ||
+    activeTopicCacheWarmIds.has(topicId)
+  ) {
+    return;
+  }
+
+  if (queuedTopicCacheWarmSet.has(topicId)) {
+    if (prioritize) {
+      const index = queuedTopicCacheWarmIds.indexOf(topicId);
+      if (index > 0) {
+        queuedTopicCacheWarmIds.splice(index, 1);
+        queuedTopicCacheWarmIds.unshift(topicId);
+      }
+    }
+  } else {
+    queuedTopicCacheWarmSet.add(topicId);
+    if (prioritize) queuedTopicCacheWarmIds.unshift(topicId);
+    else queuedTopicCacheWarmIds.push(topicId);
+  }
+
+  runQueuedTopicCacheWarms();
+};
+
+const prepareTopicMessagesForOpen = async (topicId: string): Promise<void> => {
+  if (!topicId) return;
+
+  if (!hasKnownTopicMessagesState(topicId)) {
+    warmTopicMessagesFromCache(topicId, true);
+  }
+  const cachedMessagesReady = hasKnownTopicMessagesState(topicId)
+    ? Promise.resolve(getFullMessagesByTopicId(topicId))
+    : hydrateMessagesFromCache(topicId, undefined, {
+        visibleLimit: TOPIC_CACHE_PREVIEW_LIMIT,
+        allowVisibleShrink: true
+      });
+  await Promise.race([
+    cachedMessagesReady
+      .then(messages => preloadTopicMessageAvatars(messages, true))
+      .then(() => undefined)
+      .catch(() => undefined),
+    new Promise<void>(resolve =>
+      window.setTimeout(resolve, TOPIC_OPEN_CACHE_WAIT_MS)
+    )
+  ]);
+};
+
+const syncTopicCacheObserver = async (): Promise<void> => {
+  if (typeof IntersectionObserver === 'undefined' || props.showCheckbox) return;
+
+  await nextTick();
+  topicCacheObserver?.disconnect();
+  topicCacheObserver = new IntersectionObserver(
+    entries => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const topicId = (entry.target as HTMLElement).dataset.topicId;
+        if (topicId) warmTopicMessagesFromCache(topicId);
+      }
+    },
+    {
+      root: listRootRef.value?.parentElement || null,
+      rootMargin: '240px 0px'
+    }
+  );
+  listRootRef.value
+    ?.querySelectorAll<HTMLElement>('.contact-list__li[data-topic-id]')
+    .forEach(element => topicCacheObserver?.observe(element));
+};
 
 const isTopicActive = (topic: ITopic): boolean =>
   topic.id === pendingActiveTopicId.value ||
@@ -735,15 +892,17 @@ const syncDescriptionOverflowState = (): void => {
     root.querySelectorAll<HTMLElement>('.contact-list__description')
   );
 
-  descriptions.forEach(description => {
-    const hasOverflow = getDescriptionOverflowCandidates(description).some(
+  // Сначала все измерения, затем стили: запись класса не запускает layout каждой строки.
+  const overflows = descriptions.map(description =>
+    getDescriptionOverflowCandidates(description).some(
       element =>
         element.clientWidth > 0 && element.scrollWidth > element.clientWidth + 1
-    );
-
+    )
+  );
+  descriptions.forEach((description, index) => {
     description.classList.toggle(
       'contact-list__description--overflow',
-      hasOverflow
+      overflows[index]
     );
   });
 };
@@ -795,6 +954,7 @@ onMounted(() => {
   }
 
   scheduleDescriptionOverflowSync();
+  void syncTopicCacheObserver();
 });
 
 onBeforeUnmount(() => {
@@ -809,6 +969,10 @@ onBeforeUnmount(() => {
   descriptionMutationObserver = null;
   descriptionResizeObserver?.disconnect();
   descriptionResizeObserver = null;
+  topicCacheObserver?.disconnect();
+  topicCacheObserver = null;
+  queuedTopicCacheWarmIds.length = 0;
+  queuedTopicCacheWarmSet.clear();
 });
 
 watch(
@@ -821,6 +985,14 @@ watch(
   ],
   scheduleDescriptionOverflowSync,
   { deep: true, immediate: true }
+);
+
+watch(
+  [
+    () => props.topics.map(topic => topic.id).join('|'),
+    () => props.showCheckbox
+  ],
+  () => void syncTopicCacheObserver()
 );
 
 const handlePin = (topic: ITopic): void => {
@@ -1014,7 +1186,11 @@ const resolveTopicClickTarget = (
   };
 };
 
-const handleClick = (topic: ITopic, index?: number, event?: Event): void => {
+const handleClick = async (
+  topic: ITopic,
+  index?: number,
+  event?: Event
+): Promise<void> => {
   if (isMobile.value && topicPressMoved && !(event instanceof KeyboardEvent)) {
     clearTopicPointerDownContext();
     pendingActiveTopicId.value = null;
@@ -1034,6 +1210,11 @@ const handleClick = (topic: ITopic, index?: number, event?: Event): void => {
   }
 
   const { topic: targetTopic, index: targetIndex } = clickTarget;
+  const preparationToken = ++topicOpenPreparationToken;
+  pendingActiveTopicId.value = targetTopic.id;
+  await prepareTopicMessagesForOpen(targetTopic.id);
+  if (preparationToken !== topicOpenPreparationToken) return;
+  pendingActiveTopicId.value = null;
 
   if (isMobile.value) {
     emits('unmount-topic', targetTopic, null);
@@ -1084,6 +1265,8 @@ const handleTopicPress = (topic: ITopic, event: PointerEvent): void => {
     topicId: topic.id,
     timestamp: Date.now()
   };
+
+  warmTopicMessagesFromCache(topic.id, true);
 
   if (!isMobile.value) {
     return;
@@ -1301,34 +1484,12 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
   color: var(--primary-color);
 }
 
-.contact-list__block--wrapper--selection .contact-list__description,
-.contact-list__block--wrapper--selection .contact-list__description p,
-.contact-list__block--wrapper--selection .contact-list__description strong {
-  width: calc(100vw - 180px);
-}
-
-.contact-list__block--wrapper--selection
-  .contact-list__description--overflow::after,
-.contact-list__block--wrapper--selection
-  .contact-list__description--overflow
-  p::after,
-.contact-list__block--wrapper--selection
-  .contact-list__description--overflow
-  strong::after {
-  left: auto;
-  right: 0;
-  width: 56px;
-}
-
-.contact-list__item--selection.contact-list__item--active
-  .contact-list__description--overflow::after,
-.contact-list__item--selection.contact-list__item--active
-  .contact-list__description--overflow
-  p::after,
-.contact-list__item--selection.contact-list__item--active
-  .contact-list__description--overflow
-  strong::after {
-  background-color: var(--table-surface-search);
+.contact-list__block--wrapper--selection {
+  --description-fade-width: 56px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'title'
+    'preview';
 }
 
 .contact-list__selection-checkbox {

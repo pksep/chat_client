@@ -545,9 +545,9 @@ export function useMessageSender(
   const isAutoRetryCandidate = (message?: IMessage | null): boolean =>
     Boolean(
       message &&
-        !isMessageRetryExpired(message) &&
         (message.status === MessageStatus.Wait ||
-          message.status === MessageStatus.NotDelivered)
+          message.status === MessageStatus.NotDelivered) &&
+        !isMessageRetryExpired(message)
     );
 
   const canAutoRetryMessage = (message?: IMessage | null): boolean => {

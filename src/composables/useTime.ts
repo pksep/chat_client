@@ -1,5 +1,21 @@
 import { ref, onUnmounted } from 'vue';
 
+const dayFormatter = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'UTC'
+});
+const listDateFormatter = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: '2-digit',
+  timeZone: 'UTC'
+});
+// Локальное смещение берём у самой даты: DST и смена часового пояса не устаревают.
+const formatLocalDate = (date: Date, formatter: Intl.DateTimeFormat): string =>
+  Number.isNaN(date.getTime())
+    ? 'Invalid Date'
+    : formatter.format(date.getTime() - date.getTimezoneOffset() * 60_000);
+
 export const useTime = (date: Date = new Date()) => {
   const time = ref<string>('');
   const interval = setInterval(() => {
@@ -15,10 +31,8 @@ export const useTime = (date: Date = new Date()) => {
 };
 
 export const formatTime = (date: Date = new Date()) => {
-  return date.toLocaleTimeString('ru-RU', {
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  if (Number.isNaN(date.getTime())) return 'Invalid Date';
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 };
 
 export const formatListTime = (date: Date = new Date()): string => {
@@ -35,17 +49,11 @@ export const formatListTime = (date: Date = new Date()): string => {
     return formatTime(date);
   }
 
-  return date.toLocaleDateString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit'
-  });
+  return formatLocalDate(date, listDateFormatter);
 };
 
 export const formatDay = (timestamp: Date): string => {
-  return new Date(timestamp).toLocaleDateString('ru-RU', {
-    day: 'numeric',
-    month: 'long'
-  });
+  return formatLocalDate(new Date(timestamp), dayFormatter);
 };
 
 export function isTimeAfter(time1: Date, time2: Date): boolean {

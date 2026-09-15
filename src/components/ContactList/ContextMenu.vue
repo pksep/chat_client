@@ -29,9 +29,14 @@ const props = withDefaults(
     visible?: boolean;
     position?: { x: number; y: number };
     dataTestid?: string;
+    fixedPosition?: boolean;
     forceFlipY?: boolean;
   }>(),
-  { dataTestid: () => 'ContextMenu', forceFlipY: false }
+  {
+    dataTestid: () => 'ContextMenu',
+    fixedPosition: false,
+    forceFlipY: false
+  }
 );
 
 const emits = defineEmits<{
@@ -66,11 +71,11 @@ const position = computed(() => {
   const menuWidth = menuRef.value?.offsetWidth || 0;
   const menuHeight = menuRef.value?.offsetHeight || 0;
 
-  if (flip.value && menuWidth) {
+  if (!props.fixedPosition && flip.value && menuWidth) {
     x -= menuWidth;
   }
 
-  if (flipY.value && menuHeight) {
+  if (!props.fixedPosition && flipY.value && menuHeight) {
     y -= menuHeight;
   }
 
@@ -92,6 +97,13 @@ const position = computed(() => {
 
 const recomputeFlip = async () => {
   if (!props.visible || !props.position) {
+    flip.value = false;
+    flipY.value = false;
+    menuLayoutVersion.value += 1;
+    return;
+  }
+
+  if (props.fixedPosition) {
     flip.value = false;
     flipY.value = false;
     menuLayoutVersion.value += 1;
@@ -136,7 +148,12 @@ const ensureMenuResizeObserver = () => {
 };
 
 watch(
-  () => [props.visible, props.position?.x, props.position?.y],
+  () => [
+    props.visible,
+    props.position?.x,
+    props.position?.y,
+    props.fixedPosition
+  ],
   async () => {
     if (!props.visible || !props.position) {
       disconnectMenuResizeObserver();

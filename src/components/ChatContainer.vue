@@ -23,6 +23,7 @@
       :dataTestid="`${props.dataTestid}-ChatContainer-HeaderMenu`"
     />
     <Menu
+      v-if="!isMobile"
       class="chat__menu"
       :dataTestid="`${props.dataTestid}-ChatContainer-Menu`"
       @unmount-collapse="handleCollapse"
@@ -110,18 +111,21 @@
       />
     </MobileModal>
     <NewContactModal
+      v-if="mountedCreationModals.contact"
       :open="state.isNewContactOpen"
       :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
       @unmount-close="closeModals"
     />
 
     <NewBotModal
+      v-if="mountedCreationModals.bot"
       :open="state.isNewBotOpen"
       :data-testid="`${props.dataTestid}-ChatContainer-NewBotModal`"
       @unmount-close="closeModals"
     />
 
     <NewGroupModal
+      v-if="mountedCreationModals.group"
       :user="authUser"
       :contacts="users"
       :open="state.isNewGroupOpen"
@@ -262,6 +266,12 @@ const { toggle } = useResizeState({
   storageKey: 'menu-collapse'
 });
 
+// После первого открытия сохраняем экземпляр для закрывающей анимации и черновика.
+const mountedCreationModals = reactive({
+  contact: false,
+  bot: false,
+  group: false
+});
 const state = reactive({
   isAppModalOpen: true,
   isMenuDesktopOpen: false,
@@ -384,6 +394,7 @@ const handleNewContact = async (config): Promise<void> => {
     return;
   }
   state.isNewContactOpen = config.isChapterOpen;
+  if (config.isChapterOpen) mountedCreationModals.contact = true;
 };
 
 const handleNewBot = async (config): Promise<void> => {
@@ -392,10 +403,12 @@ const handleNewBot = async (config): Promise<void> => {
   }
 
   state.isNewBotOpen = config.isChapterOpen;
+  if (config.isChapterOpen) mountedCreationModals.bot = true;
 };
 
 const handleNewGroup = (config): void => {
   state.isNewGroupOpen = config.isChapterOpen;
+  if (config.isChapterOpen) mountedCreationModals.group = true;
 };
 
 const closeModals = (): void => {

@@ -5,6 +5,13 @@ import { upsertLocalUser } from '../composables/useUsers';
 import { getChatSDK } from './useChat';
 import { normalizeUserStatus } from '../utils/userStatus';
 
+const applyUpdatedUser = (user: IUser): IUser => {
+  upsertLocalUser(user);
+  updateLocalTopicUser(user.id, user);
+  mergeAuthUser(user);
+  return user;
+};
+
 export const updateCurrentUserStatus = async (
   status?: IUserStatus | null
 ): Promise<IUser> => {
@@ -27,9 +34,19 @@ export const updateCurrentUserStatus = async (
       updatedUser.status !== undefined ? updatedUser.status : normalizedStatus
   };
 
-  upsertLocalUser(nextUser);
-  updateLocalTopicUser(nextUser.id, nextUser);
-  mergeAuthUser(nextUser);
+  return applyUpdatedUser(nextUser);
+};
 
-  return nextUser;
+export const removeCurrentUserStatusPreset = async (
+  status: IUserStatus
+): Promise<IUser> => {
+  const sdk = getChatSDK();
+  const authUser = getAuthUser() as IUser | null;
+  const normalizedStatus = normalizeUserStatus(status);
+  if (!sdk || !authUser?.id || !normalizedStatus) {
+    throw new Error('Не удалось определить пользователя или вариант статуса');
+  }
+
+  const updatedUser = await sdk.removeUserStatusPreset(normalizedStatus);
+  return applyUpdatedUser({ ...authUser, ...updatedUser });
 };

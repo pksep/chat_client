@@ -5,7 +5,7 @@ import type { CallSummaryDto } from './useCallSummaries';
 export interface CallBotCallSummaryBrief {
   id: string;
   roomId: string;
-  topicId: string;
+  topicId: string | null;
   recorderUserId: string;
   recorderName?: string | null;
   status: CallSummaryDto['status'];

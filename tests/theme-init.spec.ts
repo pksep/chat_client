@@ -15,6 +15,7 @@ const runThemeScript = (savedTheme: string | null) => {
 
   runInNewContext(themeScript, {
     window: {
+      matchMedia: () => ({ matches: false }),
       localStorage: {
         getItem: () => savedTheme
       }
@@ -62,8 +63,8 @@ describe('initial theme bootstrap', () => {
       new URL('../index.html', import.meta.url),
       'utf8'
     );
-    const scriptPosition = indexHtml.indexOf(
-      '<script src="/theme-init.js?v=20260902"></script>'
+    const scriptPosition = indexHtml.search(
+      /<script src="\/theme-init\.js(?:\?[^\"]*)?"><\/script>/
     );
     const shellPosition = indexHtml.indexOf('<div id="startup-shell"');
 

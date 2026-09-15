@@ -1,5 +1,6 @@
 import { Group, User } from '@pksep/zod-shared-chat';
 import { Reqi } from '@pksep/reqi';
+import { readJson } from './read-json';
 import { SearchParams, PaginatedResponse } from './types';
 
 export interface ChatGroupInterface {
@@ -105,11 +106,10 @@ export class ChatGroup implements ChatGroupInterface {
     const endpoint = `/groups/${groupId}${queryString ? `?${queryString}` : ''}`;
 
     try {
-      const response = (await this.reqi.get<Group>(endpoint, {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
+      return await readJson<{ group: Group; members: PaginatedResponse<User> }>(
+        this.reqi,
+        endpoint
+      );
     } catch (error) {
       throw new Error(`Failed to fetch group: ${(error as Error).message}`);
     }

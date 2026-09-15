@@ -41,12 +41,6 @@
   font-size: 16px;
 }
 
-.context-menu:has(.v3-emoji-picker) {
-  left: 50% !important;
-  top: 50% !important;
-  transform: translate(-50%, -50%);
-}
-
 .context-menu--flip {
   transform-origin: top right;
 }

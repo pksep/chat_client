@@ -446,7 +446,7 @@ const fetchLatestMessagesByTopic = async (
       try {
         const payload = await fetchJson(
           session,
-          `/messages/topic/${encodeURIComponent(topicId)}?limit=${Math.max(1, limit)}`
+          `/messages/topic/${encodeURIComponent(topicId)}?limit=${Math.max(1, limit)}&newMessages=true`
         );
 
         return [topicId, asArray(payload)] as const;
@@ -612,7 +612,7 @@ const getServiceWorkerRegistration =
     }
 
     try {
-      return await navigator.serviceWorker.ready;
+      return (await navigator.serviceWorker.getRegistration()) || null;
     } catch {
       return null;
     }

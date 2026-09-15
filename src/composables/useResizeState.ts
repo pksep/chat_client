@@ -1,11 +1,40 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 
+let viewportWidth: number | undefined;
+const resizeSubscribers = new Set<(width: number) => void>();
+const readViewportWidth = (): number => (viewportWidth ??= window.innerWidth);
+const broadcastResize = (): void => {
+  viewportWidth = window.innerWidth;
+  resizeSubscribers.forEach(update => update(viewportWidth!));
+};
+const subscribeResize = (update: (width: number) => void): (() => void) => {
+  if (!resizeSubscribers.size) {
+    viewportWidth = window.innerWidth;
+    window.addEventListener('resize', broadcastResize);
+  }
+  resizeSubscribers.add(update);
+  return () => {
+    resizeSubscribers.delete(update);
+    if (!resizeSubscribers.size) {
+      window.removeEventListener('resize', broadcastResize);
+      viewportWidth = undefined;
+    }
+  };
+};
+
 interface UseResizeStateOptions {
   breakpoint: string | number;
+  inclusive?: boolean;
   onStateChange?: (isActive: boolean) => void;
   initialState?: boolean;
   storageKey?: string;
 }
+
+const matchesBreakpoint = (
+  width: number,
+  breakpointPx: number,
+  inclusive = true
+): boolean => (inclusive ? width <= breakpointPx : width < breakpointPx);
 
 const parseBreakpoint = (breakpoint: string | number): number => {
   if (typeof breakpoint === 'string') {
@@ -32,7 +61,11 @@ const getInitialState = (
   windowWidth: number
 ): { initialActive: boolean; initialIsMobile: boolean } => {
   const breakpointPx = parseBreakpoint(config.breakpoint);
-  const initialIsMobile = windowWidth < breakpointPx;
+  const initialIsMobile = matchesBreakpoint(
+    windowWidth,
+    breakpointPx,
+    config.inclusive
+  );
 
   let initialActive: boolean;
   if (config.storageKey) {
@@ -54,7 +87,7 @@ const getInitialActiveState = (config: UseResizeStateOptions): boolean => {
   }
 
   try {
-    return getInitialState(config, window.innerWidth).initialActive;
+    return getInitialState(config, readViewportWidth()).initialActive;
   } catch {
     return config.initialState ?? false;
   }
@@ -86,7 +119,7 @@ const getNewState = (
 
 export function useResizeState(
   breakpointOrOptions: string | number | UseResizeStateOptions,
-  options?: UseResizeStateOptions
+  options?: Omit<UseResizeStateOptions, 'breakpoint'>
 ) {
   const config =
     typeof breakpointOrOptions === 'string' ||
@@ -96,12 +129,12 @@ export function useResizeState(
 
   const isActive = ref(getInitialActiveState(config));
 
-  let resizeHandler: (() => void) | undefined;
+  let unsubscribeResize: (() => void) | undefined;
   let breakpointPx: number;
   let previousIsMobile: boolean | undefined;
 
   const updateState = (width: number): void => {
-    const isMobile = width < breakpointPx;
+    const isMobile = matchesBreakpoint(width, breakpointPx, config.inclusive);
 
     const { newActive, updatedPreviousIsMobile } = getNewState(
       config,
@@ -119,8 +152,12 @@ export function useResizeState(
 
   const saveStateToStorage = (): void => {
     if (config.storageKey && breakpointPx !== undefined) {
-      const currentWidth = window.innerWidth;
-      const currentIsMobile = currentWidth < breakpointPx;
+      const currentWidth = readViewportWidth();
+      const currentIsMobile = matchesBreakpoint(
+        currentWidth,
+        breakpointPx,
+        config.inclusive
+      );
       if (!currentIsMobile) {
         sessionStorage.setItem(
           config.storageKey,
@@ -146,24 +183,21 @@ export function useResizeState(
 
   onMounted(() => {
     breakpointPx = parseBreakpoint(config.breakpoint);
+    unsubscribeResize = subscribeResize(updateState);
 
     const { initialActive, initialIsMobile } = getInitialState(
       config,
-      window.innerWidth
+      readViewportWidth()
     );
 
     isActive.value = initialActive;
     previousIsMobile = initialIsMobile;
 
-    resizeHandler = () => updateState(window.innerWidth);
-    window.addEventListener('resize', resizeHandler);
-    updateState(window.innerWidth);
+    updateState(readViewportWidth());
   });
 
   onUnmounted(() => {
-    if (resizeHandler) {
-      window.removeEventListener('resize', resizeHandler);
-    }
+    unsubscribeResize?.();
   });
 
   return {

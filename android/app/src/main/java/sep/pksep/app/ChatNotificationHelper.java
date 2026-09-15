@@ -104,7 +104,7 @@ public final class ChatNotificationHelper {
             context,
             NotificationChannelHelper.DEFAULT_CHANNEL_ID
         )
-            .setSmallIcon(R.drawable.notification_statusbar_robot_head_2026)
+            .setSmallIcon(R.drawable.notification_statusbar_chat_bubbles_2026)
             .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
             .setAutoCancel(true)
             .setContentIntent(contentIntent);
@@ -172,7 +172,7 @@ public final class ChatNotificationHelper {
         );
 
         return new NotificationCompat.Action.Builder(
-            R.drawable.notification_statusbar_robot_head_2026,
+            R.drawable.notification_statusbar_chat_bubbles_2026,
             "Ответить",
             pendingIntent
         )
@@ -203,7 +203,7 @@ public final class ChatNotificationHelper {
         );
 
         return new NotificationCompat.Action.Builder(
-            R.drawable.notification_statusbar_robot_head_2026,
+            R.drawable.notification_statusbar_chat_bubbles_2026,
             "Прочитано",
             pendingIntent
         )
@@ -237,7 +237,7 @@ public final class ChatNotificationHelper {
         );
 
         return new NotificationCompat.Action.Builder(
-            R.drawable.notification_statusbar_robot_head_2026,
+            R.drawable.notification_statusbar_chat_bubbles_2026,
             "Нравится",
             pendingIntent
         )
@@ -264,7 +264,7 @@ public final class ChatNotificationHelper {
             context,
             NotificationChannelHelper.DEFAULT_CHANNEL_ID
         )
-            .setSmallIcon(R.drawable.notification_statusbar_robot_head_2026)
+            .setSmallIcon(R.drawable.notification_statusbar_chat_bubbles_2026)
             .setContentTitle("Ответ отправлен")
             .setContentText(replyText.trim())
             .setRemoteInputHistory(new CharSequence[] { replyText.trim() })

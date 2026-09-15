@@ -20,7 +20,7 @@ export type CallSummaryStatus =
 export interface CallSummaryDto {
   id: string;
   roomId: string;
-  topicId: string;
+  topicId: string | null;
   recorderUserId: string;
   recorderName?: string | null;
   status: CallSummaryStatus;
@@ -37,7 +37,7 @@ export interface CallSummaryDto {
 export interface CallSummaryRecorderDto {
   summaryId?: string | null;
   roomId: string;
-  topicId: string;
+  topicId: string | null;
   recorderUserId: string;
   recorderName?: string | null;
 }
@@ -213,7 +213,9 @@ const applySummaryStatus = (summary: CallSummaryDto): void => {
     removeActiveRecorder(summary.roomId, summary.recorderUserId, summary.id);
   }
 
-  summariesByTopic[summary.topicId] = summary;
+  if (summary.topicId) {
+    summariesByTopic[summary.topicId] = summary;
+  }
   summariesByTopic[summary.roomId] = summary;
 };
 
@@ -286,13 +288,15 @@ const bindSocketEvents = async (): Promise<void> => {
   );
 };
 
-const ensureSocketEvents = (): void => {
+export const ensureCallSummaryEvents = (): void => {
   if (!subscriptionPromise) {
     subscriptionPromise = bindSocketEvents().finally(() => {
       subscriptionPromise = null;
     });
   }
 };
+
+const ensureSocketEvents = ensureCallSummaryEvents;
 
 export const loadActiveCallSummaryRecorders = async (
   roomId?: string | null
@@ -357,14 +361,12 @@ export const loadLatestCallSummary = async (
 };
 
 export const startCallSummaryRecording = async (
-  roomId: string,
-  topicId: string
+  roomId: string
 ): Promise<boolean> => {
   ensureSocketEvents();
 
   if (
     !roomId ||
-    !topicId ||
     startingRoomIds.has(roomId) ||
     stoppingRoomIds.has(roomId) ||
     isAnyCallSummaryRecording(roomId)

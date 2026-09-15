@@ -1,3 +1,4 @@
+import { bindIncomingChatEvents } from './incoming-events';
 import {
   User,
   Topic,
@@ -22,7 +23,13 @@ import {
 } from './types';
 
 import { ChatAuth, ChatAuthInterface } from './auth';
+import { configureJsonReads } from './read-json';
 import { ChatUser, ChatUserInterface } from './user';
+import type {
+  CustomBackgroundImage,
+  CustomBackgroundKind
+} from '../customBackgroundLibrary';
+import type { UserStatusValue } from '../../utils/userStatus';
 import { ChatTopic, ChatTopicInterface } from './topic';
 import {
   ChatMessage,
@@ -95,6 +102,7 @@ export class ChatSDK {
   private wsUrl: string;
   private token?: string;
   private socket: Socket | null = null;
+  private removeIncomingChatEvents: (() => void) | null = null;
   private readonly multipartUploadAbortControllers = new Map<
     string,
     AbortController
@@ -172,6 +180,7 @@ export class ChatSDK {
       };
     }
 
+    configureJsonReads(reqi, () => getAuthToken() || this.token);
     return reqi;
   }
 
@@ -839,101 +848,13 @@ export class ChatSDK {
           });
         });
 
-        this.socket?.on('newMessage', data => {
-          const message: WebSocketEvent = {
-            type: WebSocketEventType.NEW_MESSAGE,
-            payload: data,
-            timestamp: new Date()
-          };
-          this.handleWebSocketEvent(message);
-        });
-
-        this.socket?.on('messageUpdated', data => {
-          const message: WebSocketEvent = {
-            type: WebSocketEventType.MESSAGE_UPDATED,
-            payload: data,
-            timestamp: new Date()
-          };
-          this.handleWebSocketEvent(message);
-        });
-
-        this.socket?.on('messageDeleted', data => {
-          const message: WebSocketEvent = {
-            type: WebSocketEventType.MESSAGE_DELETED,
-            payload: data,
-            timestamp: new Date()
-          };
-          this.handleWebSocketEvent(message);
-        });
-
-        this.socket?.on('messagePinned', data => {
-          const message: WebSocketEvent = {
-            type: WebSocketEventType.MESSAGE_PINNED,
-            payload: data,
-            timestamp: new Date()
-          };
-          this.handleWebSocketEvent(message);
-        });
-
-        this.socket?.on('messagesRead', data => {
-          const message: WebSocketEvent = {
-            type: WebSocketEventType.MESSAGES_READ,
-            payload: data,
-            timestamp: new Date()
-          };
-          this.handleWebSocketEvent(message);
-        });
-
-        this.socket?.on('joined', data => {
-          const message: WebSocketEvent = {
-            type: WebSocketEventType.JOIN_TOPIC,
-            payload: data,
-            timestamp: new Date()
-          };
-          this.handleWebSocketEvent(message);
-        });
-
-        this.socket.onAny((event, ...args) => {
-          let mappedEventType: WebSocketEventType | null = null;
-
-          switch (event) {
-            case 'newMessage':
-              mappedEventType = WebSocketEventType.NEW_MESSAGE;
-              break;
-            case 'messageUpdated':
-              mappedEventType = WebSocketEventType.MESSAGE_UPDATED;
-              break;
-            case 'messageDeleted':
-              mappedEventType = WebSocketEventType.MESSAGE_DELETED;
-              break;
-            case 'messagePinned':
-              mappedEventType = WebSocketEventType.MESSAGE_PINNED;
-              break;
-            case 'messagesRead':
-              mappedEventType = WebSocketEventType.MESSAGES_READ;
-              break;
-            case 'joined':
-              mappedEventType = WebSocketEventType.JOIN_TOPIC;
-              break;
-            case 'left':
-              mappedEventType = WebSocketEventType.LEAVE_TOPIC;
-              break;
-            default:
-              if (Object.values(WebSocketEventType).includes(event)) {
-                mappedEventType = event as WebSocketEventType;
-              }
-              break;
+        this.removeIncomingChatEvents?.();
+        this.removeIncomingChatEvents = bindIncomingChatEvents(
+          this.socket,
+          event => {
+            this.handleWebSocketEvent(event);
           }
-
-          if (mappedEventType) {
-            const message: WebSocketEvent = {
-              type: mappedEventType,
-              payload: args[0],
-              timestamp: new Date()
-            };
-            this.handleWebSocketEvent(message);
-          }
-        });
+        );
       } catch (error) {
         rejectOnce(error);
       }
@@ -941,6 +862,8 @@ export class ChatSDK {
   }
 
   disconnect(): void {
+    this.removeIncomingChatEvents?.();
+    this.removeIncomingChatEvents = null;
     if (this.socket) {
       this.emitConnectionState(false);
       this.socket.disconnect();
@@ -1021,6 +944,25 @@ export class ChatSDK {
     profileData: Partial<User>
   ): Promise<User> {
     return this.user.updateUserProfile(userId, profileData);
+  }
+
+  async removeUserStatusPreset(status: UserStatusValue): Promise<User> {
+    return this.user.removeUserStatusPreset(status);
+  }
+
+  getCustomBackgrounds(kind: CustomBackgroundKind) {
+    return this.user.getCustomBackgrounds(kind);
+  }
+
+  getCustomBackground(kind: CustomBackgroundKind, id: string) {
+    return this.user.getCustomBackground(kind, id);
+  }
+
+  saveCustomBackground(
+    kind: CustomBackgroundKind,
+    image: CustomBackgroundImage
+  ) {
+    return this.user.saveCustomBackground(kind, image);
   }
 
   async getRecentTopics(userId: string): Promise<Topic[]> {
@@ -1770,7 +1712,7 @@ export class ChatSDK {
 
   async getLiveKitCallStatus(
     roomId: string,
-    options: { includeRoomState?: boolean } = {}
+    options: { includeRoomState?: boolean; inviteToken?: string } = {}
   ): Promise<{
     active: boolean;
     topicId?: string | null;
@@ -1785,6 +1727,9 @@ export class ChatSDK {
       const queryParams = new URLSearchParams({ roomId });
       if (options.includeRoomState) {
         queryParams.set('includeRoomState', 'true');
+      }
+      if (options.inviteToken) {
+        queryParams.set('invite', options.inviteToken);
       }
 
       const response = (await this.reqi.get<{

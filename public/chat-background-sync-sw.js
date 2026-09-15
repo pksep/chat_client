@@ -309,7 +309,7 @@
       try {
         const payload = await fetchJson(
           session,
-          `/messages/topic/${encodeURIComponent(topicId)}?limit=${MESSAGE_LIMIT}`
+          `/messages/topic/${encodeURIComponent(topicId)}?limit=${MESSAGE_LIMIT}&newMessages=true`
         );
         const messages = asArray(payload);
 
