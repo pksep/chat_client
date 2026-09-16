@@ -1,9 +1,13 @@
+import { openChatDatabase } from '../utils/chat-startup-databases';
+import {
+  discardStartupTopicRecords,
+  takeStartupTopicRecord
+} from '../utils/startup-topic-records';
 import { reviveCachedDates } from '../utils/revive-cached-dates';
 import type { IMessage } from '../components/interfaces/interfaces';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
 
 const DB_NAME = 'chat-sync-shadow-db';
-const DB_VERSION = 3;
 const EVENT_LOG_STORE = 'eventLog';
 const TOPIC_SNAPSHOT_STORE = 'topicSnapshots';
 const TOPIC_PREVIEW_STORE = 'topicPreviews';
@@ -74,7 +78,6 @@ const shadowReadStateLoads = new Map<
 >();
 const shadowSyncMetaLoads = new Map<string, Promise<unknown>>();
 const scheduledEventLogPrunes = new Set<string>();
-let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 export type ShadowSyncSource = 'http' | 'ws' | 'local';
 
@@ -124,9 +127,6 @@ interface ShadowSyncMetaRecord {
   value: unknown;
   updatedAt: string;
 }
-
-const hasIndexedDb = () =>
-  typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined';
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -278,58 +278,7 @@ const mergeMessages = (
   return Array.from(mergedByKey.values()).sort(compareMessagesByPosition);
 };
 
-const openDb = async (): Promise<IDBDatabase | null> => {
-  if (!hasIndexedDb()) {
-    return null;
-  }
-
-  if (dbPromise) {
-    return dbPromise;
-  }
-
-  dbPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-
-      if (!db.objectStoreNames.contains(EVENT_LOG_STORE)) {
-        db.createObjectStore(EVENT_LOG_STORE, { keyPath: 'id' });
-      }
-
-      if (!db.objectStoreNames.contains(TOPIC_SNAPSHOT_STORE)) {
-        db.createObjectStore(TOPIC_SNAPSHOT_STORE, { keyPath: 'cacheKey' });
-      }
-
-      if (!db.objectStoreNames.contains(TOPIC_PREVIEW_STORE)) {
-        db.createObjectStore(TOPIC_PREVIEW_STORE, { keyPath: 'cacheKey' });
-      }
-
-      if (!db.objectStoreNames.contains(READ_STATE_STORE)) {
-        db.createObjectStore(READ_STATE_STORE, { keyPath: 'cacheKey' });
-      }
-
-      if (!db.objectStoreNames.contains(SYNC_META_STORE)) {
-        db.createObjectStore(SYNC_META_STORE, { keyPath: 'key' });
-      }
-    };
-
-    request.onsuccess = () => {
-      const db = request.result;
-      db.onversionchange = () => {
-        db.close();
-        dbPromise = null;
-      };
-      resolve(db);
-    };
-    request.onerror = () => {
-      dbPromise = null;
-      reject(request.error);
-    };
-  });
-
-  return dbPromise;
-};
+const openDb = (): Promise<IDBDatabase | null> => openChatDatabase(DB_NAME);
 
 const getShadowSyncEnabled = (): boolean => {
   if (typeof window === 'undefined') {
@@ -414,6 +363,8 @@ const putRecord = async <T extends object>(
   storeName: string,
   payload: T
 ): Promise<boolean> => {
+  if (storeName === READ_STATE_STORE || storeName === SYNC_META_STORE)
+    discardStartupTopicRecords();
   const db = await openDb();
 
   if (!db) {
@@ -436,6 +387,16 @@ const getRecord = async <T>(
   storeName: string,
   key: IDBValidKey
 ): Promise<T | null> => {
+  if (typeof key === 'string') {
+    const prepared = takeStartupTopicRecord<T | null>(DB_NAME, storeName, key);
+    if (prepared) {
+      try {
+        return (await prepared) || null;
+      } catch {
+        /* Читаем текущую запись после изменения или ошибки. */
+      }
+    }
+  }
   const db = await openDb();
 
   if (!db) {

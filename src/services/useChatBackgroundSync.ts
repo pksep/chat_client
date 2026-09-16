@@ -43,6 +43,8 @@ export interface ChatBackgroundSyncEvent {
 export interface ChatBackgroundSyncSnapshot {
   available?: boolean;
   userId?: string;
+  snapshotUserId?: string;
+  snapshotApiUrl?: string;
   lastPts?: string;
   fromPts?: string;
   toPts?: string;
@@ -468,6 +470,32 @@ export const importNativeChatBackgroundSnapshot = async (
       error
     );
     return false;
+  }
+};
+
+export const loadNativeNotificationPreview = async (
+  topicId: string,
+  messageId: string,
+  userId: string,
+  apiUrl: string
+): Promise<IMessage[]> => {
+  if (!isAndroidNative() || !userId) return [];
+  try {
+    const snapshot = await ChatBackgroundSync.getSnapshot();
+    if (
+      !snapshot.available ||
+      snapshot.snapshotUserId !== userId ||
+      snapshot.snapshotApiUrl !== apiUrl.replace(/\/+$/, '') ||
+      !snapshot.updatedAt
+    )
+      return [];
+    const age = Date.now() - new Date(snapshot.updatedAt).getTime();
+    if (!Number.isFinite(age) || age > 12 * 60 * 60 * 1000) return [];
+    const messages = snapshot.messagesByTopic?.[topicId] || [];
+    return messages.some(message => message.id === messageId) ? messages : [];
+  } catch (error) {
+    console.warn('Не удалось прочитать фоновый кеш уведомления:', error);
+    return [];
   }
 };
 

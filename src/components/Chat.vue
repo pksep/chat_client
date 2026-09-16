@@ -21,6 +21,7 @@
 
     <template v-if="!isAiRoute && isMobile">
       <div
+        v-if="hasMountedMobileList"
         :class="[
           'chat__mobile-list-layer',
           { 'chat__mobile-list-layer--hidden': hasActiveChatRoute }
@@ -112,7 +113,6 @@ import {
   watch
 } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
-import MessageList from './MessageList.vue';
 import ContactListMobile from './ContactList/MobileList.vue';
 import type { IMessageListProps } from './interfaces/message-list';
 import { MAX_W_MD } from '../utils/constants';
@@ -129,7 +129,9 @@ import ShareSelectionOverlay from './ShareSelectionOverlay.vue';
 import { hasKnownTopicMessagesState } from '../services/useMessages';
 import { useAiAssistant } from '../composables/useAiAssistant';
 import UnselectedTopicIcon from './UI/Icons/UnselectedTopicIcon.vue';
+import { loadMessageList } from '../utils/load-message-list';
 
+const MessageList = defineAsyncComponent(loadMessageList);
 const AIAssistant = defineAsyncComponent(() => import('./AI/AIAssistant.vue'));
 
 export interface IChatProps extends IMessageListProps {
@@ -156,6 +158,10 @@ const activeChatRouteKey = computed(() =>
   route.value.type === RouteTypes.AI ? RouteTypes.AI : route.value.id
 );
 const hasActiveChatRoute = computed(() => !!activeChatRouteKey.value);
+const hasMountedMobileList = ref(!hasActiveChatRoute.value);
+watch(hasActiveChatRoute, active => {
+  if (!active) hasMountedMobileList.value = true;
+});
 const isAiRoute = computed(() => route.value.type === RouteTypes.AI);
 const mobileTransitionName = ref('');
 const isMobileMessageListMounted = ref(!isMobile.value);

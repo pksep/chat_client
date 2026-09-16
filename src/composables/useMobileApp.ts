@@ -2,6 +2,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { MobilePlatformEnum } from '../components/interfaces/interfaces';
+import { afterStartupPaint } from '../utils/after-startup-paint';
 import {
   RuStoreInstallStatus,
   RuStoreUpdateAvailability,
@@ -324,6 +325,9 @@ export function useMobileApp() {
         showDownloadModal.value = true;
       }
     }
+
+    await afterStartupPaint();
+    if (generation !== webUpdateGeneration || activeConsumers === 0) return;
 
     isCheckingForUpdates.value = true;
 

@@ -9,7 +9,10 @@
         {{ props.title }}
       </h4>
 
-      <ConnectionStatus v-if="!props.isCollapse && !!isWaitingConnection" />
+      <ConnectionStatus
+        v-if="!props.isCollapse && !!isWaitingConnection"
+        :refresh-failed="getTopicsRefreshFailed()"
+      />
 
       <Button
         v-if="props.showCreate"
@@ -108,6 +111,7 @@ import GroupIcon from '../UI/GroupIcon.vue';
 import type { ChatsToolbarFilter } from '../../composables/useChatsToolbarState';
 import ConnectionStatus from '../UI/ConnectionStatus.vue';
 import ChatsToolbarFilters from './ChatsToolbarFilters.vue';
+import { getTopicsRefreshFailed } from '../../composables/useTopics';
 import {
   getHasBrowserNetwork,
   getHasWebsocketConnection
@@ -162,7 +166,7 @@ const hasRenderableTopics = computed(() =>
 );
 
 const isWaitingConnection = computed(() => {
-  if (!getHasBrowserNetwork()) {
+  if (!getHasBrowserNetwork() || getTopicsRefreshFailed()) {
     return true;
   }
 

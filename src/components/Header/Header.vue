@@ -450,6 +450,7 @@ import {
 } from '../../composables/useManagerInquiries';
 import {
   computed,
+  defineAsyncComponent,
   nextTick,
   onMounted,
   onUnmounted,
@@ -482,7 +483,6 @@ import type {
 } from '../interfaces/interfaces';
 import AiAvatar from '../AI/AiAvatar.vue';
 import { useAiAssistant } from '../../composables/useAiAssistant';
-import MobileChatInfo from './MobileChatInfo.vue';
 import {
   useMenuInfo,
   type IMenuInfoInformation
@@ -534,7 +534,6 @@ import {
 } from '../../services/useCallState';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
-import UserInfoPanel from '../UserInfoPanel.vue';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import { useContextMenu } from '../../composables/useContextMenu';
 import {
@@ -558,6 +557,13 @@ import {
   isCallSummaryMaterialTypingInTopic,
   ensureCallSummaryEvents
 } from '../../services/useCallSummaries';
+
+const MobileChatInfo = defineAsyncComponent(
+  () => import('./MobileChatInfo.vue')
+);
+const UserInfoPanel = defineAsyncComponent(
+  () => import('../UserInfoPanel.vue')
+);
 
 const {
   activeTitle: aiAssistantTitle,

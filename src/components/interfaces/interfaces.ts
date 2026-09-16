@@ -122,6 +122,8 @@ export type IMedia = Media & {
     previewWidth?: number;
     previewHeight?: number;
     fillPreview?: boolean;
+    processingStatus?: string;
+    mediaProcessing?: { status?: string };
   };
   isLoading?: boolean;
   thumbnailPath?: string | null;

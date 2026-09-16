@@ -53,6 +53,7 @@ export interface ChatMessageInterface {
       lastMessageId?: string;
       afterMessageId?: string;
       newMessages?: boolean;
+      fresh?: boolean;
     }
   ): Promise<Message[]>;
   getTopicMedia(
@@ -208,6 +209,7 @@ export class ChatMessage implements ChatMessageInterface {
       lastMessageId?: string;
       afterMessageId?: string;
       newMessages?: boolean;
+      fresh?: boolean;
     }
   ): Promise<Message[]> {
     const queryParams = new URLSearchParams();
@@ -222,7 +224,9 @@ export class ChatMessage implements ChatMessageInterface {
     const endpoint = `/messages/topic/${topicId}${queryString ? `?${queryString}` : ''}`;
 
     try {
-      return await readJson<Message[]>(this.reqi, endpoint);
+      return await readJson<Message[]>(this.reqi, endpoint, {
+        reusePending: !opts?.fresh
+      });
     } catch (error) {
       throw new Error(`Failed to fetch messages: ${(error as Error).message}`);
     }

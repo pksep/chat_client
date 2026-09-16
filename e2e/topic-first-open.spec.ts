@@ -7,7 +7,7 @@ import {
   openTopic
 } from './fixtures/topic-performance-page';
 
-test('первое открытие показывает сообщение из списка до ответа истории без скелетона', async ({
+test('первое открытие не подменяет историю одним сообщением из списка', async ({
   page
 }) => {
   const state = await openFixture(page, { shell: true, unreadCount: 20 });
@@ -38,17 +38,19 @@ test('первое открытие показывает сообщение из
   });
   try {
     await openTopic(page, 0);
-    await expect(message(page, 0)).toBeVisible();
-    await page.waitForTimeout(1500);
+    await expect(page.locator('.chat__input')).toBeVisible();
+    await expect(page.locator('[data-message-id]')).toHaveCount(0);
+    await expect(
+      page.locator('[data-testid$="-MessageList-Skeleton"]')
+    ).toBeVisible({ timeout: 1000 });
     expect(await page.evaluate(() => (window as any).previewReadCalls)).toBe(0);
-    expect((await metrics(page)).skeletonFrames).toBe(0);
     expect(
       await page.evaluate(() => {
         const { messages } = (window as any).topicPerformance;
         return messages.getFullMessagesByTopicId('performance-0').length;
       })
     ).toBe(0);
-    await expect(page.locator('.chat__message-bubble[inert]')).toHaveCount(1);
+    await expect(page.locator('.chat__message-bubble[inert]')).toHaveCount(0);
     expect(
       state.requests.filter(url => /(?:\/read|read-status)/.test(url))
     ).toEqual([]);
@@ -58,12 +60,11 @@ test('первое открытие показывает сообщение из
   }
   await expect(page.locator('[data-message-id]')).toHaveCount(20);
   await expect(page.locator('.chat__message-bubble[inert]')).toHaveCount(0);
-  expect((await metrics(page)).skeletonFrames).toBe(0);
   expect(historyRequests).toBe(1);
   expect(state.errors).toEqual([]);
 });
 
-test('30 первых открытий: контент во время ожидания, один запрос истории на топик', async ({
+test('30 первых открытий: скелетон без одиночного превью, один запрос истории на топик', async ({
   page
 }) => {
   test.setTimeout(90_000);
@@ -92,7 +93,7 @@ test('30 первых открытий: контент во время ожид�
     await expect(page.locator('.chat__message-bubble[inert]')).toHaveCount(0);
     await page.evaluate(() => (window as any).topicPerformance.back());
   }
-  expect((await metrics(page)).skeletonFrames).toBe(0);
+  expect((await metrics(page)).skeletonFrames).toBeGreaterThan(0);
   expect(
     state.requests.filter(url =>
       /\/messages\/topic\/performance-\d+\?/.test(url)
@@ -315,7 +316,8 @@ test('быстрая смена первого топика не показыв�
   });
   try {
     await openTopic(page, 0);
-    await expect(message(page, 0)).toBeVisible();
+    await expect(page.locator('.chat__input')).toBeVisible();
+    await expect(page.locator('[data-message-id]')).toHaveCount(0);
     await openTopic(page, 1);
     await expect(message(page, 1)).toBeVisible();
   } finally {

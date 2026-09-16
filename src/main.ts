@@ -5,7 +5,7 @@ import App from './App.vue';
 import './assets/chat-container.css';
 import { installNotoEmojiFontFaces } from './composables/useEmojiStyle';
 import { emojiDirective } from './directives/emoji';
-import { registerNativeFileBridge } from './services/useNativeFile';
+import { registerNativeFileBridge } from './services/native-file-bridge';
 import { initFastNativeNotificationNavigation } from './services/usePushNotifications';
 import { LaunchStartup } from './services/launchStartup';
 import { NATIVE_STARTUP_READY_EVENT } from './utils/nativeStartup';
@@ -144,20 +144,15 @@ const runAfterFirstPaint = (task: () => void): void => {
   });
 };
 
-const runAfterNextPaint = (task: () => void): void => {
-  requestAnimationFrame(() => {
-    requestAnimationFrame(task);
-  });
-};
-
 const notifyNativeStartupReady = (): void => {
   if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') {
     return;
   }
 
-  runAfterNextPaint(() => {
-    void LaunchStartup.ready().catch(() => undefined);
-  });
+  // App.vue dispatches this event only after the real content has rendered and
+  // the web startup shell has been removed. Waiting for two more frames keeps
+  // the native logo over an already ready WebView on cold Android launches.
+  void LaunchStartup.ready().catch(() => undefined);
 };
 
 const waitForAppFontReady = async (): Promise<void> => {

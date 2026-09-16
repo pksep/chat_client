@@ -4,6 +4,7 @@ import { chromium, devices, expect } from '@playwright/test';
 import { resolve } from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { externalizeUiKitPdfWorker } from './externalize-ui-kit-pdf-worker.ts';
+import { lazyUiKitPdfRuntime } from './lazy-ui-kit-pdf-runtime.ts';
 
 const outDir = resolve('../artifacts/chat-294-pdf-bundle');
 await mkdir(outDir, { recursive: true });
@@ -30,7 +31,7 @@ pdf += `trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xref}\n
 await writeFile(resolve(outDir, 'sample.pdf'), pdf);
 await build({
   configFile: false,
-  plugins: [vue(), externalizeUiKitPdfWorker()],
+  plugins: [vue(), externalizeUiKitPdfWorker(), lazyUiKitPdfRuntime()],
   publicDir: false,
   build: {
     outDir,
@@ -62,7 +63,9 @@ try {
     await page.goto('http://127.0.0.1:5179/e2e/fixtures/pdf-worker.html');
     await page.waitForTimeout(300);
     expect(
-      requests.filter(url => /\/assets\/pdf-worker-.*\.js$/.test(url))
+      requests.filter(url =>
+        /\/assets\/(?:pdf-worker|_?chat-ui-pdf-runtime)-.*\.js$/.test(url)
+      )
     ).toHaveLength(0);
     await page.getByRole('button', { name: 'PDF', exact: true }).click();
     const canvas = page.locator('canvas');

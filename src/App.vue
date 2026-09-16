@@ -24,9 +24,11 @@
     @submit-credentials="submitCredentialsLogin"
     @back="returnToOrganizationStep"
     @qr-auth-success="handleQrAuthSuccess"
+    @ready="handleAuthorizationReady"
   />
 
   <IosInstallPromptModal
+    v-if="isIosInstallPromptOpen"
     :open="isIosInstallPromptOpen"
     data-testid="App"
     @close="closeIosInstallHelp"
@@ -45,13 +47,18 @@
   />
 </template>
 <script lang="ts" setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import {
+  computed,
+  defineAsyncComponent,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref
+} from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { PushNotification } from '@pksep/yui';
 import { IChatContainerConfig } from './components/interfaces/interfaces';
 import ChatContainerRoot from './ChatContainerRoot.vue';
-import AuthorizationScreen from './components/AuthorizationScreen.vue';
-import IosInstallPromptModal from './components/Menu/IosInstallPromptModal.vue';
 import { useIosInstallPrompt } from './composables/useIosInstallPrompt';
 import { areChatConfigsEqual, setConfig } from './services/useConfig';
 import {
@@ -71,6 +78,17 @@ import {
   NOTIFICATION_TOPIC_SHELL_READY_EVENT
 } from './utils/nativeStartup';
 import { useThemeStore } from './stores/theme';
+import {
+  prepareMessageExperience,
+  prepareMessageListAfterPaint
+} from './utils/load-message-list';
+
+const AuthorizationScreen = defineAsyncComponent(
+  () => import('./components/AuthorizationScreen.vue')
+);
+const IosInstallPromptModal = defineAsyncComponent(
+  () => import('./components/Menu/IosInstallPromptModal.vue')
+);
 
 const ORGANIZATIONS_KEY = 'chat_runtime_organizations';
 const LAST_ORGANIZATION_KEY = 'chat_runtime_last_organization';
@@ -93,6 +111,13 @@ const getStoredOrganizations = (): IStoredOrganization[] => {
 const themeStore = useThemeStore();
 themeStore.initTheme();
 
+// В Android оба модуля читаются из локального APK. Начинаем их разбор под
+// нативным логотипом, пока параллельно восстанавливаются сессия и свежие темы.
+// Тогда первое открытие переписки сразу получает историю и готовый редактор.
+if (Capacitor.isNativePlatform() && getChatAuthSession()?.token) {
+  void prepareMessageExperience().catch(() => undefined);
+}
+
 const shouldSkipStartupShell = consumeAuthRedirectStartupShellSkip();
 const startupShellElement = document.getElementById('startup-shell');
 
@@ -108,6 +133,7 @@ const isStartupShellVisible = ref(
   !shouldSkipStartupShell && Boolean(startupShellElement)
 );
 const isChatContentReady = ref(false);
+let isAuthorizationReady = false;
 const identifierValue = ref('');
 const passwordValue = ref('');
 const rememberAccount = ref(true);
@@ -229,10 +255,23 @@ window.addEventListener(
 
 const handleChatContentReady = () => {
   isChatContentReady.value = true;
+  void nextTick(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        performance.mark('chat-startup:content-painted');
+        prepareMessageListAfterPaint();
+      });
+    });
+  });
 
   if (!isBootstrapping.value) {
     requestStartupShellHide();
   }
+};
+
+const handleAuthorizationReady = () => {
+  isAuthorizationReady = true;
+  requestStartupShellHide();
 };
 
 const finishBootstrapping = () => {
@@ -254,7 +293,7 @@ const finishBootstrapping = () => {
     return;
   }
 
-  requestStartupShellHide();
+  if (isAuthorizationReady) requestStartupShellHide();
 };
 
 const parseRuntimeConfig = (

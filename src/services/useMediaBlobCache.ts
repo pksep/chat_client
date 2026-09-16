@@ -1,6 +1,11 @@
 import { getConfig } from './useConfig';
 import { getAuthToken } from '../composables/useLogin';
 import { getStoredChatAccessToken } from '../composables/useAuth';
+import {
+  buildBrowserCompatibleImageUrl,
+  isHeicMediaPath
+} from '../utils/media-format';
+import { createMediaObjectUrl } from '../utils/media-object-url';
 
 const isInquiryFile = (path: string) =>
   /^manager-private\/[0-9a-f-]{36}$/i.test(path);
@@ -213,7 +218,7 @@ const ensureCacheWithinLimit = async (): Promise<void> => {
 const buildMediaSourceUrl = (path: string): string => {
   const config = getConfig();
   if (/^(blob:|data:|file:\/\/|https?:\/\/)/i.test(path)) {
-    return path;
+    return buildBrowserCompatibleImageUrl(path);
   }
 
   const cdnBase = config.CHAT_PATH_TO_FILE_CDN.replace(/\/+$/, '');
@@ -221,13 +226,64 @@ const buildMediaSourceUrl = (path: string): string => {
   if (path.startsWith('/')) {
     try {
       const resolvedCdn = new URL(cdnBase, window.location.href);
-      return new URL(path, resolvedCdn.origin).toString();
+      return buildBrowserCompatibleImageUrl(
+        new URL(path, resolvedCdn.origin).toString()
+      );
     } catch {
       return path;
     }
   }
 
-  return `${cdnBase}/${path}`;
+  return buildBrowserCompatibleImageUrl(`${cdnBase}/${path}`);
+};
+
+export const readResponseBlobWithinLimit = async (
+  response: Response,
+  maxBytes: number
+): Promise<Blob | null> => {
+  const contentLengthHeader = response.headers.get('content-length');
+  const contentLength = contentLengthHeader
+    ? Number(contentLengthHeader)
+    : Number.NaN;
+
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    await response.body?.cancel().catch(() => undefined);
+    return null;
+  }
+
+  if (!response.body) {
+    const blob = await response.blob();
+    return blob.size <= maxBytes ? blob : null;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let receivedBytes = 0;
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      receivedBytes += value.byteLength;
+
+      if (receivedBytes > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        return null;
+      }
+
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return new Blob(chunks, {
+    type: response.headers.get('content-type') || 'application/octet-stream'
+  });
 };
 
 export const getCachedMediaObjectUrl = (
@@ -255,8 +311,12 @@ export const loadCachedMediaObjectUrl = async (
     try {
       const existingRecord = await getRecord(path);
       if (!existingRecord?.blob) return null;
+      // Старые версии кешировали HEIC, который WebView не умеет показывать.
+      if (isHeicMediaPath(path) && existingRecord.blob.type !== 'image/webp') {
+        return null;
+      }
 
-      const objectUrl = URL.createObjectURL(existingRecord.blob);
+      const objectUrl = await createMediaObjectUrl(existingRecord.blob);
       objectUrlCache.set(path, objectUrl);
       if (shouldRefreshAccessedAt(existingRecord.accessedAt)) {
         void putRecord({
@@ -315,26 +375,18 @@ export const ensureMediaObjectUrl = async (
         return null;
       }
 
-      const contentLength = Number(response.headers.get('content-length'));
+      const blob = await readResponseBlobWithinLimit(
+        response,
+        MAX_CACHE_ITEM_BYTES
+      );
 
-      if (
-        Number.isFinite(contentLength) &&
-        contentLength > MAX_CACHE_ITEM_BYTES
-      ) {
-        await response.body?.cancel().catch(() => undefined);
-        objectUrlCache.set(path, sourceUrl);
-        return sourceUrl;
-      }
-
-      const blob = await response.blob();
-
-      if (blob.size > MAX_CACHE_ITEM_BYTES) {
+      if (!blob) {
         objectUrlCache.set(path, sourceUrl);
         return sourceUrl;
       }
 
       const now = new Date().toISOString();
-      const objectUrl = URL.createObjectURL(blob);
+      const objectUrl = await createMediaObjectUrl(blob);
 
       objectUrlCache.set(path, objectUrl);
 

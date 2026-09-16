@@ -14,6 +14,11 @@ import { version } from './package.json';
 import { externalizeUiKitPdfWorker } from './scripts/externalize-ui-kit-pdf-worker';
 import { preloadStartupModules } from './scripts/preload-startup-modules';
 import { inlineStartupTheme } from './scripts/inline-startup-theme';
+import { externalizeInlineFonts } from './scripts/externalize-inline-fonts';
+import { lazyUiKitPdfRuntime } from './scripts/lazy-ui-kit-pdf-runtime';
+import { lazyUiKitEmojiRuntime } from './scripts/lazy-ui-kit-emoji-runtime';
+import { lazyUiKitEditorRuntime } from './scripts/lazy-ui-kit-editor-runtime';
+import { lazyUiKitSliderRuntime } from './scripts/lazy-ui-kit-slider-runtime';
 
 const BUILD_OUT_DIR = 'build';
 const PUBLIC_BUILD_ENTRIES = new Set([
@@ -124,6 +129,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
   }) as PluginOption;
 
   const appPlugins: PluginOption[] = [
+    externalizeInlineFonts(),
     inlineStartupTheme(),
     preloadStartupModules(),
     VitePWA({
@@ -137,6 +143,9 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         globIgnores: [
           '**/assets/pdf-worker-*.js',
           '**/assets/ui-kit-*.js',
+          '**/assets/_chat-ui-emoji-runtime-*.js',
+          '**/assets/_chat-ui-editor-runtime-*.js',
+          '**/assets/_chat-ui-slider-runtime-*.js',
           '**/assets/ai-*.js',
           '**/assets/AI*.js',
           '**/assets/TasksSuggestionIcon-*.js',
@@ -208,7 +217,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
           },
           {
             urlPattern:
-              /\/assets\/(?:ai|tasksSuggestionIcon|call|useCall|useLiveKit|useMastra|menuProfilePanel)[^/]*\.(?:js|css)$/i,
+              /\/assets\/(?:ai|tasksSuggestionIcon|call|useCall|useLiveKit|useMastra|menuProfilePanel|_chat-ui-emoji-runtime|_chat-ui-editor-runtime)[^/]*\.(?:js|css)$/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'optional-feature-chunks',
@@ -271,6 +280,10 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
 
   const plugins: PluginOption[] = [
     externalizeUiKitPdfWorker(),
+    lazyUiKitPdfRuntime(),
+    lazyUiKitEmojiRuntime(),
+    lazyUiKitEditorRuntime(),
+    lazyUiKitSliderRuntime(),
     cleanGeneratedBuildOutputPlugin(),
     vuePlugin,
     ...appPlugins,
@@ -336,7 +349,9 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
       return 'vue-vendor';
     }
 
-    return 'vendor';
+    // Общий vendor объединял также зависимости отложенных экранов с запуском.
+    // Rollup сохраняет их рядом с теми экранами, которые действительно их используют.
+    return undefined;
   };
 
   return {
@@ -377,6 +392,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
       sourcemap: mode !== 'production',
       rollupOptions: {
         output: {
+          onlyExplicitManualChunks: true,
           manualChunks: getManualChunk
         }
       }

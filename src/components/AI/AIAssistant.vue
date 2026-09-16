@@ -632,8 +632,8 @@ import MessageBubbleFiles from '../Messages/MessageBubbleFiles.vue';
 import MessageBubbleText from '../Messages/MessageBubbleText.vue';
 import PinnedMessageBanner from '../Messages/PinnedMessageBanner.vue';
 import { useMessageMedia } from '../Messages/composables/useMessageMedia';
-import { ensureMediaObjectUrl } from '../../services/useMediaBlobCache';
 import { downloadNativeFile } from '../../services/useNativeFile';
+import { triggerBrowserDownload } from '../../utils/media-download';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import MicDisableIcon from '../CallModal/UI/MicDisableIcon.vue';
 import MicIcon from '../CallModal/UI/MicIcon.vue';
@@ -853,13 +853,10 @@ const handleOutputAttachmentClick = async (
   const media = medias[index];
   if (!media?.path) return;
   if (await downloadNativeFile(media)) return;
-  const cachedObjectUrl = await ensureMediaObjectUrl(media.path);
-  const link = document.createElement('a');
-  link.href = cachedObjectUrl || getFullMediaPath(media, false);
-  link.download = media.originName || 'file';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+  triggerBrowserDownload(
+    getFullMediaPath(media, false),
+    media.originName || 'file'
+  );
 };
 
 type VoiceAssistantState =

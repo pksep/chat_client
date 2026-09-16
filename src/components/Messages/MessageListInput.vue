@@ -316,6 +316,7 @@ const emit = defineEmits([
   'clearForward',
   'scrollToMessage',
   'heightChange',
+  'ready',
   'toggleCallTopicActions'
 ]);
 
@@ -776,7 +777,10 @@ onMounted(() => {
     });
   }
 
-  requestAnimationFrame(reportInputHeight);
+  requestAnimationFrame(() => {
+    reportInputHeight();
+    emit('ready');
+  });
 
   void bindTauriFileDrop({
     getTargetElement: () =>

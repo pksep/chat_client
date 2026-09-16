@@ -236,7 +236,7 @@ import {
   TextFieldEnum
 } from '@pksep/yui';
 import LinkIcon from './UI/LinkIcon.vue';
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useQrAuth } from '../composables/useQrAuth';
 import { showErrorNotification } from '../composables/useNotifications';
 import { getUsersList } from '../composables/useUsers';
@@ -257,6 +257,7 @@ interface IAuthorizationScreenProps {
 }
 
 interface IAuthorizationScreenEmits {
+  (e: 'ready'): void;
   (e: 'update:url', value: string): void;
   (e: 'update:identifier', value: string): void;
   (e: 'update:password', value: string): void;
@@ -275,6 +276,7 @@ interface IAuthorizationScreenEmits {
 
 const props = defineProps<IAuthorizationScreenProps>();
 const emits = defineEmits<IAuthorizationScreenEmits>();
+onMounted(() => emits('ready'));
 const { isScanning, scanQrCode } = useQrAuth();
 
 const submitOrganization = () => {

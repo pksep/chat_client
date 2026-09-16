@@ -93,6 +93,71 @@ export const normalizeFavoriteTopic = (
   };
 };
 
+const toTimestamp = (value: unknown): number => {
+  const timestamp = value ? new Date(value as string | Date).getTime() : 0;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+const getFavoritePriority = (topic: ITopic): number[] => {
+  const lastMessage = topic.lastMessage?.isSystem
+    ? undefined
+    : topic.lastMessage;
+
+  return [
+    lastMessage ? 1 : 0,
+    toTimestamp(lastMessage?.updatedAt || lastMessage?.createdAt),
+    toTimestamp(topic.updatedAt),
+    toTimestamp(topic.createdAt)
+  ];
+};
+
+const isHigherPriorityFavorite = (
+  current: ITopic,
+  candidate: ITopic
+): boolean => {
+  const currentPriority = getFavoritePriority(current);
+  const candidatePriority = getFavoritePriority(candidate);
+
+  return candidatePriority.some(
+    (value, index) =>
+      value !== currentPriority[index] &&
+      value > currentPriority[index] &&
+      candidatePriority
+        .slice(0, index)
+        .every(
+          (priority, priorityIndex) =>
+            priority === currentPriority[priorityIndex]
+        )
+  );
+};
+
+export const dedupeFavoriteTopics = (
+  topics: ITopic[],
+  authUserId?: string | null
+): ITopic[] => {
+  const result: ITopic[] = [];
+  let favoriteIndex = -1;
+
+  topics.forEach(topic => {
+    if (!isFavoriteTopic(topic, authUserId)) {
+      result.push(topic);
+      return;
+    }
+
+    if (favoriteIndex < 0) {
+      favoriteIndex = result.length;
+      result.push(topic);
+      return;
+    }
+
+    if (isHigherPriorityFavorite(result[favoriteIndex], topic)) {
+      result[favoriteIndex] = topic;
+    }
+  });
+
+  return result;
+};
+
 export const filterFavoriteTopicSystemMessages = <
   T extends { isSystem?: boolean }
 >(

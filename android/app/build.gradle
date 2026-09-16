@@ -41,7 +41,11 @@ android {
         versionCode getAppVersionCode()
         versionName getAppVersionName()
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // Явно включается только для локального профилирования release APK.
+        buildConfigField "boolean", "CHAT_STARTUP_BENCHMARK", (project.findProperty("chatStartupBenchmark") == "true").toString()
         aaptOptions {
+            // Локальный WebView читает стартовые ресурсы без распаковки ZIP.
+            noCompress 'js', 'css', 'html'
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
@@ -77,6 +81,13 @@ android {
 
     buildFeatures {
         buildConfig true
+    }
+
+    if (project.findProperty("chatStartupBenchmark") == "true") {
+        sourceSets.release {
+            java.srcDir 'src/benchmark/java'
+            manifest.srcFile 'src/benchmark/AndroidManifest.xml'
+        }
     }
 }
 

@@ -138,6 +138,7 @@
 
   <template v-if="!isAssistantRoute">
     <NewChatMobileModal
+      v-if="hasOpenedNewChat"
       :open="state.showAddAccount"
       :is-add-one="state.newAccountTopicType === TopicType.DM"
       :selected-contact-ids="state.checkUsers"
@@ -145,6 +146,7 @@
       @unmount-contact="handleNewContact"
     />
     <NewBotMobileModal
+      v-if="hasOpenedNewBot"
       :open="state.showCreateBot"
       @unmount-close="handleCloseBotModal"
     />
@@ -176,8 +178,6 @@ import type {
   IMobileListEmits
 } from './interfaces/mobile-list';
 import type { IUser } from '../interfaces/interfaces';
-import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
-import NewBotMobileModal from '../NewChat/NewBotMobileModal.vue';
 import TopicList from './TopicList.vue';
 import ChatsToolbar from '../Menu/ChatsToolbar.vue';
 import { useTopics } from '../../composables/useTopics';
@@ -216,6 +216,12 @@ import {
   normalizeAtSearchQuery
 } from '../../utils/searchMatch';
 
+const NewChatMobileModal = defineAsyncComponent(
+  () => import('../NewChat/NewChatMobileModal.vue')
+);
+const NewBotMobileModal = defineAsyncComponent(
+  () => import('../NewChat/NewBotMobileModal.vue')
+);
 const CallsPage = defineAsyncComponent(() => import('../Calls/CallsPage.vue'));
 const AIMenuPanel = defineAsyncComponent(() => import('../AI/AIMenuPanel.vue'));
 const MenuProfilePanel = defineAsyncComponent(
@@ -279,6 +285,8 @@ const filterMutedOnly = computed(() =>
   getChatsToolbarFilterMutedOnly(filterBadgeState.value)
 );
 
+const hasOpenedNewChat = ref(false);
+const hasOpenedNewBot = ref(false);
 const state = reactive({
   showAddAccount: false,
   showCreateBot: false,
@@ -560,6 +568,7 @@ const handleMessageSearchClick = (result: IMessageSearchResult): void => {
 };
 
 const handleShowAccount = (topicType: TopicType) => {
+  hasOpenedNewChat.value = true;
   if (isAssistantRoute.value) {
     return;
   }
@@ -591,6 +600,7 @@ const handleNewContact = (contact: IUser): void => {
 };
 
 const handleShowBot = () => {
+  hasOpenedNewBot.value = true;
   if (isAssistantRoute.value) {
     return;
   }

@@ -10,7 +10,7 @@ export function useBackButton() {
         // Execute the last handler (the one most recently added, like a top-level modal)
         backButtonHandlers[backButtonHandlers.length - 1]();
       } else {
-        // You could handle default fallback here or just default behavior
+        void CapacitorApp.exitApp();
       }
     });
     initialized = true;
