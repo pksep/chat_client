@@ -24,7 +24,7 @@
 .confirm__modal__description {
   font-size: 14px;
   margin: 20px 0;
-  color: var(--chat-secondary);
+  color: var(--text-secondary);
   font-weight: 700;
   padding-inline: 30px;
 }
@@ -138,7 +138,7 @@
 .vpn-confirm-modal__description {
   max-width: 415px;
   margin: 20px auto 25px;
-  color: var(--chat-secondary);
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 700;
   line-height: 17px;

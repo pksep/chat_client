@@ -54,7 +54,8 @@
   overscroll-behavior: contain;
 }
 
-.mobile-list-container__section--chats {
+.mobile-list-container__section--chats,
+.mobile-list-container__section--clients {
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -66,7 +67,8 @@
   overflow: visible;
 }
 
-.mobile-list-container__section--chats .contact-list {
+.mobile-list-container__section--chats .contact-list,
+.mobile-list-container__section--clients .contact-list {
   max-height: none;
   overflow: visible;
 }

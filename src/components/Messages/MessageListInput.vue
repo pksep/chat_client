@@ -3,8 +3,10 @@
     ref="inputContainerRef"
     class="chat__input emoji-font-host"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
+    @pointerdown.capture="handleContentEditorPointerDown"
     @click.capture="handleContentEditorPopoverClick"
   >
+    <ClientReplyRoutes v-if="props.topicId" :topic-id="props.topicId" />
     <div :data-testid="`${props.dataTestid}-MessageList-ContentEditor`">
       <ContentEditor
         :active-send="props.forwardMessages.length > 0 || props.allowEmptySend"
@@ -186,6 +188,7 @@ import {
   SizesEnum
 } from '@pksep/yui';
 import EditIcon from '../UI/EditIcon.vue';
+import ClientReplyRoutes from '../Clients/ClientReplyRoutes.vue';
 import ForwardIcon from '../UI/ForwardIcon.vue';
 import { stripHtml } from '../../utils/stripHtml';
 import type { IMessage } from '../interfaces/interfaces';
@@ -220,6 +223,7 @@ import {
 } from '../../utils/searchMatch';
 
 interface Props {
+  topicId?: string;
   dataTestid: string;
   modelValue: string;
   editMessage: IMessage | null;
@@ -456,6 +460,20 @@ const contentEditorRef =
   useTemplateRef<typeof ContentEditor>('contentEditorRef');
 const inputContainerRef = useTemplateRef<HTMLElement>('inputContainerRef');
 const isTauriFileDragging = ref(false);
+
+const handleContentEditorPointerDown = (event: PointerEvent): void => {
+  const target = event.target;
+
+  if (
+    !(target instanceof HTMLInputElement) ||
+    !target.closest('.emoji-picker .v3-search')
+  ) {
+    return;
+  }
+
+  event.stopPropagation();
+  target.focus({ preventScroll: true });
+};
 
 const handleContentEditorPopoverClick = (event: MouseEvent): void => {
   const root = inputContainerRef.value;

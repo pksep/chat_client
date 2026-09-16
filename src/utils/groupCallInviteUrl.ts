@@ -1,5 +1,6 @@
 const CALL_INVITE_PARAM = 'callInvite';
 const CALL_ROOM_PARAM = 'callRoom';
+const TRUSTED_NATIVE_CALL_INVITE_ORIGINS = new Set(['https://chat.pksep.ru']);
 
 interface GroupCallInviteParams {
   inviteToken: string;
@@ -19,9 +20,24 @@ const resolveCurrentOrigin = (currentOrigin?: string | null): string | null => {
   return null;
 };
 
+const isNativeClient = (): boolean => {
+  if (typeof window === 'undefined') return false;
+
+  const capacitor = (
+    window as typeof window & {
+      Capacitor?: {
+        isNativePlatform?: () => boolean;
+      };
+    }
+  ).Capacitor;
+
+  return capacitor?.isNativePlatform?.() === true;
+};
+
 export const parseGroupCallInviteUrl = (
   value: string | URL,
   options?: {
+    allowTrustedNativeOrigin?: boolean;
     currentOrigin?: string | null;
   }
 ): GroupCallInviteParams | null => {
@@ -40,7 +56,17 @@ export const parseGroupCallInviteUrl = (
 
     const currentOrigin = resolveCurrentOrigin(options?.currentOrigin);
 
-    if (currentOrigin && url.origin !== currentOrigin) {
+    const allowTrustedNativeOrigin =
+      options?.allowTrustedNativeOrigin ?? isNativeClient();
+    const isTrustedNativeOrigin =
+      allowTrustedNativeOrigin &&
+      TRUSTED_NATIVE_CALL_INVITE_ORIGINS.has(url.origin);
+
+    if (
+      currentOrigin &&
+      url.origin !== currentOrigin &&
+      !isTrustedNativeOrigin
+    ) {
       return null;
     }
 
@@ -64,6 +90,7 @@ export const parseGroupCallInviteUrl = (
 export const isGroupCallInviteUrl = (
   value: string | URL,
   options?: {
+    allowTrustedNativeOrigin?: boolean;
     currentOrigin?: string | null;
   }
 ): boolean => Boolean(parseGroupCallInviteUrl(value, options));

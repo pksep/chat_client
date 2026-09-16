@@ -18,7 +18,14 @@
     >
       {{ props.topic.group?.title || 'Group' }}
     </h3>
-    <ConnectionStatus v-if="!!isWaitingConnection" />
+    <span
+      v-if="props.description !== undefined"
+      class="user-profile__ex"
+      :data-testid="`${dataTestid}-UserProfile-Ex`"
+    >
+      {{ props.description }}
+    </span>
+    <ConnectionStatus v-else-if="!!isWaitingConnection" />
     <TypingIndicator
       v-else-if="props.typingLabel"
       class="user-profile__ex user-profile__ex--typing"

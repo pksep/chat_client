@@ -1,5 +1,10 @@
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { MessageTypeEnum } from '@pksep/yui';
+import { showNotification } from '../composables/useNotifications';
+import { parseGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
+import { createGroupCallInviteQueue } from './groupCallInviteQueue';
+import { invitedGroupCall } from './useCallState';
 
 type NativeCallAction = 'accept' | 'decline';
 
@@ -29,6 +34,7 @@ const CallScreen = registerPlugin<CallScreenPlugin>('CallScreen');
 const CALL_ACTION_URL_SCHEME = 'sepchat://call';
 
 let isCallKitInitialized = false;
+const groupCallInviteQueue = createGroupCallInviteQueue();
 
 const normalizeCallAction = (
   value?: string | null
@@ -69,6 +75,19 @@ const handleCallActionPayload = async (payload?: CallActionPayload | null) => {
 
 const handleAppUrlOpen = async ({ url }: { url: string }) => {
   try {
+    const invite = parseGroupCallInviteUrl(url, {
+      allowTrustedNativeOrigin: Capacitor.isNativePlatform()
+    });
+
+    if (invite) {
+      groupCallInviteQueue.enqueue({
+        key: `${invite.roomId}\u0000${invite.inviteToken}`,
+        url
+      });
+      await flushPendingGroupCallInviteUrl();
+      return;
+    }
+
     const parsedUrl = new URL(url);
     const action =
       normalizeCallAction(parsedUrl.searchParams.get('callAction')) ||
@@ -83,6 +102,49 @@ const handleAppUrlOpen = async ({ url }: { url: string }) => {
     );
   } catch (error) {
     console.warn('[CallKit] Failed to handle app URL action:', error);
+  }
+};
+
+export const flushPendingGroupCallInviteUrl = async (): Promise<boolean> => {
+  try {
+    const { getChatSDK } = await import('./useChat');
+
+    return await groupCallInviteQueue.flush(
+      () => getChatSDK()?.isConnected() === true,
+      async url => {
+        const invite = parseGroupCallInviteUrl(url, {
+          allowTrustedNativeOrigin: Capacitor.isNativePlatform()
+        });
+        const sdk = getChatSDK();
+
+        if (!invite || !sdk) {
+          return false;
+        }
+
+        // Start the small invite request before loading LiveKit. Expired links
+        // avoid downloading LiveKit and media processors at all.
+        const preview = await sdk.getGroupCallInvitePreview(
+          invite.roomId,
+          invite.inviteToken
+        );
+
+        if (!preview) {
+          invitedGroupCall.value = null;
+          showNotification({
+            title: 'Ссылка недействительна',
+            description: 'Ссылка на звонок больше не действует.',
+            type: MessageTypeEnum.error
+          });
+          return true;
+        }
+
+        const { openGroupCallInviteUrl } = await import('./useLiveKit');
+        return openGroupCallInviteUrl(url, { preview });
+      }
+    );
+  } catch (error) {
+    console.warn('[CallKit] Failed to open group call invite:', error);
+    return false;
   }
 };
 
@@ -119,6 +181,17 @@ export const initCallKit = async () => {
     void handleCallActionPayload(customEvent.detail);
   });
 
+  // Read the launch URL before initializing the optional native call screen.
+  // This keeps a cold App Link independent from that plugin's startup time.
+  try {
+    const launchUrl = await CapacitorApp.getLaunchUrl();
+    if (launchUrl?.url) {
+      void handleAppUrlOpen({ url: launchUrl.url });
+    }
+  } catch (error) {
+    console.warn('[CallKit] Failed to read launch URL:', error);
+  }
+
   try {
     await CallScreen.addListener('callAction', payload => {
       void handleCallActionPayload(payload);
@@ -132,15 +205,6 @@ export const initCallKit = async () => {
     void handleCallActionPayload(pendingAction);
   } catch (error) {
     console.warn('[CallKit] Failed to consume pending call action:', error);
-  }
-
-  try {
-    const launchUrl = await CapacitorApp.getLaunchUrl();
-    if (launchUrl?.url) {
-      void handleAppUrlOpen({ url: launchUrl.url });
-    }
-  } catch (error) {
-    console.warn('[CallKit] Failed to read launch URL:', error);
   }
 };
 

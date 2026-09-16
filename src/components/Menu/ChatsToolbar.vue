@@ -1,17 +1,18 @@
 <template>
   <div class="chats-toolbar" :data-testid="`${props.dataTestid}-ChatsToolbar`">
-    <div class="chats-toolbar__headline">
+    <div class="chats-toolbar__headline menu-section-heading">
       <h4
         v-if="!props.isCollapse"
         class="chats-toolbar__title"
         :data-testid="`${props.dataTestid}-ChatsToolbar-Title`"
       >
-        Чаты
+        {{ props.title }}
       </h4>
 
       <ConnectionStatus v-if="!props.isCollapse && !!isWaitingConnection" />
 
       <Button
+        v-if="props.showCreate"
         class="chats-toolbar__create-button"
         :type="ButtonTypeEnum.secondary"
         :size="SizesEnum.little"
@@ -20,11 +21,13 @@
       >
         <Icon
           :name="IconNameEnum.plus"
+          viewBox="0 0 24 24"
           :data-testid="`${props.dataTestid}-ChatsToolbar-PlusIcon`"
         />
       </Button>
 
       <ContextMenu
+        v-if="props.showCreate"
         :visible="!!isOpen['plusMenu']"
         :position="props.contextMenuPosition || position"
         @unmount-close="closeActivePopover('plusMenu')"
@@ -70,40 +73,18 @@
         :data-testid="`${props.dataTestid}-ChatsToolbar-Search`"
       />
 
-      <div
-        v-if="!props.isCollapse"
-        class="chats-toolbar__filters"
-        :data-testid="`${props.dataTestid}-ChatsToolbar-Filters`"
-      >
-        <button
-          v-for="filterOption in filterOptions"
-          :key="filterOption.value"
-          type="button"
-          :class="[
-            'chats-toolbar__filter-button',
-            {
-              'chats-toolbar__filter-button--active':
-                props.filter === filterOption.value
-            }
-          ]"
-          :data-testid="`${props.dataTestid}-ChatsToolbar-Filter-${filterOption.value}`"
-          @click="emits('update:filter', filterOption.value)"
-        >
-          <span>{{ filterOption.label }}</span>
-          <span
-            v-if="!!props.filterCounts[filterOption.value]"
-            :class="[
-              'chats-toolbar__filter-count',
-              {
-                'chats-toolbar__filter-count--muted':
-                  props.filterMutedOnly[filterOption.value]
-              }
-            ]"
-          >
-            {{ props.filterCounts[filterOption.value] }}
-          </span>
-        </button>
-      </div>
+      <template v-if="!props.isCollapse">
+        <slot name="filters">
+          <ChatsToolbarFilters
+            :model-value="props.filter"
+            :options="filterOptions"
+            :counts="props.filterCounts"
+            :muted-only="props.filterMutedOnly"
+            :data-testid="`${props.dataTestid}-ChatsToolbar`"
+            @update:model-value="emits('update:filter', $event)"
+          />
+        </slot>
+      </template>
     </div>
   </div>
 </template>
@@ -126,6 +107,7 @@ import MessageIcon from '../UI/MessageIcon.vue';
 import GroupIcon from '../UI/GroupIcon.vue';
 import type { ChatsToolbarFilter } from '../../composables/useChatsToolbarState';
 import ConnectionStatus from '../UI/ConnectionStatus.vue';
+import ChatsToolbarFilters from './ChatsToolbarFilters.vue';
 import {
   getHasBrowserNetwork,
   getHasWebsocketConnection
@@ -137,6 +119,8 @@ type ChatsToolbarMutedOnly = Record<ChatsToolbarFilter, boolean>;
 const props = withDefaults(
   defineProps<{
     modelValue: string;
+    title?: string;
+    showCreate?: boolean;
     filter?: ChatsToolbarFilter;
     filterCounts?: ChatsToolbarCounts;
     filterMutedOnly?: ChatsToolbarMutedOnly;
@@ -145,6 +129,8 @@ const props = withDefaults(
     contextMenuPosition?: { x: number; y: number };
   }>(),
   {
+    title: 'Чаты',
+    showCreate: true,
     filter: 'all',
     filterCounts: () => ({
       all: 0,

@@ -1,5 +1,6 @@
 import { Topic, TopicSetting, User } from '@pksep/zod-shared-chat';
 import { Reqi } from '@pksep/reqi';
+import { readJson } from './read-json';
 import { PaginatedResponse } from './types';
 import { ITopic } from '../../components/interfaces/interfaces';
 
@@ -49,12 +50,7 @@ export class ChatTopic implements ChatTopicInterface {
     const endpoint = `/topics${queryString ? `?${queryString}` : ''}`;
 
     try {
-      const response = (await this.reqi.get<PaginatedResponse<ITopic>>(
-        endpoint,
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
+      return await readJson<PaginatedResponse<ITopic>>(this.reqi, endpoint);
     } catch (error) {
       throw new Error(`Failed to fetch topics: ${(error as Error).message}`);
     }
@@ -137,12 +133,10 @@ export class ChatTopic implements ChatTopicInterface {
     userId: string
   ): Promise<TopicSetting> {
     try {
-      const response = (await this.reqi.get<TopicSetting>(
-        `/topics/${topicId}/settings/${userId}`,
-        { parsed: false }
-      )) as any;
-      const data = await response.json();
-      return data;
+      return await readJson<TopicSetting>(
+        this.reqi,
+        `/topics/${topicId}/settings/${userId}`
+      );
     } catch (error) {
       throw new Error(
         `Failed to fetch topic settings: ${(error as Error).message}`
@@ -182,11 +176,7 @@ export class ChatTopic implements ChatTopicInterface {
 
   async getTopicById(topicId: string): Promise<Topic> {
     try {
-      const response = (await this.reqi.get<Topic>(`/topics/${topicId}`, {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
+      return await readJson<Topic>(this.reqi, `/topics/${topicId}`);
     } catch (error) {
       throw new Error(`Failed to fetch topic: ${(error as Error).message}`);
     }
@@ -194,14 +184,10 @@ export class ChatTopic implements ChatTopicInterface {
 
   async getTopicParticipants(topicId: string): Promise<User[]> {
     try {
-      const response = (await this.reqi.get<User[]>(
-        `/topics/${topicId}/participants`,
-        {
-          parsed: false
-        }
-      )) as any;
-      const data = await response.json();
-      return data;
+      return await readJson<User[]>(
+        this.reqi,
+        `/topics/${topicId}/participants`
+      );
     } catch (error) {
       throw new Error(
         `Failed to fetch topic participants: ${(error as Error).message}`

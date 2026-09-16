@@ -4,7 +4,7 @@
     :data-testid="`${props.dataTestid}-MenuProfilePanel-Container`"
   >
     <h4
-      class="menu-profile__title"
+      class="menu-profile__title menu-section-heading"
       :data-testid="`${props.dataTestid}-MenuProfilePanel-Title`"
     >
       Профиль
@@ -99,20 +99,35 @@
             class="menu-profile__status-menu"
             :data-testid="`${props.dataTestid}-MenuProfilePanel-StatusMenu`"
           >
-            <button
+            <div
               v-for="option in statusPresets"
               :key="`${option.icon}-${option.text}`"
-              type="button"
-              class="menu-profile__status-option"
-              :disabled="isSavingStatus"
-              @click="selectPreset(option)"
+              class="menu-profile__status-option-row"
             >
-              <EmojiIcon
-                class="menu-profile__status-option-icon"
-                :emoji="option.icon"
-              />
-              <span>{{ option.text }}</span>
-            </button>
+              <button
+                type="button"
+                class="menu-profile__status-option"
+                :disabled="isSavingStatus"
+                @click="selectPreset(option)"
+              >
+                <EmojiIcon
+                  class="menu-profile__status-option-icon"
+                  :emoji="option.icon"
+                />
+                <span>{{ option.text }}</span>
+              </button>
+              <button
+                v-if="option.custom"
+                type="button"
+                class="menu-profile__status-option-remove"
+                :aria-label="`Удалить вариант «${option.text}»`"
+                :title="`Удалить вариант «${option.text}»`"
+                :disabled="isSavingStatus"
+                @click.stop="removeStatusPreset(option)"
+              >
+                <Icon :name="IconNameEnum.closeTag" :width="16" :height="16" />
+              </button>
+            </div>
 
             <button
               type="button"
@@ -132,8 +147,11 @@
           >
             <div class="menu-profile__status-custom__input__group">
               <button
+                ref="statusEmojiButtonRef"
                 type="button"
                 class="menu-profile__status-emoji-button"
+                aria-label="Выбрать эмодзи статуса"
+                :aria-expanded="isEmojiPickerOpen"
                 :disabled="isSavingStatus"
                 @click="toggleEmojiPicker"
               >
@@ -157,12 +175,18 @@
                 placeholder="Выберите эмодзи и введите текст"
               />
             </div>
-            <div
-              v-if="isEmojiPickerOpen"
-              class="menu-profile__status-emoji-picker"
-            >
-              <EmojiPicker :native="true" @select="handleSelectEmoji" />
-            </div>
+            <Teleport to="body">
+              <div
+                v-if="isEmojiPickerOpen"
+                ref="statusEmojiPickerRef"
+                class="menu-profile__status-emoji-picker"
+                :style="statusEmojiPickerStyles"
+                role="dialog"
+                aria-label="Эмодзи статуса"
+              >
+                <EmojiPickerPanel @select="handleSelectEmoji" />
+              </div>
+            </Teleport>
             <Button
               :type="ButtonTypeEnum.primary"
               :size="SizesEnum.small"
@@ -760,21 +784,27 @@ import {
   ButtonTypeEnum,
   Checkbox,
   CheckboxCircularEnum,
+  EmojiPickerPanel,
   Icon,
   IconNameEnum,
   Modal,
   SizesEnum,
-  Toggle
+  Toggle,
+  autoUpdate,
+  flip,
+  offset,
+  shift,
+  useFloating
 } from '@pksep/yui';
 import {
   computed,
   defineAsyncComponent,
   ref,
   useTemplateRef,
+  watch,
   type CSSProperties
 } from 'vue';
-import EmojiPicker from 'vue3-emoji-picker';
-import 'vue3-emoji-picker/css';
+import { onClickOutside, onKeyStroke } from '@vueuse/core';
 import type { IUser, IUserStatus } from '../interfaces/interfaces';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import EmojiIcon from '../UI/EmojiIcon.vue';
@@ -786,10 +816,14 @@ import {
 import { useLogout } from '../../composables/useLogin';
 import { clearAnyChatBackgroundSyncSession } from '../../services/useChatBackgroundSync';
 import { cleanupPushNotificationsOnLogout } from '../../services/usePushNotifications';
-import { updateCurrentUserStatus } from '../../services/useUserStatus';
+import {
+  updateCurrentUserStatus,
+  removeCurrentUserStatusPreset
+} from '../../services/useUserStatus';
 import {
   formatUserStatusLabel,
   formatUserStatusText,
+  getCustomUserStatusPresets,
   normalizeUserStatus,
   USER_STATUS_PRESETS
 } from '../../utils/userStatus';
@@ -804,6 +838,10 @@ import ConfirmModal from '../UI/ConfirmModal.vue';
 import FileIcon from '../UI/FileIcon.vue';
 import { useMobileApp } from '../../composables/useMobileApp';
 import { useThemeStore } from '../../stores/theme';
+import {
+  isStatusPresetDesignPreview,
+  statusPresetDesignPreview
+} from './status-presets-design-preview';
 
 const CallBackgroundPreviewModal = defineAsyncComponent(
   () => import('../CallModal/CallBackgroundPreviewModal.vue')
@@ -825,11 +863,54 @@ const { state: isMobile } = useResizeState(MAX_W_MD);
 const canChangeTheme = computed(
   () => !isMobile.value && !Capacitor.isNativePlatform()
 );
-const statusPresets = USER_STATUS_PRESETS;
+const statusPresets = computed(() => [
+  ...USER_STATUS_PRESETS.map(status => ({ ...status, custom: false })),
+  ...(isStatusPresetDesignPreview
+    ? statusPresetDesignPreview.value
+    : getCustomUserStatusPresets(authUser.value?.ex, authUser.value?.status)
+  ).map(status => ({ ...status, custom: true }))
+]);
 const MAX_CUSTOM_WALLPAPER_SIZE_BYTES = 2 * 1024 * 1024;
 const isStatusMenuOpen = ref(false);
 const isCustomStatusOpen = ref(false);
 const isEmojiPickerOpen = ref(false);
+const statusEmojiButtonRef = useTemplateRef<HTMLButtonElement>(
+  'statusEmojiButtonRef'
+);
+const statusEmojiPickerRef = useTemplateRef<HTMLDivElement>(
+  'statusEmojiPickerRef'
+);
+const { floatingStyles: statusEmojiPickerStyles } = useFloating(
+  statusEmojiButtonRef,
+  statusEmojiPickerRef,
+  {
+    open: isEmojiPickerOpen,
+    placement: 'top-start',
+    strategy: 'fixed',
+    middleware: [
+      offset(8),
+      flip({ padding: 8 }),
+      shift({ padding: 8, crossAxis: true })
+    ],
+    whileElementsMounted: autoUpdate
+  }
+);
+onClickOutside(
+  statusEmojiPickerRef,
+  () => {
+    isEmojiPickerOpen.value = false;
+  },
+  { ignore: [statusEmojiButtonRef] }
+);
+onKeyStroke('Escape', event => {
+  if (!isEmojiPickerOpen.value) return;
+  event.preventDefault();
+  isEmojiPickerOpen.value = false;
+  statusEmojiButtonRef.value?.focus();
+});
+watch(isMobile, () => {
+  isEmojiPickerOpen.value = false;
+});
 const isWallpaperMenuOpen = ref(false);
 const isWallpaperPreviewOpen = ref(false);
 const isApplyingWallpaper = ref(false);
@@ -952,8 +1033,12 @@ const profileUpdateDescription = computed(() => {
   return 'Нажмите, чтобы проверить доступные обновления';
 });
 
-preloadNotoEmojiAssets([...statusPresets.map(option => option.icon), '🦄'], {
-  highPriority: true
+watch(isStatusMenuOpen, isOpen => {
+  if (isOpen)
+    preloadNotoEmojiAssets(
+      [...statusPresets.value.map(option => option.icon), '🦄'],
+      { highPriority: true }
+    );
 });
 
 const canSaveCustomStatus = computed(
@@ -1185,7 +1270,7 @@ const applyPendingWallpaper = async (): Promise<void> => {
   } catch (error) {
     console.error('Failed to persist custom wallpaper:', error);
     wallpaperError.value =
-      'Не получилось сохранить изображение. Попробуйте SVG или файл поменьше';
+      'Не получилось сохранить фон на сервере. Проверьте соединение и попробуйте ещё раз';
     isApplyingWallpaper.value = false;
   }
 };
@@ -1244,7 +1329,7 @@ const applyPendingCallBackground = async (): Promise<void> => {
   } catch (error) {
     console.error('Failed to persist custom call background:', error);
     callBackgroundError.value =
-      'Не получилось сохранить изображение. Попробуйте SVG или файл поменьше';
+      'Не получилось сохранить фон на сервере. Проверьте соединение и попробуйте ещё раз';
     isApplyingCallBackground.value = false;
   }
 };
@@ -1252,9 +1337,11 @@ const applyPendingCallBackground = async (): Promise<void> => {
 const handleSelectEmoji = (emoji: { i: string }): void => {
   customStatusIcon.value = emoji.i;
   isEmojiPickerOpen.value = false;
+  statusEmojiButtonRef.value?.focus();
 };
 
 const saveStatus = async (status: IUserStatus | null): Promise<void> => {
+  if (isStatusPresetDesignPreview) return;
   statusError.value = '';
   isSavingStatus.value = true;
 
@@ -1272,6 +1359,27 @@ const saveStatus = async (status: IUserStatus | null): Promise<void> => {
 
 const selectPreset = async (status: IUserStatus): Promise<void> => {
   await saveStatus(status);
+};
+
+const removeStatusPreset = async (status: IUserStatus): Promise<void> => {
+  if (isStatusPresetDesignPreview) {
+    statusPresetDesignPreview.value = statusPresetDesignPreview.value.filter(
+      option => option.icon !== status.icon || option.text !== status.text
+    );
+    return;
+  }
+  if (isSavingStatus.value) return;
+  statusError.value = '';
+  isSavingStatus.value = true;
+  try {
+    await removeCurrentUserStatusPreset(status);
+  } catch (error) {
+    console.error('Не получилось удалить вариант статуса:', error);
+    statusError.value =
+      'Не получилось удалить вариант статуса. Попробуйте ещё раз';
+  } finally {
+    isSavingStatus.value = false;
+  }
 };
 
 const saveCustomStatus = async (): Promise<void> => {

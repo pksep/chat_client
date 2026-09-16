@@ -3,7 +3,9 @@
     class="chats-toolbar calls-page__panel-header"
     :data-testid="`${props.dataTestid}-Container`"
   >
-    <div class="chats-toolbar__headline calls-page__headline">
+    <div
+      class="chats-toolbar__headline calls-page__headline menu-section-heading"
+    >
       <div class="calls-page__header-copy">
         <h4
           class="chats-toolbar__title calls-page__header-title"

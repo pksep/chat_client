@@ -46,6 +46,7 @@
 </template>
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { Capacitor } from '@capacitor/core';
 import { PushNotification } from '@pksep/yui';
 import { IChatContainerConfig } from './components/interfaces/interfaces';
 import ChatContainerRoot from './ChatContainerRoot.vue';
@@ -162,6 +163,7 @@ const dispatchNativeStartupReadyOnce = () => {
 
 const removeStartupShell = () => {
   startupShellElement?.remove();
+  performance.mark('chat-startup:shell-removed');
   document.documentElement.classList.remove('startup-shell-topic-route');
   isStartupShellVisible.value = false;
   dispatchNativeStartupReadyOnce();
@@ -172,6 +174,13 @@ const hideStartupShellAfterMainPaint = async () => {
 
   await nextTick();
   await waitForAnimationFrame();
+  if (hideToken !== startupShellHideToken) return;
+  // Настоящий интерфейс уже готов к этому кадру; fade на Android держал
+  // поверх него ещё один скелетон и конкурировал с отложенной загрузкой.
+  if (Capacitor.getPlatform() === 'android') {
+    removeStartupShell();
+    return;
+  }
   await waitForAnimationFrame();
 
   if (hideToken !== startupShellHideToken) {
@@ -1192,6 +1201,18 @@ onBeforeUnmount(() => {
 }
 
 .app-notification-stack__item {
+  width: min(305px, calc(100vw - 32px));
+  min-height: 77px;
+  box-sizing: border-box;
+  box-shadow: 0 4px 9.8px rgb(0 0 0 / 5%);
   pointer-events: auto;
+}
+
+.app-notification-stack__item.push-notification-yui-kit_info {
+  --text-brand: var(--action-primary-bg);
+}
+
+.app-notification-stack__item :deep(.notification-yui-kit) {
+  box-shadow: none;
 }
 </style>

@@ -4,6 +4,20 @@ import {
 } from '@vite-pwa/assets-generator/config';
 
 export default defineConfig({
-  preset,
-  images: ['public/images/logo-light.svg']
+  preset: {
+    ...preset,
+    transparent: { ...preset.transparent, padding: 0 },
+    maskable: {
+      ...preset.maskable,
+      padding: 0,
+      resizeOptions: { background: '#262A38' }
+    },
+    apple: {
+      ...preset.apple,
+      padding: 0,
+      resizeOptions: { background: '#262A38' }
+    }
+  },
+  // Иконка установленного приложения всегда использует тёмный вариант.
+  images: ['public/images/logo-dark.svg']
 });

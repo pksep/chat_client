@@ -440,7 +440,7 @@ const handleCallBackgroundUpload = async (event: Event): Promise<void> => {
   } catch (error) {
     console.error('Failed to save custom call background:', error);
     callBackgroundError.value =
-      'Не получилось сохранить изображение. Попробуйте SVG или файл поменьше';
+      'Не получилось сохранить фон на сервере. Проверьте соединение и попробуйте ещё раз';
   } finally {
     input.value = '';
   }

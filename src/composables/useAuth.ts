@@ -5,6 +5,7 @@ import type {
 import { ref, Ref } from 'vue';
 import { setAuthToken } from './useLogin';
 import { getConfig } from '../services/useConfig';
+import { configureCustomBackgroundSync } from '../services/useCustomBackgroundSync';
 
 type AuthUser = IUser;
 
@@ -195,6 +196,7 @@ export const isStoredChatSessionPersistent = (): boolean => {
 };
 
 export const clearChatAuthSession = (): void => {
+  configureCustomBackgroundSync(null);
   localStorage.removeItem(CHAT_AUTH_SESSION_KEY);
   sessionStorage.removeItem(CHAT_AUTH_SESSION_KEY);
   void import('../services/useChatBackgroundSync')
@@ -346,6 +348,9 @@ export const fetchAuthUser = async (): Promise<AuthUser | null> => {
 };
 
 export const setAuthUser = (user: AuthUser | null) => {
+  if (!user || (authedUser.value?.id && authedUser.value.id !== user.id)) {
+    configureCustomBackgroundSync(null);
+  }
   authedUser.value = user;
 };
 

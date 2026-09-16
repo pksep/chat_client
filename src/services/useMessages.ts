@@ -14,12 +14,13 @@ import {
   setTopicTaggedMe,
   syncTopicUnreadState,
   clearTopicReadPreview,
+  cleanupFavoriteTopicSystemMessages,
   useTopics
 } from '../composables/useTopics';
 import { isTopicMuted } from '../composables/useTopics';
 import { useGroup } from '../composables/useGroup';
 import { useUrlWatcher } from '../composables/navigation';
-import { authedUser } from '../composables/useAuth';
+import { authedUser, getChatAuthSession } from '../composables/useAuth';
 import {
   clearCachedTopicMessages,
   loadCachedPinnedMessages,
@@ -48,12 +49,14 @@ import { getIsAppActivelyVisible } from './useAppVisibility';
 import {
   appendShadowSyncMetaList,
   deleteShadowTopicMessage,
+  getCachedShadowReadState,
   hasCachedShadowLoadedRanges,
   hasCachedShadowReadState,
   isShadowSyncEnabled,
   loadShadowDeletedMessageIds,
   loadShadowLoadedRanges,
   loadShadowReadState,
+  loadShadowTopicPreview,
   resolveShadowTopicContext,
   resolveShadowTopicPage,
   saveShadowLoadedRange,
@@ -63,6 +66,7 @@ import {
   saveShadowTopicSnapshot,
   syncShadowReadStateFromMessages
 } from './useShadowChatSync';
+import type { ShadowReadStateValue } from './useShadowChatSync';
 import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { compareMessages, getMessageTimestamp } from '../utils/messageOrder';
 import { parseMessageEx } from '../utils/messageReplyQuote';
@@ -84,9 +88,29 @@ interface PendingMessagePersist {
   idleId: number | null;
   messages: IMessage[];
   replace: boolean;
+  userId: string | undefined;
+  migrateLegacyCache: boolean;
 }
 
 const pendingMessagePersists = new Map<string, PendingMessagePersist>();
+let messagePersistenceBarrier: Promise<void> | null = null;
+
+// Первый экран важнее переноса уже сохранённой истории. При уходе в фон
+// flushPendingMessagePersists обходит ожидание и сохраняет новые изменения.
+export const deferMessagePersistsUntil = (
+  ready: Promise<void>
+): (() => void) => {
+  let release!: () => void;
+  const barrier = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  void ready.then(release, release);
+  messagePersistenceBarrier = barrier;
+  void barrier.then(() => {
+    if (messagePersistenceBarrier === barrier) messagePersistenceBarrier = null;
+  });
+  return release;
+};
 const pendingOutgoingForwardBatches = new Map<
   string,
   Array<{
@@ -114,6 +138,23 @@ const pendingUploadSnapshotGenerations = new Map<string, number>();
 const pendingUploadSnapshotRevisions = new Map<string, number>();
 const PENDING_UPLOAD_SNAPSHOT_PERSIST_DELAY_MS = 200;
 const canonicalTopicStateIds = new Set<string>();
+const hydratedResidentTopicUsers = new Map<string, string>();
+const recentTopicFetches = new Map<
+  string,
+  {
+    sdk: ReturnType<typeof getChatSDK>;
+    fetchedAt: number;
+    limit: number;
+    complete: boolean;
+  }
+>();
+const recentPinnedFetches = new Map<
+  string,
+  {
+    sdk: ReturnType<typeof getChatSDK>;
+    fetchedAt: number;
+  }
+>();
 const delayedOutgoingMessages = new Map<
   string,
   { message: IMessage; timeoutId: ReturnType<typeof setTimeout> }
@@ -240,12 +281,30 @@ const persistPendingMessageSnapshot = async (
   // The shadow snapshot is the canonical cache. The old topic cache remains
   // read-only as a migration fallback, avoiding two full structured clones
   // and two IndexedDB writes after every message mutation.
-  await Promise.allSettled([
-    saveShadowTopicSnapshot(topicId, topicMessages, 'local', undefined, {
-      replace: pendingPersist.replace
-    }),
-    syncShadowReadStateFromMessages(topicId, topicMessages, 'local')
+  const [snapshot] = await Promise.allSettled([
+    saveShadowTopicSnapshot(
+      topicId,
+      topicMessages,
+      'local',
+      pendingPersist.userId,
+      {
+        replace: pendingPersist.replace
+      }
+    ),
+    syncShadowReadStateFromMessages(
+      topicId,
+      topicMessages,
+      'local',
+      pendingPersist.userId
+    )
   ]);
+  if (
+    pendingPersist.migrateLegacyCache &&
+    snapshot.status === 'fulfilled' &&
+    snapshot.value
+  ) {
+    await clearCachedTopicMessages(topicId, pendingPersist.userId);
+  }
   pruneInactiveTopicMemory();
 };
 
@@ -259,12 +318,18 @@ export const flushPendingMessagePersists = async (): Promise<void> => {
   );
 };
 
-const schedulePersistMessages = (topicId: string, delayMs = 150): void => {
+const schedulePersistMessages = (
+  topicId: string,
+  delayMs = 150,
+  opts?: { userId?: string; migrateLegacyCache?: boolean }
+): void => {
   if (!topicId) {
     return;
   }
 
   const previousPersist = pendingMessagePersists.get(topicId);
+  const userId =
+    opts?.userId || authedUser.value?.id || getChatAuthSession()?.user?.id;
 
   if (previousPersist) {
     cancelPendingMessagePersistSchedule(previousPersist);
@@ -274,11 +339,16 @@ const schedulePersistMessages = (topicId: string, delayMs = 150): void => {
     timeoutId: null,
     idleId: null,
     messages: fullMessagesStore[topicId] || [],
-    replace: canonicalTopicStateIds.has(topicId)
+    replace: canonicalTopicStateIds.has(topicId),
+    userId,
+    migrateLegacyCache: !!(
+      opts?.migrateLegacyCache ||
+      (previousPersist?.userId === userId &&
+        previousPersist?.migrateLegacyCache)
+    )
   };
   const queueIdlePersist = (): void => {
-    pendingPersist.timeoutId = null;
-
+    if (pendingMessagePersists.get(topicId) !== pendingPersist) return;
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
       pendingPersist.idleId = window.requestIdleCallback(
         () => void persistPendingMessageSnapshot(topicId, pendingPersist),
@@ -293,7 +363,14 @@ const schedulePersistMessages = (topicId: string, delayMs = 150): void => {
     );
   };
 
-  pendingPersist.timeoutId = setTimeout(queueIdlePersist, delayMs);
+  pendingPersist.timeoutId = setTimeout(() => {
+    pendingPersist.timeoutId = null;
+    if (messagePersistenceBarrier && document.visibilityState !== 'hidden') {
+      void messagePersistenceBarrier.then(queueIdlePersist);
+    } else {
+      queueIdlePersist();
+    }
+  }, delayMs);
   pendingMessagePersists.set(topicId, pendingPersist);
 };
 
@@ -353,6 +430,9 @@ const pruneInactiveTopicMemory = (): void => {
     delete messagesStore[topicId];
     fullMessageIndexesByTopic.delete(topicId);
     canonicalTopicStateIds.delete(topicId);
+    hydratedResidentTopicUsers.delete(topicId);
+    recentTopicFetches.delete(topicId);
+    recentPinnedFetches.delete(topicId);
     defaultVisibleMessagesLimitByTopic.delete(topicId);
     topicMemoryAccessOrder.delete(topicId);
     removableCount -= 1;
@@ -829,14 +909,23 @@ const getNonShrinkingVisibleLimit = (
   return Math.max(requestedLimit, getMessagesByTopicId(topicId).length);
 };
 
-const stripRuntimeMediaState = (message: IMessage): IMessage => ({
-  ...message,
-  media: message.media?.map(media => ({
-    ...media,
-    localPath: undefined,
-    localThumbnailPath: undefined
-  }))
-});
+const stripRuntimeMediaState = (message: IMessage): IMessage => {
+  if (
+    !message.media?.some(
+      media =>
+        media.localPath !== undefined || media.localThumbnailPath !== undefined
+    )
+  )
+    return message;
+  return {
+    ...message,
+    media: message.media.map(media =>
+      media.localPath !== undefined || media.localThumbnailPath !== undefined
+        ? { ...media, localPath: undefined, localThumbnailPath: undefined }
+        : media
+    )
+  };
+};
 
 const prepareMessagesForPersistence = (messages: IMessage[]): IMessage[] =>
   messages.map(stripRuntimeMediaState);
@@ -844,88 +933,103 @@ const prepareMessagesForPersistence = (messages: IMessage[]): IMessage[] =>
 const restorePendingUploadMediaState = async (
   topicId: string,
   messages: IMessage[]
-): Promise<IMessage[]> =>
-  Promise.all(
-    messages.map(async message => {
-      if (!message.media?.length) {
-        return message;
+): Promise<IMessage[]> => {
+  let restored = messages;
+  const pending: Promise<void>[] = [];
+  for (let index = 0; index < messages.length; index++) {
+    const message = messages[index];
+    if (!message.media?.some(media => media.isLoading || media.uploadError)) {
+      continue;
+    }
+    if (restored === messages) restored = messages.slice();
+    pending.push(
+      restoreMessagePendingUploadMediaState(topicId, message).then(result => {
+        restored[index] = result;
+      })
+    );
+  }
+  if (pending.length) await Promise.all(pending);
+  return restored;
+};
+
+const restoreMessagePendingUploadMediaState = async (
+  topicId: string,
+  message: IMessage
+): Promise<IMessage> => {
+  let hadInterruptedUpload = false;
+
+  const restoredMedia = await Promise.all(
+    message.media.map(async media => {
+      // Normal remote media never has a pending local file. Avoid one
+      // IndexedDB transaction per image while hydrating long histories.
+      if (!media.isLoading && !media.uploadError) {
+        return media;
       }
 
-      let hadInterruptedUpload = false;
+      // Show an interrupted upload immediately with its persisted percent.
+      // The sender retry loop waits for the service worker/OPFS file in the
+      // background, so a very early refresh never blocks the whole history.
+      if (media.isLoading) {
+        hadInterruptedUpload = true;
+        return {
+          ...media,
+          isLoading: true,
+          uploadError: true
+        };
+      }
 
-      const restoredMedia = await Promise.all(
-        message.media.map(async media => {
-          // Normal remote media never has a pending local file. Avoid one
-          // IndexedDB transaction per image while hydrating long histories.
-          if (!media.isLoading && !media.uploadError) {
-            return media;
-          }
-
-          // Show an interrupted upload immediately with its persisted percent.
-          // The sender retry loop waits for the service worker/OPFS file in the
-          // background, so a very early refresh never blocks the whole history.
-          if (media.isLoading) {
-            hadInterruptedUpload = true;
-            return {
-              ...media,
-              isLoading: true,
-              uploadError: true
-            };
-          }
-
-          const pendingFile = await getPendingUploadFile(
-            topicId,
-            message.id,
-            media.id
-          );
-
-          if (!pendingFile) {
-            if (media.isLoading) {
-              hadInterruptedUpload = true;
-              return {
-                ...media,
-                isLoading: false,
-                uploadError: true,
-                uploadPercent: null
-              };
-            }
-
-            return media;
-          }
-
-          let localPath = media.localPath;
-          let localThumbnailPath = media.localThumbnailPath;
-
-          if (media.type === MediaType.Video) {
-            localPath = URL.createObjectURL(pendingFile.file);
-            localThumbnailPath =
-              (await getVideoThumbnail(pendingFile.file)) ||
-              VIDEO_FALLBACK_THUMBNAIL;
-          } else if (media.type === MediaType.Image) {
-            localPath = await fileToDataURL(pendingFile.file);
-          }
-
-          if (media.isLoading) {
-            hadInterruptedUpload = true;
-          }
-
-          return {
-            ...media,
-            localPath,
-            localThumbnailPath,
-            isLoading: media.isLoading ? false : media.isLoading,
-            uploadError: media.isLoading ? true : media.uploadError
-          };
-        })
+      const pendingFile = await getPendingUploadFile(
+        topicId,
+        message.id,
+        media.id
       );
 
+      if (!pendingFile) {
+        if (media.isLoading) {
+          hadInterruptedUpload = true;
+          return {
+            ...media,
+            isLoading: false,
+            uploadError: true,
+            uploadPercent: null
+          };
+        }
+
+        return media;
+      }
+
+      let localPath = media.localPath;
+      let localThumbnailPath = media.localThumbnailPath;
+
+      if (media.type === MediaType.Video) {
+        localPath = URL.createObjectURL(pendingFile.file);
+        localThumbnailPath =
+          (await getVideoThumbnail(pendingFile.file)) ||
+          VIDEO_FALLBACK_THUMBNAIL;
+      } else if (media.type === MediaType.Image) {
+        localPath = await fileToDataURL(pendingFile.file);
+      }
+
+      if (media.isLoading) {
+        hadInterruptedUpload = true;
+      }
+
       return {
-        ...message,
-        status: hadInterruptedUpload ? MessageStatus.Wait : message.status,
-        media: restoredMedia
+        ...media,
+        localPath,
+        localThumbnailPath,
+        isLoading: media.isLoading ? false : media.isLoading,
+        uploadError: media.isLoading ? true : media.uploadError
       };
     })
   );
+
+  return {
+    ...message,
+    status: hadInterruptedUpload ? MessageStatus.Wait : message.status,
+    media: restoredMedia
+  };
+};
 
 const dedupeMessagesForTopic = (messages: IMessage[]): IMessage[] => {
   const byStableKey = new Map<string, IMessage>();
@@ -1167,13 +1271,17 @@ const updateTopicMessageStores = (
 const applyShadowReadStateToMessages = async (
   topicId: string,
   messages: IMessage[],
-  userId = authedUser.value?.id
+  userId = authedUser.value?.id,
+  loadedReadState?: ShadowReadStateValue | null
 ): Promise<IMessage[]> => {
   if (!topicId || !userId || messages.length === 0) {
     return messages;
   }
 
-  const readState = await loadShadowReadState(topicId, userId);
+  const readState =
+    loadedReadState === undefined
+      ? await loadShadowReadState(topicId, userId)
+      : loadedReadState;
 
   if (!readState?.lastReadMessageId && !readState?.lastReadAt) {
     return messages;
@@ -1262,23 +1370,73 @@ export const fetchMessagesForTopic = async (
     forceNetwork?: boolean;
     visibleLimit?: number;
     updateVisible?: boolean;
+    revealIfEmpty?: boolean;
     allowVisibleShrink?: boolean;
     skipShadowSnapshot?: boolean;
     allowStaleFallback?: boolean;
+    maxAgeMs?: number;
   }
 ): Promise<IMessage[]> => {
   try {
     if (!topicId) return [];
 
-    await ensureShadowReadStateLoaded(topicId);
-    await ensureShadowLoadedRangesLoaded(topicId);
-    await rememberPersistedDeletedMessageIds(topicId);
-
+    const metadataReady = Promise.all([
+      ensureShadowReadStateLoaded(topicId),
+      ensureShadowLoadedRangesLoaded(topicId),
+      rememberPersistedDeletedMessageIds(topicId)
+    ]);
     const existingMessages = getFullMessagesByTopicId(topicId);
     const isPaginationRequest = Boolean(
       opts?.lastMessageId || opts?.afterMessageId || opts?.newMessages
     );
     const direction = getHistoryDirection(opts);
+    const recentFetch = recentTopicFetches.get(topicId);
+    const lastMessage = getSelectedTopic(topicId)?.lastMessage;
+    const localLastMessage = lastMessage
+      ? getClientMessageById(topicId, lastMessage.id)
+      : undefined;
+    const hasCurrentPreview =
+      !lastMessage ||
+      (localLastMessage &&
+        new Date(
+          localLastMessage.updatedAt || localLastMessage.createdAt
+        ).getTime() >=
+          new Date(lastMessage.updatedAt || lastMessage.createdAt).getTime());
+
+    if (
+      !isPaginationRequest &&
+      opts?.maxAgeMs &&
+      recentFetch?.sdk === getChatSDK() &&
+      Date.now() - recentFetch.fetchedAt < opts.maxAgeMs &&
+      canonicalTopicStateIds.has(topicId) &&
+      hasCurrentPreview &&
+      (recentFetch.complete || recentFetch.limit >= (opts.limit || 50))
+    ) {
+      await metadataReady;
+      return existingMessages.slice(-(opts.limit || 50));
+    }
+
+    // Запрос выбранного чата не ждёт IndexedDB. Ошибку удерживаем до await,
+    // а метаданные применяем до сохранения ответа и проверки удалений.
+    const requestSdk = getChatSDK();
+    const earlyRequest =
+      opts?.forceRefresh &&
+      opts?.forceNetwork &&
+      getHasBrowserNetwork() &&
+      requestSdk
+        ? requestSdk
+            .getMessages(topicId, {
+              limit: opts.limit,
+              lastMessageId: opts.lastMessageId,
+              afterMessageId: opts.afterMessageId,
+              newMessages: opts.newMessages
+            })
+            .then(
+              messages => ({ ok: true as const, messages }),
+              error => ({ ok: false as const, error })
+            )
+        : null;
+    await metadataReady;
 
     if (!getHasBrowserNetwork()) {
       if (
@@ -1449,15 +1607,21 @@ export const fetchMessagesForTopic = async (
       return opts?.allowStaleFallback === false ? [] : existingMessages;
     }
 
+    const earlyResult = await earlyRequest;
+    if (earlyRequest && requestSdk !== getChatSDK()) return [];
+    if (earlyResult?.ok === false) throw earlyResult.error;
     const messages = normalizePaginationResult(
-      await sdk.getMessages(topicId, {
-        limit: opts?.limit,
-        lastMessageId: opts?.lastMessageId,
-        afterMessageId: opts?.afterMessageId,
-        newMessages: opts?.newMessages
-      }),
+      earlyResult?.ok === true
+        ? earlyResult.messages
+        : await sdk.getMessages(topicId, {
+            limit: opts?.limit,
+            lastMessageId: opts?.lastMessageId,
+            afterMessageId: opts?.afterMessageId,
+            newMessages: opts?.newMessages
+          }),
       opts
     );
+    cleanupFavoriteTopicSystemMessages(getSelectedTopic(topicId), messages);
 
     void recordShadowChatEvent({
       topicId,
@@ -1513,12 +1677,23 @@ export const fetchMessagesForTopic = async (
           isPaginationRequest,
           opts?.allowVisibleShrink
         ),
-        updateVisible: opts?.updateVisible
+        updateVisible:
+          opts?.revealIfEmpty && existingVisible.length === 0
+            ? true
+            : opts?.updateVisible
       });
     }
 
     if (!isPaginationRequest) {
       markTopicStateCanonical(topicId);
+      if (!opts?.skipSave) {
+        recentTopicFetches.set(topicId, {
+          sdk,
+          fetchedAt: Date.now(),
+          limit: opts?.limit || 50,
+          complete: messages.length < (opts?.limit || 50)
+        });
+      }
     }
 
     return messages;
@@ -1546,11 +1721,23 @@ export const fetchMessagesForTopic = async (
 };
 
 export const fetchPinnedMessagesForTopic = async (
-  topicId: string = route.value.id
+  topicId: string = route.value.id,
+  opts?: { maxAgeMs?: number }
 ): Promise<IMessage[]> => {
   if (!topicId) return [];
 
-  const cachedMessages = await loadCachedPinnedMessages(topicId);
+  const recentFetch = recentPinnedFetches.get(topicId);
+  if (
+    opts?.maxAgeMs &&
+    recentFetch?.sdk === getChatSDK() &&
+    Date.now() - recentFetch.fetchedAt < opts.maxAgeMs
+  ) {
+    return getPinnedMessagesByTopicId(topicId);
+  }
+
+  const cachedMessages = pinnedMessagesStore[topicId]
+    ? null
+    : await loadCachedPinnedMessages(topicId);
 
   if (cachedMessages) {
     savePinnedMessagesToLocal(topicId, cachedMessages, {
@@ -1564,6 +1751,7 @@ export const fetchPinnedMessagesForTopic = async (
     const messages = await sdk.getPinnedMessages(topicId);
 
     savePinnedMessagesToLocal(topicId, messages);
+    recentPinnedFetches.set(topicId, { sdk, fetchedAt: Date.now() });
 
     return messages;
   } catch (error) {
@@ -2078,16 +2266,16 @@ export const saveMessagesToLocal = (
     topicId,
     dedupeMessagesForTopic(filteredMessages).sort(compareMessages)
   );
+  const visibleSource = opts?.visibleMessages
+    ? applyReactionOverlaysToMessages(
+        topicId,
+        dedupeMessagesForTopic(
+          filterDeletedMessagesForTopic(topicId, opts.visibleMessages)
+        ).sort(compareMessages)
+      )
+    : sortedMessages;
   const boundedMessages = clampMessagesForUi(
-    applyReactionOverlaysToMessages(
-      topicId,
-      dedupeMessagesForTopic(
-        filterDeletedMessagesForTopic(
-          topicId,
-          opts?.visibleMessages || sortedMessages
-        )
-      ).sort(compareMessages)
-    ),
+    visibleSource,
     windowMode,
     opts?.anchorMessageId,
     visibleLimit
@@ -2123,6 +2311,9 @@ export const clearMessagesForTopic = (
   topicId: string,
   opts?: { syncLastMessage?: boolean }
 ): void => {
+  recentTopicFetches.delete(topicId);
+  recentPinnedFetches.delete(topicId);
+  hydratedResidentTopicUsers.delete(topicId);
   if (!topicId) {
     return;
   }
@@ -2179,6 +2370,30 @@ export const hasKnownTopicMessagesState = (topicId: string): boolean => {
   );
 };
 
+export const getTopicMessagePreview = (topicId: string): IMessage | null => {
+  const topic = getSelectedTopic(topicId);
+  const message = topic?.lastMessage;
+  if (
+    !message?.id ||
+    message.deletedAt ||
+    (message.topicId && message.topicId !== topicId) ||
+    deletedMessageIdsByTopic.get(topicId)?.has(message.id) ||
+    canonicalTopicStateIds.has(topicId)
+  )
+    return null;
+
+  const senderUser =
+    message.senderUser ||
+    topic?.members?.find(member => member.id === message.senderUserId) ||
+    (topic?.user?.id === message.senderUserId ? topic.user : undefined);
+
+  // Превью уже получено со списком топиков. Оно не становится кешем истории.
+  // Участник группы дополняет автора без HTTP, пока открывается полный снимок.
+  return senderUser === message.senderUser
+    ? message
+    : { ...message, senderUser };
+};
+
 export const setVisibleMessagesLimitForTopic = (
   topicId: string,
   visibleLimit: number,
@@ -2215,9 +2430,9 @@ export const setVisibleMessagesLimitForTopic = (
       nextVisibleLimit
     );
   } else {
-    const sourceIndexById = new Map(
-      sourceMessages.map((message, index) => [message.id, index])
-    );
+    const sourceIndexById = fullMessages.length
+      ? getFullMessageIndexesForTopic(topicId, fullMessages)
+      : new Map(sourceMessages.map((message, index) => [message.id, index]));
     const visibleIndexes = visibleMessages.map(message =>
       sourceIndexById.get(message.id)
     );
@@ -2251,14 +2466,91 @@ export const setVisibleMessagesLimitForTopic = (
   }
 
   defaultVisibleMessagesLimitByTopic.set(topicId, nextVisibleLimit);
+  if (
+    nextVisibleMessages.length === visibleMessages.length &&
+    nextVisibleMessages.every(
+      (message, index) => message === visibleMessages[index]
+    )
+  ) {
+    return visibleMessages;
+  }
   messagesStore[topicId] = nextVisibleMessages;
   touchTopicMemory(topicId);
-  syncTopicUnreadState(topicId);
 
   return nextVisibleMessages;
 };
 
+const messageHydrationsInFlight = new Map<string, Promise<IMessage[]>>();
+
 export const hydrateMessagesFromCache = async (
+  topicId: string,
+  userId?: string,
+  opts?: { visibleLimit?: number; allowVisibleShrink?: boolean }
+): Promise<IMessage[]> => {
+  const resolvedUserId =
+    userId || authedUser.value?.id || getChatAuthSession()?.user?.id || '';
+  if (
+    topicId &&
+    hydratedResidentTopicUsers.get(topicId) === resolvedUserId &&
+    canonicalTopicStateIds.has(topicId)
+  ) {
+    if (opts?.visibleLimit) {
+      return setVisibleMessagesLimitForTopic(topicId, opts.visibleLimit, {
+        allowShrink: opts.allowVisibleShrink
+      });
+    }
+    return getMessagesByTopicId(topicId);
+  }
+
+  const hydrationKey = JSON.stringify([resolvedUserId, topicId]);
+  let hydration = messageHydrationsInFlight.get(hydrationKey);
+  if (!hydration) {
+    hydration = loadMessagesFromCache(topicId, resolvedUserId, opts).finally(
+      () => {
+        messageHydrationsInFlight.delete(hydrationKey);
+      }
+    );
+    messageHydrationsInFlight.set(hydrationKey, hydration);
+  }
+  const result = await hydration;
+  if (opts?.visibleLimit) {
+    setVisibleMessagesLimitForTopic(topicId, opts.visibleLimit, {
+      allowShrink: opts.allowVisibleShrink
+    });
+  }
+  if (topicId) hydratedResidentTopicUsers.set(topicId, resolvedUserId);
+  return result;
+};
+
+export const hydrateMessagePreviewFromCache = async (
+  topicId: string,
+  userId?: string,
+  visibleLimit = 48
+): Promise<IMessage[]> => {
+  if (!topicId || !isShadowSyncEnabled()) {
+    return [];
+  }
+
+  const resolvedUserId =
+    userId || authedUser.value?.id || getChatAuthSession()?.user?.id || '';
+  const previewMessages = await loadShadowTopicPreview(topicId, resolvedUserId);
+
+  if (!previewMessages.length) {
+    return [];
+  }
+
+  const normalizedMessages = prepareMessagesForPersistence(previewMessages);
+  saveMessagesToLocal(topicId, normalizedMessages, {
+    syncLastMessage: false,
+    windowMode: 'latest',
+    visibleLimit,
+    skipPersist: true
+  });
+
+  return getMessagesByTopicId(topicId);
+};
+
+const loadMessagesFromCache = async (
   topicId: string,
   userId?: string,
   opts?: { visibleLimit?: number; allowVisibleShrink?: boolean }
@@ -2269,9 +2561,59 @@ export const hydrateMessagesFromCache = async (
 
   const resolvedUserId = userId || authedUser.value?.id;
   const existingFullMessages = getFullMessagesByTopicId(topicId);
+  const hasCanonicalMessages =
+    existingFullMessages.length > 0 && canonicalTopicStateIds.has(topicId);
+  const pendingUploadMessagesPromise = loadPendingUploadMessages(
+    topicId,
+    resolvedUserId
+  );
+  const deletedMessagesReady = rememberPersistedDeletedMessageIds(
+    topicId,
+    resolvedUserId
+  );
+  // Независимые метаданные читаются вместе. Снимок истории не ждёт более
+  // тяжёлое восстановление вложений и поэтому успевает в первый кадр топика.
+  const readStateReady = hasCanonicalMessages
+    ? Promise.resolve()
+    : loadShadowReadState(topicId, resolvedUserId).then(() => undefined);
+  const loadedRangesReady = hasCanonicalMessages
+    ? Promise.resolve()
+    : ensureShadowLoadedRangesLoaded(topicId, resolvedUserId);
+  const shadowMessagesPromise =
+    !hasCanonicalMessages && isShadowSyncEnabled()
+      ? loadShadowTopicSnapshot(topicId, resolvedUserId)
+      : Promise.resolve<IMessage[]>([]);
+  const [shadowMessages] = await Promise.all([
+    shadowMessagesPromise,
+    deletedMessagesReady
+  ]);
+
+  if (!hasCanonicalMessages && shadowMessages.length > 0) {
+    const earlyShadowMessages = prepareMessagesForPersistence(
+      dedupeMessagesForTopic([
+        ...shadowMessages,
+        ...getFullMessagesByTopicId(topicId)
+      ])
+    );
+
+    saveMessagesToLocal(topicId, earlyShadowMessages, {
+      syncLastMessage: false,
+      windowMode: 'latest',
+      visibleLimit: getNonShrinkingVisibleLimit(
+        topicId,
+        opts?.visibleLimit,
+        false,
+        opts?.allowVisibleShrink
+      ),
+      skipPersist: true
+    });
+    markTopicStateCanonical(topicId);
+  }
+
   const [pendingUploadMessages] = await Promise.all([
-    loadPendingUploadMessages(topicId, resolvedUserId),
-    rememberPersistedDeletedMessageIds(topicId, resolvedUserId)
+    pendingUploadMessagesPromise,
+    readStateReady,
+    loadedRangesReady
   ]);
   const mergePendingUploadMessages = (messages: IMessage[]): IMessage[] =>
     dedupeMessagesForTopic([...messages, ...pendingUploadMessages]);
@@ -2280,7 +2622,7 @@ export const hydrateMessagesFromCache = async (
     const normalizedExistingMessages = await restorePendingUploadMediaState(
       topicId,
       prepareMessagesForPersistence(
-        mergePendingUploadMessages(existingFullMessages)
+        mergePendingUploadMessages(getFullMessagesByTopicId(topicId))
       )
     );
 
@@ -2299,14 +2641,15 @@ export const hydrateMessagesFromCache = async (
     return getMessagesByTopicId(topicId);
   }
 
-  await ensureShadowReadStateLoaded(topicId, resolvedUserId);
-  await ensureShadowLoadedRangesLoaded(topicId, resolvedUserId);
+  if (hasCanonicalMessages) {
+    await Promise.all([
+      loadShadowReadState(topicId, resolvedUserId),
+      ensureShadowLoadedRangesLoaded(topicId, resolvedUserId)
+    ]);
+  }
 
   if (isShadowSyncEnabled()) {
-    const shadowMessages = await loadShadowTopicSnapshot(topicId, userId);
-
     if (shadowMessages.length > 0) {
-      await loadShadowReadState(topicId, userId);
       const existingMessages = getFullMessagesByTopicId(topicId);
       const normalizedShadowMessages = await restorePendingUploadMediaState(
         topicId,
@@ -2315,7 +2658,8 @@ export const hydrateMessagesFromCache = async (
           prepareMessagesForPersistence(
             mergePendingUploadMessages([...shadowMessages, ...existingMessages])
           ),
-          userId
+          resolvedUserId,
+          getCachedShadowReadState(topicId, resolvedUserId) ?? null
         )
       );
 
@@ -2361,22 +2705,10 @@ export const hydrateMessagesFromCache = async (
       skipPersist: true
     });
     markTopicStateCanonical(topicId);
-    void saveShadowTopicSnapshot(
-      topicId,
-      normalizedCachedMessages,
-      'local',
-      userId,
-      {
-        replace: true
-      }
-    );
-    void syncShadowReadStateFromMessages(
-      topicId,
-      normalizedCachedMessages,
-      'local',
-      userId
-    );
-    void clearCachedTopicMessages(topicId, userId);
+    schedulePersistMessages(topicId, 150, {
+      userId: resolvedUserId,
+      migrateLegacyCache: true
+    });
 
     return normalizedCachedMessages;
   }
@@ -2385,7 +2717,7 @@ export const hydrateMessagesFromCache = async (
     const normalizedExistingMessages = await restorePendingUploadMediaState(
       topicId,
       prepareMessagesForPersistence(
-        mergePendingUploadMessages(existingFullMessages)
+        mergePendingUploadMessages(getFullMessagesByTopicId(topicId))
       )
     );
 

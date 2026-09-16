@@ -39,5 +39,11 @@ dev-dist/
 .meta/local-packages
 
 # Codex local artifacts
+test-results/
+playwright-report/
 .codex/
 .codex-*/
+
+# Playwright generated reports
+/test-results*/
+/playwright-report/

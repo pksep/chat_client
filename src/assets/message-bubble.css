@@ -146,6 +146,10 @@
   background-color: #767F9DE5;
 }
 
+:is([data-theme='light'], .theme-light) .highlighted.message__bubble {
+  background-color: var(--surface-authorization);
+}
+
 .message-quote-highlight {
   display: inline;
   background-color: var(--action-primary-bg);
@@ -1470,7 +1474,7 @@ div.message-content__file {
   hyphens: auto;
   overflow-wrap: anywhere;
   justify-self: start;
-  border-radius: 16px;
+  border-radius: 20px;
   transition: background-color 0.2s;
 
   &:last-child {

@@ -29,13 +29,11 @@ import { computed, ref } from 'vue';
 import ShareSelectionModal from './Menu/ShareSelectionModal.vue';
 import { useTopics } from '../composables/useTopics';
 import { useChatsToolbarState } from '../composables/useChatsToolbarState';
-import { TopicType } from '../services/useChatSDK/types';
 import { getAuthUser } from '../composables/useAuth';
 import { useShareSelection } from '../composables/useShareSelection';
 import type { ITopic } from './interfaces/interfaces';
 import { getShareSelectionSummaryLabel } from '../utils/shareSelectionSummary';
-import { isBotTopic } from '../utils/bot';
-import { isFavoriteTopic } from '../utils/favorite-topic';
+import { getTopicsByChatsToolbarFilter } from '../utils/chats-toolbar-filter';
 import {
   getChatsToolbarFilterBadgeState,
   getChatsToolbarFilterCounts,
@@ -114,33 +112,6 @@ const shareModalSummaryLabel = computed(() =>
   ])
 );
 
-const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
-  if (!topic) {
-    return false;
-  }
-
-  if (toolbarState.filter === 'chats') {
-    return (
-      topic.type === TopicType.DM &&
-      !isBotTopic(topic) &&
-      !isFavoriteTopic(topic, authUserId.value)
-    );
-  }
-
-  if (toolbarState.filter === 'groups') {
-    return (
-      topic.type === TopicType.Group &&
-      !isFavoriteTopic(topic, authUserId.value)
-    );
-  }
-
-  if (toolbarState.filter === 'bots') {
-    return isBotTopic(topic);
-  }
-
-  return true;
-};
-
 const filterBadgeState = computed(() =>
   getChatsToolbarFilterBadgeState(allTopics.value, authUserId.value)
 );
@@ -155,8 +126,10 @@ const filterMutedOnly = computed(() =>
 
 const contactList = computed(() => {
   const query = normalizeAtSearchQuery(toolbarState.search);
-  const filteredByType = allTopics.value.filter(topic =>
-    matchesToolbarFilter(topic)
+  const filteredByType = getTopicsByChatsToolbarFilter(
+    allTopics.value,
+    toolbarState.filter,
+    authUserId.value
   );
 
   if (!query) {

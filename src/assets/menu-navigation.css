@@ -15,6 +15,10 @@
   width: calc(100% + 20px);
 }
 
+.menu-bottom-nav--clients {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .menu-bottom-nav__button {
   display: flex;
   justify-content: center;
@@ -52,8 +56,17 @@
     all 0.2s ease
 }
 
-.menu-bottom-nav__button--active .menu-bottom-nav__avatar-shell {
-  padding: 2px;
+.menu-bottom-nav__avatar-shell {
+  position: relative;
+}
+
+.menu-bottom-nav__button--active .menu-bottom-nav__avatar-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 3px var(--border-hover);
+  pointer-events: none;
 }
 
 .menu-bottom-nav__icon {
@@ -109,7 +122,7 @@
 }
 
 .menu-profile {
-  padding: 0 5px 0 10px;
+  padding: 0;
   overflow-y: auto;
 }
 
@@ -233,6 +246,8 @@
 
 .menu-profile__status-menu {
   display: grid;
+  max-height: min(260px, 40dvh);
+  overflow-y: auto;
   gap: 4px;
   padding: 5px;
   border: 1px solid var(--border-hover);
@@ -255,12 +270,48 @@
 
   font-size: 14px;
   text-align: left;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
 
 .menu-profile__status-option:hover:not(:disabled) {
   background: var(--action-secondary-pressed-bg);
+}
+
+.menu-profile__status-option-row {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.menu-profile__status-option-row > .menu-profile__status-option {
+  flex: 1;
+  min-width: 0;
+}
+
+.menu-profile__status-option-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 30px;
+  align-self: center;
+  height: 30px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.menu-profile__status-option-remove:hover:not(:disabled) {
+  background: var(--action-secondary-pressed-bg);
+  color: var(--text-primary);
+}
+
+.menu-profile__status-option-remove:disabled {
+  color: var(--text-disabled);
+  cursor: default;
 }
 
 .menu-profile__status-option-icon {
@@ -274,7 +325,7 @@
   justify-content: space-between;
   min-height: 40px;
   padding: 10px 15px;
-  border-radius: 8px;
+  border-radius: 5px;
   background: var(--table-surface-search);
 
   font-size: 14px;
@@ -346,7 +397,7 @@
   min-height: 40px;
   height: 40px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 5px;
   background: var(--border-hover);
   color: var(--white);
   font-size: 14px;
@@ -354,11 +405,7 @@
 }
 
 .menu-profile__status-emoji-picker {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 10px);
-  z-index: 20;
-  grid-column: 1 / -1;
+  z-index: 1100;
 }
 
 .menu-profile__status-error {
@@ -379,10 +426,11 @@
   justify-content: space-between;
   min-height: 44px;
   padding: 10px 15px;
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
   background: var(--table-surface-search);
 
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
 
   cursor: pointer;
 
@@ -393,7 +441,7 @@
 
 .menu-profile__wallpapers:has(.menu-profile__wallpapers-menu)
   .menu-profile__wallpapers-trigger {
-  border: 1px solid var(--border-blue);
+  border-color: var(--border-hover);
 }
 
 .menu-profile__wallpapers-trigger-copy {
@@ -412,10 +460,25 @@
   gap: 10px;
 }
 
+:root {
+  --chat-wallpaper-none-background: linear-gradient(
+    180deg,
+    rgba(251, 253, 255, 1) 0%,
+    rgba(236, 243, 255, 1) 100%
+  );
+}
+
+:root:is([data-theme='dark'], .theme-dark) {
+  --chat-wallpaper-none-background: var(
+    --surface-input-secondary,
+    #262a38
+  );
+}
+
 .menu-profile__wallpapers-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
 }
 
 .menu-profile__wallpaper-tile {
@@ -429,7 +492,7 @@
   cursor: pointer;
   justify-content: center;
   align-items: center;
-  aspect-ratio: 0.76;
+  aspect-ratio: 1.34;
 }
 
 .menu-profile__wallpaper-tile-preview {
@@ -438,6 +501,11 @@
   height: 100%;
   width: 100%;
   border-radius: 10px;
+}
+
+:is([data-theme='dark'], .theme-dark) .menu-profile__wallpaper-tile-preview {
+  border: 0.5px solid var(--border-table, #606884);
+  box-sizing: border-box;
 }
 
 .menu-profile__wallpaper-tile-check {
@@ -508,7 +576,7 @@
   gap: 10px;
   min-height: 64px;
   padding: 10px;
-  border-radius: 8px;
+  border-radius: 5px;
   background: var(--action-secondary-pressed-bg);
   border: 1px solid var(--border-hover);
 }
@@ -564,7 +632,7 @@
   height: 36px;
   padding: 8px 10px !important;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 5px;
   font-size: 12px;
   line-height: 15px;
   white-space: nowrap;
@@ -762,7 +830,7 @@ dialog.menu-profile__wallpaper-modal>.modal-yui-kit__modal-content {
     z-index: 12;
     padding: 6px 20px;
     justify-content: space-between;
-    height: 50px;
+    height: 58px;
     border: 0;
     border-radius: 999px;
     background: var(--white);
@@ -788,7 +856,8 @@ dialog.menu-profile__wallpaper-modal>.modal-yui-kit__modal-content {
   }
 
   .menu-profile__wallpapers-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
   }
 
   dialog.menu-profile__wallpaper-preview-mobile.modal-yui-kit.modal-yui-kit_bottom {
@@ -869,7 +938,7 @@ dialog.menu-profile__wallpaper-modal>.modal-yui-kit__modal-content {
   }
 
   .menu-profile__wallpaper-tile {
-    aspect-ratio: 1.34;
+    aspect-ratio: 0.76;
   }
 
   .menu-profile__wallpapers-button.button-yui-kit {

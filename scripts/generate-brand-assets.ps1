@@ -1,10 +1,12 @@
-param()
+param([switch] $AppIconsOnly)
 
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $lightLogoAsset = Join-Path $projectRoot 'assets\logo-light.svg'
 $darkLogoAsset = Join-Path $projectRoot 'assets\logo-dark.svg'
+# Иконки приложения не зависят от темы интерфейса.
+$appIconAsset = $darkLogoAsset
 $androidResources = Join-Path $projectRoot 'android\app\src\main\res'
 $iosSplashResources = Join-Path $projectRoot 'ios\App\App\Assets.xcassets\Splash.imageset'
 $favicon = Join-Path $projectRoot 'public\images\favicon.ico'
@@ -63,135 +65,188 @@ function Render-FigmaSvg {
 }
 
 try {
-    $splashIconSizes = @{
-        'drawable' = 64
-        'drawable-night' = 48
-        'drawable-land-hdpi' = 96
-        'drawable-land-ldpi' = 48
-        'drawable-land-mdpi' = 64
-        'drawable-land-night-hdpi' = 96
-        'drawable-land-night-ldpi' = 48
-        'drawable-land-night-mdpi' = 64
-        'drawable-land-night-xhdpi' = 144
-        'drawable-land-night-xxhdpi' = 192
-        'drawable-land-night-xxxhdpi' = 256
-        'drawable-land-xhdpi' = 144
-        'drawable-land-xxhdpi' = 192
-        'drawable-land-xxxhdpi' = 256
-        'drawable-port-hdpi' = 96
-        'drawable-port-ldpi' = 48
-        'drawable-port-mdpi' = 64
-        'drawable-port-night-hdpi' = 96
-        'drawable-port-night-ldpi' = 48
-        'drawable-port-night-mdpi' = 64
-        'drawable-port-night-xhdpi' = 144
-        'drawable-port-night-xxhdpi' = 192
-        'drawable-port-night-xxxhdpi' = 256
-        'drawable-port-xhdpi' = 144
-        'drawable-port-xxhdpi' = 192
-        'drawable-port-xxxhdpi' = 256
-    }
-
-    $splashFiles = Get-ChildItem $androidResources -Recurse -File -Filter 'splash.png'
-    foreach ($splashFile in $splashFiles) {
-        $resourceDirectory = $splashFile.Directory.Name
-        $sourceIconSize = $splashIconSizes[$resourceDirectory]
-        if ($null -eq $sourceIconSize) {
-            throw "Unknown splash resource directory: $resourceDirectory"
+    # Общие PNG, PWA и Android всегда строятся из одного тёмного SVG.
+    foreach ($appearance in @('light', 'dark')) {
+        $sourceLogo = if ($appearance -eq 'dark') { $darkLogoAsset } else { $lightLogoAsset }
+        $publicLogo = Join-Path $temporaryDirectory "logo-$appearance.png"
+        Render-FigmaSvg $sourceLogo 1120 $publicLogo
+        Copy-GeneratedAsset $publicLogo (Join-Path $projectRoot "public\images\logo-$appearance.png")
+        if ($appearance -eq 'dark') {
+            Copy-GeneratedAsset $publicLogo (Join-Path $projectRoot 'assets\logo.png')
         }
-
-        $canvasSize = & $magick identify -format '%wx%h' -- $splashFile.FullName
-        $isDarkSplash = $resourceDirectory -like '*night*'
-        $logoAsset = if ($isDarkSplash) { $darkLogoAsset } else { $lightLogoAsset }
-        $background = if ($isDarkSplash) {
-            $darkSplashBackground
-        } else {
-            $lightSplashBackground
-        }
-        $headSize = [Math]::Max(1, [int][Math]::Round($sourceIconSize * 0.73))
-        $resizedHead = Join-Path $temporaryDirectory "head-$resourceDirectory.png"
-        $renderedSplash = Join-Path $temporaryDirectory "splash-$resourceDirectory.png"
-
-        Render-FigmaSvg $logoAsset $headSize $resizedHead
-        & $magick -size $canvasSize "xc:$background" $resizedHead `
-            -gravity center -composite $renderedSplash
-        Copy-GeneratedAsset $renderedSplash $splashFile.FullName
     }
 
-    $renderedSplashIcon = Join-Path $temporaryDirectory 'splash-icon.png'
-    $resizedSplashHead = Join-Path $temporaryDirectory 'splash-head.png'
-    Render-FigmaSvg $lightLogoAsset 96 $resizedSplashHead
-    & $magick -size 288x288 xc:none $resizedSplashHead `
-        -gravity center -composite $renderedSplashIcon
-    Copy-GeneratedAsset $renderedSplashIcon (
-        Join-Path $androidResources 'drawable\splash_icon.png'
-    )
-
-    $renderedDarkSplashIcon = Join-Path $temporaryDirectory 'splash-icon-dark.png'
-    $resizedDarkSplashHead = Join-Path $temporaryDirectory 'splash-head-dark.png'
-    Render-FigmaSvg $darkLogoAsset 96 $resizedDarkSplashHead
-    & $magick -size 288x288 xc:none $resizedDarkSplashHead `
-        -gravity center -composite $renderedDarkSplashIcon
-    Copy-GeneratedAsset $renderedDarkSplashIcon (
-        Join-Path $androidResources 'drawable-night\splash_icon.png'
-    )
-
-    $splashIconDensities = @{
-        'ldpi' = 0.75
-        'mdpi' = 1
-        'hdpi' = 1.5
-        'xhdpi' = 2
-        'xxhdpi' = 3
-        'xxxhdpi' = 4
+    foreach ($size in @(64, 192, 512)) {
+        $pwaIcon = Join-Path $temporaryDirectory "pwa-${size}x${size}.png"
+        Render-FigmaSvg $appIconAsset $size $pwaIcon
+        Copy-GeneratedAsset $pwaIcon (Join-Path $projectRoot "public\images\pwa-${size}x${size}.png")
     }
-    foreach ($density in $splashIconDensities.Keys) {
-        $scale = $splashIconDensities[$density]
-        $canvasPixels = [int][Math]::Round(288 * $scale)
-        $logoPixels = [int][Math]::Round(96 * $scale)
 
-        foreach ($appearance in @(
-            @{
-                Name = 'light'
-                Logo = $lightLogoAsset
-                Directory = "drawable-$density"
-            },
-            @{
-                Name = 'dark'
-                Logo = $darkLogoAsset
-                Directory = "drawable-night-$density"
+    foreach ($icon in @(
+        @{ Name = 'maskable-icon-512x512.png'; Size = 512 },
+        @{ Name = 'apple-touch-icon-180x180.png'; Size = 180 }
+    )) {
+        $iconSource = Join-Path $temporaryDirectory "source-$($icon.Name)"
+        $iconOutput = Join-Path $temporaryDirectory $icon.Name
+        Render-FigmaSvg $appIconAsset $icon.Size $iconSource
+        & $magick $iconSource -background $darkSplashBackground -alpha remove -alpha off $iconOutput
+        Copy-GeneratedAsset $iconOutput (Join-Path $projectRoot "public\images\$($icon.Name)")
+    }
+
+    foreach ($size in @(48, 72, 96, 128, 192, 256, 512)) {
+        $legacyIcon = Join-Path $temporaryDirectory "icon-$size.webp"
+        Render-FigmaSvg $appIconAsset $size $legacyIcon
+        Copy-GeneratedAsset $legacyIcon (Join-Path $projectRoot "icons\icon-$size.webp")
+    }
+
+    foreach ($density in @('ldpi', 'mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi')) {
+        $mipmapDirectory = Join-Path $androidResources "mipmap-$density"
+        foreach ($iconName in @('ic_launcher', 'ic_launcher_round', 'ic_launcher_foreground', 'ic_launcher_background')) {
+            $iconDestination = Join-Path $mipmapDirectory "$iconName.png"
+            $iconSize = [int](& $magick identify -format '%w' -- $iconDestination)
+            $iconOutput = Join-Path $temporaryDirectory "$iconName-$density.png"
+            if ($iconName -eq 'ic_launcher_background') {
+                & $magick -size "${iconSize}x${iconSize}" "xc:$darkSplashBackground" $iconOutput
+            } else {
+                Render-FigmaSvg $appIconAsset $iconSize $iconOutput
             }
-        )) {
-            $densityLogo = Join-Path $temporaryDirectory (
-                "splash-head-$($appearance.Name)-$density.png"
-            )
-            $densitySplashIcon = Join-Path $temporaryDirectory (
-                "splash-icon-$($appearance.Name)-$density.png"
-            )
-            Render-FigmaSvg $appearance.Logo $logoPixels $densityLogo
-            & $magick -size "${canvasPixels}x${canvasPixels}" xc:none $densityLogo `
-                -gravity center -composite $densitySplashIcon
-            Copy-GeneratedAsset $densitySplashIcon (
-                Join-Path $androidResources "$($appearance.Directory)\splash_icon.png"
-            )
+            Copy-GeneratedAsset $iconOutput $iconDestination
         }
     }
 
-    foreach ($iosSplash in Get-ChildItem $iosSplashResources -File -Filter '*.png') {
-        $isDarkSplash = $iosSplash.Name -like '*-dark.png'
-        $appearance = if ($isDarkSplash) { 'dark' } else { 'light' }
-        $logoAsset = if ($isDarkSplash) { $darkLogoAsset } else { $lightLogoAsset }
-        $background = if ($isDarkSplash) {
-            $darkSplashBackground
-        } else {
-            $lightSplashBackground
+    # Заставки запуска сохраняют собственные светлую и тёмную темы.
+    if (-not $AppIconsOnly) {
+        $splashIconSizes = @{
+            'drawable' = 64
+            'drawable-night' = 48
+            'drawable-land-hdpi' = 96
+            'drawable-land-ldpi' = 48
+            'drawable-land-mdpi' = 64
+            'drawable-land-night-hdpi' = 96
+            'drawable-land-night-ldpi' = 48
+            'drawable-land-night-mdpi' = 64
+            'drawable-land-night-xhdpi' = 144
+            'drawable-land-night-xxhdpi' = 192
+            'drawable-land-night-xxxhdpi' = 256
+            'drawable-land-xhdpi' = 144
+            'drawable-land-xxhdpi' = 192
+            'drawable-land-xxxhdpi' = 256
+            'drawable-port-hdpi' = 96
+            'drawable-port-ldpi' = 48
+            'drawable-port-mdpi' = 64
+            'drawable-port-night-hdpi' = 96
+            'drawable-port-night-ldpi' = 48
+            'drawable-port-night-mdpi' = 64
+            'drawable-port-night-xhdpi' = 144
+            'drawable-port-night-xxhdpi' = 192
+            'drawable-port-night-xxxhdpi' = 256
+            'drawable-port-xhdpi' = 144
+            'drawable-port-xxhdpi' = 192
+            'drawable-port-xxxhdpi' = 256
         }
-        $canvasSize = & $magick identify -format '%wx%h' -- $iosSplash.FullName
-        $resizedLogo = Join-Path $temporaryDirectory "ios-$appearance-logo.png"
-        $renderedSplash = Join-Path $temporaryDirectory $iosSplash.Name
-        Render-FigmaSvg $logoAsset 360 $resizedLogo
-        & $magick -size $canvasSize "xc:$background" $resizedLogo `
-            -gravity center -composite $renderedSplash
-        Copy-GeneratedAsset $renderedSplash $iosSplash.FullName
+
+        $splashFiles = Get-ChildItem $androidResources -Recurse -File -Filter 'splash.png'
+        foreach ($splashFile in $splashFiles) {
+            $resourceDirectory = $splashFile.Directory.Name
+            $sourceIconSize = $splashIconSizes[$resourceDirectory]
+            if ($null -eq $sourceIconSize) {
+                throw "Unknown splash resource directory: $resourceDirectory"
+            }
+
+            $canvasSize = & $magick identify -format '%wx%h' -- $splashFile.FullName
+            $isDarkSplash = $resourceDirectory -like '*night*'
+            $logoAsset = if ($isDarkSplash) { $darkLogoAsset } else { $lightLogoAsset }
+            $background = if ($isDarkSplash) {
+                $darkSplashBackground
+            } else {
+                $lightSplashBackground
+            }
+            $headSize = [Math]::Max(1, [int][Math]::Round($sourceIconSize * 0.73))
+            $resizedHead = Join-Path $temporaryDirectory "head-$resourceDirectory.png"
+            $renderedSplash = Join-Path $temporaryDirectory "splash-$resourceDirectory.png"
+
+            Render-FigmaSvg $logoAsset $headSize $resizedHead
+            & $magick -size $canvasSize "xc:$background" $resizedHead `
+                -gravity center -composite $renderedSplash
+            Copy-GeneratedAsset $renderedSplash $splashFile.FullName
+        }
+
+        $renderedSplashIcon = Join-Path $temporaryDirectory 'splash-icon.png'
+        $resizedSplashHead = Join-Path $temporaryDirectory 'splash-head.png'
+        Render-FigmaSvg $lightLogoAsset 96 $resizedSplashHead
+        & $magick -size 288x288 xc:none $resizedSplashHead `
+            -gravity center -composite $renderedSplashIcon
+        Copy-GeneratedAsset $renderedSplashIcon (
+            Join-Path $androidResources 'drawable\splash_icon.png'
+        )
+
+        $renderedDarkSplashIcon = Join-Path $temporaryDirectory 'splash-icon-dark.png'
+        $resizedDarkSplashHead = Join-Path $temporaryDirectory 'splash-head-dark.png'
+        Render-FigmaSvg $darkLogoAsset 96 $resizedDarkSplashHead
+        & $magick -size 288x288 xc:none $resizedDarkSplashHead `
+            -gravity center -composite $renderedDarkSplashIcon
+        Copy-GeneratedAsset $renderedDarkSplashIcon (
+            Join-Path $androidResources 'drawable-night\splash_icon.png'
+        )
+
+        $splashIconDensities = @{
+            'ldpi' = 0.75
+            'mdpi' = 1
+            'hdpi' = 1.5
+            'xhdpi' = 2
+            'xxhdpi' = 3
+            'xxxhdpi' = 4
+        }
+        foreach ($density in $splashIconDensities.Keys) {
+            $scale = $splashIconDensities[$density]
+            $canvasPixels = [int][Math]::Round(288 * $scale)
+            $logoPixels = [int][Math]::Round(96 * $scale)
+
+            foreach ($appearance in @(
+                @{
+                    Name = 'light'
+                    Logo = $lightLogoAsset
+                    Directory = "drawable-$density"
+                },
+                @{
+                    Name = 'dark'
+                    Logo = $darkLogoAsset
+                    Directory = "drawable-night-$density"
+                }
+            )) {
+                $densityLogo = Join-Path $temporaryDirectory (
+                    "splash-head-$($appearance.Name)-$density.png"
+                )
+                $densitySplashIcon = Join-Path $temporaryDirectory (
+                    "splash-icon-$($appearance.Name)-$density.png"
+                )
+                Render-FigmaSvg $appearance.Logo $logoPixels $densityLogo
+                & $magick -size "${canvasPixels}x${canvasPixels}" xc:none $densityLogo `
+                    -gravity center -composite $densitySplashIcon
+                Copy-GeneratedAsset $densitySplashIcon (
+                    Join-Path $androidResources "$($appearance.Directory)\splash_icon.png"
+                )
+            }
+        }
+
+        foreach ($iosSplash in Get-ChildItem $iosSplashResources -File -Filter '*.png') {
+            $isDarkSplash = $iosSplash.Name -like '*-dark.png'
+            $appearance = if ($isDarkSplash) { 'dark' } else { 'light' }
+            $logoAsset = if ($isDarkSplash) { $darkLogoAsset } else { $lightLogoAsset }
+            $background = if ($isDarkSplash) {
+                $darkSplashBackground
+            } else {
+                $lightSplashBackground
+            }
+            $canvasSize = & $magick identify -format '%wx%h' -- $iosSplash.FullName
+            $resizedLogo = Join-Path $temporaryDirectory "ios-$appearance-logo.png"
+            $renderedSplash = Join-Path $temporaryDirectory $iosSplash.Name
+            Render-FigmaSvg $logoAsset 360 $resizedLogo
+            & $magick -size $canvasSize "xc:$background" $resizedLogo `
+                -gravity center -composite $renderedSplash
+            Copy-GeneratedAsset $renderedSplash $iosSplash.FullName
+        }
+
     }
 
     $faviconParts = @()
@@ -199,7 +254,7 @@ try {
         $faviconPart = Join-Path $temporaryDirectory "favicon-$faviconSize.png"
         $faviconHead = Join-Path $temporaryDirectory "favicon-head-$faviconSize.png"
         $innerSize = [Math]::Max(1, $faviconSize - 2)
-        Render-FigmaSvg $lightLogoAsset $innerSize $faviconHead
+        Render-FigmaSvg $appIconAsset $innerSize $faviconHead
         & $magick -size "${faviconSize}x${faviconSize}" xc:none $faviconHead `
             -gravity center -composite $faviconPart
         $faviconParts += $faviconPart

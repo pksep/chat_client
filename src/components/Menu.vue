@@ -75,6 +75,11 @@
         :data-testid="`${props.dataTestid}-Menu-CallsPage`"
       />
 
+      <ClientsPanel
+        v-else-if="activeSection === 'clients'"
+        :is-collapse="isCollapse"
+      />
+
       <AIMenuPanel
         v-else-if="activeSection === 'ai'"
         :is-collapse="isCollapse"
@@ -110,6 +115,11 @@
 </template>
 
 <script lang="ts" setup>
+import {
+  isClientTopic,
+  useManagerInquiries
+} from '../composables/useManagerInquiries';
+import ClientsPanel from './Clients/ClientsPanel.vue';
 import {
   computed,
   defineAsyncComponent,
@@ -184,6 +194,7 @@ const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 const selectedContactId = computed(() => route.value?.id);
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
+const { byTopic: clientInquiries } = useManagerInquiries();
 const {
   pendingShareBatches,
   isShareSelectionActive,
@@ -196,7 +207,9 @@ const {
   updateShareMessage,
   sendSharedFiles
 } = useShareSelection();
-const allTopics = computed(() => getTopicList());
+const allTopics = computed(() =>
+  getTopicList().filter(topic => !isClientTopic(topic))
+);
 const messageSearchResults = ref<IMessageSearchResult[]>([]);
 const isMessageSearchLoading = ref(false);
 const isMessageSearchPending = ref(false);
@@ -388,7 +401,11 @@ const handleNewBotModal = () => {
 };
 
 watch(
-  () => [route.value?.type, route.value?.id],
+  () => [
+    route.value?.type,
+    route.value?.id,
+    clientInquiries.value.has(route.value?.id || '')
+  ],
   ([routeType]) => {
     if (routeType === RouteTypes.CALL) {
       setActiveSection('calls');
@@ -405,7 +422,13 @@ watch(
       routeType === RouteTypes.GROUP ||
       routeType === RouteTypes.FAVORITES
     ) {
-      setActiveSection('chats');
+      const topicId = route.value?.id;
+      setActiveSection(
+        clientInquiries.value.has(topicId || '') ||
+          isClientTopic(getTopicList().find(topic => topic.id === topicId))
+          ? 'clients'
+          : 'chats'
+      );
     }
   },
   { immediate: true }

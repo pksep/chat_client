@@ -16,8 +16,9 @@
       :is-me-sender="props.isMeSender"
       @navigate-message="$emit('navigate-message')"
     />
-    <article
-      ref="messageArticleRef"
+    <ChatMessageSurface
+      unstyled
+      ref="messageSurfaceRef"
       :class="messageArticleStyles"
       :data-testid="`${props.dataTestid}-Article`"
     >
@@ -67,6 +68,7 @@
             v-html="safeMessageHtml"
             :data-testid="`${props.dataTestid}-MessageText`"
             @click="handleMentionUserClick"
+            @copy="copyMessageSelection"
           ></div>
           <div
             v-if="!hasReactions"
@@ -129,11 +131,12 @@
           />
         </div>
       </div>
-    </article>
+    </ChatMessageSurface>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ChatMessageSurface } from '@pksep/yui';
 import { computed, nextTick, ref, watch } from 'vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import MessageStatusIcons from './MessageStatusIcons.vue';
@@ -153,13 +156,19 @@ import {
   useMentionUserClick
 } from './composables/useMentionUserClick';
 import { sanitizeMessageHtml } from '../../utils/sanitizeMessageHtml';
+import { copyMessageSelection } from '../../utils/copyMessageSelection';
 
 const props = defineProps<IMessageBubbleProps>();
 const safeMessageHtml = computed(() => sanitizeMessageHtml(props.message));
 
 defineEmits(['navigate-message']);
 
-const messageArticleRef = ref<HTMLElement | null>(null);
+const messageSurfaceRef = ref<InstanceType<typeof ChatMessageSurface> | null>(
+  null
+);
+const messageArticleRef = computed(
+  () => messageSurfaceRef.value?.element ?? null
+);
 const messageHtmlRef = ref<HTMLElement | null>(null);
 const hasReplyReference = computed(() => Boolean(props.replyMessage));
 const replyReferenceWidth = useReferenceWidth(messageArticleRef, {

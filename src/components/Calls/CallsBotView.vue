@@ -257,6 +257,10 @@ const callInfoTitle = computed(() => {
     return '';
   }
 
+  if (!selectedCall.value.sourceTopicId) {
+    return `Информация о звонке от ${selectedCall.value.fullDateLabel}.`;
+  }
+
   const target =
     selectedCall.value.topicType === TopicType.Group
       ? `в группе ${selectedCall.value.displayName}`

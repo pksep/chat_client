@@ -8,8 +8,9 @@ import {
   migratePersistentCustomImages,
   persistSelectedId,
   readPersistedSelectedId,
-  savePersistentCustomImage
+  savePersistentCustomImageRecord
 } from '../services/customImagePersistence';
+import { createCustomBackgroundSync } from '../services/useCustomBackgroundSync';
 
 export interface ChatWallpaperOption {
   id: string;
@@ -80,7 +81,10 @@ const customWallpapers = ref<StoredCustomWallpaper[]>([]);
 const isInitialized = ref(false);
 const isHydratingCustomWallpapers = ref(false);
 let wallpaperAppStateListenerRegistered = false;
-const DEFAULT_WALLPAPER_GRADIENT = 'var(--surface-input-primary)';
+let wallpaperHydration: Promise<void> = Promise.resolve();
+let wallpaperHydrationFailed = false;
+const DEFAULT_WALLPAPER_GRADIENT =
+  'var(--chat-wallpaper-none-background, linear-gradient(180deg, rgba(251, 253, 255, 1) 0%, rgba(236, 243, 255, 1) 100%))';
 
 const nonePreviewStyle: CSSProperties = {
   background: DEFAULT_WALLPAPER_GRADIENT
@@ -178,10 +182,19 @@ const saveStoredCustomWallpaper = async (
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(WALLPAPER_STORE_NAME, 'readwrite');
     const store = tx.objectStore(WALLPAPER_STORE_NAME);
-    const request = store.put(wallpaper);
-
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    store.put(wallpaper);
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+    tx.onabort = () => {
+      db.close();
+      reject(tx.error || new Error('Не удалось сохранить фон'));
+    };
   });
 };
 
@@ -401,6 +414,7 @@ const hydrateCustomWallpapers = async (): Promise<void> => {
   }
 
   isHydratingCustomWallpapers.value = true;
+  wallpaperHydrationFailed = false;
 
   try {
     if (isNativeCustomImagePersistenceAvailable()) {
@@ -469,6 +483,7 @@ const hydrateCustomWallpapers = async (): Promise<void> => {
     reconcileSelectedWallpaper();
     cacheSelectedCustomWallpaperForStartup();
   } catch (error) {
+    wallpaperHydrationFailed = true;
     console.warn('Failed to hydrate custom wallpapers:', error);
   } finally {
     isHydratingCustomWallpapers.value = false;
@@ -484,7 +499,8 @@ const ensureInitialized = (): void => {
   hydrateStartupWallpaperFromSynchronousCache();
 
   registerWallpaperAppStatePersistence();
-  void hydrateCustomWallpapers();
+  wallpaperHydration = hydrateCustomWallpapers();
+  wallpaperSync.refresh();
 };
 
 const selectWallpaper = (wallpaperId: string): void => {
@@ -515,6 +531,33 @@ const selectWallpaper = (wallpaperId: string): void => {
   persistSelectedWallpaperId(wallpaperId);
 };
 
+const wallpaperSync = createCustomBackgroundSync('chat', {
+  ready: async () => {
+    ensureInitialized();
+    if (wallpaperHydrationFailed) {
+      wallpaperHydration = hydrateCustomWallpapers();
+    }
+    await wallpaperHydration;
+    if (wallpaperHydrationFailed) {
+      throw new Error('Не удалось прочитать сохранённые фоны чата');
+    }
+  },
+  items: () => customWallpapers.value,
+  put: async wallpaper => {
+    if (isNativeCustomImagePersistenceAvailable()) {
+      await savePersistentCustomImageRecord(WALLPAPER_NATIVE_STORE, wallpaper);
+    } else {
+      await saveStoredCustomWallpaper(wallpaper);
+    }
+    customWallpapers.value = [
+      wallpaper,
+      ...customWallpapers.value.filter(item => item.id !== wallpaper.id)
+    ].sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id));
+  }
+});
+
+let pendingWallpaper: StoredCustomWallpaper | null = null;
+let pendingWallpaperScope: string | null = null;
 const setCustomWallpaper = async (dataUrl: string): Promise<void> => {
   ensureInitialized();
 
@@ -522,28 +565,16 @@ const setCustomWallpaper = async (dataUrl: string): Promise<void> => {
     return;
   }
 
-  if (isNativeCustomImagePersistenceAvailable()) {
-    const wallpaper = await savePersistentCustomImage(
-      WALLPAPER_NATIVE_STORE,
-      dataUrl
-    );
+  const scope = wallpaperSync.scope();
+  const wallpaper: StoredCustomWallpaper =
+    pendingWallpaperScope === scope && pendingWallpaper?.dataUrl === dataUrl
+      ? pendingWallpaper
+      : { id: createCustomWallpaperId(), dataUrl, createdAt: Date.now() };
 
-    customWallpapers.value = [wallpaper, ...customWallpapers.value];
-    selectedWallpaperId.value = wallpaper.id;
-    cacheStartupCustomWallpaper(wallpaper.dataUrl);
-    persistSelectedWallpaperId(wallpaper.id);
-    return;
-  }
-
-  const wallpaper: StoredCustomWallpaper = {
-    id: createCustomWallpaperId(),
-    dataUrl,
-    createdAt: Date.now()
-  };
-
-  await saveStoredCustomWallpaper(wallpaper);
-
-  customWallpapers.value = [wallpaper, ...customWallpapers.value];
+  pendingWallpaper = wallpaper;
+  pendingWallpaperScope = scope;
+  await wallpaperSync.save(wallpaper);
+  pendingWallpaper = null;
   selectedWallpaperId.value = wallpaper.id;
   cacheStartupCustomWallpaper(wallpaper.dataUrl);
   persistSelectedWallpaperId(wallpaper.id);
@@ -577,16 +608,16 @@ const isWallpaperApplied = computed(() => {
 const wallpaperPreviewItems = computed<ChatWallpaperPreviewItem[]>(() => {
   ensureInitialized();
 
-  const items: ChatWallpaperPreviewItem[] = customWallpapers.value.map(
-    wallpaper => ({
+  const items: ChatWallpaperPreviewItem[] = wallpaperSync
+    .visible()
+    .map(wallpaper => ({
       id: wallpaper.id,
       previewStyle: buildPreviewStyle(wallpaper.dataUrl, {
         previewSize: 'cover',
         repeat: 'no-repeat',
         backgroundColor: 'transparent'
       })
-    })
-  );
+    }));
 
   items.push({
     id: 'none',
@@ -605,13 +636,14 @@ const wallpaperPreviewItems = computed<ChatWallpaperPreviewItem[]>(() => {
 
 export const useChatWallpaper = () => {
   ensureInitialized();
+  wallpaperSync.refresh();
 
   return {
     wallpaperOptions,
     wallpaperPreviewItems,
     selectedWallpaperId: computed(() => selectedWallpaperId.value),
     currentWallpaperStyle,
-    hasCustomWallpaper: computed(() => customWallpapers.value.length > 0),
+    hasCustomWallpaper: computed(() => wallpaperSync.visible().length > 0),
     isWallpaperApplied,
     selectWallpaper,
     setCustomWallpaper

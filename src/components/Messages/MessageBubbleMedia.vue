@@ -1,8 +1,9 @@
 <template>
   <template v-if="mediaFiles.length > 0">
     <div class="message-bubble-stack">
-      <article
-        ref="mediaArticleRef"
+      <ChatMessageSurface
+        unstyled
+        ref="mediaSurfaceRef"
         :class="messageArticleStyles"
         :style="articleInlineStyle"
         :data-testid="`${props.dataTestid}-Article`"
@@ -141,6 +142,7 @@
             v-html="safeMessageHtml"
             :data-testid="`${props.dataTestid}-MessageText`"
             @click="handleMentionUserClick"
+            @copy="copyMessageSelection"
           ></div>
           <div
             v-if="!hasReactions"
@@ -173,7 +175,7 @@
             </div>
           </div>
         </div>
-      </article>
+      </ChatMessageSurface>
 
       <div
         v-if="props.reactions?.length && !hasInlineCaption"
@@ -188,6 +190,7 @@
 </template>
 
 <script setup lang="ts">
+import { ChatMessageSurface } from '@pksep/yui';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { MediaType } from '@pksep/zod-shared-chat';
 import MessageStatusIcons from './MessageStatusIcons.vue';
@@ -218,6 +221,7 @@ import {
   VIDEO_FALLBACK_THUMBNAIL
 } from '../../utils/mediaPreview';
 import { sanitizeMessageHtml } from '../../utils/sanitizeMessageHtml';
+import { copyMessageSelection } from '../../utils/copyMessageSelection';
 
 const props = defineProps<IMessageBubbleProps>();
 const safeMessageHtml = computed(() => sanitizeMessageHtml(props.message));
@@ -269,7 +273,10 @@ const articleInlineStyle = computed(() => {
     minWidth: `${singleMediaPreviewWidth.value}px`
   };
 });
-const mediaArticleRef = ref<HTMLElement | null>(null);
+const mediaSurfaceRef = ref<InstanceType<typeof ChatMessageSurface> | null>(
+  null
+);
+const mediaArticleRef = computed(() => mediaSurfaceRef.value?.element ?? null);
 const syncMentions = async (): Promise<void> => {
   if (!hasMessageInteractivityCandidates(props.message)) {
     return;

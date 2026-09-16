@@ -1,3 +1,4 @@
+import { reviveCachedDates as deserializeValue } from '../utils/revive-cached-dates';
 import type { IMessage } from '../components/interfaces/interfaces';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
 
@@ -14,12 +15,7 @@ const PENDING_UPLOAD_WORKER_LOAD_TIMEOUT_MS = 5000;
 const PENDING_UPLOAD_SERVICE_WORKER_URL =
   '/pending-upload-service-worker.js?v=20260901-10';
 const PENDING_UPLOAD_SERVICE_WORKER_SCOPE = '/pending-upload-cache-v3/';
-const DATE_KEYS = new Set([
-  'createdAt',
-  'updatedAt',
-  'deletedAt',
-  'lastOnline'
-]);
+
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 interface CachedTopicMessages {
@@ -183,7 +179,6 @@ const handoffPendingUploadsForRefresh = (): void => {
 };
 
 if (typeof window !== 'undefined') {
-  void getPendingUploadServiceWorker();
   window.addEventListener('pagehide', handoffPendingUploadsForRefresh);
 }
 
@@ -337,27 +332,6 @@ const serializeValue = (
     seenObjects.delete(value);
 
     return serializedObject;
-  }
-
-  return value;
-};
-
-const deserializeValue = (value: unknown, key?: string): unknown => {
-  if (typeof value === 'string' && key && DATE_KEYS.has(key)) {
-    return new Date(value);
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(item => deserializeValue(item));
-  }
-
-  if (isPlainObject(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([nestedKey, nestedValue]) => [
-        nestedKey,
-        deserializeValue(nestedValue, nestedKey)
-      ])
-    );
   }
 
   return value;
@@ -1397,7 +1371,16 @@ export const loadPendingUploadMessages = async (
     return await new Promise((resolve, reject) => {
       const tx = db.transaction(PENDING_UPLOAD_META_STORE_NAME, 'readonly');
       const store = tx.objectStore(PENDING_UPLOAD_META_STORE_NAME);
-      const request = store.getAll();
+      // Ключи этого топика начинаются с ':', следующий символ ';' ограничивает
+      // диапазон без чтения вложений других топиков и пользователей.
+      const request = store.getAll(
+        IDBKeyRange.bound(
+          cacheKeyPrefix,
+          `${userId || 'anonymous'}:${topicId};`,
+          false,
+          true
+        )
+      );
 
       request.onsuccess = () => {
         const records = request.result as CachedPendingUploadMeta[];

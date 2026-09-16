@@ -3,6 +3,8 @@ import type { ITopic, IUser } from '../components/interfaces/interfaces';
 import { TopicType } from '../services/useChatSDK/types';
 import { getTopicList } from './useTopics';
 import { getAuthUser } from './useAuth';
+import { useManagerInquiries } from './useManagerInquiries';
+import { currentRoute } from './navigation';
 import { isDeletedBotUser } from '../utils/bot';
 
 const isUserInfoOpen = ref(false);
@@ -29,6 +31,16 @@ const resolveUserInfoTopic = (
   if (!user?.id) {
     return null;
   }
+
+  const { inquiries } = useManagerInquiries();
+  const inquiry =
+    inquiries.value.find(
+      item =>
+        item.guest_user_id === user.id &&
+        item.topic_id === (topic?.id || currentRoute.value?.id)
+    ) || inquiries.value.find(item => item.guest_user_id === user.id);
+  if (inquiry)
+    return getTopicList().find(item => item.id === inquiry.topic_id) || null;
 
   if (topic?.type === TopicType.DM && topic.user?.id === user.id) {
     return (

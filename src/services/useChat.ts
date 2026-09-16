@@ -1,5 +1,11 @@
 import { ref, shallowRef } from 'vue';
+import { MessageTypeEnum } from '@pksep/yui';
 import { ChatSDK } from './useChatSDK';
+import { createReconnectRefreshCoordinator } from './reconnect-refresh';
+import {
+  configureCustomBackgroundSync,
+  refreshCustomBackgrounds
+} from './useCustomBackgroundSync';
 import type { UploadTelemetryContext } from './useChatSDK';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
 import type { PtsMeta } from './useChatSDK/websocketEvents';
@@ -50,6 +56,7 @@ import {
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
 import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { Capacitor } from '@capacitor/core';
+import { isTauriRuntime } from './useTauriNotifications';
 import { App as CapacitorApp } from '@capacitor/app';
 import {
   clearMessageNotification,
@@ -101,6 +108,7 @@ import { normalizeDateValue } from '../utils/dateValue';
 import { getIsTopicMessageVisible } from './useTopicViewportState';
 import { isGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
 import { isFavoriteTopic } from '../utils/favorite-topic';
+import { showNotification } from '../composables/useNotifications';
 import {
   importAnyChatBackgroundSnapshot,
   requestAnyChatBackgroundSync,
@@ -947,13 +955,23 @@ const setupChatListeners = (): void => {
       const isGroupCall = topicType === TopicType.Group;
 
       if (isReceived) {
-        void showTauriIncomingCallNotification({
-          caller: user || null,
-          roomId: payload.roomId,
-          topic,
-          topicId: payload.topicId,
-          topicType
-        });
+        if (isGroupCall && getIsAppActivelyVisible()) {
+          showNotification({
+            title: topic?.name || 'Групповой звонок',
+            description: user?.initials
+              ? `${user.initials} начал звонок`
+              : 'Начался звонок',
+            type: MessageTypeEnum.info
+          });
+        } else {
+          void showTauriIncomingCallNotification({
+            caller: user || null,
+            roomId: payload.roomId,
+            topic,
+            topicId: payload.topicId,
+            topicType
+          });
+        }
       }
 
       if (Capacitor.isNativePlatform() && !isGroupCall && isReceived && user) {
@@ -1091,9 +1109,10 @@ const setupChatListeners = (): void => {
 let isVisibilityListenerAdded = false;
 let isResumeListenersAdded = false;
 let lastVisibilityState = document.visibilityState;
+let hiddenSince: number | null =
+  document.visibilityState === 'hidden' ? Date.now() : null;
+const BROWSER_RESUME_REFRESH_AFTER_MS = 30_000;
 let reconnectRefreshTimeout: ReturnType<typeof setTimeout> | null = null;
-let isRefreshingAfterReconnect = false;
-let shouldRerunRefreshAfterReconnect = false;
 let hasCompletedInitialConnection = false;
 const MAX_BACKGROUND_TOPIC_RECONCILES = 12;
 const FRESH_SYNC_THROTTLE_MS = 5000;
@@ -1274,6 +1293,9 @@ const requestBackgroundSyncOnForeground = (source: string): void => {
       return;
     }
 
+    // Активное соединение уже синхронизирует клиент; фоновый HTTP нужен для восстановления.
+    if (chatSDK.isConnected()) return;
+
     void requestAnyChatBackgroundSync({
       reason: source,
       topicId: route.value.id || undefined
@@ -1400,10 +1422,9 @@ const syncCurrentUserFromFreshUsers = (): void => {
   mergeAuthUser(refreshedUser);
 };
 
-const refreshActiveTopicMessagesAfterReconnect = async (
+const refreshTopicMessagesAfterReconnect = async (
   topicId: string
 ): Promise<void> => {
-  const existingMessages = getFullMessagesByTopicId(topicId);
   const latestMessages = await fetchMessagesForTopic(topicId, {
     limit: 100,
     newMessages: true,
@@ -1413,30 +1434,27 @@ const refreshActiveTopicMessagesAfterReconnect = async (
     skipSave: true
   });
 
-  if (latestMessages.length > 0) {
+  if (
+    latestMessages.length > 0 ||
+    getFullMessagesByTopicId(topicId).length === 0
+  ) {
     mergeMessagesForTopic(topicId, latestMessages, 'replace', {
       syncLastMessage: true,
       updateVisible: false
-    });
-    return;
-  }
-
-  if (existingMessages.length === 0) {
-    await fetchMessagesForTopic(topicId, {
-      limit: 100,
-      newMessages: true,
-      forceRefresh: true,
-      forceNetwork: true,
-      allowStaleFallback: false,
-      syncLastMessage: true
     });
   }
 };
 
 const reconcileTopicCachesAfterReconnect = async (): Promise<void> => {
+  const sdk = chatSDK;
+  const residentTopicIds = new Set(getTopicIdsWithMessages());
   const topicsToRefresh = getTopicList()
     .filter(topic => {
-      if (!topic?.id || topic.id === route.value.id) {
+      if (
+        !topic?.id ||
+        topic.id === route.value.id ||
+        !residentTopicIds.has(topic.id)
+      ) {
         return false;
       }
 
@@ -1469,14 +1487,13 @@ const reconcileTopicCachesAfterReconnect = async (): Promise<void> => {
 
   for (const topic of topicsToRefresh) {
     await waitForReconnectIdle();
-    await fetchMessagesForTopic(topic.id, {
-      limit: 100,
-      newMessages: true,
-      forceRefresh: true,
-      forceNetwork: true,
-      allowStaleFallback: false,
-      syncLastMessage: true
-    });
+    if (chatSDK !== sdk || !shouldContinueReconnectRefresh()) return;
+    if (
+      topic.id === route.value.id ||
+      !getTopicIdsWithMessages().includes(topic.id)
+    )
+      continue;
+    await refreshTopicMessagesAfterReconnect(topic.id);
   }
 };
 
@@ -1538,7 +1555,7 @@ const runActiveTopicRefreshAfterReconnect = async (): Promise<void> => {
 
   await Promise.allSettled([
     fetchPinnedMessagesForTopic(activeTopicId),
-    refreshActiveTopicMessagesAfterReconnect(activeTopicId)
+    refreshTopicMessagesAfterReconnect(activeTopicId)
   ]);
 
   if (
@@ -1616,36 +1633,19 @@ const runStagedReconnectRefresh = async (
   });
 };
 
-const refreshDataAfterReconnect = async (
-  reason: ReconnectRefreshReason
-): Promise<void> => {
-  if (isRefreshingAfterReconnect) {
-    shouldRerunRefreshAfterReconnect = true;
-    return;
-  }
-
-  isRefreshingAfterReconnect = true;
-
-  try {
-    do {
-      shouldRerunRefreshAfterReconnect = false;
-      await runStagedReconnectRefresh(reason);
-    } while (
-      shouldRerunRefreshAfterReconnect &&
-      shouldContinueReconnectRefresh()
-    );
-  } catch (error) {
-    console.warn('Chat fresh sync failed after reconnect/resume:', error);
-    void saveShadowSyncMeta('fresh_sync:last_failed', {
-      reason,
-      timestamp: new Date().toISOString(),
-      error: error instanceof Error ? error.message : String(error)
-    });
-  } finally {
-    isRefreshingAfterReconnect = false;
-    shouldRerunRefreshAfterReconnect = false;
-  }
-};
+const reconnectRefresh =
+  createReconnectRefreshCoordinator<ReconnectRefreshReason>({
+    run: runStagedReconnectRefresh,
+    shouldContinue: shouldContinueReconnectRefresh,
+    onError(error, reason) {
+      console.warn('Chat fresh sync failed after reconnect/resume:', error);
+      void saveShadowSyncMeta('fresh_sync:last_failed', {
+        reason,
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
 
 const requestFreshDataRefresh = (
   reason: ReconnectRefreshReason,
@@ -1658,15 +1658,12 @@ const requestFreshDataRefresh = (
   const now = Date.now();
 
   if (!opts?.force && now - lastFreshSyncRequestedAt < FRESH_SYNC_THROTTLE_MS) {
-    if (isRefreshingAfterReconnect) {
-      shouldRerunRefreshAfterReconnect = true;
-    }
     return;
   }
 
   lastFreshSyncRequestedAt = now;
   markRecentlyReconnected();
-  void refreshDataAfterReconnect(reason);
+  void reconnectRefresh.request(reason);
 };
 
 const reconnectChatOnResume = (): void => {
@@ -1766,13 +1763,40 @@ const handleNetworkOrResumeChange = (
 
   const nextFingerprint = getNetworkFingerprint(effectiveOnline);
   const hasNetworkChanged = nextFingerprint !== lastKnownNetworkFingerprint;
+  if (hasNetworkChanged) reconnectRefresh.invalidate();
+  const wasConnected = chatSDK?.isConnected();
   lastKnownNetworkFingerprint = nextFingerprint;
   syncBrowserNetworkState(effectiveOnline);
 
   if (!effectiveOnline) {
+    if (
+      reason === 'app-visible' ||
+      reason === 'native-app-active' ||
+      reason === 'native-resume'
+    ) {
+      scheduleForegroundSnapshotImport(
+        currentUserId.value || undefined,
+        reason
+      );
+    }
     return;
   }
 
+  if (
+    (reason === 'window-focus' ||
+      reason === 'app-visible' ||
+      reason === 'native-app-active' ||
+      reason === 'native-resume') &&
+    wasConnected &&
+    !hasNetworkChanged &&
+    !opts?.forceRefresh &&
+    !opts?.forceHardReconnect
+  ) {
+    syncPresenceForVisibility();
+    return;
+  }
+
+  scheduleForegroundSnapshotImport(currentUserId.value || undefined, reason);
   syncFreshDataForResume(reason, {
     hardReconnect: opts?.forceHardReconnect || hasNetworkChanged,
     forceRefresh: opts?.forceRefresh || hasNetworkChanged
@@ -1888,9 +1912,11 @@ const startChatConnectionInBackground = (sdk: ChatSDK): void => {
 
         if (Capacitor.isNativePlatform()) {
           void loadCallKitApi()
-            .then(({ initCallKit }) => initCallKit())
+            .then(({ flushPendingGroupCallInviteUrl }) =>
+              flushPendingGroupCallInviteUrl()
+            )
             .catch(error => {
-              console.warn('[CallKit] Failed to initialize:', error);
+              console.warn('[CallKit] Failed to open pending invite:', error);
             });
         }
 
@@ -1901,10 +1927,13 @@ const startChatConnectionInBackground = (sdk: ChatSDK): void => {
             syncPresenceForVisibility();
 
             if (getIsAppActivelyVisible()) {
+              const wasHiddenLong =
+                hiddenSince !== null &&
+                Date.now() - hiddenSince >= BROWSER_RESUME_REFRESH_AFTER_MS;
               handleNetworkOrResumeChange('app-visible', {
                 assumeOnlineOnNative: true,
-                forceHardReconnect: true,
-                forceRefresh: true
+                forceHardReconnect: isTauriRuntime() || wasHiddenLong,
+                forceRefresh: isTauriRuntime() || wasHiddenLong
               });
             }
           });
@@ -1920,11 +1949,19 @@ export const initializeChat = async (options: {
   wsUrl: string;
   userId?: string;
 }): Promise<void> => {
-  await saveAnyChatBackgroundSyncSession({
+  const backgroundSession = saveAnyChatBackgroundSyncSession({
     token: options.token,
     userId: options.userId,
     apiUrl: options.apiUrl
   });
+  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+    // Сохранение native-сессии не должно задерживать SDK и первый экран чата.
+    void backgroundSession.catch(error => {
+      console.warn('Не удалось сохранить сессию фоновой синхронизации:', error);
+    });
+  } else {
+    await backgroundSession;
+  }
 
   chatSDK = new ChatSDK({
     apiUrl: options.apiUrl,
@@ -1932,7 +1969,14 @@ export const initializeChat = async (options: {
     token: options.token
   });
   notifyChatSDKReady(chatSDK);
+  configureCustomBackgroundSync(
+    options.userId
+      ? JSON.stringify([options.apiUrl.replace(/\/+$/, ''), options.userId])
+      : null,
+    chatSDK
+  );
   hasCompletedInitialConnection = false;
+  reconnectRefresh.invalidate();
   chatSDK.setConnectionStateListener(connected => {
     const wasConnected = hasWebsocketConnection.value;
     isWebsocketConnecting.value = browserOnline.value && !connected;
@@ -1944,8 +1988,21 @@ export const initializeChat = async (options: {
     });
 
     if (!connected) {
+      if (wasConnected) reconnectRefresh.invalidate();
       return;
     }
+
+    if (Capacitor.isNativePlatform()) {
+      void loadCallKitApi()
+        .then(({ flushPendingGroupCallInviteUrl }) =>
+          flushPendingGroupCallInviteUrl()
+        )
+        .catch(error => {
+          console.warn('[CallKit] Failed to open pending invite:', error);
+        });
+    }
+
+    refreshCustomBackgrounds();
 
     syncPresenceForVisibility();
 
@@ -1961,6 +2018,16 @@ export const initializeChat = async (options: {
   });
   areChatListenersBound = false;
 
+  if (Capacitor.isNativePlatform()) {
+    // Register App Links before the initial WebSocket attempt. The invite is
+    // queued until the connection-state listener above reports readiness.
+    void loadCallKitApi()
+      .then(({ initCallKit }) => initCallKit())
+      .catch(error => {
+        console.warn('[CallKit] Failed to initialize:', error);
+      });
+  }
+
   currentUserId.value = options.userId || null;
   scheduleForegroundSnapshotImport(options.userId, 'initialize-chat');
   requestBackgroundSyncOnForeground('initialize-chat');
@@ -1972,20 +2039,21 @@ export const initializeChat = async (options: {
 
       lastVisibilityState = document.visibilityState;
       if (document.visibilityState === 'visible') {
+        const wasHiddenLong =
+          hiddenSince !== null &&
+          Date.now() - hiddenSince >= BROWSER_RESUME_REFRESH_AFTER_MS;
+        hiddenSince = null;
         syncPresenceForVisibility();
-        scheduleForegroundSnapshotImport(
-          currentUserId.value || undefined,
-          'app-visible'
-        );
         requestBackgroundSyncOnForeground('app-visible');
         handleNetworkOrResumeChange('app-visible', {
           assumeOnlineOnNative: true,
-          forceHardReconnect: true,
-          forceRefresh: true
+          forceHardReconnect: Capacitor.isNativePlatform() && wasHiddenLong,
+          forceRefresh: wasHiddenLong
         });
         return;
       }
 
+      hiddenSince = Date.now();
       syncPresenceForVisibility();
     });
     isVisibilityListenerAdded = true;
@@ -1993,10 +2061,6 @@ export const initializeChat = async (options: {
 
   if (!isResumeListenersAdded) {
     window.addEventListener('focus', () => {
-      scheduleForegroundSnapshotImport(
-        currentUserId.value || undefined,
-        'window-focus'
-      );
       requestBackgroundSyncOnForeground('window-focus');
       handleNetworkOrResumeChange('window-focus', {
         assumeOnlineOnNative: true
@@ -2029,31 +2093,32 @@ export const initializeChat = async (options: {
     if (Capacitor.isNativePlatform()) {
       void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
         if (!isActive) {
+          hiddenSince ??= Date.now();
           syncPresenceForVisibility();
           return;
         }
 
         syncPresenceForVisibility();
-        scheduleForegroundSnapshotImport(
-          currentUserId.value || undefined,
-          'native-app-active'
-        );
+        const wasHiddenLong =
+          hiddenSince !== null &&
+          Date.now() - hiddenSince >= BROWSER_RESUME_REFRESH_AFTER_MS;
+        hiddenSince = null;
         handleNetworkOrResumeChange('native-app-active', {
           assumeOnlineOnNative: true,
-          forceHardReconnect: true,
-          forceRefresh: true
+          forceHardReconnect: wasHiddenLong,
+          forceRefresh: wasHiddenLong
         });
       });
 
       void CapacitorApp.addListener('resume', () => {
-        scheduleForegroundSnapshotImport(
-          currentUserId.value || undefined,
-          'native-resume'
-        );
+        const wasHiddenLong =
+          hiddenSince !== null &&
+          Date.now() - hiddenSince >= BROWSER_RESUME_REFRESH_AFTER_MS;
+        hiddenSince = null;
         handleNetworkOrResumeChange('native-resume', {
           assumeOnlineOnNative: true,
-          forceHardReconnect: true,
-          forceRefresh: true
+          forceHardReconnect: wasHiddenLong,
+          forceRefresh: wasHiddenLong
         });
       });
     }
@@ -2206,6 +2271,31 @@ export const sendMessageChat = async (params: {
   const sdk = getChatSDK();
 
   try {
+    const { useManagerInquiries, managerRequest } = await import(
+      '../composables/useManagerInquiries'
+    );
+    const inquiry = useManagerInquiries().byTopic.value.get(params.topicId);
+    if (inquiry && !params.messageId) {
+      const ex = params.ex ? JSON.parse(params.ex) : {};
+      if (!ex.clientId || !ex.managerReplyRouteId || params.forwardMessageId)
+        return false;
+      const attachmentIds = (params.medias || []).map(media => {
+        const match = /^manager-private\/([0-9a-f-]{36})$/i.exec(
+          media.path || ''
+        );
+        if (!match) throw new Error('Вложение ещё не загружено в обращение');
+        return match[1];
+      });
+      await managerRequest(`inquiries/${inquiry.id}/messages`, {
+        operationId: ex.clientId,
+        routeId: ex.managerReplyRouteId,
+        html: params.text || '',
+        attachmentIds,
+        replyMessageId: params.replyMessageId,
+        ex
+      });
+      return true;
+    }
     if (!sdk) {
       return false;
     }

@@ -121,11 +121,13 @@
   >
     <MessageListUserItems
       v-if="shouldMountUserMessageItems"
+      :key="renderedTopicId"
       ref="messageListUserItemsRef"
       :class="{
         'chat__message-bubble--warming': shouldCoverUserMessagesWithSkeleton
       }"
       :messages="renderedUserMessages"
+      :inert="isShowingTopicPreview || undefined"
       :auth-user-id="authUserId"
       :hide-unread-marker="state.hideUnreadMarker"
       :unread-marker-message-id="state.unreadMarkerMessageId"
@@ -219,96 +221,104 @@
       @touchstart.stop
       @touchend.stop
     >
-      <span
-        :class="[
-          'chat-update-banner__status-icon',
-          `chat-update-banner__status-icon--${updateBannerState}`
-        ]"
-        aria-hidden="true"
-      >
-        <svg
-          v-if="updateBannerState === 'downloaded'"
-          viewBox="0 0 18 18"
-          fill="none"
+      <div class="chat-update-banner__message">
+        <span
+          :class="[
+            'chat-update-banner__status-icon',
+            `chat-update-banner__status-icon--${updateBannerState}`
+          ]"
+          aria-hidden="true"
         >
-          <path
-            d="M5 9.2L7.7 12L13.2 6"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-        <svg v-else viewBox="0 0 18 18" fill="none">
-          <path
-            d="M14 11.25V14C14 14.2761 13.883 14.5412 13.6746 14.7366C13.4662 14.932 13.1836 15.0417 12.8889 15.0417H5.11111C4.81643 15.0417 4.53381 14.932 4.32544 14.7366C4.11706 14.5412 4 14.2761 4 14V11.25"
-            stroke="currentColor"
-            stroke-width="1.375"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <path
-            d="M6.39587 7.95996L9.00003 10.5641L11.6042 7.95996"
-            stroke="currentColor"
-            stroke-width="1.375"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <path
-            d="M9 10.5654V4.31543"
-            stroke="currentColor"
-            stroke-width="1.375"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </span>
-
-      <div class="chat-update-banner__content">
-        <p class="chat-update-banner__title">
-          {{ updateBannerTitle }}
-        </p>
-        <p class="chat-update-banner__description">
-          {{ updateBannerDescription }}
-        </p>
-      </div>
-      <Button
-        :class="[
-          'chat-update-banner__action',
-          {
-            'chat-update-banner__action--progress':
-              props.updateProgress !== undefined
-          }
-        ]"
-        :data-testid="`${props.dataTestid}-MessageList-UpdateBannerInstallButton`"
-        :disabled="props.isUpdateActionDisabled"
-        @click="props.onUpdateClick?.()"
-      >
-        <template v-if="props.updateProgress !== undefined">
-          <span class="chat-update-banner__action-progress-label">
-            {{ props.updateActionLabel }}
-          </span>
-          <span class="chat-update-banner__action-progress" aria-hidden="true">
-            <FileIcon
-              :is-me-sender="false"
-              :is-loaded="false"
-              :percent="props.updateProgress"
-              background-color="var(--grey2)"
+          <svg
+            v-if="updateBannerState === 'downloaded'"
+            viewBox="0 0 18 18"
+            fill="none"
+          >
+            <path
+              d="M5 9.2L7.7 12L13.2 6"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
             />
-          </span>
-        </template>
-        <template v-else>{{ props.updateActionLabel }}</template>
-      </Button>
-      <button
-        v-if="!isMobile"
-        type="button"
-        class="chat-update-banner__close"
-        :data-testid="`${props.dataTestid}-MessageList-UpdateBannerCloseButton`"
-        aria-label="Закрыть уведомление об обновлении"
-        @click="props.onDismissUpdateBanner?.()"
-      >
-        <Icon :name="IconNameEnum.crossLarge" />
-      </button>
+          </svg>
+          <svg v-else viewBox="0 0 18 18" fill="none">
+            <path
+              d="M14 11.25V14C14 14.2761 13.883 14.5412 13.6746 14.7366C13.4662 14.932 13.1836 15.0417 12.8889 15.0417H5.11111C4.81643 15.0417 4.53381 14.932 4.32544 14.7366C4.11706 14.5412 4 14.2761 4 14V11.25"
+              stroke="currentColor"
+              stroke-width="1.375"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M6.39587 7.95996L9.00003 10.5641L11.6042 7.95996"
+              stroke="currentColor"
+              stroke-width="1.375"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M9 10.5654V4.31543"
+              stroke="currentColor"
+              stroke-width="1.375"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </span>
+
+        <div class="chat-update-banner__content">
+          <p class="chat-update-banner__title">
+            {{ updateBannerTitle }}
+          </p>
+          <p class="chat-update-banner__description">
+            {{ updateBannerDescription }}
+          </p>
+        </div>
+      </div>
+      <div class="chat-update-banner__actions">
+        <Button
+          :class="[
+            'chat-update-banner__action',
+            {
+              'chat-update-banner__action--progress':
+                props.updateProgress !== undefined
+            }
+          ]"
+          :size="SizesEnum.small"
+          :data-testid="`${props.dataTestid}-MessageList-UpdateBannerInstallButton`"
+          :disabled="props.isUpdateActionDisabled"
+          @click="props.onUpdateClick?.()"
+        >
+          <template v-if="props.updateProgress !== undefined">
+            <span class="chat-update-banner__action-progress-label">
+              {{ props.updateActionLabel }}
+            </span>
+            <span
+              class="chat-update-banner__action-progress"
+              aria-hidden="true"
+            >
+              <FileIcon
+                :is-me-sender="false"
+                :is-loaded="false"
+                :percent="props.updateProgress"
+                background-color="var(--grey2)"
+              />
+            </span>
+          </template>
+          <template v-else>{{ props.updateActionLabel }}</template>
+        </Button>
+        <button
+          v-if="!isMobile"
+          type="button"
+          class="chat-update-banner__close"
+          :data-testid="`${props.dataTestid}-MessageList-UpdateBannerCloseButton`"
+          aria-label="Закрыть уведомление об обновлении"
+          @click="props.onDismissUpdateBanner?.()"
+        >
+          <Icon :name="IconNameEnum.crossLarge" />
+        </button>
+      </div>
     </section>
   </div>
 
@@ -436,6 +446,7 @@
   />
   <MessageListInput
     v-if="shouldRenderMessageComposer"
+    :topic-id="activeTopic?.id"
     :key="`${route.type}:${route.id || 'default'}`"
     v-model="inputText"
     ref="messageListInputRef"
@@ -490,7 +501,8 @@ import {
   PushNotification,
   Icon,
   IconNameEnum,
-  Button
+  Button,
+  SizesEnum
 } from '@pksep/yui';
 import type { IMessageListProps } from './interfaces/message-list';
 import type { AIMessage } from '../types/messages';
@@ -515,6 +527,7 @@ import {
   fetchPinnedMessagesForTopic,
   getFullMessagesByTopicId,
   getMessagesByTopicId,
+  getTopicMessagePreview,
   hasKnownTopicMessagesState,
   hydrateMessageContextFromShadow,
   hydrateMessagesFromCache,
@@ -594,8 +607,7 @@ import {
 import { getMessageReactionLayoutSignature } from '../utils/messageScroll';
 import { dispatchNotificationTopicShellReady } from '../utils/nativeStartup';
 import {
-  collectNotificationForwardPages,
-  getNotificationVisibleMessagesLimit,
+  needsNotificationMessageContext,
   mergeNotificationMessageSnapshots
 } from '../utils/notificationMessages';
 
@@ -621,18 +633,18 @@ const TOPIC_SWITCH_AUTO_READ_GRACE_MS = 1200;
 const TOPIC_SWITCH_HISTORY_FETCH_GRACE_MS = 1200;
 const TOPIC_SWITCH_BOOTSTRAP_MESSAGES_LIMIT = 48;
 const TOPIC_SWITCH_SKELETON_DELAY_MS = 300;
+const TOPIC_SWITCH_CACHE_MAX_AGE_MS = 15_000;
 const TOPIC_SWITCH_EXPANDED_FETCH_DELAY_MS = 80;
 const TOPIC_SWITCH_USER_SCROLL_INTENT_GRACE_MS = 2000;
 const CURRENT_TOPIC_BOTTOM_THRESHOLD_PX = 120;
 const TOPIC_SWITCH_MEDIA_PREWARM_LIMIT = 12;
-const MOBILE_FAST_INITIAL_MESSAGES_LIMIT = 48;
+const MOBILE_FAST_INITIAL_MESSAGES_LIMIT = 24;
 const MOBILE_FAST_MAX_INITIAL_MESSAGES_LIMIT = 48;
 const MOBILE_VISIBLE_EXPAND_DELAY_MS = 600;
 const MOBILE_INITIAL_MESSAGES_LIMIT = 48;
 const MOBILE_MAX_INITIAL_MESSAGES_LIMIT = 48;
 const MOBILE_EXPANDED_MESSAGES_LIMIT = 72;
 const MOBILE_MAX_VISIBLE_MESSAGES_LIMIT = 72;
-const NOTIFICATION_RECONCILIATION_PAGE_LIMIT = 200;
 type UpdateBannerState = 'available' | 'downloading' | 'downloaded';
 
 const updateBannerState = computed<UpdateBannerState>(() => {
@@ -679,7 +691,9 @@ const updateBannerRef = useTemplateRef<HTMLElement>('updateBannerRef');
 
 const route = useUrlWatcher();
 const { state: isMobile } = useResizeState(MAX_W_MD);
-const { state: isCompactMessageInput } = useResizeState(481);
+const { state: isCompactMessageInput } = useResizeState(481, {
+  inclusive: false
+});
 const isNativeAndroid =
   Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
@@ -920,8 +934,18 @@ const renderedUserMessages = computed(() => {
     message => !message.topicId || message.topicId === topicId
   );
 
-  return getRenderedTopicMessages(topicId, currentTopicMessages);
+  const preview =
+    initialTopicPreviewEnabled.value && currentTopicMessages.length === 0
+      ? getTopicMessagePreview(topicId)
+      : null;
+  return getRenderedTopicMessages(
+    topicId,
+    preview ? [preview] : currentTopicMessages
+  );
 });
+const isShowingTopicPreview = computed(
+  () => state.messages.length === 0 && renderedUserMessages.value.length > 0
+);
 const renderedLastUserMessageSignature = computed(() => {
   const lastMessage =
     renderedUserMessages.value[renderedUserMessages.value.length - 1];
@@ -1014,6 +1038,7 @@ const renderedTopicId = ref(route.value.id || '');
 const isAwaitingUserMessagesPaint = ref(false);
 const paintedUserMessageTopicId = ref('');
 const isInitialMessagesSkeletonVisible = ref(false);
+const initialTopicPreviewEnabled = ref(false);
 const isBootstrapScrollLocked = ref(false);
 const isSearchNavigationPositioning = ref(false);
 const knownEmptyMessageTopicIds = ref<Set<string>>(new Set());
@@ -1208,11 +1233,6 @@ const resetInitialMessagesSkeleton = (): void => {
   isInitialMessagesSkeletonVisible.value = false;
 };
 
-const showInitialMessagesSkeletonImmediately = (): void => {
-  cancelInitialMessagesSkeletonDelay();
-  isInitialMessagesSkeletonVisible.value = true;
-};
-
 const scheduleNotificationTopicShellReady = (topicId: string): void => {
   pendingNotificationTopicShellId = topicId;
 
@@ -1287,32 +1307,37 @@ const scheduleNotificationTopicShellReady = (topicId: string): void => {
 
 const scheduleInitialMessagesSkeleton = (
   topicId: string,
-  topicSwitchToken: number
+  topicSwitchToken: number,
+  delayMs = TOPIC_SWITCH_SKELETON_DELAY_MS
 ): void => {
   cancelInitialMessagesSkeletonDelay();
   isInitialMessagesSkeletonVisible.value = false;
 
   const skeletonToken = ++initialMessagesSkeletonToken;
 
-  initialMessagesSkeletonTimeoutId = window.setTimeout(() => {
+  const showSkeleton = () => {
     initialMessagesSkeletonTimeoutId = null;
 
     const hasRenderedRequestedMessages =
       renderedTopicId.value === topicId &&
-      getMessagesByTopicId(topicId).length > 0;
+      renderedUserMessages.value.length > 0;
 
     if (
       skeletonToken !== initialMessagesSkeletonToken ||
       topicSwitchToken !== activeTopicSwitchToken ||
       route.value?.id !== topicId ||
       !isLoadingInitialMessages.value ||
+      isTopicMessagesKnownEmpty(topicId) ||
       hasRenderedRequestedMessages
     ) {
       return;
     }
 
     isInitialMessagesSkeletonVisible.value = true;
-  }, TOPIC_SWITCH_SKELETON_DELAY_MS);
+  };
+  if (delayMs <= 0) showSkeleton();
+  else
+    initialMessagesSkeletonTimeoutId = window.setTimeout(showSkeleton, delayMs);
 };
 
 const getTopicSwitchFetchLimits = (
@@ -1324,7 +1349,10 @@ const getTopicSwitchFetchLimits = (
         MOBILE_MAX_VISIBLE_MESSAGES_LIMIT,
         Math.max(MOBILE_EXPANDED_MESSAGES_LIMIT, unreadWindowLimit)
       )
-    : Math.max(DESKTOP_INITIAL_MESSAGES_LIMIT, unreadWindowLimit);
+    : Math.min(
+        250,
+        Math.max(DESKTOP_INITIAL_MESSAGES_LIMIT, unreadWindowLimit)
+      );
   const initialLimit = TOPIC_SWITCH_BOOTSTRAP_MESSAGES_LIMIT;
 
   if (!isMobile.value) {
@@ -1356,9 +1384,19 @@ const getFastInitialMessagesLimit = (
       ? Math.min(MOBILE_FAST_MAX_INITIAL_MESSAGES_LIMIT, unreadCount + 8)
       : MOBILE_FAST_INITIAL_MESSAGES_LIMIT;
 
+  // Первый кадр покрывает экран; остальная история уже загружается одним запросом.
+  const viewportLimit = Math.min(
+    MOBILE_FAST_MAX_INITIAL_MESSAGES_LIMIT,
+    Math.ceil(window.innerHeight / 32) + 2
+  );
+
   return Math.min(
     initialLimit,
-    Math.max(MOBILE_FAST_INITIAL_MESSAGES_LIMIT, unreadAwareLimit)
+    Math.max(
+      MOBILE_FAST_INITIAL_MESSAGES_LIMIT,
+      viewportLimit,
+      unreadAwareLimit
+    )
   );
 };
 
@@ -1568,7 +1606,7 @@ const reconcileNotificationTopicMessages = async (
   notificationMessageId?: string
 ): Promise<NotificationTopicMessagesResult> => {
   const residentMessagesBeforeFetch = [...getFullMessagesByTopicId(topicId)];
-  const latestMessagesPromise = fetchMessagesForTopic(topicId, {
+  const latestMessages = await fetchMessagesForTopic(topicId, {
     limit,
     newMessages: true,
     forceRefresh: true,
@@ -1577,32 +1615,20 @@ const reconcileNotificationTopicMessages = async (
     visibleLimit: limit,
     updateVisible: false
   });
-  const notificationContextPromise = notificationMessageId
+  // Обычно уведомление уже входит в последнюю страницу. Старый контекст
+  // не требует загрузки всех промежуточных страниц до показа чата.
+  const notificationContext = needsNotificationMessageContext(
+    notificationMessageId,
+    latestMessages,
+    residentMessagesBeforeFetch,
+    getFullMessagesByTopicId(topicId)
+  )
     ? fetchAroundMessage(notificationMessageId, topicId, {
         updateVisible: false,
         forceNetwork: true
       })
     : Promise.resolve([] as IMessage[]);
-  const [latestMessages, notificationContext] = await Promise.all([
-    latestMessagesPromise,
-    notificationContextPromise
-  ]);
-  const forwardPages = await collectNotificationForwardPages(
-    notificationContext,
-    latestMessages,
-    NOTIFICATION_RECONCILIATION_PAGE_LIMIT,
-    (afterMessageId, pageLimit) =>
-      fetchMessagesForTopic(topicId, {
-        afterMessageId,
-        limit: pageLimit,
-        skipSave: true,
-        skipShadowSnapshot: true,
-        forceRefresh: true,
-        forceNetwork: true,
-        allowStaleFallback: false,
-        updateVisible: false
-      })
-  );
+  const contextMessages = await notificationContext;
 
   // A topic can still be in history mode while the notification request is in
   // flight. Flush messages buffered by the WebSocket before choosing the
@@ -1613,15 +1639,11 @@ const reconcileNotificationTopicMessages = async (
   const reconciledMessages = mergeNotificationMessageSnapshots(
     residentMessagesBeforeFetch,
     latestMessages,
-    notificationContext,
-    ...forwardPages,
+    contextMessages,
     bufferedMessages,
     getFullMessagesByTopicId(topicId)
   );
-  const visibleLimit = getNotificationVisibleMessagesLimit(
-    limit,
-    reconciledMessages
-  );
+  const visibleLimit = limit;
 
   if (reconciledMessages.length > 0) {
     mergeMessagesForTopic(topicId, reconciledMessages, 'replace', {
@@ -1651,9 +1673,11 @@ const refreshActiveTopicFromNotification = async (
 
   if (forceScrollToBottom) {
     isForcedNotificationRefreshPending = true;
-    isLoadingInitialMessages.value = true;
-    renderedTopicId.value = '';
-    showInitialMessagesSkeletonImmediately();
+    const hasMessages = getMessagesByTopicId(topicId).length > 0;
+    isLoadingInitialMessages.value = !hasMessages;
+    renderedTopicId.value = hasMessages ? topicId : '';
+    if (hasMessages) resetInitialMessagesSkeleton();
+    else scheduleInitialMessagesSkeleton(topicId, activeTopicSwitchToken);
     scheduleNotificationTopicShellReady(topicId);
   }
 
@@ -1662,6 +1686,19 @@ const refreshActiveTopicFromNotification = async (
     authUser.value?.id
   );
   const { expandedLimit } = getTopicSwitchFetchLimits(unreadCount);
+  if (forceScrollToBottom && getMessagesByTopicId(topicId).length > 0) {
+    setVisibleMessagesLimitForTopic(topicId, expandedLimit, {
+      allowShrink: true
+    });
+    void nextTick(() => {
+      if (
+        refreshToken === activeNotificationRefreshToken &&
+        route.value?.id === topicId
+      ) {
+        scrollToBottom({ preferUnreadMarker: false, smooth: false });
+      }
+    });
+  }
   try {
     const { visibleLimit } = await reconcileNotificationTopicMessages(
       topicId,
@@ -1681,7 +1718,7 @@ const refreshActiveTopicFromNotification = async (
 
     if (shouldApplyVisibleRefresh) {
       setVisibleMessagesLimitForTopic(topicId, visibleLimit, {
-        allowShrink: false
+        allowShrink: forceScrollToBottom
       });
     }
 
@@ -1831,8 +1868,14 @@ const scheduleExpandedTopicMessagesFetch = (
         return;
       }
 
+      if (document.visibilityState !== 'visible') {
+        releaseBootstrapScrollLockAfterPaint(topicSwitchToken);
+        return;
+      }
+
       await fetchMessagesForTopic(topicId, {
         limit,
+        maxAgeMs: TOPIC_SWITCH_CACHE_MAX_AGE_MS,
         forceRefresh: true,
         forceNetwork: getHasBrowserNetwork(),
         allowStaleFallback: !getHasBrowserNetwork(),
@@ -2119,12 +2162,14 @@ const shouldProtectEmptyUserMessagesWithSkeleton = computed(
     route.value.type !== RouteTypes.CALL &&
     isUserMessagesRoute.value &&
     !isActiveCallTopic.value &&
+    isInitialMessagesSkeletonVisible.value &&
     !hasVisibleUserMessages.value &&
     !isTopicMessagesKnownEmpty(route.value.id)
 );
 const shouldRenderAiMessageSkeleton = computed(() => props.deferContentRender);
 const shouldShowDelayedInitialSkeleton = computed(
   () =>
+    !hasVisibleUserMessages.value &&
     isInitialMessagesSkeletonVisible.value &&
     (isLoadingInitialMessages.value || isAwaitingUserMessagesPaint.value)
 );
@@ -3714,6 +3759,7 @@ watch(
 
     hideFloatingDateDivider();
     if (!topicId) {
+      initialTopicPreviewEnabled.value = false;
       renderedTopicId.value = '';
       paintedUserMessageTopicId.value = '';
       isAwaitingUserMessagesPaint.value = false;
@@ -3733,7 +3779,7 @@ watch(
       route.value?.id !== topicId;
     const hadRenderedDifferentTopicMessages =
       renderedTopicId.value !== topicId && state.messages.length > 0;
-    if (routeType === RouteTypes.AI || shouldScrollToBottomForNotification) {
+    if (routeType === RouteTypes.AI) {
       renderedTopicId.value = '';
     } else {
       renderedTopicId.value = topicId;
@@ -3749,14 +3795,18 @@ watch(
     state.errorMessage = '';
     state.hideUnreadMarker = true;
     state.unreadMarkerMessageId = null;
-    setTopicMessagesKnownEmpty(topicId, false);
-    isLoadingInitialMessages.value = true;
-    if (shouldScrollToBottomForNotification) {
-      showInitialMessagesSkeletonImmediately();
-      scheduleNotificationTopicShellReady(topicId);
-    } else {
-      scheduleInitialMessagesSkeleton(topicId, topicSwitchToken);
+    if (
+      getMessagesByTopicId(topicId).length > 0 ||
+      getSelectedTopic(topicId)?.lastMessage
+    ) {
+      setTopicMessagesKnownEmpty(topicId, false);
     }
+    isLoadingInitialMessages.value = true;
+    resetInitialMessagesSkeleton();
+    if (routeType === RouteTypes.AI)
+      scheduleInitialMessagesSkeleton(topicId, topicSwitchToken);
+    if (shouldScrollToBottomForNotification)
+      scheduleNotificationTopicShellReady(topicId);
     resetScrollState();
     if (hadRenderedDifferentTopicMessages) {
       scrollAnchor.setViewportMode('history', { pin: false });
@@ -3777,6 +3827,13 @@ watch(
       topicUnreadCount,
       initialMessagesLimit
     );
+    // На мобильном одно чтение покрывает всё окно. При возврате в длинный
+    // резидентный чат также обновляем окно целиком, сохраняя малый первый кадр.
+    const initialNetworkMessagesLimit =
+      isMobile.value ||
+      getFullMessagesByTopicId(topicId).length >= expandedLimit
+        ? expandedLimit
+        : initialMessagesLimit;
     let notificationVisibleMessagesLimit = expandedLimit;
     const pendingSearchNavigationForTopic =
       routeType !== RouteTypes.AI &&
@@ -3786,6 +3843,12 @@ watch(
     const pendingSearchMessageId =
       pendingSearchNavigationForTopic?.message?.id || '';
     const shouldPositionToPendingSearch = !!pendingSearchMessageId;
+    // Последнее сообщение уже пришло со списком: показываем его во время
+    // первого чтения истории, не добавляя в кеш и не отмечая прочитанным.
+    initialTopicPreviewEnabled.value =
+      routeType !== RouteTypes.AI &&
+      !isNotificationRefreshRequestForTopic &&
+      !shouldPositionToPendingSearch;
     const bootstrapAnchorMessageId = pendingSearchMessageId;
     const shouldBootstrapAroundMessage = !!bootstrapAnchorMessageId;
     const shouldLockBootstrapScroll = false;
@@ -3815,11 +3878,12 @@ watch(
     }
 
     if (!shouldScrollToBottomForNotification) {
-      void fetchPinnedMessagesForTopic(topicId);
+      void fetchPinnedMessagesForTopic(topicId, {
+        maxAgeMs: TOPIC_SWITCH_CACHE_MAX_AGE_MS
+      });
     }
 
-    const shouldHydrateBeforeInitialPaint =
-      routeType !== RouteTypes.AI && !shouldScrollToBottomForNotification;
+    const shouldHydrateBeforeInitialPaint = routeType !== RouteTypes.AI;
     const hydrationPromise = shouldHydrateBeforeInitialPaint
       ? hydrateMessagesFromCache(topicId, undefined, {
           visibleLimit: fastInitialMessagesLimit,
@@ -3841,12 +3905,14 @@ watch(
             return result.messages;
           })
         : fetchMessagesForTopic(topicId, {
-            limit: initialMessagesLimit,
+            limit: initialNetworkMessagesLimit,
+            maxAgeMs: TOPIC_SWITCH_CACHE_MAX_AGE_MS,
             forceRefresh: true,
             forceNetwork: getHasBrowserNetwork(),
             allowStaleFallback: !getHasBrowserNetwork(),
             visibleLimit: fastInitialMessagesLimit,
-            updateVisible: false
+            updateVisible: false,
+            revealIfEmpty: true
           });
     }
 
@@ -3856,14 +3922,32 @@ watch(
       return;
     }
 
+    // Сначала выясняем, есть ли кеш: медленное чтение IndexedDB не должно
+    // успевать включить скелетон поверх сохранённого чата.
     if (
-      !shouldScrollToBottomForNotification &&
-      (getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
-        getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId))
-          .length > 0)
+      getMessagesByTopicId(topicId).length === 0 &&
+      hydratedMessages.length === 0
+    ) {
+      scheduleInitialMessagesSkeleton(
+        topicId,
+        topicSwitchToken,
+        Math.max(
+          0,
+          TOPIC_SWITCH_SKELETON_DELAY_MS -
+            (performance.now() - topicSwitchStartedAtMs)
+        )
+      );
+    }
+
+    if (
+      getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
+      getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId)).length >
+        0
     ) {
       setTopicMessagesKnownEmpty(topicId, false);
-      cancelInitialMessagesSkeletonDelay();
+      resetInitialMessagesSkeleton();
+      if (shouldScrollToBottomForNotification)
+        isLoadingInitialMessages.value = false;
       setVisibleMessagesLimitForTopic(topicId, fastInitialMessagesLimit);
       scheduleVisibleTopicMediaWarm(topicId, isStaleTopicSwitch);
 
@@ -3910,10 +3994,13 @@ watch(
     }
 
     if (shouldScrollToBottomForNotification) {
-      void fetchPinnedMessagesForTopic(topicId);
+      void fetchPinnedMessagesForTopic(topicId, {
+        maxAgeMs: TOPIC_SWITCH_CACHE_MAX_AGE_MS
+      });
     }
 
     cancelInitialMessagesSkeletonDelay();
+    initialTopicPreviewEnabled.value = false;
     const shouldApplyInitialNetworkWindow =
       !shouldBootstrapAroundMessage &&
       (getMessagesByTopicId(topicId).length === 0 ||
@@ -3957,6 +4044,7 @@ watch(
     if (
       !shouldScrollToBottomForNotification &&
       !shouldBootstrapAroundMessage &&
+      !isMobile.value &&
       expandedLimit > initialMessagesLimit
     ) {
       scheduleExpandedTopicMessagesFetch(
@@ -4263,22 +4351,8 @@ onMounted(() => {
     if (getCanSendReadReceipts()) {
       refreshUnreadMarkerState();
     }
-
-    const topicId = route.value?.id;
-
-    if (
-      !getIsAppActivelyVisible() ||
-      !topicId ||
-      route.value.type === RouteTypes.AI ||
-      renderedTopicId.value !== topicId ||
-      isLoadingInitialMessages.value
-    ) {
-      return;
-    }
-
-    void refreshActiveTopicFromNotification(topicId, false).catch(error => {
-      console.warn('Failed to refresh active topic after app resume:', error);
-    });
+    // Историю при resume обновляет useChat с учётом соединения и времени
+    // в фоне. Второй запрос отсюда обходил эти проверки и дублировал обновление.
   });
 });
 

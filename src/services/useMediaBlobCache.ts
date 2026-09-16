@@ -1,4 +1,30 @@
 import { getConfig } from './useConfig';
+import { getAuthToken } from '../composables/useLogin';
+import { getStoredChatAccessToken } from '../composables/useAuth';
+
+const isInquiryFile = (path: string) =>
+  /^manager-private\/[0-9a-f-]{36}$/i.test(path);
+const inquiryObjectUrls = new Map<string, string>();
+
+// Файлы обращений проверяются сервером при каждом открытии и не попадают в общий кеш браузера.
+const loadInquiryFile = async (path: string): Promise<string | null> => {
+  const token = getAuthToken() || getStoredChatAccessToken();
+  if (!token) return null;
+  const response = await fetch(
+    `${getConfig().CHAT_API_DOMAIN.replace(/\/$/, '')}/media/object/${path}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+      redirect: 'error'
+    }
+  );
+  if (!response.ok) return null;
+  const objectUrl = URL.createObjectURL(await response.blob());
+  const previous = inquiryObjectUrls.get(path);
+  inquiryObjectUrls.set(path, objectUrl);
+  if (previous) setTimeout(() => URL.revokeObjectURL(previous), 60000);
+  return objectUrl;
+};
 
 const DB_NAME = 'chat-media-blob-cache-db';
 const DB_VERSION = 2;
@@ -19,6 +45,7 @@ interface CachedMediaBlobRecord {
 
 const objectUrlCache = new Map<string, string>();
 const pendingMediaRequests = new Map<string, Promise<string | null>>();
+const pendingCachedMediaReads = new Map<string, Promise<string | null>>();
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 const hasIndexedDb = () =>
@@ -185,7 +212,22 @@ const ensureCacheWithinLimit = async (): Promise<void> => {
 
 const buildMediaSourceUrl = (path: string): string => {
   const config = getConfig();
-  return `${config.CHAT_PATH_TO_FILE_CDN}/${path}`;
+  if (/^(blob:|data:|file:\/\/|https?:\/\/)/i.test(path)) {
+    return path;
+  }
+
+  const cdnBase = config.CHAT_PATH_TO_FILE_CDN.replace(/\/+$/, '');
+
+  if (path.startsWith('/')) {
+    try {
+      const resolvedCdn = new URL(cdnBase, window.location.href);
+      return new URL(path, resolvedCdn.origin).toString();
+    } catch {
+      return path;
+    }
+  }
+
+  return `${cdnBase}/${path}`;
 };
 
 export const getCachedMediaObjectUrl = (
@@ -198,11 +240,55 @@ export const getCachedMediaObjectUrl = (
   return objectUrlCache.get(path) || null;
 };
 
+export const loadCachedMediaObjectUrl = async (
+  path?: string | null
+): Promise<string | null> => {
+  if (!path || typeof window === 'undefined') return null;
+
+  const cachedObjectUrl = objectUrlCache.get(path);
+  if (cachedObjectUrl) return cachedObjectUrl;
+
+  const pendingRead = pendingCachedMediaReads.get(path);
+  if (pendingRead) return pendingRead;
+
+  const read = (async () => {
+    try {
+      const existingRecord = await getRecord(path);
+      if (!existingRecord?.blob) return null;
+
+      const objectUrl = URL.createObjectURL(existingRecord.blob);
+      objectUrlCache.set(path, objectUrl);
+      if (shouldRefreshAccessedAt(existingRecord.accessedAt)) {
+        void putRecord({
+          ...existingRecord,
+          accessedAt: new Date().toISOString()
+        });
+      }
+      return objectUrl;
+    } catch (error) {
+      console.warn('Failed to read cached media object URL:', error);
+      return null;
+    } finally {
+      pendingCachedMediaReads.delete(path);
+    }
+  })();
+
+  pendingCachedMediaReads.set(path, read);
+  return read;
+};
+
 export const ensureMediaObjectUrl = async (
   path?: string | null
 ): Promise<string | null> => {
   if (!path || typeof window === 'undefined') {
     return null;
+  }
+  if (isInquiryFile(path)) {
+    try {
+      return await loadInquiryFile(path);
+    } catch {
+      return null;
+    }
   }
 
   const cachedObjectUrl = objectUrlCache.get(path);
@@ -217,20 +303,8 @@ export const ensureMediaObjectUrl = async (
 
   const request = (async () => {
     try {
-      const existingRecord = await getRecord(path);
-
-      if (existingRecord?.blob) {
-        const objectUrl = URL.createObjectURL(existingRecord.blob);
-        objectUrlCache.set(path, objectUrl);
-        if (shouldRefreshAccessedAt(existingRecord.accessedAt)) {
-          void putRecord({
-            ...existingRecord,
-            accessedAt: new Date().toISOString()
-          });
-        }
-
-        return objectUrl;
-      }
+      const storedObjectUrl = await loadCachedMediaObjectUrl(path);
+      if (storedObjectUrl) return storedObjectUrl;
 
       const sourceUrl = buildMediaSourceUrl(path);
       const response = await fetch(sourceUrl, {

@@ -1,0 +1,11 @@
+// Отдельный пакет и данные для нагрузочных проверок на личном телефоне.
+allprojects {
+    plugins.withId('com.android.application') {
+        android.buildTypes.debug {
+            applicationIdSuffix '.performance'
+            versionNameSuffix '-performance'
+            resValue 'string', 'app_name', 'CHAT-294 Test'
+            resValue 'string', 'title_activity_main', 'CHAT-294 Test'
+        }
+    }
+}

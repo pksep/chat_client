@@ -661,10 +661,9 @@ p.chat__nothing-paragraph {
 
   .chat-mobile-route-forward,
   .chat-mobile-route-back {
-    animation-duration: 220ms;
-    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-    animation-fill-mode: both;
-    will-change: transform, opacity;
+    animation-duration: 140ms;
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+    animation-fill-mode: backwards;
   }
 
   .chat-mobile-route-forward {
@@ -677,25 +676,21 @@ p.chat__nothing-paragraph {
 
   @keyframes chat-mobile-route-forward-in {
     from {
-      opacity: 0.84;
-      transform: translate3d(24%, 0, 0);
+      transform: translate3d(24px, 0, 0);
     }
 
     to {
-      opacity: 1;
-      transform: translate3d(0, 0, 0);
+      transform: none;
     }
   }
 
   @keyframes chat-mobile-route-back-in {
     from {
-      opacity: 0.84;
-      transform: translate3d(-16%, 0, 0);
+      transform: translate3d(-18px, 0, 0);
     }
 
     to {
-      opacity: 1;
-      transform: translate3d(0, 0, 0);
+      transform: none;
     }
   }
 
