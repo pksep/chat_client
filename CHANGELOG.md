@@ -1,3 +1,17 @@
+# [1.41.0](https://github.com/pksep/chat_client/compare/v1.40.0...v1.41.0) (2026-09-16)
+
+
+### Bug Fixes
+
+* **ai:** allow selecting and copying message steps ([09e13a8](https://github.com/pksep/chat_client/commit/09e13a8a2151d0b7a8bdb027e703a5485d4c1404))
+* **ai:** keep action plan controls below the message ([ba34b9f](https://github.com/pksep/chat_client/commit/ba34b9f551c804fcf0db4fd5cc88809a8cd56ab2))
+* **ai:** preserve mobile menu spacing after canary update ([0c0f8bc](https://github.com/pksep/chat_client/commit/0c0f8bc3b53ea5e82109165ad77994d761c86206))
+
+
+### Features
+
+* **ai:** show durable action progress and preserve chat drafts ([843a148](https://github.com/pksep/chat_client/commit/843a1481f5acacfe348c00486c84af045901ed63))
+
 # [1.40.0](https://github.com/pksep/chat_client/compare/v1.39.0...v1.40.0) (2026-09-16)
 
 
