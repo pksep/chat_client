@@ -1,3 +1,217 @@
+# [1.41.0](https://github.com/pksep/chat_client/compare/v1.40.0...v1.41.0) (2026-09-16)
+
+
+### Bug Fixes
+
+* **ai:** allow selecting and copying message steps ([09e13a8](https://github.com/pksep/chat_client/commit/09e13a8a2151d0b7a8bdb027e703a5485d4c1404))
+* **ai:** keep action plan controls below the message ([ba34b9f](https://github.com/pksep/chat_client/commit/ba34b9f551c804fcf0db4fd5cc88809a8cd56ab2))
+* **ai:** preserve mobile menu spacing after canary update ([0c0f8bc](https://github.com/pksep/chat_client/commit/0c0f8bc3b53ea5e82109165ad77994d761c86206))
+
+
+### Features
+
+* **ai:** show durable action progress and preserve chat drafts ([843a148](https://github.com/pksep/chat_client/commit/843a1481f5acacfe348c00486c84af045901ed63))
+
+# [1.40.0](https://github.com/pksep/chat_client/compare/v1.39.0...v1.40.0) (2026-09-16)
+
+
+### Bug Fixes
+
+* calls with one person and styles ([f393ea3](https://github.com/pksep/chat_client/commit/f393ea38aafba0ba6d016e89cefdbf7d4d6e7126))
+* improve mobile forward recipient modal ([e66f5e9](https://github.com/pksep/chat_client/commit/e66f5e9ea67d956e0e0d71bc50acf350cc856eec))
+* lint ([98b746b](https://github.com/pksep/chat_client/commit/98b746b67e6e659965f41a803ca3738de2370d2f))
+* **manager:** pin published YUI with client section components ([ab3f5ae](https://github.com/pksep/chat_client/commit/ab3f5ae794abbef44054fea1efa8f185a0e41e22))
+* styles ([8bdea97](https://github.com/pksep/chat_client/commit/8bdea97a2507b94182fc77fffd509f0123a1d4c5))
+* styles ([ef8e869](https://github.com/pksep/chat_client/commit/ef8e869844313ceb649937cdbf95aae9cc23b132))
+* styles ([58b12c2](https://github.com/pksep/chat_client/commit/58b12c2dfb54cdfce461364a07d5a0ed2d3a634a))
+* styles ([6503c1f](https://github.com/pksep/chat_client/commit/6503c1f982de08709cc91d3414ba48b90c6449f9))
+* update yui emoji picker ([9bc04e7](https://github.com/pksep/chat_client/commit/9bc04e705895ad90a1e5ce21e5b197f1f1405c8b))
+
+
+### Features
+
+* authorize inquiry attachment downloads ([959f539](https://github.com/pksep/chat_client/commit/959f539903a058e1fa549b53427f1461c67fcb44))
+* **manager:** add clients inbox and native ERP contact actions ([e8aec7c](https://github.com/pksep/chat_client/commit/e8aec7cde19d81619129808229e7016c94e5c83f))
+
+
+### Performance Improvements
+
+* optimize Android startup and topic navigation ([9bfe463](https://github.com/pksep/chat_client/commit/9bfe46308096534433c5f0ac8a39326580e801a0))
+
+# [1.39.0](https://github.com/pksep/chat_client/compare/v1.38.0...v1.39.0) (2026-09-08)
+
+
+### Bug Fixes
+
+* **ai:** align collapsed item divider ([cafe3ce](https://github.com/pksep/chat_client/commit/cafe3ce971e4b50b2033e1f3ed67cfe632a633d9))
+* **ai:** align date color with chat ([95a270d](https://github.com/pksep/chat_client/commit/95a270d6e6960bf8cfd85e8aeaa99f61e22a0ab7))
+* **ai:** align message text metrics with chat ([d9bfe2e](https://github.com/pksep/chat_client/commit/d9bfe2e9a28c31da328c9741cd236c7ae3688446))
+* **ai:** align reply styling with chat messages ([053f851](https://github.com/pksep/chat_client/commit/053f8513cf4ea9913cac8d096b7325c203173fdb))
+* **ai:** align response and voice controls ([ec3cec1](https://github.com/pksep/chat_client/commit/ec3cec14fc7f0c24596fe8650856ce06588db3c8))
+* **ai:** constrain menu separator width ([35c9f03](https://github.com/pksep/chat_client/commit/35c9f030a5e5c3862308b3c5358cbafce49b4122))
+* **ai:** keep header menu above pinned content ([5d99e75](https://github.com/pksep/chat_client/commit/5d99e755de998d92d7ff189a70829ca077ef5b87))
+* **ai:** keep response mode and send buttons 8px apart ([9b6e418](https://github.com/pksep/chat_client/commit/9b6e418ce1e330e338af2be98d873a85375370ab))
+* **ai:** keep response selector width stable ([dab12c3](https://github.com/pksep/chat_client/commit/dab12c37bcfd1053ef3df2696a8c7c15f990ef1a))
+* **ai:** keep search usable with pinned messages ([e0474fd](https://github.com/pksep/chat_client/commit/e0474fd4468ef988e00879e67bdeb0c87d3aca23))
+* **ai:** make search result navigation continuous ([35e163e](https://github.com/pksep/chat_client/commit/35e163e943d3976b0743b41c04f30d30a32b8120))
+* **ai:** move collapsed divider outside button ([066ba77](https://github.com/pksep/chat_client/commit/066ba779339af4a63468d801d375f96a46eb2019))
+* **ai:** pass chat thread to Mastra memory ([b4d5990](https://github.com/pksep/chat_client/commit/b4d5990080768cdde5065bb4d94ad4725bd8d265))
+* **ai:** preserve approvals and surface tool errors ([9f92639](https://github.com/pksep/chat_client/commit/9f926392f6b7997d90d26ba0d5156934a9eb6895))
+* **ai:** preserve rounded pinned message accent ([7faf2cf](https://github.com/pksep/chat_client/commit/7faf2cfe55a14cad85cc54e79ea390d3beef9a7b))
+* **ai:** sync collapsed avatar theme color ([fb5e01f](https://github.com/pksep/chat_client/commit/fb5e01f4273c5d45d0dbbb63b7c3ce71f1465f1a))
+* **ai:** truncate long pinned message previews ([1cc8b8b](https://github.com/pksep/chat_client/commit/1cc8b8b83cb91157d260fcdd6710d69501863303))
+* allow set styles in span ([7cc89eb](https://github.com/pksep/chat_client/commit/7cc89eb319048b73aec4f7b448959a68635695c7))
+* apply lint formatting ([28939a2](https://github.com/pksep/chat_client/commit/28939a210b7cabba931b4ab216a2c660574306c8))
+* **CHAT-286:** improve Android notification navigation and branding ([ed1b6c1](https://github.com/pksep/chat_client/commit/ed1b6c167694f1722851ddaff92da5f55f77fe61))
+* emoji picker ([23ab014](https://github.com/pksep/chat_client/commit/23ab014a19d2572155eb7fdcc22dd7c0481c01ae))
+* lint ([d5597fd](https://github.com/pksep/chat_client/commit/d5597fdc7a9992a25f49af39f52ce687205626c6))
+* lint ([16d9e37](https://github.com/pksep/chat_client/commit/16d9e37dcae37af1d39ceaad5568b2c7c117a090))
+* version ([acef60a](https://github.com/pksep/chat_client/commit/acef60afd2684139474f244b48b25ba3bbee65ef))
+
+
+### Features
+
+* **ai:** add generated attachments and finalize AI UI ([e075ed5](https://github.com/pksep/chat_client/commit/e075ed577fc51cd885233d8cb6400c9478f74ebd))
+* **ai:** add pinned message navigation ([633aff8](https://github.com/pksep/chat_client/commit/633aff8ff2c348a2a8384cbf6398d5b759abc9a4))
+* **ai:** add response model selector ([7242f8b](https://github.com/pksep/chat_client/commit/7242f8b28a348ec533f8f1dbc20e6ac29dd32927))
+* **ai:** confirm standalone ERP entity creation ([597adaa](https://github.com/pksep/chat_client/commit/597adaa3db129615fcb5872b05726d468f3e3d18))
+* **ai:** describe shipment approvals ([46ae174](https://github.com/pksep/chat_client/commit/46ae17467668ad80147577178f2c902478769682))
+* update chat branding and Android compatibility ([8432c54](https://github.com/pksep/chat_client/commit/8432c54575de09d29939dfa89b5245411b9e20d1))
+* update package json ([ea5f4cc](https://github.com/pksep/chat_client/commit/ea5f4cc99f84f418d2c7513ff0b04eb983188348))
+* update web version ([a8ca7e5](https://github.com/pksep/chat_client/commit/a8ca7e54c4ae342df46d83b09a0870f99e746760))
+* update web version ([8142337](https://github.com/pksep/chat_client/commit/814233735119feb5203fd208e3e3251780871c24))
+
+# [1.38.0](https://github.com/pksep/chat_client/compare/v1.37.0...v1.38.0) (2026-09-02)
+
+
+### Bug Fixes
+
+* add sass embedded for scss build ([39f50a7](https://github.com/pksep/chat_client/commit/39f50a7cba6aa3e8aff18e2645a843528c495a37))
+* adjust active audio stream during calls ([ab90aad](https://github.com/pksep/chat_client/commit/ab90aad5958f72a86c9b964f2f22d993d5216247))
+* **ai-menu:** align activity status spacing ([559bf35](https://github.com/pksep/chat_client/commit/559bf3557b6666c27b682737c8167039b8ef5fbd))
+* **ai:** align assistant editor payload type ([9c9d2f7](https://github.com/pksep/chat_client/commit/9c9d2f74447f3009058ca92675eacf93a2754db6))
+* **ai:** create tasks in isolated sessions ([5c8265d](https://github.com/pksep/chat_client/commit/5c8265d68a2126797aae36ebc1881c2c1ec8612e))
+* **ai:** enable assistant beta navigation ([74b9e38](https://github.com/pksep/chat_client/commit/74b9e380426837f7c0951925f1fdcaeabd7d68e4))
+* **ai:** highlight the active assistant chat ([8b0ae16](https://github.com/pksep/chat_client/commit/8b0ae16d4d55cb19f69078ec18fcd76f861a5dac))
+* **ai:** recover stale tool approvals ([ba992ef](https://github.com/pksep/chat_client/commit/ba992ef1e0b7e7f5e85dbf17121fab75cb5084eb))
+* **ai:** require approval through chat controls ([9a515c8](https://github.com/pksep/chat_client/commit/9a515c8ff456804bc82d4acef440f2867480ecad))
+* **ai:** route protected uploads through public API ([3e31eab](https://github.com/pksep/chat_client/commit/3e31eab23ca8be343fc255f12e3c19b73da58391))
+* align call background grid ([4c65b33](https://github.com/pksep/chat_client/commit/4c65b33ab116416cea5f942c382a9027278ce434))
+* align chat creation icon with design ([88b4a75](https://github.com/pksep/chat_client/commit/88b4a75ade313d11fdaf9c674bf1dddeea212669))
+* align chat logo assets ([1bf9fb6](https://github.com/pksep/chat_client/commit/1bf9fb66797d8b4b9da6ff4d55b5e87a7f9eb793))
+* align group modal and contact selectors ([8ac2c81](https://github.com/pksep/chat_client/commit/8ac2c81122eb433610457bab1dc392f5699af9fe))
+* alternate profile attachment file colors ([d2a2c67](https://github.com/pksep/chat_client/commit/d2a2c678090946770e6868d54312f2bcd0fd1d35))
+* alternate profile attachment file styles ([c5a13bb](https://github.com/pksep/chat_client/commit/c5a13bb6915d26975ed74e03435a86daf11d1215))
+* apply lint formatting ([9186532](https://github.com/pksep/chat_client/commit/9186532372e876d8dafab6e99ee1d8231aa0ea99))
+* apply lint formatting ([b212acc](https://github.com/pksep/chat_client/commit/b212acc2dbf0d0e79be2ff4842c4f4fe7b8c46f5))
+* **attachments:** overlay emoji picker in modal ([2073845](https://github.com/pksep/chat_client/commit/2073845905e81b0c84749f0ecc85d020798ca47b))
+* batch profile attachments without scroll jumps ([5b4fc8d](https://github.com/pksep/chat_client/commit/5b4fc8de1476493b51927cc9e6d11239775dcf45))
+* **bots:** authorize gateway requests with bearer token ([4a07456](https://github.com/pksep/chat_client/commit/4a07456713d0bde6d4990983fd26329f9907ae23))
+* cancel attachment long press while scrolling ([a1c630c](https://github.com/pksep/chat_client/commit/a1c630c84d6f82ad6cba30934d9160ef5e8dbdb9))
+* change showed pinned message in scrolling ([706c738](https://github.com/pksep/chat_client/commit/706c7387abeb5ef8dab4a134772d72d753962403))
+* chat-265 mobile call bot layout ([8cf5be3](https://github.com/pksep/chat_client/commit/8cf5be331576d728ed1e107cde80b754ed787ccb))
+* **CHAT-277:** improve media handling and upload feedback ([9cadfa6](https://github.com/pksep/chat_client/commit/9cadfa62ae23a8f7e8bf3f4a2bbba617d85dd0c1))
+* constrain mobile assistant editor layout ([0565c81](https://github.com/pksep/chat_client/commit/0565c81f5727e6ba1f4d55c46302e1f770f2a9a3))
+* context menu ([9079821](https://github.com/pksep/chat_client/commit/9079821295155469e349a60ce6a39525a1b7559f))
+* disable mobile bot text selection ([4b1fa83](https://github.com/pksep/chat_client/commit/4b1fa832caadaf251bbdc6d491aee7c59e23fa5c))
+* humanize AI action approvals ([b1f735a](https://github.com/pksep/chat_client/commit/b1f735a60a723f0c2673913d4f1fc36035fcc1a3))
+* improve active call continuity and navigation ([4129428](https://github.com/pksep/chat_client/commit/4129428c11bf295c7551a653adbc0c85c0b67e45))
+* improve call reconnect and adaptive video ([24577af](https://github.com/pksep/chat_client/commit/24577afbeea40cecf237fa8f115d607f19082cd2))
+* improve call recovery and network handling ([2b0343a](https://github.com/pksep/chat_client/commit/2b0343a8e73e2ee414fe68ae8d76fdb4a8ae79e1))
+* keep bottom pinned when reactions change ([de5d57f](https://github.com/pksep/chat_client/commit/de5d57f8076037e9f14704d25ac4854d5b0b7083))
+* keep calls active until hangup ([36ff17d](https://github.com/pksep/chat_client/commit/36ff17d301488946093012186919b1586d4b1086))
+* keep message list pinned after layout growth ([055a5cd](https://github.com/pksep/chat_client/commit/055a5cddea043b9e75e5f1030cc3de1565bd52e1))
+* keep mobile call actions above input ([9039ad1](https://github.com/pksep/chat_client/commit/9039ad1be081b0c7e87130bcddacf1ff10cbcaff))
+* keep pinned messages aligned during calls ([41241ca](https://github.com/pksep/chat_client/commit/41241cac82b0dc08dc10cfa55543075f88994b87))
+* lint ([6d21f99](https://github.com/pksep/chat_client/commit/6d21f991a57b16276d7974a05ed71598fb0c3d11))
+* lint ([e450c6c](https://github.com/pksep/chat_client/commit/e450c6cd632a18152f41a88a639750e601e3b731))
+* lint ([99a233e](https://github.com/pksep/chat_client/commit/99a233e2755d9b8661135a52c9311805298f3102))
+* lint ([8e702d8](https://github.com/pksep/chat_client/commit/8e702d8cc4761f2246e441a55be629da4fb7bdd6))
+* lint ([d7b36bc](https://github.com/pksep/chat_client/commit/d7b36bcafb5b9fd758096de34434c5b2bec2165e))
+* map call topic input commands to actions ([334f046](https://github.com/pksep/chat_client/commit/334f0468aa6adb5cc97d09cadefcc4acafd57a4f))
+* **media:** allow 600 MiB uploads and resume after reload ([68a3cfc](https://github.com/pksep/chat_client/commit/68a3cfcb37c3fc04f6bdb9670b32f093f8f2e44a))
+* **media:** reliably resume multipart uploads after refresh ([24d9bcf](https://github.com/pksep/chat_client/commit/24d9bcf08a8778d340ce4989def85f3e1ec7c331))
+* merge ([560980d](https://github.com/pksep/chat_client/commit/560980d363c3d83f7eef3a64d8d0d07c7a69db16))
+* messages group ([b88be02](https://github.com/pksep/chat_client/commit/b88be02b869ee7a59b88e3253b7a9d707aeb3d0b))
+* normalize outgoing read receipts ([6c7c2e8](https://github.com/pksep/chat_client/commit/6c7c2e8c123d98f874e3d38ec75e3c2c3924c68c))
+* open PDF in media slider ([6cafea1](https://github.com/pksep/chat_client/commit/6cafea1d1b91129e5ae2beceef396e23624d6e3f))
+* optimize ([5815ea1](https://github.com/pksep/chat_client/commit/5815ea115cb32dc24877551381da5e6859f7c6e7))
+* polish call recording controls ([a915c0f](https://github.com/pksep/chat_client/commit/a915c0f56bda25d631a026155aaf7bfaf48c8e0d))
+* polish mobile call bot layout ([f153f77](https://github.com/pksep/chat_client/commit/f153f77a56168f3e156ecaff05d21470ced24090))
+* prefer cached profile attachment history ([886c6f3](https://github.com/pksep/chat_client/commit/886c6f30c700360253e89c0af75b9fc9c01d8783))
+* preserve forwarded message order ([c56c440](https://github.com/pksep/chat_client/commit/c56c4405228a512e8f328e72573429c073c4aad4))
+* preserve notification message context ([e834432](https://github.com/pksep/chat_client/commit/e83443212b91276e73baf897d80bd96060329180))
+* preserve screen share quality during recovery ([65e23e0](https://github.com/pksep/chat_client/commit/65e23e07536e3a27518cefc238c771502ec0e687))
+* preserve topic preview after message deletion ([b5b01ec](https://github.com/pksep/chat_client/commit/b5b01ec9b5fd7e668bfe8aa2cd0a5b2f62fa75f5))
+* prevent stale chat messages on topic switch ([c8bd19c](https://github.com/pksep/chat_client/commit/c8bd19c0da3bb88a5ee66a2a291d58e8eb0a1ff2))
+* remove mobile call route transition ([a73d9f7](https://github.com/pksep/chat_client/commit/a73d9f7a119e4e74f1cfeea2321a760ed8c3acf2))
+* restore sender-based attachment colors ([47514c9](https://github.com/pksep/chat_client/commit/47514c9c87539cbee3e91e8321bc0cf0b9e3cc91))
+* save bot commands ([a221e3c](https://github.com/pksep/chat_client/commit/a221e3c715d602a0933059cfc9b6f89bd27ac7c6))
+* scroll and add saved messages ([5036161](https://github.com/pksep/chat_client/commit/5036161548d3bd7c68aab0aa3eee04cff94c0cf3))
+* scrolling ([3b8ae35](https://github.com/pksep/chat_client/commit/3b8ae3594d9eb22caded57254eff47038c09d6e1))
+* **security:** sanitize rendered message html ([546cf82](https://github.com/pksep/chat_client/commit/546cf8281d44fb057ae66cf8bb97f1e990ea6a19))
+* send forwarded message with typed text ([aa7eef3](https://github.com/pksep/chat_client/commit/aa7eef3be825bb8f1cd8dffaf7d9b5b273ffa161))
+* show all PDF pages in chat ([b5b7a4d](https://github.com/pksep/chat_client/commit/b5b7a4d047b87c205f64fd1489d0ca54787c991e))
+* show bot links and fix styles ([567a900](https://github.com/pksep/chat_client/commit/567a900ee27daceaa904a0fc7fca10ede836fe49))
+* show call prompt placeholder when disabled ([a46dd72](https://github.com/pksep/chat_client/commit/a46dd72e78df13ab2323b9276ab6314e11aa1e18))
+* size bot icon ([3326668](https://github.com/pksep/chat_client/commit/3326668b45199ccf4d29a718aa124f59ae9b86e8))
+* stabilize network status label ([ccd9651](https://github.com/pksep/chat_client/commit/ccd9651d6965c32f57b77b5baff6147730af05dd))
+* start ([cf16961](https://github.com/pksep/chat_client/commit/cf169612614f9afce49595976923f196c9ba02ef))
+* style ([c1928cd](https://github.com/pksep/chat_client/commit/c1928cdd686da143fa0cf78d98784b9f98661cb9))
+* styles ([38abb0f](https://github.com/pksep/chat_client/commit/38abb0fd08f5c2e6caf56a28973ee338f000dcba))
+* styles ([d047b66](https://github.com/pksep/chat_client/commit/d047b66000dae3a1c4d2965a597f57bc7a13ab9d))
+* styles ([76962b2](https://github.com/pksep/chat_client/commit/76962b27f8862eb347526f7cfbfab8ebbf85af75))
+* styles ([72fe258](https://github.com/pksep/chat_client/commit/72fe258212f2618b1ab0f54f5324fbbacf739d03))
+* support call topic AI responses ([7a4595f](https://github.com/pksep/chat_client/commit/7a4595fda6c06c571fe11c342dd2fbeb1c000bb7))
+* sync and scroll ([6e902c4](https://github.com/pksep/chat_client/commit/6e902c4b478009bb67ee18cf0ccae96c325aee76))
+* sync topic preview message status ([36f83b6](https://github.com/pksep/chat_client/commit/36f83b603b2b5981258f9694cd5765fa5c300bb0))
+* sync topic preview with client messages ([0e55653](https://github.com/pksep/chat_client/commit/0e55653df074b698285f0e491eb10998bada6c99))
+* **ui:** improve avatar fallbacks and AI panel states ([7a7c7c3](https://github.com/pksep/chat_client/commit/7a7c7c34ca84284ca5cadfece42943619a7526bc))
+* use mobile group avatar cropper layout ([73e8b12](https://github.com/pksep/chat_client/commit/73e8b1257f302c862e79d250b6efbb8c10d704a2))
+* VITE_BOT_GATEWAY_URL ([15b5d22](https://github.com/pksep/chat_client/commit/15b5d229794660a96d26f6ea81177d63ee321f0e))
+* web update ([da51b1e](https://github.com/pksep/chat_client/commit/da51b1eda80125498d639c3e01049f896abdd54d))
+
+
+### Features
+
+* add AI assistant mock interface ([dfd960b](https://github.com/pksep/chat_client/commit/dfd960b90cae96aafea33931c4ee9c87658c1012))
+* add call recording transcripts ([502157d](https://github.com/pksep/chat_client/commit/502157dcc8101ce6c800cf7d25693286f13cd33c))
+* add favorite history clearing ([4bd636c](https://github.com/pksep/chat_client/commit/4bd636c10fd056cc56fa1c654b5882341aedacaf))
+* add profile attachments browser ([ba38015](https://github.com/pksep/chat_client/commit/ba38015ea90ea6d4c500db4f97dc56aee60f0b1a))
+* add resumable multipart file uploads ([c50412b](https://github.com/pksep/chat_client/commit/c50412bbe8fa076c92e2d0dcebffe15f1869df7a))
+* add RuStore push with Firebase fallback ([54b3ee2](https://github.com/pksep/chat_client/commit/54b3ee2339c1fe33d7b5c67ceaf9e61ddd6c0035))
+* **ai:** add message context actions ([7b25b2e](https://github.com/pksep/chat_client/commit/7b25b2e8987dd5855331f968d190f19d35d5bd41))
+* **ai:** connect assistant interface to Mastra ([9b0b00c](https://github.com/pksep/chat_client/commit/9b0b00cfd20685b23c3e0156d3554e4e9b3a59e1))
+* **ai:** connect automatic approval mode ([bef047d](https://github.com/pksep/chat_client/commit/bef047da85c8d156c0700bb5a5356c02c14f9145))
+* **ai:** describe detail archive approvals ([1ce5372](https://github.com/pksep/chat_client/commit/1ce5372434f035035cbd7090070307b07d6ffd54))
+* **ai:** describe ERP approvals in plain language ([42debd5](https://github.com/pksep/chat_client/commit/42debd5e488416aaa0c60adcf21b85b962ec73b6))
+* **ai:** describe ERP specification approvals ([64611ae](https://github.com/pksep/chat_client/commit/64611ae538b976de61e33e593703325b40c25b5e))
+* **ai:** humanize ERP detail approvals ([932b1f7](https://github.com/pksep/chat_client/commit/932b1f79f77494078e2b097eb82d5a8dd353d13d))
+* **ai:** humanize knowledge base approvals ([3830046](https://github.com/pksep/chat_client/commit/38300468fda5c799de7e0d55cf5e962f4678b83e))
+* **ai:** improve assistant chat experience ([08b1769](https://github.com/pksep/chat_client/commit/08b176930b0a8e53a79925f3c7ae6b2cad0020af))
+* **ai:** show and manage recurring automations ([714b7ce](https://github.com/pksep/chat_client/commit/714b7cef8a10b6c41a23708ffefa68f5b2fb3980))
+* **ai:** transfer chat attachments to ERP ([12b5131](https://github.com/pksep/chat_client/commit/12b5131306510c15264779790f348bc9e327df73))
+* **CHAT-282:** display deleted ERP accounts ([2c8c19b](https://github.com/pksep/chat_client/commit/2c8c19b606f0632e29e65c7417d65bb5b22b6a70))
+* connect AI chat to approved Board actions ([7cb8ed9](https://github.com/pksep/chat_client/commit/7cb8ed99ef7a3f5f6fe1f18aa9cade97d13c09b6))
+* fix Audio volume ([6461e69](https://github.com/pksep/chat_client/commit/6461e69c4a3df41f0c84f26d357d50b239dade61))
+* humanize all board approvals ([b7ad611](https://github.com/pksep/chat_client/commit/b7ad611a5d5e549dd9aea34f9b70691294cfc7d4))
+* paginate topic attachments by type ([2e211bd](https://github.com/pksep/chat_client/commit/2e211bdda131efa0ad2ef92e425b4fb8649cb1f8))
+* restore reactions ([b3f122e](https://github.com/pksep/chat_client/commit/b3f122e53ac9d952242137021bd38fff12b879ce))
+* scroll and skeleton ([ff1161e](https://github.com/pksep/chat_client/commit/ff1161e7cdea886dcdf6b655873217abb389ad8e))
+* update Mastra client integration ([f6fc1c8](https://github.com/pksep/chat_client/commit/f6fc1c84adf380c147b6427426c80bead6c8c20b))
+* update web version ([63bebcf](https://github.com/pksep/chat_client/commit/63bebcf6e25ed1acb4a8dac085ae70565547dccf))
+* web update ([8dbaab4](https://github.com/pksep/chat_client/commit/8dbaab4c1f02599e546e91f2155a657eddf80c4e))
+
+
+### Performance Improvements
+
+* lazy-load calls and AI features ([509c1d9](https://github.com/pksep/chat_client/commit/509c1d9cd38047f4301062df783bd9b2f24a4096))
+
+
+### Reverts
+
+* restore sender-based attachment colors ([f5a8904](https://github.com/pksep/chat_client/commit/f5a890453680c0b6639b4d3634c6dfe94cd2edec))
+
 # [1.37.0](https://github.com/pksep/chat_client/compare/v1.36.2...v1.37.0) (2026-07-13)
 
 
