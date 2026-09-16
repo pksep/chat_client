@@ -9,6 +9,38 @@ import {
   resetMetrics
 } from './fixtures/topic-performance-page';
 
+test('мобильный первый кадр темы содержит поле ввода полной высоты', async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 392, height: 832 });
+  const { errors } = await openFixture(page, { shell: true });
+  const frames = await page.evaluate(async () => {
+    const samples: { at: number; inputHeight: number }[] = [];
+    const started = performance.now();
+    (window as any).topicPerformance.navigate('performance-0');
+
+    while (performance.now() - started < 350) {
+      await new Promise<void>(resolve =>
+        requestAnimationFrame(() => resolve())
+      );
+      samples.push({
+        at: performance.now() - started,
+        inputHeight: Math.round(
+          document.querySelector('.chat__input')?.getBoundingClientRect()
+            .height || 0
+        )
+      });
+    }
+
+    return samples;
+  });
+
+  expect(frames.length).toBeGreaterThan(0);
+  expect(frames[0].inputHeight).toBeGreaterThanOrEqual(75);
+  expect(frames.every(frame => frame.inputHeight >= 75)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
 test('эмодзи создаются по нажатию, вставляются в черновик и сохраняются после возврата', async ({
   page
 }) => {
