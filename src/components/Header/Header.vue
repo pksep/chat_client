@@ -207,7 +207,12 @@
               v-if="option.customIcon === 'search'"
               class="chat__header-context-menu-icon"
             />
-            <Icon v-else-if="option.iconName" :name="option.iconName" />
+            <Icon
+              v-else-if="option.iconName"
+              :name="option.iconName"
+              :width="option.iconSize"
+              :height="option.iconSize"
+            />
             {{ option.value }}
           </Button>
         </ContextMenu>
@@ -558,6 +563,12 @@ const {
   activeTitle: aiAssistantTitle,
   activeSessionId: aiAssistantSessionId,
   activeSession: aiAssistantSession,
+  activeTask: aiAssistantTask,
+  isActiveTaskSession: isAiTaskSession,
+  startNewSession: startNewAiSession,
+  startNewTask: startNewAiTask,
+  toggleTask: toggleAiTask,
+  deleteTask: deleteAiTask,
   isVoiceModeOpen: isAiVoiceCallActive,
   isVoiceModalVisible: isAiVoiceCallModalVisible,
   voiceCallStartedAt: aiVoiceCallStartedAt,
@@ -745,16 +756,21 @@ const mobileInfoMembersLabel = computed(() => {
   return `${count} ${getParticipantForm(count)}`;
 });
 const actionModalTitle = computed(() =>
-  route.value.type === RouteTypes.DIALOGS || route.value.type === RouteTypes.AI
-    ? 'Удаление чата'
-    : currentRouteGroup.value?.isAdmin
-      ? 'Удаление канала'
-      : 'Выход из канала'
+  route.value.type === RouteTypes.AI && isAiTaskSession.value
+    ? 'Удаление задачи'
+    : route.value.type === RouteTypes.DIALOGS ||
+        route.value.type === RouteTypes.AI
+      ? 'Удаление чата'
+      : currentRouteGroup.value?.isAdmin
+        ? 'Удаление канала'
+        : 'Выход из канала'
 );
 
 const actionModalDescription = computed(() =>
   route.value.type === RouteTypes.AI
-    ? 'Вы действительно хотите удалить чат?'
+    ? isAiTaskSession.value
+      ? 'Вы действительно хотите удалить задачу?'
+      : 'Вы действительно хотите удалить чат?'
     : route.value.type === RouteTypes.DIALOGS
       ? 'Вы уверены, что хотите удалить чат?'
       : currentRouteGroup.value?.isAdmin
@@ -801,7 +817,7 @@ const hasPendingCallForCurrentTopic = computed(
 );
 const showHeaderCallAction = computed(() => {
   if (route.value.type === RouteTypes.AI) {
-    return !isMobile.value && !isCallActive.value && !isAiVoiceCallActive.value;
+    return !isCallActive.value && !isAiVoiceCallActive.value;
   }
 
   return (
@@ -1299,6 +1315,7 @@ const getHeaderContextMenuOptions = computed(() => {
     function: () => void;
     style?: string;
     iconName?: IconNameEnum;
+    iconSize?: number;
     customIcon?: 'search';
   }> = [];
 
@@ -1388,7 +1405,41 @@ const getHeaderContextMenuOptions = computed(() => {
       });
     }
   } else {
-    if (!aiAssistantSessionId.value) return options;
+    if (!aiAssistantSessionId.value) {
+      options.push(
+        {
+          value: 'Новый чат',
+          iconName: IconNameEnum.chat,
+          function: () => {
+            startNewAiSession();
+            navigateToAI();
+          }
+        },
+        {
+          value: 'Новая задача',
+          iconName: IconNameEnum.calendar,
+          function: () => {
+            startNewAiTask();
+            navigateToAI();
+          }
+        }
+      );
+      return options;
+    }
+
+    const task = aiAssistantTask.value;
+    if (task) {
+      options.push({
+        value: task.enabled ? 'Остановить' : 'Возобновить',
+        iconName: task.enabled ? IconNameEnum.pause : IconNameEnum.play,
+        iconSize: 16,
+        function: () => {
+          void toggleAiTask(task.id).catch(error => {
+            console.error('Не удалось изменить состояние задачи ИИ:', error);
+          });
+        }
+      });
+    }
 
     if (isMobile.value && isChatSearchAvailable.value) {
       options.push({
@@ -1398,15 +1449,16 @@ const getHeaderContextMenuOptions = computed(() => {
       });
     }
 
+    if (!isAiTaskSession.value)
+      options.push({
+        value: 'Очистить чат',
+        function: () => {
+          emits('unmount-clear');
+        },
+        iconName: IconNameEnum.imagePaint
+      });
     options.push({
-      value: 'Очистить чат',
-      function: () => {
-        emits('unmount-clear');
-      },
-      iconName: IconNameEnum.imagePaint
-    });
-    options.push({
-      value: 'Удалить чат',
+      value: isAiTaskSession.value ? 'Удалить задачу' : 'Удалить чат',
       function: handleOpenActionModal,
       style: 'color: var(--error-color)',
       iconName: IconNameEnum.deleteSmall
@@ -1445,7 +1497,9 @@ const handleConfirmClearHistory = (): void => {
 const handleConfirmActionModal = async (): Promise<void> => {
   if (route.value.type === RouteTypes.AI) {
     const sessionId = aiAssistantSessionId.value;
-    if (sessionId) {
+    if (aiAssistantTask.value) {
+      await deleteAiTask(aiAssistantTask.value.id);
+    } else if (sessionId) {
       deleteAiAssistantSession(sessionId);
       navigateToAI();
     }

@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator } from './fixtures/ai-history';
 
 const FITTING_SESSION_ID = 'ai-title-fitting';
 const OVERFLOWING_SESSION_ID = 'ai-title-overflowing';

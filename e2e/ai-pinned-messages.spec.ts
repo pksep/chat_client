@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './fixtures/ai-history';
 
 const SESSION_ID = 'ai-pinned-messages';
 const HEADER_TEST_ID = 'ChatContainer-ChatContainer-Header-Header';
@@ -108,12 +108,14 @@ test('показывает закреп и позволяет переходит
   const thirdMessage = userMessages.nth(2);
   const pinnedPanel = page.getByTestId('AI-Assistant-PinnedMessage');
 
-  await expect(
-    firstMessage.locator('.ai-assistant__message-body > p')
-  ).toHaveCSS('font-size', '14px');
-  await expect(
-    firstMessage.locator('.ai-assistant__message-body > p')
-  ).toHaveCSS('line-height', '17px');
+  await expect(firstMessage.locator('.message-content__html')).toHaveCSS(
+    'font-size',
+    '14px'
+  );
+  await expect(firstMessage.locator('.message-content__html')).toHaveCSS(
+    'line-height',
+    '20px'
+  );
 
   await pinMessage(page, firstMessage);
   await expect(pinnedPanel).toContainText('Первое важное сообщение');
@@ -132,15 +134,11 @@ test('показывает закреп и позволяет переходит
     'overflow',
     'visible'
   );
-  await expect(
-    firstMessage.locator('.ai-assistant__message-pin')
-  ).toBeVisible();
+  await expect(firstMessage.locator('[data-testid$="-PinIcon"]')).toBeVisible();
 
   await pinMessage(page, thirdMessage);
   await expect(pinnedPanel).toContainText('Третье важное сообщение');
-  await expect(
-    thirdMessage.locator('.ai-assistant__message-pin')
-  ).toBeVisible();
+  await expect(thirdMessage.locator('[data-testid$="-PinIcon"]')).toBeVisible();
 
   await pinnedPanel.click();
   await expect(thirdMessage).toHaveClass(/highlighted/);
@@ -174,7 +172,7 @@ test('показывает закреп и позволяет переходит
   await page.getByTestId('AI-Assistant-PinnedMessage-CloseButton').click();
   await confirmUnpin(page);
   await expect(pinnedPanel).toContainText('Первое важное сообщение');
-  await expect(thirdMessage.locator('.ai-assistant__message-pin')).toHaveCount(
+  await expect(thirdMessage.locator('[data-testid$="-PinIcon"]')).toHaveCount(
     0
   );
 
@@ -186,7 +184,7 @@ test('показывает закреп и позволяет переходит
     page
       .locator('.ai-assistant__message--user')
       .nth(0)
-      .locator('.ai-assistant__message-pin')
+      .locator('[data-testid$="-PinIcon"]')
   ).toBeVisible();
 
   await page.getByTestId('AI-Assistant-PinnedMessage-CloseButton').click();
