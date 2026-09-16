@@ -1,3 +1,29 @@
+# [1.40.0](https://github.com/pksep/chat_client/compare/v1.39.0...v1.40.0) (2026-09-16)
+
+
+### Bug Fixes
+
+* calls with one person and styles ([f393ea3](https://github.com/pksep/chat_client/commit/f393ea38aafba0ba6d016e89cefdbf7d4d6e7126))
+* improve mobile forward recipient modal ([e66f5e9](https://github.com/pksep/chat_client/commit/e66f5e9ea67d956e0e0d71bc50acf350cc856eec))
+* lint ([98b746b](https://github.com/pksep/chat_client/commit/98b746b67e6e659965f41a803ca3738de2370d2f))
+* **manager:** pin published YUI with client section components ([ab3f5ae](https://github.com/pksep/chat_client/commit/ab3f5ae794abbef44054fea1efa8f185a0e41e22))
+* styles ([8bdea97](https://github.com/pksep/chat_client/commit/8bdea97a2507b94182fc77fffd509f0123a1d4c5))
+* styles ([ef8e869](https://github.com/pksep/chat_client/commit/ef8e869844313ceb649937cdbf95aae9cc23b132))
+* styles ([58b12c2](https://github.com/pksep/chat_client/commit/58b12c2dfb54cdfce461364a07d5a0ed2d3a634a))
+* styles ([6503c1f](https://github.com/pksep/chat_client/commit/6503c1f982de08709cc91d3414ba48b90c6449f9))
+* update yui emoji picker ([9bc04e7](https://github.com/pksep/chat_client/commit/9bc04e705895ad90a1e5ce21e5b197f1f1405c8b))
+
+
+### Features
+
+* authorize inquiry attachment downloads ([959f539](https://github.com/pksep/chat_client/commit/959f539903a058e1fa549b53427f1461c67fcb44))
+* **manager:** add clients inbox and native ERP contact actions ([e8aec7c](https://github.com/pksep/chat_client/commit/e8aec7cde19d81619129808229e7016c94e5c83f))
+
+
+### Performance Improvements
+
+* optimize Android startup and topic navigation ([9bfe463](https://github.com/pksep/chat_client/commit/9bfe46308096534433c5f0ac8a39326580e801a0))
+
 # [1.39.0](https://github.com/pksep/chat_client/compare/v1.38.0...v1.39.0) (2026-09-08)
 
 
