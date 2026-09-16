@@ -1437,7 +1437,9 @@ const getHeaderContextMenuOptions = computed(() => {
     if (task) {
       options.push({
         value: task.enabled ? 'Остановить' : 'Возобновить',
-        iconName: task.enabled ? IconNameEnum.pause : IconNameEnum.play,
+        iconName: task.enabled
+          ? IconNameEnum.minus
+          : IconNameEnum.planeRightFill,
         iconSize: 16,
         function: () => {
           void toggleAiTask(task.id).catch(error => {
