@@ -96,17 +96,20 @@
           v-for="message in activeSession?.messages || []"
           :key="message.id"
           :class="[
-            'ai-assistant__message',
+            'message ai-assistant__message',
             `ai-assistant__message--${message.role}`,
             {
+              message__other: message.role === 'user',
               'ai-assistant__message--selection-active': isSelectionMode,
               'ai-assistant__message--selected': isMessageSelected(message.id),
               highlighted: highlightedMessageId === message.id
             }
           ]"
           :data-message-id="message.id"
+          :data-is-me-sender="message.role === 'user'"
           @click="handleMessageSelectionClick(message, $event)"
           @contextmenu="handleMessageContextMenu(message, $event)"
+          @copy="copyMessageSelection"
         >
           <div
             :class="[
@@ -126,8 +129,8 @@
           </div>
           <MessageBubbleFiles
             v-if="message.outputAttachments?.length"
-            class="ai-assistant__message-files"
-            :message="message.text"
+            class="message__bubble ai-assistant__message-files"
+            :message="getMessageHtml(message.text)"
             :time="message.time"
             :is-pin="message.pinned"
             :is-me-sender="false"
@@ -136,10 +139,23 @@
             :data-testid="`AI-Assistant-Message-${message.id}`"
             @set-slider="handleOutputAttachmentClick"
           />
-          <div v-else class="ai-assistant__message-content">
-            <div class="ai-assistant__message-body">
+          <MessageBubbleText
+            v-else
+            class="message__bubble ai-assistant__message-content"
+            :message="getMessageHtml(message.text)"
+            :time="message.time"
+            :is-pin="message.pinned"
+            :is-me-sender="message.role === 'user'"
+            :is-read="true"
+            :is-dialog="true"
+            :parsed-call-message="null"
+            :data-testid="`AI-Assistant-Message-${message.id}`"
+          >
+            <template v-if="visibleActionTasks.has(message.id)" #after-message>
+              <AIActionPipeline :task="visibleActionTasks.get(message.id)!" />
+            </template>
+            <template v-if="message.replyTo" #reference>
               <div
-                v-if="message.replyTo"
                 :class="[
                   'ai-assistant__message-reply',
                   'message-reference-block',
@@ -159,23 +175,14 @@
                   </div>
                 </div>
               </div>
-              <p>{{ message.text }}</p>
-            </div>
-            <PinIcon
-              v-if="message.pinned"
-              class="ai-assistant__message-pin"
-              aria-label="Закреплено"
-            />
-            <time>{{ message.time }}</time>
-            <Icon
-              v-if="message.role === 'user'"
-              class="ai-assistant__read"
-              :name="IconNameEnum.delivered"
-              aria-label="Прочитано"
-            />
-          </div>
+            </template>
+          </MessageBubbleText>
           <div
-            v-if="message.showApproval && !message.approvalState"
+            v-if="
+              visibleActionTasks.get(message.id)?.status ===
+                'waiting_approval' ||
+              (message.showApproval && !message.approvalState)
+            "
             class="ai-assistant__approval"
           >
             <button
@@ -188,6 +195,7 @@
             <button
               type="button"
               class="ai-assistant__approval-confirm"
+              :disabled="visibleActionTasks.has(message.id) && taskBusy"
               @click="handleApproval(message.id, 'approved')"
             >
               Подтвердить
@@ -208,7 +216,7 @@
           </Teleport>
         </div>
         <div v-if="isThinking" class="ai-assistant__thinking">
-          Думает <span>•••</span>
+          {{ preparationStatus }} <span>•••</span>
         </div>
       </div>
     </div>
@@ -281,10 +289,16 @@
         }
       ]"
     >
-      <div class="ai-assistant__editor">
+      <div
+        class="ai-assistant__editor"
+        @change.capture="validateAttachmentSelection"
+        @drop.capture="validateAttachmentSelection"
+        @paste.capture="validateAttachmentSelection"
+      >
         <ContentEditor
           ref="contentEditorRef"
           v-model="draft"
+          :attachment-draft-key="composerKey"
           :active-attach-file="true"
           :disable-send-on-enter="isThinking || isUploadingAttachments"
           @unmount-send="handleSend"
@@ -338,69 +352,27 @@
               </Button>
             </div>
           </template>
-          <template #mobile-trailing-action>
+          <template
+            v-for="placement in composerControlPlacements"
+            #[placement.slot]
+          >
             <div
-              class="ai-assistant__permission-control ai-assistant__permission-control--mobile"
+              v-if="placement.permission"
+              :key="`${placement.slot}-permission`"
+              :class="[
+                'ai-assistant__permission-control',
+                `ai-assistant__permission-control--${placement.variant}`
+              ]"
             >
               <Button
                 :type="ButtonTypeEnum.ghost"
                 :size="SizesEnum.small"
-                class="toolbar-button mobile-buttons ai-assistant__permission-trigger ai-assistant__permission-trigger--mobile"
+                :class="[
+                  'toolbar-button ai-assistant__permission-trigger',
+                  `ai-assistant__permission-trigger--${placement.variant}`,
+                  { 'mobile-buttons': placement.variant === 'mobile' }
+                ]"
                 :aria-label="permissionLabel"
-                :title="permissionLabel"
-                aria-haspopup="menu"
-                :aria-expanded="isPermissionMenuOpen"
-                @click.stop="togglePermissionMenu"
-              >
-                <PermissionHandIcon v-if="permissionMode === 'ask'" />
-                <PermissionCheckCircleIcon v-else />
-              </Button>
-              <div
-                v-if="isPermissionMenuOpen"
-                class="ai-assistant__permission-menu"
-                role="menu"
-                aria-label="Режим подтверждения действий"
-              >
-                <button
-                  type="button"
-                  role="menuitemradio"
-                  :aria-checked="permissionMode === 'automatic'"
-                  @click="selectPermission('automatic')"
-                >
-                  <PermissionCheckCircleIcon />
-                  <span>Автоматически подтверждать</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitemradio"
-                  :aria-checked="permissionMode === 'ask'"
-                  @click="selectPermission('ask')"
-                >
-                  <PermissionHandIcon />
-                  <span>Запрашивать разрешения</span>
-                </button>
-              </div>
-            </div>
-            <Button
-              :type="ButtonTypeEnum.ghost"
-              :size="SizesEnum.small"
-              class="toolbar-button mobile-buttons ai-assistant__voice-trigger ai-assistant__voice-trigger--mobile"
-              aria-label="Голосовой режим"
-              title="Голосовой режим"
-              @click.stop="openVoiceMode"
-            >
-              <VoiceMessageIcon />
-            </Button>
-          </template>
-
-          <template #desktop-left-action>
-            <div
-              class="ai-assistant__permission-control ai-assistant__permission-control--desktop"
-            >
-              <Button
-                :type="ButtonTypeEnum.ghost"
-                :size="SizesEnum.small"
-                class="toolbar-button ai-assistant__permission-trigger ai-assistant__permission-trigger--desktop"
                 :title="permissionLabel"
                 aria-haspopup="menu"
                 :aria-expanded="isPermissionMenuOpen"
@@ -436,21 +408,26 @@
                 </button>
               </div>
             </div>
-          </template>
-
-          <template #desktop-right-action>
             <div
-              class="ai-assistant__response-control ai-assistant__response-control--desktop"
+              v-if="placement.response"
+              :key="`${placement.slot}-response`"
+              :class="[
+                'ai-assistant__response-control',
+                `ai-assistant__response-control--${placement.variant}`
+              ]"
             >
               <Button
                 :type="ButtonTypeEnum.ghost"
                 :size="SizesEnum.small"
-                class="toolbar-button ai-assistant__response-trigger ai-assistant__response-trigger--desktop"
+                :class="[
+                  'toolbar-button ai-assistant__response-trigger',
+                  `ai-assistant__response-trigger--${placement.variant}`,
+                  { 'mobile-buttons': placement.variant === 'mobile' }
+                ]"
                 :title="responseModeLabel"
                 :aria-label="responseModeLabel"
                 aria-haspopup="menu"
                 :aria-expanded="isResponseModeMenuOpen"
-                :disabled="isThinking"
                 @click.stop="toggleResponseModeMenu"
               >
                 <Icon
@@ -614,6 +591,7 @@ import TasksSuggestionIcon from './TasksSuggestionIcon.vue';
 import PermissionHandIcon from './PermissionHandIcon.vue';
 import PermissionCheckCircleIcon from './PermissionCheckCircleIcon.vue';
 import AIMessageContextMenu from './AIMessageContextMenu.vue';
+import AIActionPipeline from './AIActionPipeline.vue';
 import {
   type AiAssistantMessage,
   type AiResponseMode,
@@ -627,11 +605,11 @@ import { openMessageDraft } from '../../composables/useMessageDraftTransfer';
 import {
   clearAiForwardDraft,
   openAiForwardDraft,
-  restoreAiForwardDraft,
   useAiForwardDraft
 } from '../../composables/useAiForwardDraft';
 import { useAiMessageSearch } from '../../composables/useAiMessageSearch';
 import { stageAiAttachments } from '../../services/aiAttachments';
+import { validateAiAttachments } from '../../services/aiAttachmentLimits';
 import { MediaType } from '@pksep/zod-shared-chat';
 import {
   recognizeVoice,
@@ -642,15 +620,16 @@ import {
   type VoicePlaybackSession
 } from '../../services/aiSpeech';
 import { stripHtml } from '../../utils/stripHtml';
+import { copyMessageSelection } from '../../utils/copyMessageSelection';
 import type { IMedia, ITopic } from '../interfaces/interfaces';
 import type { AiAssistantSession } from '../../composables/useAiAssistant';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import EditIcon from '../UI/EditIcon.vue';
 import ForwardIcon from '../UI/ForwardIcon.vue';
-import PinIcon from '../UI/PinIcon.vue';
 import ReplyIcon from '../UI/ReplyIcon.vue';
 import ForwardModal from '../Messages/ForwardModal.vue';
 import MessageBubbleFiles from '../Messages/MessageBubbleFiles.vue';
+import MessageBubbleText from '../Messages/MessageBubbleText.vue';
 import PinnedMessageBanner from '../Messages/PinnedMessageBanner.vue';
 import { useMessageMedia } from '../Messages/composables/useMessageMedia';
 import { ensureMediaObjectUrl } from '../../services/useMediaBlobCache';
@@ -665,6 +644,36 @@ interface IContentEditorSendPayload {
   mediaFiles?: FileList;
 }
 
+// Одинаковые кнопки и меню в штатных слотах редактора на обеих ширинах.
+const composerControlPlacements = [
+  {
+    slot: 'mobile-trailing-action',
+    variant: 'mobile',
+    permission: true,
+    response: true
+  },
+  {
+    slot: 'desktop-left-action',
+    variant: 'desktop',
+    permission: true,
+    response: false
+  },
+  {
+    slot: 'desktop-right-action',
+    variant: 'desktop',
+    permission: false,
+    response: true
+  }
+] as const;
+
+// Ответы ИИ хранятся как текст, а общий компонент сообщений принимает HTML.
+const getMessageHtml = (text: string): string =>
+  text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\r?\n/g, '<br>');
+
 const {
   sessions,
   tasks,
@@ -672,6 +681,9 @@ const {
   activeSessionId,
   activeSession,
   isThinking,
+  preparationStatus,
+  taskBusy,
+  resolveActionTask,
   isVoiceModeOpen,
   isVoiceModalVisible,
   permissionMode,
@@ -694,6 +706,26 @@ const {
   clearAll
 } = useAiAssistant();
 
+// Каждый план показан в своём сообщении один раз, в последней сохранённой версии.
+// Незавершённые поручения остаются управляемыми, старые итоги — в истории чата.
+const visibleActionTasks = computed(() => {
+  const plans = new Map<
+    string,
+    { messageId: string; task: NonNullable<AiAssistantMessage['actionTask']> }
+  >();
+  for (const message of activeSession.value?.messages || []) {
+    const task = message.actionTask;
+    if (
+      task &&
+      (!plans.has(task.id) || plans.get(task.id)!.task.version <= task.version)
+    ) {
+      plans.set(task.id, { messageId: message.id, task });
+    }
+  }
+  const ordered = [...plans.values()];
+  return new Map(ordered.map(({ messageId, task }) => [messageId, task]));
+});
+
 const route = useUrlWatcher();
 const { activeTarget: activeSearchTarget } = useAiMessageSearch();
 const { pendingAiForwardDraft } = useAiForwardDraft();
@@ -714,8 +746,58 @@ const contextMessage = ref<{
   selectedText: string;
 } | null>(null);
 const selectedMessageIds = ref<Set<string>>(new Set());
-const replyMessage = ref<AiAssistantMessage | null>(null);
+const replyMessage = ref<Pick<AiAssistantMessage, 'role' | 'text'> | null>(
+  null
+);
 const editingMessage = ref<AiAssistantMessage | null>(null);
+type ComposerDraft = {
+  html: string;
+  reply: typeof replyMessage.value;
+  editing: typeof editingMessage.value;
+  files: File[];
+  mediaFiles: File[];
+};
+const composerKey = computed(() =>
+  activeView.value === 'tasks'
+    ? 'new-task'
+    : activeSessionId.value ?? 'new-chat'
+);
+const composerDrafts = new Map<string, ComposerDraft>();
+const composerSubmissions = new Map<string, { key: string }>();
+let selectingSubmissionSession: { key: string } | undefined;
+
+/** Возвращает непринятые файлы штатному редактору только в их исходном чате. */
+const restoreComposerFiles = async (key: string) => {
+  await nextTick();
+  if (
+    !isAssistantMounted ||
+    composerKey.value !== key ||
+    !contentEditorRef.value
+  )
+    return;
+  const saved = composerDrafts.get(key);
+  if (!saved || (!saved.files.length && !saved.mediaFiles.length)) return;
+  for (const kind of ['files', 'mediaFiles'] as const) {
+    if (
+      !isAssistantMounted ||
+      composerKey.value !== key ||
+      !contentEditorRef.value
+    )
+      return;
+    const files = [...saved[kind]];
+    if (!files.length) continue;
+    try {
+      await contentEditorRef.value.queueAttachFiles(
+        files,
+        kind === 'mediaFiles'
+      );
+      saved[kind].splice(0, files.length);
+    } catch (error) {
+      showErrorNotification(error);
+      return;
+    }
+  }
+};
 const forwardModalOpen = ref(false);
 const forwardMessages = ref<AiAssistantMessage[]>([]);
 const pendingDeleteMessageIds = ref<string[]>([]);
@@ -1020,7 +1102,7 @@ const conversationDate = computed(() =>
   }).format(new Date())
 );
 
-/** Возвращает курсор в конец черновика, когда композер доступен пользователю. */
+/** Возвращает фокус, не меняя выделение пользователя в уже активном редакторе. */
 const focusComposer = (): void => {
   if (!isAssistantMounted) return;
 
@@ -1045,7 +1127,11 @@ const focusComposer = (): void => {
 
       const editor = contentEditorRef.value?.editor;
       if (editor) {
-        editor.commands.focus('end');
+        if (!editor.isDestroyed && !editor.view.hasFocus()) {
+          // Кадр уже наступил: второй отложенный focus может сбросить новое выделение.
+          editor.commands.setTextSelection(editor.state.doc.content.size);
+          editor.view.focus();
+        }
         return;
       }
 
@@ -1385,7 +1471,9 @@ const startMessageReply = (message: AiAssistantMessage): void => {
 const startMessageEdit = (message: AiAssistantMessage): void => {
   if (message.role !== 'user') return;
   editingMessage.value = message;
-  replyMessage.value = null;
+  replyMessage.value = message.replyTo
+    ? { role: message.replyTo.role, text: message.replyTo.content }
+    : null;
   draft.value = message.text;
   focusComposer();
 };
@@ -1393,6 +1481,7 @@ const startMessageEdit = (message: AiAssistantMessage): void => {
 /** Отменяет редактирование AI-сообщения. */
 const cancelMessageEdit = (): void => {
   editingMessage.value = null;
+  replyMessage.value = null;
   draft.value = '';
   focusComposer();
 };
@@ -1489,13 +1578,21 @@ const handleApproval = async (
   state: 'approved' | 'rejected'
 ): Promise<void> => {
   try {
-    await updateApproval(messageId, state);
+    const task = visibleActionTasks.value.get(messageId);
+    if (task?.status === 'waiting_approval') {
+      await resolveActionTask(
+        task.id,
+        state === 'approved' ? 'approve' : 'cancel'
+      );
+    } else {
+      await updateApproval(messageId, state);
+    }
   } finally {
     focusComposer();
   }
 };
 
-/** Удаляет подтверждённые сообщения из локальной истории AI-чата. */
+/** Удаляет подтверждённые сообщения; отказ сервера не подменяется локальным успехом. */
 const confirmDeleteMessages = async (): Promise<void> => {
   const messageIds = [...pendingDeleteMessageIds.value];
   pendingDeleteMessageIds.value = [];
@@ -1533,33 +1630,113 @@ const handleMessageAction = async (
   }
 };
 
+/** Останавливает недопустимый выбор ещё до добавления файлов в редактор. */
+const validateAttachmentSelection = (event: Event): void => {
+  const files =
+    event instanceof DragEvent
+      ? event.dataTransfer?.files
+      : event instanceof ClipboardEvent
+        ? event.clipboardData?.files
+        : event.target instanceof HTMLInputElement &&
+            event.target.type === 'file'
+          ? event.target.files
+          : undefined;
+  if (!files?.length) return;
+  try {
+    validateAiAttachments(Array.from(files));
+  } catch (error) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (event.target instanceof HTMLInputElement) event.target.value = '';
+    showErrorNotification(
+      error instanceof Error
+        ? error.message
+        : 'Не удалось проверить вложения. Выберите файлы заново.'
+    );
+  }
+};
+
 const handleSend = async (
   payload?: IContentEditorSendPayload
 ): Promise<void> => {
   const value = stripHtml(payload?.content ?? draft.value);
   const submittedForwardDraft = activeForwardDraft.value;
-  const files = [
-    ...(payload?.mediaFiles ? Array.from(payload.mediaFiles) : []),
-    ...(payload?.files ? Array.from(payload.files) : [])
-  ];
-
-  if (
-    (!value && files.length === 0 && !submittedForwardDraft) ||
-    isUploadingAttachments.value
-  ) {
+  const submittedHtml = draft.value;
+  const submittedReply = replyMessage.value;
+  const editedMessage = editingMessage.value;
+  const regularFiles = payload?.files ? Array.from(payload.files) : [];
+  const mediaFiles = payload?.mediaFiles ? Array.from(payload.mediaFiles) : [];
+  const files = [...mediaFiles, ...regularFiles];
+  if (!value && files.length === 0 && !submittedForwardDraft) return;
+  const attempt = { key: composerKey.value };
+  const keepFiles = () => {
+    const saved = composerDrafts.get(attempt.key) ?? {
+      html: submittedHtml,
+      reply: submittedReply,
+      editing: editedMessage,
+      files: [],
+      mediaFiles: []
+    };
+    saved.files.push(...regularFiles);
+    saved.mediaFiles.push(...mediaFiles);
+    composerDrafts.set(attempt.key, saved);
+    return restoreComposerFiles(attempt.key);
+  };
+  if (isUploadingAttachments.value) {
+    await keepFiles();
     return;
   }
-
+  let accepted = false;
+  const releaseBusy = () => {
+    if (composerSubmissions.get(attempt.key) === attempt)
+      composerSubmissions.delete(attempt.key);
+    isUploadingAttachments.value = composerSubmissions.has(composerKey.value);
+  };
+  const onAccepted = () => {
+    accepted = true;
+    releaseBusy();
+    // Пользователь мог дописать новый текст во время подготовки. Не затираем его.
+    if (isAssistantMounted && composerKey.value === attempt.key) {
+      if (
+        draft.value === submittedHtml &&
+        replyMessage.value === submittedReply &&
+        editingMessage.value === editedMessage &&
+        activeForwardDraft.value === submittedForwardDraft
+      ) {
+        draft.value = '';
+        if (replyMessage.value === submittedReply) replyMessage.value = null;
+        if (editingMessage.value === editedMessage) editingMessage.value = null;
+      }
+      void scrollToBottom();
+    } else {
+      const saved = composerDrafts.get(attempt.key);
+      if (
+        saved?.html === submittedHtml &&
+        saved.reply === submittedReply &&
+        saved.editing === editedMessage
+      ) {
+        saved.html = '';
+        saved.reply = null;
+        saved.editing = null;
+      }
+    }
+    if (
+      submittedForwardDraft &&
+      pendingAiForwardDraft.value === submittedForwardDraft
+    )
+      clearAiForwardDraft(submittedForwardDraft.sessionId);
+  };
+  composerSubmissions.set(attempt.key, attempt);
   isUploadingAttachments.value = true;
   try {
     const attachments = files.length > 0 ? await stageAiAttachments(files) : [];
-    const replyTo = replyMessage.value
+    if (!isAssistantMounted || composerKey.value !== attempt.key) return;
+    const replyTo = submittedReply
       ? {
-          role: replyMessage.value.role,
-          content: replyMessage.value.text
+          role: submittedReply.role,
+          content: submittedReply.text
         }
       : undefined;
-    const editedMessage = editingMessage.value;
     const visibleValue = submittedForwardDraft
       ? [submittedForwardDraft.context, value].filter(Boolean).join('\n\n')
       : value;
@@ -1572,31 +1749,28 @@ const handleSend = async (
             : 'Поручение пользователя:\nПроанализируй сообщение и предложи дальнейшие действия.'
         ].join('\n\n')
       : undefined;
-    const request = editedMessage
-      ? editMessageAndResend(
-          editedMessage.id,
-          visibleValue,
-          attachments,
-          replyTo
-        )
-      : sendMessage(visibleValue, attachments, replyTo, modelValue);
-    if (submittedForwardDraft) {
-      clearAiForwardDraft(submittedForwardDraft.sessionId);
+    let request: Promise<unknown>;
+    selectingSubmissionSession = attempt;
+    try {
+      request = editedMessage
+        ? editMessageAndResend(
+            editedMessage.id,
+            visibleValue,
+            attachments,
+            replyTo,
+            onAccepted
+          )
+        : sendMessage(
+            visibleValue,
+            attachments,
+            replyTo,
+            modelValue,
+            onAccepted
+          );
+    } finally {
+      selectingSubmissionSession = undefined;
     }
-    void request.catch(error => {
-      showErrorNotification(error);
-      if (submittedForwardDraft) {
-        restoreAiForwardDraft(submittedForwardDraft);
-      }
-      if (editedMessage) {
-        editingMessage.value = editedMessage;
-        draft.value = value;
-      }
-    });
-    draft.value = '';
-    replyMessage.value = null;
-    editingMessage.value = null;
-    void scrollToBottom();
+    await request;
   } catch (error) {
     showErrorNotification(
       error instanceof Error
@@ -1604,8 +1778,9 @@ const handleSend = async (
         : 'Не удалось подготовить вложение для AI'
     );
   } finally {
-    isUploadingAttachments.value = false;
-    focusComposer();
+    releaseBusy();
+    if (!accepted) await keepFiles();
+    if (composerKey.value === attempt.key) focusComposer();
   }
 };
 
@@ -1704,26 +1879,51 @@ watch([activeSessionId, activeView], ([sessionId, view]) => {
   navigateToAI(view === 'chat' ? sessionId : null);
 });
 
-watch([() => activeSession.value?.id, activeView], () => {
-  closeMessageContextMenu();
-  closePinnedMessageUnpinModal();
-  clearMessageHighlight();
-  clearMessageSelection();
-  currentPinnedMessageId.value = null;
-  replyMessage.value = null;
-  editingMessage.value = null;
-  pendingDeleteMessageIds.value = [];
-  isNearBottom.value = true;
-  void scrollToBottom();
-});
+watch(
+  composerKey,
+  (key, previousKey) => {
+    if (selectingSubmissionSession?.key === previousKey) {
+      composerSubmissions.delete(previousKey);
+      selectingSubmissionSession.key = key;
+      composerSubmissions.set(key, selectingSubmissionSession);
+    } else {
+      const previous = composerDrafts.get(previousKey);
+      composerDrafts.set(previousKey, {
+        html: draft.value,
+        reply: replyMessage.value,
+        editing: editingMessage.value,
+        files: previous?.files ?? [],
+        mediaFiles: previous?.mediaFiles ?? []
+      });
+      const saved = composerDrafts.get(key);
+      draft.value = saved?.html ?? '';
+      replyMessage.value = saved?.reply ?? null;
+      editingMessage.value = saved?.editing ?? null;
+      void restoreComposerFiles(key);
+    }
+    isUploadingAttachments.value = composerSubmissions.has(key);
+    closeMessageContextMenu();
+    closePinnedMessageUnpinModal();
+    clearMessageHighlight();
+    clearMessageSelection();
+    currentPinnedMessageId.value = null;
+    pendingDeleteMessageIds.value = [];
+    isNearBottom.value = true;
+    void scrollToBottom();
+  },
+  { flush: 'sync' }
+);
 
-watch([() => activeSession.value?.messages.length || 0, isThinking], () => {
-  if (isNearBottom.value) void scrollToBottom();
-});
-
-watch(isThinking, thinking => {
-  if (thinking) isResponseModeMenuOpen.value = false;
-});
+watch(
+  [
+    () => activeSession.value?.messages.length || 0,
+    isThinking,
+    visibleActionTasks
+  ],
+  () => {
+    if (isNearBottom.value) void scrollToBottom();
+  }
+);
 
 watch(isVoiceModeOpen, (isOpen, wasOpen) => {
   if (!isOpen || wasOpen) return;

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures/ai-history';
 
 test.setTimeout(90_000);
 
@@ -54,10 +54,7 @@ for (const theme of ['theme-light', 'theme-dark']) {
   test(`выбирает модель по режиму ответа и сохраняет выбор (${theme})`, async ({
     page
   }, testInfo) => {
-    test.skip(
-      testInfo.project.name === 'chromium-mobile',
-      'Выбор режима расположен в компьютерной панели'
-    );
+    const isMobile = testInfo.project.name === 'chromium-mobile';
     const sessionId = `ai-response-mode-${Date.now()}`;
     const requests: Array<Record<string, unknown>> = [];
     await prepareAiSession(page, sessionId);
@@ -65,11 +62,13 @@ for (const theme of ['theme-light', 'theme-dark']) {
       localStorage.setItem('erp-theme-color-scheme', value);
     }, theme);
 
+    let releaseFirstReply!: () => void;
+    const firstReplyReady = new Promise<void>(resolve => {
+      releaseFirstReply = resolve;
+    });
     await page.route('**/api/agents/generalAgent/stream*', async route => {
       requests.push(route.request().postDataJSON());
-      await new Promise(resolve => {
-        setTimeout(resolve, 2000);
-      });
+      if (requests.length === 1) await firstReplyReady;
       await route.fulfill({
         status: 200,
         contentType: 'text/event-stream',
@@ -96,7 +95,7 @@ for (const theme of ['theme-light', 'theme-dark']) {
     );
     const assertSendGap = async () => {
       const mode = await page
-        .locator('.ai-assistant__response-trigger--desktop')
+        .locator('.ai-assistant__response-trigger:visible')
         .boundingBox();
       const send = await page
         .locator('.ai-assistant__editor .toolbar-button.right:visible')
@@ -105,7 +104,7 @@ for (const theme of ['theme-light', 'theme-dark']) {
       expect(send).not.toBeNull();
       expect(send!.x - mode!.x - mode!.width).toBeCloseTo(8, 1);
     };
-    await assertSendGap();
+    if (!isMobile) await assertSendGap();
     await quickModeButton.click();
     const advancedModeOption = page.getByRole('menuitemradio', {
       name: 'Продвинутый ответ'
@@ -119,14 +118,16 @@ for (const theme of ['theme-light', 'theme-dark']) {
     });
     await expect(advancedModeButton).toBeVisible();
     await expect(advancedModeButton.locator('svg')).toBeVisible();
-    await expect
-      .poll(() =>
-        advancedModeButton.evaluate(
-          element => element.getBoundingClientRect().width
+    if (!isMobile) {
+      await expect
+        .poll(() =>
+          advancedModeButton.evaluate(
+            element => element.getBoundingClientRect().width
+          )
         )
-      )
-      .toBeGreaterThan(triggerWidth);
-    await assertSendGap();
+        .toBeGreaterThan(triggerWidth);
+      await assertSendGap();
+    }
 
     const editor = page.locator('.ai-assistant__editor');
     await testInfo.attach(`response-toolbar-${theme}`, {
@@ -137,20 +138,36 @@ for (const theme of ['theme-light', 'theme-dark']) {
     await page.keyboard.insertText('Подготовь подробный ответ');
     await editor.locator('.toolbar-button.right:visible').click();
 
-    await expect(advancedModeButton).toBeDisabled();
+    await expect(page.locator('.ai-assistant__thinking')).toBeVisible();
+    await expect(advancedModeButton).toBeEnabled();
     await expect(advancedModeButton).toContainText('Продвинутый ответ');
     await expect(
       advancedModeButton.locator('.ai-assistant__response-trigger-skeleton')
     ).toHaveCount(0);
-    await assertSendGap();
+    await advancedModeButton.click();
+    await page.getByRole('menuitemradio', { name: 'Быстрый ответ' }).click();
+    await expect(quickModeButton).toBeEnabled();
+    await expect(page.locator('.ai-assistant__thinking')).toBeVisible();
+    expect(requests).toHaveLength(1);
 
     await expect.poll(() => requests.length, { timeout: 30_000 }).toBe(1);
     expect(requests[0]).toMatchObject({
       requestContext: { responseMode: 'advanced' }
     });
+    releaseFirstReply();
+    await expect(page.locator('.ai-assistant__thinking')).toHaveCount(0);
+    await editor
+      .locator('[contenteditable="true"]')
+      .fill('Теперь ответь быстро');
+    await editor.locator('.toolbar-button.right:visible').click();
+    await expect.poll(() => requests.length).toBe(2);
+    expect(requests[1]).toMatchObject({
+      requestContext: { responseMode: 'quick' }
+    });
+    await expect(page.locator('.ai-assistant__thinking')).toHaveCount(0);
 
     await page.reload();
-    await expect(advancedModeButton).toBeVisible({ timeout: 30_000 });
+    await expect(quickModeButton).toBeVisible({ timeout: 30_000 });
     await expect
       .poll(() =>
         page.evaluate(() => {
@@ -158,6 +175,6 @@ for (const theme of ['theme-light', 'theme-dark']) {
           return stored ? JSON.parse(stored).responseMode : null;
         })
       )
-      .toBe('advanced');
+      .toBe('quick');
   });
 }

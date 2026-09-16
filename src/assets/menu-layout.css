@@ -106,7 +106,7 @@
   }
 
   .mobile-list-container .ai-menu-panel__list {
-    padding-inline: 16px;
+    padding-inline: 0;
   }
 
   .mobile-list-container .calls-page__item {

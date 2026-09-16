@@ -59,6 +59,19 @@ const STALE_APPROVAL_RESPONSE_PATTERNS = [
 
 /** Определяет, что подтверждение больше нельзя продолжить после завершения или перезапуска запуска Mastra. */
 export const isStaleApprovalResponse = (payload: unknown): boolean => {
+  if (typeof payload === 'string') {
+    try {
+      return isStaleApprovalResponse(JSON.parse(payload));
+    } catch {
+      // Совместимость с прежним сервером, возвращавшим обычный текст.
+    }
+  }
+  if (payload && typeof payload === 'object') {
+    const record = payload as Record<string, unknown>;
+    if (typeof record.code === 'string' && record.code.startsWith('AI_')) {
+      return record.code === 'AI_APPROVAL_STALE';
+    }
+  }
   const text =
     typeof payload === 'string'
       ? payload

@@ -110,6 +110,7 @@ import PinIcon from '../UI/PinIcon.vue';
 import ReplyIcon from '../UI/ReplyIcon.vue';
 import SelectIcon from '../UI/SelectIcon.vue';
 import UnpinIcon from '../UI/UnpinIcon.vue';
+import { copyTextToClipboard } from '../../utils/copyTextToClipboard';
 
 type MenuAction =
   | 'reply'
@@ -143,8 +144,17 @@ const runAction = (action: MenuAction): void => {
 };
 
 const handleCopy = async (): Promise<void> => {
-  const text = props.selectedText?.trim() || props.message.text;
-  if (text) await navigator.clipboard.writeText(text);
+  const text =
+    props.selectedText?.trim() ||
+    [
+      props.message.text,
+      props.message.actionTask?.steps
+        .map((step, index) => `${index + 1}. ${step.title}`)
+        .join('\n')
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+  if (text) await copyTextToClipboard(text);
   emit('close');
 };
 </script>
