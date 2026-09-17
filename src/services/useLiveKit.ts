@@ -5558,14 +5558,18 @@ export const hydrateInvitedGroupCallFromUrl = async (options?: {
 
 export const openGroupCallInviteUrl = async (
   value: string,
-  options?: { preview?: GroupCallInvitePreview }
+  options?: {
+    allowTrustedOrigin?: boolean;
+    preview?: GroupCallInvitePreview;
+  }
 ): Promise<boolean> => {
   if (typeof window === 'undefined') {
     return false;
   }
 
   const invite = parseGroupCallInviteUrl(value, {
-    allowTrustedNativeOrigin: Capacitor.isNativePlatform()
+    allowTrustedOrigin:
+      options?.allowTrustedOrigin ?? Capacitor.isNativePlatform()
   });
 
   if (!invite) {

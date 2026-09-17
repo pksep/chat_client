@@ -11,6 +11,7 @@ import {
   getChatAuthSession,
   type StoredChatAuthSession
 } from '../utils/stored-chat-session';
+import { buildGroupCallInviteAuthorizationUrl } from '../utils/groupCallInviteUrl';
 export {
   CHAT_AUTH_SESSION_KEY,
   getChatAuthSession
@@ -248,10 +249,13 @@ export const consumeAuthRedirectStartupShellSkip = (): boolean => {
 };
 
 export const redirectToAuthorization = (): void => {
+  const authorizationUrl = buildGroupCallInviteAuthorizationUrl(
+    window.location.href
+  );
   clearErpAuthSession();
   authedUser.value = null;
   skipStartupShellOnNextAuthScreen();
-  window.location.replace(window.location.origin);
+  window.location.replace(authorizationUrl);
 };
 
 export const ensureAuthorizedResponse = (response: Response): Response => {

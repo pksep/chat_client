@@ -30,6 +30,7 @@ export {
 };
 
 const loadLiveKit = () => import('./useLiveKit');
+let invitedGroupCallRestorePromise: Promise<boolean> | null = null;
 
 export const handleIncomingCall = async (
   targetUser: any,
@@ -181,10 +182,20 @@ export const removeInvitedGroupCall = async (roomId?: string) => {
   clearInvitedGroupCall(roomId);
 };
 
-export const restoreInvitedGroupCallFromUrl = async () => {
-  const { hydrateInvitedGroupCallFromUrl } = await loadLiveKit();
+export const restoreInvitedGroupCallFromUrl = (): Promise<boolean> => {
+  if (invitedGroupCallRestorePromise) {
+    return invitedGroupCallRestorePromise;
+  }
 
-  await hydrateInvitedGroupCallFromUrl();
+  invitedGroupCallRestorePromise = loadLiveKit()
+    .then(({ hydrateInvitedGroupCallFromUrl }) =>
+      hydrateInvitedGroupCallFromUrl()
+    )
+    .finally(() => {
+      invitedGroupCallRestorePromise = null;
+    });
+
+  return invitedGroupCallRestorePromise;
 };
 
 export const copyInviteGroupCallLink = async () => {
