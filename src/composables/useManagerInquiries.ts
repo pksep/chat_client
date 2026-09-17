@@ -8,6 +8,7 @@ import { getAuthToken } from './useLogin';
 import { getConfig } from '../services/useConfig';
 import { getTopicList } from './useTopics';
 import { clearManagerRoutes } from './useManagerRoutes';
+import { showErrorNotification } from './useNotifications';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
 
 export interface ManagerInquiry {
@@ -49,7 +50,6 @@ const inquiries = ref<ManagerInquiry[]>([]);
 const managers = ref<ManagerOption[]>([]);
 const allowed = ref(false);
 const loading = ref(false);
-const error = ref('');
 let subscribers = 0;
 let refreshPromise: Promise<void> | null = null;
 let generation = 0;
@@ -57,6 +57,24 @@ let interval: ReturnType<typeof setInterval> | undefined;
 let scheduled: ReturnType<typeof setTimeout> | undefined;
 let stopWatch: (() => void) | undefined;
 let stopTopics: (() => void) | undefined;
+let lastRefreshError = '';
+
+const managerRequestErrorMessage = (status: number): string => {
+  if (status === 403) return 'Нет доступа к разделу «Клиенты»';
+  if (status === 404) return 'Данные обращения не найдены';
+  if (status === 409) return 'Данные обращения изменились другим менеджером';
+  return 'Не удалось выполнить действие. Попробуйте ещё раз.';
+};
+
+const notifyRefreshError = (cause: unknown): void => {
+  const message =
+    cause instanceof Error ? cause.message : 'Не удалось загрузить обращения';
+
+  if (message === lastRefreshError) return;
+
+  lastRefreshError = message;
+  showErrorNotification(message);
+};
 
 export async function managerRequest<T>(
   path: string,
@@ -75,6 +93,7 @@ export async function managerRequest<T>(
     signal: AbortSignal.timeout(20000)
   });
   const data = await response.json().catch(() => ({}));
+
   if (!response.ok) {
     if (response.status === 403 && path !== 'access') {
       // Отсутствие права синхронизации с ЕРП не закрывает сам раздел обращений.
@@ -89,7 +108,7 @@ export async function managerRequest<T>(
       }
     }
     throw new ManagerRequestError(
-      data.message || 'Не удалось выполнить действие',
+      managerRequestErrorMessage(response.status),
       response.status
     );
   }
@@ -150,7 +169,7 @@ export async function refreshManagerInquiries(): Promise<void> {
         clearManagerRoutes();
         inquiries.value = [];
         managers.value = [];
-        error.value = '';
+        lastRefreshError = '';
         return;
       }
       const rows: ManagerInquiry[] = [];
@@ -173,13 +192,9 @@ export async function refreshManagerInquiries(): Promise<void> {
           : item;
       });
       managers.value = people;
-      error.value = '';
+      lastRefreshError = '';
     } catch (cause) {
-      if (currentGeneration === generation)
-        error.value =
-          cause instanceof Error
-            ? cause.message
-            : 'Не удалось загрузить заявки';
+      if (currentGeneration === generation) notifyRefreshError(cause);
     } finally {
       if (currentGeneration === generation) loading.value = false;
       refreshPromise = null;
@@ -231,7 +246,7 @@ export function useManagerInboxSubscription() {
         inquiries.value = [];
         managers.value = [];
         allowed.value = false;
-        error.value = '';
+        lastRefreshError = '';
         void (refreshPromise || Promise.resolve()).then(
           refreshManagerInquiries
         );
@@ -271,7 +286,6 @@ export function useManagerInquiries() {
     managers,
     allowed,
     loading,
-    error,
     byTopic: computed(
       () => new Map(inquiries.value.map(item => [item.topic_id, item]))
     ),

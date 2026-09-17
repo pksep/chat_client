@@ -24,9 +24,6 @@
         @focusout="save"
       />
     </div>
-    <p v-if="saveError" class="client-details__error" role="alert">
-      {{ saveError }}
-    </p>
     <template v-if="conflict">
       <Button
         :type="ButtonTypeEnum.secondary"
@@ -42,9 +39,6 @@
         >Принять сохранённые</Button
       >
     </template>
-    <p v-if="erpError" class="client-details__error" role="alert">
-      {{ erpError }}
-    </p>
     <div v-if="candidates.length" class="client-details__candidates">
       <p>Найдены контакты в СЭП. Выберите, с каким связать клиента:</p>
       <Button
@@ -88,6 +82,8 @@ import {
 } from '../../composables/useManagerInquiries';
 import { getConfig } from '../../services/useConfig';
 import { openErpContact } from '../../composables/useErpContact';
+import { showErrorNotification } from '../../composables/useNotifications';
+
 const props = defineProps<{ inquiry: ManagerInquiry }>();
 const { managers } = useManagerInquiries();
 const note = ref('');
@@ -95,8 +91,6 @@ const selectedManagers = ref<string[]>([]);
 const version = ref(0);
 const saving = ref(false);
 const conflict = ref(false);
-const saveError = ref('');
-const erpError = ref('');
 const erpBusy = ref(false);
 const failedOperation = ref('');
 const candidates = ref<Array<{ id: number; initial: string; ban: boolean }>>(
@@ -135,19 +129,17 @@ const dirty = computed(
     JSON.stringify(selectedManagers.value) !==
       JSON.stringify(props.inquiry.manager_ids)
 );
-function resetDraft() {
+function resetDraft(): void {
   note.value = props.inquiry.note;
   selectedManagers.value = [...props.inquiry.manager_ids];
   version.value = props.inquiry.metadata_version;
   conflict.value = false;
-  saveError.value = '';
 }
 watch(
   () => props.inquiry.id,
   () => {
     resetDraft();
     candidates.value = [];
-    erpError.value = '';
     failedOperation.value = '';
     clearTimeout(poll);
     void checkErp();
@@ -172,17 +164,16 @@ watch(
 );
 let previousNote = props.inquiry.note;
 let previousManagers = JSON.stringify(props.inquiry.manager_ids);
-async function selectManagers(ids: string[]) {
+async function selectManagers(ids: string[]): Promise<void> {
   if (saving.value) return;
   selectedManagers.value = ids;
   await save();
 }
-async function save(overwrite: unknown = false) {
+async function save(overwrite: unknown = false): Promise<void> {
   if (saving.value || !dirty.value || (conflict.value && overwrite !== true))
     return;
   const item = props.inquiry;
   saving.value = true;
-  saveError.value = '';
   try {
     const patch = {
       ...(JSON.stringify(selectedManagers.value) !==
@@ -201,19 +192,23 @@ async function save(overwrite: unknown = false) {
     previousManagers = JSON.stringify(selectedManagers.value);
     conflict.value = false;
   } catch (cause) {
-    saveError.value =
-      cause instanceof Error ? cause.message : 'Не удалось сохранить';
     if (cause instanceof ManagerRequestError && cause.status === 409) {
       conflict.value = true;
       await loadInquiry(item.id).catch(() => {});
-      saveError.value =
-        'Карточку изменил другой менеджер. Вы можете принять сохранённые данные или сохранить свои изменения.';
+      showErrorNotification(
+        'Карточку изменил другой менеджер. Вы можете принять сохранённые данные или сохранить свои изменения.'
+      );
+      return;
     }
+
+    showErrorNotification(
+      cause instanceof Error ? cause.message : 'Не удалось сохранить'
+    );
   } finally {
     saving.value = false;
   }
 }
-async function checkErp() {
+async function checkErp(): Promise<void> {
   const id = props.inquiry.id;
   try {
     const detail = await loadInquiry(id);
@@ -230,50 +225,50 @@ async function checkErp() {
     failedOperation.value =
       failed && failed.state === 'failed' ? failed.id : '';
     if (failed)
-      erpError.value =
+      showErrorNotification(
         failed.state === 'conflict'
           ? 'В СЭП найдены совпадения. Нажмите «Создать в СЭП» и выберите контакт.'
-          : 'Синхронизация не завершена. Можно повторить попытку.';
+          : 'Синхронизация не завершена. Можно повторить попытку.'
+      );
     if (detail.inquiry.erp_contact_id) {
       candidates.value = [];
-      erpError.value = '';
       failedOperation.value = '';
     }
     if (active) poll = setTimeout(() => void checkErp(), 3000);
   } catch (cause) {
     if (!disposed) {
       erpBusy.value = false;
-      erpError.value =
+      showErrorNotification(
         cause instanceof Error
           ? cause.message
-          : 'Не удалось проверить синхронизацию';
+          : 'Не удалось проверить синхронизацию'
+      );
     }
   }
 }
 /** Передаёт контакт штатной форме ЕРП без автоматического создания. */
-async function handleErp(contactId?: unknown) {
+async function handleErp(contactId?: unknown): Promise<void> {
   if (erpBusy.value && !props.inquiry.erp_contact_id) return;
   erpBusy.value = true;
-  erpError.value = '';
   try {
     candidates.value = await openErpContact(
       props.inquiry,
       typeof contactId === 'number' ? contactId : undefined
     );
   } catch (cause) {
-    erpError.value =
+    showErrorNotification(
       cause instanceof ManagerRequestError && cause.status === 403
         ? 'Нет доступа к синхронизации СЭП или не настроена связь сотрудника с ЕРП.'
         : cause instanceof Error
           ? cause.message
-          : 'Не удалось найти контакты';
+          : 'Не удалось найти контакты'
+    );
   } finally {
     erpBusy.value = false;
   }
 }
-async function retryErp() {
+async function retryErp(): Promise<void> {
   erpBusy.value = true;
-  erpError.value = '';
   try {
     await managerRequest(`inquiries/${props.inquiry.id}/erp/retry`, {
       operationId: failedOperation.value
@@ -281,10 +276,11 @@ async function retryErp() {
     await checkErp();
   } catch (cause) {
     erpBusy.value = false;
-    erpError.value =
+    showErrorNotification(
       cause instanceof Error
         ? cause.message
-        : 'Не удалось повторить синхронизацию';
+        : 'Не удалось повторить синхронизацию'
+    );
   }
 }
 onUnmounted(() => {
@@ -315,15 +311,11 @@ defineExpose({ handleErp, erpBusy });
   pointer-events: none;
   opacity: 0.6;
 }
-.client-details__error,
 .client-details__candidates p {
   margin: 0;
   font-size: 12px;
   line-height: 18px;
   color: var(--text-secondary);
-}
-.client-details__error {
-  color: var(--text-error, #c33);
 }
 .client-details__candidates {
   display: flex;
