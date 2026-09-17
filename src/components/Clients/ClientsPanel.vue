@@ -31,10 +31,7 @@
       </template>
     </ChatsToolbar>
     <template v-if="!isCollapse">
-      <p v-if="error" class="clients-panel__error" role="alert">
-        {{ error }} <button type="button" @click="refresh">Повторить</button>
-      </p>
-      <p v-else-if="!allowed && !loading" class="clients-panel__empty">
+      <p v-if="!allowed && !loading" class="clients-panel__empty">
         Раздел недоступен для вашей роли
       </p>
     </template>
@@ -71,7 +68,7 @@ import ChatsToolbar from '../Menu/ChatsToolbar.vue';
 import MenuEmptyState from '../Menu/MenuEmptyState.vue';
 import type { ITopic } from '../interfaces/interfaces';
 defineProps<{ isCollapse?: boolean; isMobile?: boolean }>();
-const { inquiries, allowed, loading, error, refresh } = useManagerInquiries();
+const { inquiries, allowed, loading } = useManagerInquiries();
 const route = useUrlWatcher();
 const { setActiveSection } = useChatMenu();
 const queue = ref('all');
@@ -141,10 +138,6 @@ const openTopic = (topic: ITopic) => {
 }
 .clients-panel__filter-rows > :deep(.chats-toolbar__filters:first-child) {
   padding-bottom: 0;
-}
-.clients-panel__error {
-  color: var(--text-error, #c33);
-  font-size: 14px;
 }
 .clients-panel__empty {
   color: var(--text-secondary);

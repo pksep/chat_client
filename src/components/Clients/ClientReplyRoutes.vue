@@ -25,12 +25,11 @@
     <p v-if="selected && !selected.canReply" role="alert">
       Канал недоступен для ответа
     </p>
-    <p v-if="error" role="alert">{{ error }}</p>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue';
+import { computed, onUnmounted, watch } from 'vue';
 import { useManagerInquiries } from '../../composables/useManagerInquiries';
 import {
   channelLabel,
@@ -41,13 +40,13 @@ import {
 } from '../../composables/useManagerRoutes';
 import ChatsToolbarFilters from '../Menu/ChatsToolbarFilters.vue';
 import ClientPlatformIcon from './ClientPlatformIcon.vue';
+import { showErrorNotification } from '../../composables/useNotifications';
 
 const props = defineProps<{ topicId: string }>();
 const { byTopic } = useManagerInquiries();
 const inquiry = computed(() => byTopic.value.get(props.topicId));
 const routes = computed(() => managerRoutes[props.topicId] || []);
 const selected = computed(() => selectedManagerRoute(props.topicId));
-const error = ref('');
 const options = computed(() =>
   routes.value
     .filter(
@@ -62,13 +61,14 @@ const options = computed(() =>
 let timer: ReturnType<typeof setInterval> | undefined;
 let generation = 0;
 let busy = false;
+let lastRoutesError = '';
 
 watch(
   () => inquiry.value?.id,
   id => {
     clearInterval(timer);
     generation++;
-    error.value = '';
+    lastRoutesError = '';
     if (!id) return;
     const expected = generation;
     const topicId = props.topicId;
@@ -77,10 +77,13 @@ watch(
       busy = true;
       try {
         await refreshManagerRoutes(topicId, id);
-        if (expected === generation) error.value = '';
+        if (expected === generation) lastRoutesError = '';
       } catch {
-        if (expected === generation)
-          error.value = 'Не удалось обновить каналы и доставку';
+        const message = 'Не удалось обновить каналы и доставку';
+        if (expected === generation && lastRoutesError !== message) {
+          lastRoutesError = message;
+          showErrorNotification(message);
+        }
       } finally {
         busy = false;
       }

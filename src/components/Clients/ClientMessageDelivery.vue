@@ -45,7 +45,6 @@
         ></template
       >
     </template>
-    <span v-if="error" role="alert">{{ error }}</span>
   </div>
 </template>
 
@@ -62,6 +61,7 @@ import {
   managerDeliveries,
   refreshManagerRoutes
 } from '../../composables/useManagerRoutes';
+import { showErrorNotification } from '../../composables/useNotifications';
 
 const props = defineProps<{
   messageId: string;
@@ -88,7 +88,6 @@ const status = computed(
 );
 const busy = ref(false);
 const confirm = ref(false);
-const error = ref('');
 
 async function retry(
   checkedOriginalChat: boolean,
@@ -107,9 +106,8 @@ async function retry(
     );
     await refreshManagerRoutes(props.topicId, inquiry.id);
     confirm.value = false;
-    error.value = '';
   } catch {
-    error.value = 'Не удалось обновить отправку';
+    showErrorNotification('Не удалось обновить отправку');
   } finally {
     busy.value = false;
   }
