@@ -175,6 +175,7 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
   max-height: 300px !important;
   max-width: 300px !important;
   box-sizing: border-box;
+  border: 0.5px solid var(--border-table) !important;
 
   font-size: 14px;
   padding-block: 5px !important;
