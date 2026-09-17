@@ -422,12 +422,15 @@ const setupChatListeners = (): void => {
       }
 
       if (!opts?.silent) {
-        playNotificationSound(message.topicId);
+        playNotificationSound(message.topicId, {
+          isMention: message.taggedUserIds?.includes(currentUserId.value || '')
+        });
       }
 
       if (
         !opts?.silent &&
-        !isTopicMuted(message.topicId) &&
+        (!isTopicMuted(message.topicId) ||
+          message.taggedUserIds?.includes(currentUserId.value || '')) &&
         !isCurrentTopicActivelyVisible
       ) {
         const topic = useTopics().getSelectedTopic(message.topicId) as any;
@@ -1948,6 +1951,7 @@ export const initializeChat = async (options: {
   apiUrl: string;
   wsUrl: string;
   userId?: string;
+  cacheReady?: Promise<void>;
 }): Promise<void> => {
   const backgroundSession = saveAnyChatBackgroundSyncSession({
     token: options.token,
@@ -1969,6 +1973,11 @@ export const initializeChat = async (options: {
     token: options.token
   });
   notifyChatSDKReady(chatSDK);
+  const initializedSDK = chatSDK;
+  performance.mark('chat-startup:sdk-ready');
+  // HTTP выбранного чата уже может работать; фоновые обновления ждут кеш.
+  await options.cacheReady;
+  if (chatSDK !== initializedSDK) return;
   configureCustomBackgroundSync(
     options.userId
       ? JSON.stringify([options.apiUrl.replace(/\/+$/, ''), options.userId])

@@ -1,0 +1,20 @@
+# Startup paths missing from the AndroidX library profiles. R8 expands these
+# against the current classes and preserves the profile through obfuscation.
+HSPLsep/pksep/app/MainActivity;->**(**)**
+HSPLsep/pksep/app/ChatApplication;->**(**)**
+HSPLsep/pksep/app/NotificationLaunchActivity;->**(**)**
+HSPLsep/pksep/app/NotificationTapLaunchActivity;->**(**)**
+HSPLsep/pksep/app/PreparedStartupView;->**(**)**
+HSPLsep/pksep/app/RuStoreProjectMigrationProvider;->**(**)**
+HSPLsep/pksep/app/sync/ChatStartupHistory;->**(**)**
+HSPLsep/pksep/app/sync/ChatBackgroundSyncApi;->**(**)**
+HSPLsep/pksep/app/sync/ChatBackgroundSyncStore;->**(**)**
+HSPLcom/getcapacitor/BridgeActivity;->**(**)**
+HSPLcom/getcapacitor/Bridge;->**(**)**
+HSPLcom/getcapacitor/Bridge$Builder;->**(**)**
+HSPLcom/getcapacitor/CapConfig;->**(**)**
+HSPLcom/getcapacitor/JSExport;->**(**)**
+HSPLcom/getcapacitor/PluginHandle;->**(**)**
+HSPLcom/getcapacitor/PluginManager;->**(**)**
+HSPLcom/getcapacitor/MessageHandler;->**(**)**
+HSPLcom/getcapacitor/WebViewLocalServer;->**(**)**

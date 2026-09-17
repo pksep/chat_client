@@ -1,5 +1,4 @@
 import type { IUser } from '../../interfaces/interfaces';
-import { Capacitor } from '@capacitor/core';
 import { currentGroup } from '../../../composables/useGroup';
 import { getTopicList } from '../../../composables/useTopics';
 import { getUserById, getUsersList } from '../../../composables/useUsers';
@@ -300,7 +299,7 @@ export const useMentionUserClick = () => {
       .forEach(anchor => {
         if (
           !isGroupCallInviteUrl(anchor.href, {
-            allowTrustedNativeOrigin: Capacitor.isNativePlatform()
+            allowTrustedOrigin: true
           })
         ) {
           return;
@@ -333,14 +332,15 @@ export const useMentionUserClick = () => {
     if (
       anchorElement &&
       isGroupCallInviteUrl(anchorElement.href, {
-        allowTrustedNativeOrigin: Capacitor.isNativePlatform()
+        allowTrustedOrigin: true
       })
     ) {
       const inviteUrl = anchorElement.href;
       event.preventDefault();
       event.stopPropagation();
       void import('../../../services/useLiveKit').then(
-        ({ openGroupCallInviteUrl }) => openGroupCallInviteUrl(inviteUrl)
+        ({ openGroupCallInviteUrl }) =>
+          openGroupCallInviteUrl(inviteUrl, { allowTrustedOrigin: true })
       );
       return;
     }

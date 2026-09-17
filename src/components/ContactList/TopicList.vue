@@ -1,7 +1,6 @@
 <template>
   <ul
     ref="listRootRef"
-    :key="listRenderKey"
     :class="['contact-list', props.class]"
     role="list"
     :data-testid="`${props.dataTestid}-ContactList-List`"
@@ -606,8 +605,15 @@ const getClientLastMessage = (topic: ITopic) => {
     ? [...messages].reverse().find(message => !message.isSystem)
     : messages.at(-1);
 };
+const startupTopicsPending = ref(
+  isMobile.value && !!document.getElementById('startup-shell')
+);
+const initialTopicCount = Math.ceil(window.innerHeight / 64) + 2;
 const displayTopics = computed(() =>
-  props.topics.map(topic => {
+  (startupTopicsPending.value && !props.searchQuery && !props.showCheckbox
+    ? props.topics.slice(0, initialTopicCount)
+    : props.topics
+  ).map(topic => {
     const lastMessage = resolveTopicLastMessage(
       topic.lastMessage,
       getClientLastMessage(topic)
@@ -623,18 +629,56 @@ const getTopicLastMessageStatus = (topic: ITopic) =>
     topic.lastMessage,
     getClientMessageById(topic.id, topic.lastMessage?.id)
   );
-const isRecentlyReconnected = computed(() => getHasWebsocketConnection());
-const listRenderKey = ref(0);
+// Переподключение обновляет реактивные статусы, сохраняя DOM и наблюдатели превью.
 const listRootRef = ref<HTMLElement | null>(null);
 const pendingActiveTopicId = ref<string | null>(null);
 const { getFullMediaPath } = useMessageMedia();
 const currentTime = ref(Date.now());
 let currentTimeInterval: ReturnType<typeof setInterval> | null = null;
+let startupTopicsFrame = 0;
+let startupTopicsIdle = 0;
+const revealRemainingStartupTopics = (): void => {
+  startupTopicsPending.value = false;
+  if (startupTopicsFrame) cancelAnimationFrame(startupTopicsFrame);
+  if (startupTopicsIdle) window.cancelIdleCallback(startupTopicsIdle);
+  startupTopicsFrame = 0;
+  startupTopicsIdle = 0;
+  document.removeEventListener('scroll', revealStartupTopicsOnScroll, true);
+  void nextTick(syncTopicCacheObserver);
+};
+const revealStartupTopicsOnScroll = (event: Event): void => {
+  if (
+    event.target instanceof Element &&
+    listRootRef.value &&
+    event.target.contains(listRootRef.value)
+  )
+    revealRemainingStartupTopics();
+};
+const scheduleRemainingStartupTopics = (): void => {
+  if (!startupTopicsPending.value) return;
+  if (document.getElementById('startup-shell')) {
+    startupTopicsFrame = requestAnimationFrame(scheduleRemainingStartupTopics);
+    return;
+  }
+  startupTopicsFrame = requestAnimationFrame(() => {
+    startupTopicsFrame = requestAnimationFrame(() => {
+      if ('requestIdleCallback' in window) {
+        startupTopicsIdle = window.requestIdleCallback(
+          revealRemainingStartupTopics,
+          { timeout: 500 }
+        );
+      } else revealRemainingStartupTopics();
+    });
+  });
+};
 let descriptionOverflowRafId = 0;
 let descriptionOverflowSecondRafId = 0;
 let descriptionMutationObserver: MutationObserver | null = null;
 let descriptionResizeObserver: ResizeObserver | null = null;
 let topicCacheObserver: IntersectionObserver | null = null;
+let topicCacheWarmFrame = 0;
+let isStartupTopicCacheWarmReady =
+  typeof document === 'undefined' || !document.getElementById('startup-shell');
 let activeTopicCacheWarmCount = 0;
 const queuedTopicCacheWarmIds: string[] = [];
 const queuedTopicCacheWarmSet = new Set<string>();
@@ -718,6 +762,25 @@ const preloadTopicMessageAvatars = async (
 };
 
 const runQueuedTopicCacheWarms = (): void => {
+  // IntersectionObserver видит строки и под стартовым экраном. Чтение историй
+  // и декодирование аватаров этих чатов должны начинаться после готового списка.
+  if (!isStartupTopicCacheWarmReady) {
+    if (!topicCacheWarmFrame) {
+      topicCacheWarmFrame = requestAnimationFrame(() => {
+        topicCacheWarmFrame = 0;
+        if (document.getElementById('startup-shell')) {
+          runQueuedTopicCacheWarms();
+          return;
+        }
+        topicCacheWarmFrame = requestAnimationFrame(() => {
+          topicCacheWarmFrame = 0;
+          isStartupTopicCacheWarmReady = true;
+          runQueuedTopicCacheWarms();
+        });
+      });
+    }
+    return;
+  }
   while (
     activeTopicCacheWarmCount < MAX_CONCURRENT_TOPIC_CACHE_WARMS &&
     queuedTopicCacheWarmIds.length > 0
@@ -840,11 +903,6 @@ const getTopicStatusIcon = (topic: ITopic): string =>
     ? getTopicEffectiveUser(topic)?.status?.icon || ''
     : '';
 
-watch(isRecentlyReconnected, value => {
-  if (!value) return;
-  listRenderKey.value += 1;
-});
-
 watch(
   () =>
     props.topics
@@ -929,6 +987,10 @@ const scheduleDescriptionOverflowSync = (): void => {
 };
 
 onMounted(() => {
+  if (startupTopicsPending.value) {
+    document.addEventListener('scroll', revealStartupTopicsOnScroll, true);
+    startupTopicsFrame = requestAnimationFrame(scheduleRemainingStartupTopics);
+  }
   currentTimeInterval = setInterval(() => {
     currentTime.value = Date.now();
   }, 1000);
@@ -960,6 +1022,9 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  if (startupTopicsFrame) cancelAnimationFrame(startupTopicsFrame);
+  if (startupTopicsIdle) window.cancelIdleCallback(startupTopicsIdle);
+  document.removeEventListener('scroll', revealStartupTopicsOnScroll, true);
   if (currentTimeInterval) {
     clearInterval(currentTimeInterval);
     currentTimeInterval = null;
@@ -967,6 +1032,7 @@ onBeforeUnmount(() => {
 
   window.removeEventListener('resize', scheduleDescriptionOverflowSync);
   cancelDescriptionOverflowSync();
+  if (topicCacheWarmFrame) cancelAnimationFrame(topicCacheWarmFrame);
   descriptionMutationObserver?.disconnect();
   descriptionMutationObserver = null;
   descriptionResizeObserver?.disconnect();

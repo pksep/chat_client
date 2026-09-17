@@ -8,6 +8,8 @@ import { resolve } from 'node:path';
 const serial = process.env.ANDROID_PERFORMANCE_SERIAL;
 if (!serial) throw new Error('Укажите ANDROID_PERFORMANCE_SERIAL');
 const packageId = process.env.ANDROID_PERFORMANCE_PACKAGE || 'sep.pksep.app';
+const expectedTopicText =
+  process.env.ANDROID_PERFORMANCE_EXPECTED_TOPIC_TEXT || '';
 if (!['sep.pksep.app', 'sep.pksep.app.performance'].includes(packageId))
   throw new Error('Неизвестный пакет приложения');
 const sdk =
@@ -28,7 +30,30 @@ const output = resolve(
 await mkdir(output, { recursive: true });
 const samples: unknown[] = [];
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const getMainProcessId = async (): Promise<string> => {
+  const processIds = (await adb('shell', 'pidof', packageId).catch(() => ''))
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  for (const processId of processIds) {
+    const commandLine = await adb(
+      'shell',
+      'cat',
+      `/proc/${processId}/cmdline`
+    ).catch(() => '');
+    if (commandLine.replaceAll('\0', '').trim() === packageId) {
+      return processId;
+    }
+  }
+
+  return '';
+};
 try {
+  const policy = await adb('shell', 'dumpsys', 'window', 'policy');
+  if (/^\s+showing=true\s*$/m.test(policy))
+    throw new Error('Разблокируйте телефон перед замером видимого интерфейса');
+  await adb('shell', 'input', 'keyevent', 'KEYCODE_WAKEUP');
   for (
     let iteration = 0;
     iteration < Number(process.env.ANDROID_PERFORMANCE_ITERATIONS || 3);
@@ -38,12 +63,12 @@ try {
     const started = performance.now();
     const nativeLaunch = await adb(
       'shell',
-      'am',
-      'start',
-      '-W',
-      '-n',
-      `${packageId}/sep.pksep.app.MainActivity`
+      // Оба времени принадлежат телефону: подключение CDP не входит в результат.
+      `date +%s%3N; am start -W -n ${packageId}/sep.pksep.app.NotificationLaunchActivity`
     );
+    const deviceLaunchStartedAt = Number(nativeLaunch.trim().split(/\r?\n/)[0]);
+    if (!Number.isFinite(deviceLaunchStartedAt))
+      throw new Error('Не удалось прочитать часы устройства перед запуском');
     const deadline = Date.now() + 30_000;
     let devtoolsReady = false;
     try {
@@ -51,9 +76,7 @@ try {
     } catch {}
     while (!devtoolsReady && Date.now() < deadline) {
       try {
-        const pid = (await adb('shell', 'pidof', packageId))
-          .trim()
-          .split(' ')[0];
+        const pid = await getMainProcessId();
         if (pid) {
           await adb(
             'forward',
@@ -127,28 +150,116 @@ try {
         iteration,
         nativeLaunch,
         processStartToObservedReadyMs,
-        ...(await page.evaluate(() => ({
-          ...(window as any).__phoneStartup,
-          marks: performance
-            .getEntriesByType('mark')
-            .filter(x => x.name.startsWith('chat-startup:'))
-            .map(x => ({ name: x.name, at: x.startTime })),
-          topicRows: document.querySelectorAll(
-            '[data-testid*="-ContactList-Item"]'
-          ).length,
-          // Не сохраняем имена, тексты, токены, идентификаторы и параметры запросов.
-          resources: performance.getEntriesByType('resource').map(x => {
-            const url = new URL(x.name);
-            return {
-              path: url.pathname.startsWith('/assets/')
-                ? url.pathname
-                : url.pathname.split('/').slice(0, 3).join('/'),
-              start: x.startTime,
-              duration: x.duration
-            };
-          })
-        })))
+        ...(await page.evaluate(
+          expectedText => ({
+            ...(window as any).__phoneStartup,
+            shellRemovedEpochMs: (() => {
+              const mark = performance.getEntriesByName(
+                'chat-startup:shell-removed'
+              )[0];
+              return mark ? performance.timeOrigin + mark.startTime : null;
+            })(),
+            contentPaintedEpochMs: (() => {
+              const mark = performance.getEntriesByName(
+                'chat-startup:content-painted'
+              )[0];
+              return mark ? performance.timeOrigin + mark.startTime : null;
+            })(),
+            freshTopicsEpochMs: (() => {
+              const mark = performance.getEntriesByName(
+                'chat-startup:topics-resolved'
+              )[0] as PerformanceMark | undefined;
+              return mark?.detail?.isFresh
+                ? performance.timeOrigin + mark.startTime
+                : null;
+            })(),
+            expectedTopicVisible:
+              !expectedText ||
+              [
+                ...document.querySelectorAll<HTMLElement>('[data-topic-id]')
+              ].some(node => {
+                const box = node.getBoundingClientRect();
+                return (
+                  node.innerText.includes(expectedText) &&
+                  box.height > 0 &&
+                  box.top < innerHeight &&
+                  box.bottom > 0
+                );
+              }),
+            marks: performance
+              .getEntriesByType('mark')
+              .filter(x => x.name.startsWith('chat-startup:'))
+              .map(x => ({ name: x.name, at: x.startTime })),
+            topicRows: document.querySelectorAll(
+              '[data-testid*="-ContactList-Item"]'
+            ).length,
+            // Не сохраняем имена, тексты, токены, идентификаторы и параметры запросов.
+            resources: performance.getEntriesByType('resource').map(x => {
+              const url = new URL(x.name);
+              return {
+                path: url.pathname.startsWith('/assets/')
+                  ? url.pathname
+                  : url.pathname.split('/').slice(0, 3).join('/'),
+                start: x.startTime,
+                duration: x.duration
+              };
+            })
+          }),
+          expectedTopicText
+        ))
       };
+      const nativeLog = await adb(
+        'logcat',
+        '-d',
+        '-s',
+        'ChatStartupBenchmark:I',
+        '*:S'
+      );
+      const nativeMarks = [
+        ...nativeLog.matchAll(/ChatStartupBenchmark:\s+([a-z-]+)\s+(\d{13})/g)
+      ]
+        .map(match => ({ stage: match[1], epochMs: Number(match[2]) }))
+        .filter(mark => mark.epochMs >= deviceLaunchStartedAt);
+      const contentEpoch =
+        sample.contentPaintedEpochMs ?? sample.shellRemovedEpochMs;
+      const nativeContentEpoch = Math.max(
+        0,
+        ...nativeMarks
+          .filter(mark =>
+            ['content-visible', 'splash-removed'].includes(mark.stage)
+          )
+          .map(mark => mark.epochMs)
+      );
+      const nativeLogoMark = nativeMarks.find(
+        mark => mark.stage === 'native-logo-visible'
+      );
+      const finalWebViewContentMs =
+        contentEpoch === null
+          ? null
+          : Math.max(contentEpoch, nativeContentEpoch) - deviceLaunchStartedAt;
+      const deviceLaunchToContentMs = finalWebViewContentMs;
+      Object.assign(sample, {
+        nativeMarks: nativeMarks.map(mark => ({
+          stage: mark.stage,
+          at: mark.epochMs - deviceLaunchStartedAt
+        })),
+        deviceLaunchToLogoMs: nativeLogoMark
+          ? nativeLogoMark.epochMs - deviceLaunchStartedAt
+          : null,
+        deviceLaunchToContentMs,
+        finalWebViewContentMs,
+        readinessMetric:
+          sample.contentPaintedEpochMs === null
+            ? 'shell-removed'
+            : 'content-painted',
+        meetsOneSecondTarget:
+          deviceLaunchToContentMs !== null &&
+          deviceLaunchToContentMs <= 1000 &&
+          sample.freshTopicsEpochMs !== null &&
+          contentEpoch !== null &&
+          sample.freshTopicsEpochMs <= contentEpoch &&
+          sample.expectedTopicVisible
+      });
       samples.push(sample);
       await writeFile(
         resolve(output, 'results.json'),

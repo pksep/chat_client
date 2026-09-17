@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { parseGroupCallInviteUrl } from '../src/utils/groupCallInviteUrl';
+import {
+  buildGroupCallInviteAuthorizationUrl,
+  parseGroupCallInviteUrl
+} from '../src/utils/groupCallInviteUrl';
 
 const inviteQuery = 'callRoom=livekit-room&callInvite=signed-invite';
 
@@ -28,6 +31,19 @@ describe('group call invite URL', () => {
     });
   });
 
+  test('accepts the trusted production link for an explicit in-chat click', () => {
+    expect(
+      parseGroupCallInviteUrl(`https://chat.pksep.ru/?${inviteQuery}`, {
+        allowTrustedOrigin: true,
+        currentOrigin: 'http://localhost:5173'
+      })
+    ).toEqual({
+      inviteToken: 'signed-invite',
+      organization: null,
+      roomId: 'livekit-room'
+    });
+  });
+
   test('keeps external origins blocked in a regular web client', () => {
     expect(
       parseGroupCallInviteUrl(`https://chat.pksep.ru/?${inviteQuery}`, {
@@ -47,5 +63,23 @@ describe('group call invite URL', () => {
         }
       )
     ).toBeNull();
+  });
+
+  test('keeps a valid invite while redirecting an expired session to authorization', () => {
+    expect(
+      buildGroupCallInviteAuthorizationUrl(
+        `https://chat.pksep.ru/dialogs/topic-id?${inviteQuery}&organization=${encodeURIComponent('http://localhost:5001')}&token=expired`
+      )
+    ).toBe(
+      `https://chat.pksep.ru/?callRoom=livekit-room&callInvite=signed-invite&organization=${encodeURIComponent('http://localhost:5001')}`
+    );
+  });
+
+  test('does not keep unrelated query parameters on an authorization redirect', () => {
+    expect(
+      buildGroupCallInviteAuthorizationUrl(
+        'https://chat.pksep.ru/dialogs/topic-id?token=expired&next=external'
+      )
+    ).toBe('https://chat.pksep.ru/');
   });
 });

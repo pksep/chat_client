@@ -13,6 +13,7 @@ import {
 } from './useTauriNotifications';
 import { getIsAppActivelyVisible } from './useAppVisibility';
 import { RuStorePush } from './nativePush';
+import { observeNotificationPaint } from '../utils/notification-paint';
 
 type NotificationTopicType = 'DM' | 'GROUP' | null;
 
@@ -241,11 +242,9 @@ export const navigateToNotificationTarget = (
   }
 
   if (target.topicId) {
-    requestNotificationTopicRefresh(
-      target.topicId,
-      true,
-      resolveNotificationMessageId(payload)
-    );
+    const messageId = resolveNotificationMessageId(payload);
+    if (messageId) observeNotificationPaint(target.topicId, messageId);
+    requestNotificationTopicRefresh(target.topicId, true, messageId);
   }
 
   if (isTauriRuntime()) {

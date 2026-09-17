@@ -291,7 +291,11 @@
                 aria-hidden="true"
               >
                 <Icon
-                  :name="task.enabled ? IconNameEnum.play : IconNameEnum.pause"
+                  :name="
+                    task.enabled
+                      ? IconNameEnum.planeRightFill
+                      : IconNameEnum.minus
+                  "
                   :width="16"
                   :height="16"
                 />
@@ -337,7 +341,7 @@
               class="ai-menu-panel__task-state ai-menu-panel__task-state--draft"
               aria-hidden="true"
             >
-              <Icon :name="IconNameEnum.circle" :width="16" :height="16" />
+              <Icon :name="IconNameEnum.taskStatus" :width="16" :height="16" />
             </span>
             <span class="ai-menu-panel__row-copy">
               <strong>{{ session.title }}</strong>
@@ -377,7 +381,9 @@
       >
         <Icon
           class="ai-menu-panel__context-state"
-          :name="task.enabled ? IconNameEnum.pause : IconNameEnum.play"
+          :name="
+            task.enabled ? IconNameEnum.minus : IconNameEnum.planeRightFill
+          "
           :width="16"
           :height="16"
         />

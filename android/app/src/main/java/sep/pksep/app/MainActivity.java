@@ -58,6 +58,7 @@ import sep.pksep.app.plugins.RuStoreUpdatePlugin;
 import sep.pksep.app.plugins.ShareIntentPlugin;
 import sep.pksep.app.plugins.TelemetryDevicePlugin;
 import sep.pksep.app.plugins.VpnStatusPlugin;
+import sep.pksep.app.sync.ChatStartupHistory;
 
 @SuppressWarnings("deprecation")
 public class MainActivity extends BridgeActivity {
@@ -78,41 +79,76 @@ public class MainActivity extends BridgeActivity {
     private static final int LAUNCH_BACKGROUND_DARK_COLOR = 0xFF212531;
     private static final long LAUNCH_SPLASH_FALLBACK_TIMEOUT_MS = 6000L;
     private static final long STARTUP_OVERLAY_FALLBACK_TIMEOUT_MS = 30000L;
-    private static boolean customPluginsRegistered = false;
+    private boolean customPluginsRegistered = false;
     private static volatile boolean appInForeground = false;
     private static volatile boolean activityCreated = false;
     private boolean launchedFromIncomingCall = false;
     private boolean launchedFromChatNotification = false;
-    private boolean shouldClearWebViewCacheBeforeLoad = false;
     private boolean callFullscreenSystemUiEnabled = false;
     private boolean keepLaunchSplash = true;
     private boolean startupOverlayHidden = false;
+    private boolean preparedNativeLaunch = false;
+    private boolean preparedWebViewHidden = false;
+    private boolean preparedWebContentReady = false;
+    private boolean preparedWebViewCommitted = false;
+    private boolean preparedWebViewRevealScheduled = false;
+    private View preparedLogoOverlay;
     private View startupOverlay;
     private final Handler launchSplashHandler = new Handler(Looper.getMainLooper());
     private String pendingWebViewCacheClearFingerprint = null;
     private long pendingWebViewCacheClearVersionCode = -1L;
 
+    private static void markStartupBenchmark(String stage) {
+        if (BuildConfig.CHAT_STARTUP_BENCHMARK) {
+            android.util.Log.i("ChatStartupBenchmark", stage + " " + System.currentTimeMillis());
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        markStartupBenchmark("activity-start");
+        if (savedInstanceState != null) markStartupBenchmark("activity-restored");
         activityCreated = true;
         launchedFromIncomingCall = isIncomingCallIntent(getIntent());
         launchedFromChatNotification = isChatMessageNotificationIntent(getIntent());
-        if (
-            getIntent() != null &&
-            getIntent().getBooleanExtra(
-                NotificationLaunchActivity.EXTRA_PREPARED_NOTIFICATION_LAUNCH,
-                false
-            )
-        ) {
-            setTheme(R.style.AppTheme_NoActionBar);
+        preparedNativeLaunch = getIntent() != null && getIntent().getBooleanExtra(
+            NotificationLaunchActivity.EXTRA_PREPARED_NOTIFICATION_LAUNCH,
+            false
+        );
+        if (preparedNativeLaunch) {
+            ChatStartupHistory.adopt(
+                this,
+                getIntent().getStringExtra(EXTRA_TOPIC_ID),
+                getIntent().getStringExtra(
+                    NotificationLaunchActivity.EXTRA_PREPARED_HISTORY
+                ),
+                getIntent().getLongExtra(
+                    NotificationLaunchActivity.EXTRA_PREPARED_HISTORY_STARTED_AT,
+                    0L
+                )
+            );
         }
-        SplashScreen launchSplash = SplashScreen.installSplashScreen(this);
+        // Сохранённое состояние Activity не означает живой процесс: после его
+        // выгрузки свежая история тоже должна загружаться параллельно WebView.
+        if (!launchedFromIncomingCall && !preparedNativeLaunch) {
+            ChatStartupHistory.start(this, launchedFromChatNotification ? getIntent().getStringExtra(EXTRA_TOPIC_ID) : null);
+        }
+        if (preparedNativeLaunch) setTheme(R.style.AppTheme_PreparedMain);
+        SplashScreen launchSplash = preparedNativeLaunch
+            ? null
+            : SplashScreen.installSplashScreen(this);
         configureLaunchSplash(launchSplash);
-        applyLaunchBackground();
-        shouldClearWebViewCacheBeforeLoad =
-            savedInstanceState == null &&
-                !launchedFromIncomingCall &&
-                shouldClearWebViewCacheForCurrentVersion();
+        if (!preparedNativeLaunch) applyLaunchBackground();
+        if (!launchedFromIncomingCall &&
+            shouldClearWebViewCacheForCurrentVersion()) {
+            markStartupBenchmark("asset-cache-cleanup-start");
+            // Старый service worker может перехватить новый index.html. Удаляем
+            // только его до создания WebView, сохраняя вложения и скомпилированный JS.
+            if (WebViewAssetCache.clearLegacyServiceWorkers(new File(getApplicationInfo().dataDir))) {
+                markWebViewCacheClearedForCurrentVersion();
+            }
+            markStartupBenchmark("asset-cache-cleanup-ready");
+        }
         NotificationChannelHelper.ensureDefaultChannel(this);
         registerCustomPluginsIfNeeded();
         // Publish a cold-start notification before Capacitor starts loading the
@@ -120,17 +156,32 @@ public class MainActivity extends BridgeActivity {
         // Android reveals the WebView, instead of briefly showing the chat list.
         handleNotificationLaunchIntent(getIntent());
 
+        markStartupBenchmark("activity-prepared");
         super.onCreate(savedInstanceState);
-        applyLaunchBackground();
-        if (launchedFromChatNotification) {
-            installStartupOverlay();
+        if (BuildConfig.CHAT_STARTUP_BENCHMARK) {
+            WebView.setWebContentsDebuggingEnabled(true);
+        }
+        if (!launchedFromIncomingCall) {
+            configurePreparedMainWindow();
+        } else {
+            applyLaunchBackground();
         }
         configureLocalDevelopmentNetworking();
         configureBridgeWebViewBackground();
-        setPortraitOrientation();
+        if (!preparedNativeLaunch) setPortraitOrientation();
         configureIncomingCallWindow(getIntent());
         handleCallIntent(getIntent());
         handleShareIntent(getIntent());
+        if (preparedWebViewHidden) {
+            launchSplashHandler.postDelayed(
+                this::revealPreparedWebView,
+                STARTUP_OVERLAY_FALLBACK_TIMEOUT_MS
+            );
+        }
+        if (launchSplash != null && preparedWebViewHidden) {
+            releaseLaunchSplash();
+        }
+        markStartupBenchmark("activity-created");
     }
 
     @Override
@@ -175,19 +226,30 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void configureLaunchSplash(SplashScreen launchSplash) {
-        keepLaunchSplash = true;
-        launchSplash.setKeepOnScreenCondition(() -> keepLaunchSplash);
-        // Первый кадр уже готов: системное затухание логотипа лишь задерживает его показ.
-        launchSplash.setOnExitAnimationListener(provider -> provider.remove());
-        launchSplashHandler.postDelayed(
-            this::releaseLaunchSplash,
-            LAUNCH_SPLASH_FALLBACK_TIMEOUT_MS
-        );
+        keepLaunchSplash = launchSplash != null;
+        if (launchSplash != null) {
+            launchSplash.setKeepOnScreenCondition(() -> keepLaunchSplash);
+            // Первый кадр уже готов: системное затухание логотипа лишь задерживает его показ.
+            launchSplash.setOnExitAnimationListener(provider -> {
+                provider.remove();
+                markStartupBenchmark("splash-removed");
+            });
+            launchSplashHandler.postDelayed(
+                this::releaseLaunchSplash,
+                LAUNCH_SPLASH_FALLBACK_TIMEOUT_MS
+            );
+        }
 
         bridgeBuilder.addWebViewListener(
             new WebViewListener() {
                 @Override
                 public void onPageCommitVisible(WebView view, String url) {
+                    markStartupBenchmark("webview-commit");
+                    if (preparedWebViewHidden) {
+                        preparedWebViewCommitted = true;
+                        maybeRevealPreparedWebView();
+                        return;
+                    }
                     if (launchedFromChatNotification) {
                         applyWebViewLaunchBackground(view);
                         return;
@@ -215,17 +277,26 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void releaseLaunchSplash() {
+        if (keepLaunchSplash) markStartupBenchmark("splash-release-requested");
         keepLaunchSplash = false;
     }
 
     public void revealStartupOverlay() {
-        runOnUiThread(this::releaseLaunchSplash);
+        if (!preparedNativeLaunch) runOnUiThread(this::releaseLaunchSplash);
     }
 
     public void hideStartupOverlayAndReleaseSplash() {
+        markStartupBenchmark("web-content-ready");
         runOnUiThread(
             () -> {
                 releaseLaunchSplash();
+
+                if (preparedWebViewHidden) {
+                    startupOverlayHidden = true;
+                    preparedWebContentReady = true;
+                    maybeRevealPreparedWebView();
+                    return;
+                }
 
                 if (startupOverlayHidden) {
                     return;
@@ -245,6 +316,7 @@ public class MainActivity extends BridgeActivity {
                 if (overlay.getParent() instanceof ViewGroup) {
                     ((ViewGroup) overlay.getParent()).removeView(overlay);
                 }
+                markStartupBenchmark("content-visible");
             }
         );
     }
@@ -916,6 +988,7 @@ public class MainActivity extends BridgeActivity {
                 new WebView.VisualStateCallback() {
                     @Override
                     public void onComplete(long requestId) {
+                        markStartupBenchmark("webview-visual-ready");
                         // WebView подтвердил готовность кадра; дополнительный таймер не нужен.
                         MainActivity.this.releaseLaunchSplash();
                     }
@@ -939,6 +1012,64 @@ public class MainActivity extends BridgeActivity {
         }
 
         applyWebViewLaunchBackground(bridge.getWebView());
+    }
+
+    private void configurePreparedMainWindow() {
+        preparedWebViewHidden = true;
+        int background = getLaunchBackgroundColor();
+        getWindow().setBackgroundDrawable(new ColorDrawable(background));
+        getWindow().getDecorView().setBackgroundColor(background);
+        View content = findViewById(android.R.id.content);
+        if (content != null) content.setBackgroundColor(background);
+        if (bridge != null && bridge.getWebView() != null) {
+            applyWebViewLaunchBackground(bridge.getWebView());
+            bridge.getWebView().setAlpha(1f);
+        }
+        preparedLogoOverlay = new PreparedStartupView(
+            this,
+            getIntent(),
+            launchedFromChatNotification
+        );
+        addContentView(
+            preparedLogoOverlay,
+            new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        );
+        markStartupBenchmark("prepared-webview-hidden");
+    }
+
+    private void revealPreparedWebView() {
+        if (!preparedWebViewHidden) return;
+        WebView webView = bridge == null ? null : bridge.getWebView();
+        if (webView == null) return;
+
+        int background = getLaunchBackgroundColor();
+        webView.setBackgroundColor(background);
+        webView.setAlpha(1f);
+        View content = findViewById(android.R.id.content);
+        if (content != null) content.setBackgroundColor(background);
+        getWindow().setBackgroundDrawable(new ColorDrawable(background));
+        getWindow().getDecorView().setBackgroundColor(background);
+        View logoOverlay = preparedLogoOverlay;
+        preparedLogoOverlay = null;
+        if (logoOverlay != null && logoOverlay.getParent() instanceof ViewGroup) {
+            ((ViewGroup) logoOverlay.getParent()).removeView(logoOverlay);
+        }
+        preparedWebViewHidden = false;
+        markStartupBenchmark("content-visible");
+        webView.postOnAnimation(() -> markStartupBenchmark("prepared-handoff-complete"));
+    }
+
+    private void maybeRevealPreparedWebView() {
+        if (!preparedWebContentReady || !preparedWebViewCommitted ||
+            preparedWebViewRevealScheduled || !preparedWebViewHidden) return;
+        WebView webView = bridge == null ? null : bridge.getWebView();
+        if (webView == null) return;
+
+        preparedWebViewRevealScheduled = true;
+        revealPreparedWebView();
     }
 
     private void applyWebViewLaunchBackground(WebView webView) {
@@ -968,16 +1099,22 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void load() {
-        if (shouldClearWebViewCacheBeforeLoad) {
-            shouldClearWebViewCacheBeforeLoad = false;
-            clearWebViewCacheBeforeLoad();
-            markWebViewCacheClearedForCurrentVersion();
-        }
+        markStartupBenchmark("bridge-start");
         super.load();
+        markStartupBenchmark("bridge-ready");
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
+        markStartupBenchmark("new-intent");
+        // При восстановлении задачи Android сначала создаёт Activity со старым
+        // intent, затем передаёт нажатое уведомление. Capacitor также вызывает
+        // этот метод с исходным объектом; его запрос повторять не нужно.
+        if (!startupOverlayHidden && intent != getIntent() &&
+            isChatMessageNotificationIntent(intent)) {
+            markStartupBenchmark("history-retargeted");
+            ChatStartupHistory.start(this, intent.getStringExtra(EXTRA_TOPIC_ID));
+        }
         super.onNewIntent(intent);
         setIntent(intent);
         launchedFromIncomingCall = isIncomingCallIntent(intent);
@@ -1344,56 +1481,4 @@ public class MainActivity extends BridgeActivity {
         return packageInfo.versionCode;
     }
 
-    private void clearWebViewCacheBeforeLoad() {
-        clearDirectoryContents(getCacheDir());
-        clearDirectoryContents(getCodeCacheDir());
-
-        File appWebViewDir = new File(getApplicationInfo().dataDir, "app_webview");
-
-        clearDirectoryContents(new File(appWebViewDir, "Cache"));
-        clearDirectoryContents(new File(appWebViewDir, "Code Cache"));
-        clearDirectoryContents(new File(appWebViewDir, "GPUCache"));
-        clearDirectoryContents(new File(appWebViewDir, "blob_storage"));
-        clearDirectoryContents(new File(appWebViewDir, "Service Worker"));
-
-        File defaultDir = new File(appWebViewDir, "Default");
-
-        clearDirectoryContents(new File(defaultDir, "Cache"));
-        clearDirectoryContents(new File(defaultDir, "Code Cache"));
-        clearDirectoryContents(new File(defaultDir, "GPUCache"));
-        clearDirectoryContents(new File(defaultDir, "blob_storage"));
-        clearDirectoryContents(new File(defaultDir, "Service Worker"));
-    }
-
-    private void clearDirectoryContents(File directory) {
-        if (directory == null || !directory.exists() || !directory.isDirectory()) {
-            return;
-        }
-
-        File[] children = directory.listFiles();
-        if (children == null) {
-            return;
-        }
-
-        for (File child : children) {
-            deleteRecursively(child);
-        }
-    }
-
-    private void deleteRecursively(File target) {
-        if (target == null || !target.exists()) {
-            return;
-        }
-
-        if (target.isDirectory()) {
-            File[] children = target.listFiles();
-            if (children != null) {
-                for (File child : children) {
-                    deleteRecursively(child);
-                }
-            }
-        }
-
-        target.delete();
-    }
 }

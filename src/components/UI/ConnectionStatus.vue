@@ -14,19 +14,22 @@ import {
   getIsWebsocketConnecting
 } from '../../services/useChat';
 
-type ConnectionStatus = 'offline' | 'waiting' | 'online';
+const props = defineProps<{ refreshFailed?: boolean }>();
+type ConnectionStatus = 'offline' | 'waiting' | 'online' | 'error';
 
 const WAITING_STATUS_DELAY = 1500;
 const statusLabels: Record<ConnectionStatus, string> = {
   offline: 'Нет сети',
   waiting: 'Ожидание сети',
-  online: 'В сети'
+  online: 'В сети',
+  error: 'Не удалось обновить'
 };
 
 const connectionStatus = computed<ConnectionStatus>(() => {
   if (!getHasBrowserNetwork()) {
     return 'offline';
   }
+  if (props.refreshFailed) return 'error';
 
   if (getIsWebsocketConnecting() || !getHasWebsocketConnection()) {
     return 'waiting';

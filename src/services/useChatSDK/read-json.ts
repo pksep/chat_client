@@ -27,7 +27,11 @@ export const configureJsonReads = (
   }) as Reqi['sendRequest'];
 };
 
-export const readJson = <T>(reqi: Reqi, endpoint: string): Promise<T> => {
+export const readJson = <T>(
+  reqi: Reqi,
+  endpoint: string,
+  options?: { reusePending?: boolean }
+): Promise<T> => {
   configureJsonReads(reqi);
   const state = pendingReads.get(reqi)!;
   const scope = state.getScope();
@@ -36,7 +40,7 @@ export const readJson = <T>(reqi: Reqi, endpoint: string): Promise<T> => {
     state.scope = scope;
   }
   const pending = state.requests.get(endpoint);
-  if (pending) return pending as Promise<T>;
+  if (pending && options?.reusePending !== false) return pending as Promise<T>;
 
   const request = (async () => {
     const response = await reqi.get(endpoint, { parsed: false });

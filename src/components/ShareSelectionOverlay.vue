@@ -25,8 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import ShareSelectionModal from './Menu/ShareSelectionModal.vue';
+import { computed, defineAsyncComponent, ref } from 'vue';
 import { useTopics } from '../composables/useTopics';
 import { useChatsToolbarState } from '../composables/useChatsToolbarState';
 import { getAuthUser } from '../composables/useAuth';
@@ -43,6 +42,10 @@ import {
   matchesTopicSearch,
   normalizeAtSearchQuery
 } from '../utils/searchMatch';
+
+const ShareSelectionModal = defineAsyncComponent(
+  () => import('./Menu/ShareSelectionModal.vue')
+);
 
 const { getTopicList } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();

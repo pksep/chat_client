@@ -1360,6 +1360,11 @@
   animation: ai-avatar-float 3.2s ease-in-out infinite;
 }
 
+/* Значок навигации не должен непрерывно перерисовывать весь Android WebView. */
+.menu-bottom-nav .ai-avatar__motion {
+  animation: none;
+}
+
 .ai-avatar__image {
   position: absolute;
   inset: 0;

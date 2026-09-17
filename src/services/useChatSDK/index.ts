@@ -1163,6 +1163,7 @@ export class ChatSDK {
       lastMessageId?: string;
       afterMessageId?: string;
       newMessages?: boolean;
+      fresh?: boolean;
     }
   ): Promise<Message[]> {
     return await this.message.getMessages(topicId, opts);
