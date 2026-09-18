@@ -33,12 +33,6 @@
       />
     </div>
     <div :class="messageArticlesStyles">
-      <ClientMessageDelivery
-        v-if="props.messageId && props.topicId"
-        :message-id="props.messageId"
-        :topic-id="props.topicId"
-        :ex="props.messageEx"
-      />
       <MessageBubbleText
         v-if="shouldRenderStandaloneText"
         v-bind="props"
@@ -115,7 +109,6 @@ import { MediaType } from '@pksep/zod-shared-chat';
 import { IMedia } from '../interfaces/interfaces';
 import MessageContextMenu from './MessageContextMenu.vue';
 import MessageBubbleText from './MessageBubbleText.vue';
-import ClientMessageDelivery from '../Clients/ClientMessageDelivery.vue';
 import { hasExternalMessageChannel } from '../../utils/managerMessageChannel';
 import MessageBubbleFiles from './MessageBubbleFiles.vue';
 import MessageBubbleMedia from './MessageBubbleMedia.vue';
