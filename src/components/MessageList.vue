@@ -147,12 +147,22 @@
           :data-testid="`${props.dataTestid}-CallTopicDefaultMessage`"
         />
       </template>
-      <template v-if="activeTopic && shouldShowInlineCallTopicActions" #after>
+      <template #after>
         <CallTopicActions
+          v-if="activeTopic && shouldShowInlineCallTopicActions"
           class="call-topic-actions--message-inline"
           :topic="activeTopic"
           :data-testid="`${props.dataTestid}-CallTopicActionsInline`"
         />
+        <div
+          v-if="isDeletedAccountTopic"
+          class="top-element"
+          :data-testid="`${props.dataTestid}-MessageList-DeletedAccountMessage`"
+        >
+          <div class="system-message chat__deleted-account-message">
+            <span class="system-message-text">Чат с этим пользователем недоступен</span>
+          </div>
+        </div>
       </template>
     </MessageListUserItems>
     <div
@@ -4690,3 +4700,15 @@ defineExpose({
   scrollToMessage: handleScrollToMessage
 });
 </script>
+
+<style scoped>
+.chat__deleted-account-message > .system-message-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0 10px;
+  background: rgb(28 38 53 / 70%);
+}
+</style>

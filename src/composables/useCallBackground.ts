@@ -8,6 +8,7 @@ import {
   migratePersistentCustomImages,
   persistSelectedId,
   readPersistedSelectedId,
+  removePersistentCustomImage,
   savePersistentCustomImageRecord
 } from '../services/customImagePersistence';
 import { createCustomBackgroundSync } from '../services/useCustomBackgroundSync';
@@ -32,6 +33,7 @@ interface CallBackgroundPreviewItem {
   id: string;
   previewStyle: CSSProperties;
   label?: string;
+  isCustom: boolean;
 }
 
 interface StoredCustomCallBackground {
@@ -227,6 +229,31 @@ const saveStoredCustomCallBackground = async (
     tx.onabort = () => {
       db.close();
       reject(tx.error || new Error('Не удалось сохранить фон'));
+    };
+  });
+};
+
+const removeStoredCustomCallBackground = async (id: string): Promise<void> => {
+  if (!isIndexedDbAvailable()) {
+    return;
+  }
+
+  const db = await openCallBackgroundDb();
+
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(CALL_BACKGROUND_STORE_NAME, 'readwrite');
+    tx.objectStore(CALL_BACKGROUND_STORE_NAME).delete(id);
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+    tx.onabort = () => {
+      db.close();
+      reject(tx.error || new Error('Не удалось удалить фон'));
     };
   });
 };
@@ -496,6 +523,16 @@ const callBackgroundSync = createCustomBackgroundSync('call', {
       background,
       ...customCallBackgrounds.value.filter(item => item.id !== background.id)
     ].sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id));
+  },
+  remove: async id => {
+    if (isNativeCustomImagePersistenceAvailable()) {
+      await removePersistentCustomImage(CALL_BACKGROUND_NATIVE_STORE, id);
+    } else {
+      await removeStoredCustomCallBackground(id);
+    }
+    customCallBackgrounds.value = customCallBackgrounds.value.filter(
+      background => background.id !== id
+    );
   }
 });
 
@@ -521,6 +558,18 @@ const setCustomCallBackground = async (dataUrl: string): Promise<void> => {
   pendingCallBackground = null;
   selectedCallBackgroundId.value = background.id;
   persistSelectedCallBackgroundId(background.id);
+};
+
+const deleteCustomCallBackground = async (id: string): Promise<void> => {
+  ensureInitialized();
+
+  const wasSelected = selectedCallBackgroundId.value === id;
+  await callBackgroundSync.remove(id);
+
+  if (wasSelected) {
+    selectedCallBackgroundId.value = CALL_BACKGROUND_NONE_ID;
+    persistSelectedCallBackgroundId(CALL_BACKGROUND_NONE_ID);
+  }
 };
 
 const currentCallBackgroundStyle = computed<CSSProperties>(() => {
@@ -555,6 +604,7 @@ const callBackgroundPreviewItems = computed<CallBackgroundPreviewItem[]>(() => {
     .filter(option => option.mode !== 'image')
     .map(option => ({
       id: option.id,
+      isCustom: false,
       label: option.label,
       previewStyle:
         option.id === CALL_BACKGROUND_NONE_ID
@@ -566,6 +616,7 @@ const callBackgroundPreviewItems = computed<CallBackgroundPreviewItem[]>(() => {
     .visible()
     .map(wallpaper => ({
       id: wallpaper.id,
+      isCustom: true,
       previewStyle: buildPreviewStyle(wallpaper.dataUrl, {
         previewSize: 'cover',
         repeat: 'no-repeat',
@@ -577,6 +628,7 @@ const callBackgroundPreviewItems = computed<CallBackgroundPreviewItem[]>(() => {
     .filter(option => option.mode === 'image')
     .map(option => ({
       id: option.id,
+      isCustom: false,
       previewStyle: buildPreviewStyle(option.imageUrl, option)
     }));
 
@@ -610,6 +662,7 @@ export const useCallBackground = () => {
     isCallBackgroundApplied,
     getCallBackgroundOptionById,
     selectCallBackground,
-    setCustomCallBackground
+    setCustomCallBackground,
+    deleteCustomCallBackground
   };
 };

@@ -26,6 +26,9 @@ const server = () => {
       uploads.push(item.id);
       records.set(`${kind}:${item.id}`, item);
       return { id: item.id, kind, createdAt: item.createdAt };
+    },
+    deleteCustomBackground: async (kind, id) => {
+      records.delete(`${kind}:${id}`);
     }
   };
   return { api, uploads, records };
@@ -45,6 +48,10 @@ const device = (
     items: () => [...cached.values()],
     put: async (item: CustomBackgroundImage) => {
       cached.set(item.id, item);
+    },
+    remove: async (id: string) => {
+      cached.delete(id);
+      owners.delete(id);
     },
     getOwner: async (id: string) => owners.get(id) || null,
     setOwner: async (id: string, scope: string) => {
