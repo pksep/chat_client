@@ -215,6 +215,7 @@ import {
   matchesTopicSearch,
   normalizeAtSearchQuery
 } from '../../utils/searchMatch';
+import { resolveChatMenuSectionForRoute } from '../../utils/chatMenuNavigation';
 
 const NewChatMobileModal = defineAsyncComponent(
   () => import('../NewChat/NewChatMobileModal.vue')
@@ -707,34 +708,22 @@ watch(
 );
 
 watch(
-  () => [
-    route.value?.type,
-    route.value?.id,
-    clientInquiries.value.has(route.value?.id || '')
+  [
+    () => route.value?.type,
+    () => route.value?.id,
+    () => clientInquiries.value.has(route.value?.id || '')
   ],
-  ([routeType]) => {
-    if (routeType === RouteTypes.CALL) {
-      setActiveSection('calls');
-      return;
-    }
+  ([routeType, topicId]) => {
+    const section = resolveChatMenuSectionForRoute(
+      routeType,
+      topicId,
+      !!topicId &&
+        (clientInquiries.value.has(topicId) ||
+          isClientTopic(getTopicList().find(topic => topic.id === topicId)))
+    );
 
-    if (routeType === RouteTypes.AI || routeType === RouteTypes.ASSISTANT) {
-      setActiveSection('ai');
-      return;
-    }
-
-    if (
-      routeType === RouteTypes.DIALOGS ||
-      routeType === RouteTypes.GROUP ||
-      routeType === RouteTypes.FAVORITES
-    ) {
-      const topicId = route.value?.id;
-      setActiveSection(
-        clientInquiries.value.has(topicId || '') ||
-          isClientTopic(getTopicList().find(topic => topic.id === topicId))
-          ? 'clients'
-          : 'chats'
-      );
+    if (section) {
+      setActiveSection(section);
     }
   },
   { immediate: true }

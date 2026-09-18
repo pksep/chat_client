@@ -144,7 +144,6 @@ import {
   navigateToFavorites,
   useUrlWatcher
 } from '../composables/navigation';
-import { RouteTypes } from '../composables/navigation/useUrlRouting';
 import { useTopics } from '../composables/useTopics';
 import TopicList from './ContactList/TopicList.vue';
 import ChatsToolbar from './Menu/ChatsToolbar.vue';
@@ -177,6 +176,7 @@ import {
   recordChatTopicNavigationRequest,
   type ChatTopicOpenTelemetryMeta
 } from '../services/useChatNavigationTelemetry';
+import { resolveChatMenuSectionForRoute } from '../utils/chatMenuNavigation';
 
 const CallsPage = defineAsyncComponent(() => import('./Calls/CallsPage.vue'));
 const AIMenuPanel = defineAsyncComponent(() => import('./AI/AIMenuPanel.vue'));
@@ -401,34 +401,22 @@ const handleNewBotModal = () => {
 };
 
 watch(
-  () => [
-    route.value?.type,
-    route.value?.id,
-    clientInquiries.value.has(route.value?.id || '')
+  [
+    () => route.value?.type,
+    () => route.value?.id,
+    () => clientInquiries.value.has(route.value?.id || '')
   ],
-  ([routeType]) => {
-    if (routeType === RouteTypes.CALL) {
-      setActiveSection('calls');
-      return;
-    }
+  ([routeType, topicId]) => {
+    const section = resolveChatMenuSectionForRoute(
+      routeType,
+      topicId,
+      !!topicId &&
+        (clientInquiries.value.has(topicId) ||
+          isClientTopic(getTopicList().find(topic => topic.id === topicId)))
+    );
 
-    if (routeType === RouteTypes.AI || routeType === RouteTypes.ASSISTANT) {
-      setActiveSection('ai');
-      return;
-    }
-
-    if (
-      routeType === RouteTypes.DIALOGS ||
-      routeType === RouteTypes.GROUP ||
-      routeType === RouteTypes.FAVORITES
-    ) {
-      const topicId = route.value?.id;
-      setActiveSection(
-        clientInquiries.value.has(topicId || '') ||
-          isClientTopic(getTopicList().find(topic => topic.id === topicId))
-          ? 'clients'
-          : 'chats'
-      );
+    if (section) {
+      setActiveSection(section);
     }
   },
   { immediate: true }
