@@ -239,6 +239,51 @@ test('автопроверка обновления молчит в скрыто
   expect(requests).toBe(3);
 });
 
+test('кнопка веб-обновления перезагружает страницу без загрузки чанка звонков', async ({
+  page
+}) => {
+  await openFixture(page);
+  let version = 1;
+  let blockedLiveKitRequests = 0;
+  await page.route('**/web-update.json*', route =>
+    route.fulfill({ json: { version } })
+  );
+  await page.route('**/src/services/useLiveKit.ts*', route => {
+    blockedLiveKitRequests++;
+    return route.abort();
+  });
+  await mountUpdates(page);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as any).networkUpdates.updates.hasCheckedForUpdates.value
+      )
+    )
+    .toBe(true);
+
+  version = 2;
+  await page.evaluate(() =>
+    (window as any).networkUpdates.updates.checkForUpdates()
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as any).networkUpdates.updates.showUpdateBanner.value
+      )
+    )
+    .toBe(true);
+
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+    page.evaluate(() => {
+      void (window as any).networkUpdates.updates.handleUpdateClick();
+    })
+  ]);
+
+  expect(page.url()).toContain('/__topic-performance');
+  expect(blockedLiveKitRequests).toBe(0);
+});
+
 test('закрытие последнего компонента во время запроса не оставляет таймер обновлений', async ({
   page
 }) => {

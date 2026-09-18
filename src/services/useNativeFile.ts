@@ -265,6 +265,11 @@ export const handleNativeFileClick = async (
     return true;
   }
 
+  if (state.phase === 'not-downloaded') {
+    await downloadNativeFileToDownloads(media);
+    return true;
+  }
+
   nativeFileDownloadStates[key] = {
     phase: 'downloading',
     percent: null
