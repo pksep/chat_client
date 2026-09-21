@@ -1176,6 +1176,11 @@
   pointer-events: none;
 }
 
+.menu-bottom-nav__ai-status--with-count {
+  right: auto;
+  left: -1px;
+}
+
 .menu-bottom-nav__ai-status--running,
 .ai-action-pipeline__progress,
 .ai-menu-panel__activity-status--running {

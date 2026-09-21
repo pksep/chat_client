@@ -52,39 +52,113 @@
   gap: 10px;
   padding: 10px;
   border: 0;
+  background: transparent;
   cursor: pointer;
   text-align: left;
-  transition: transform 0.2s ease;
+}
+
+.calls-page__item::before,
+.calls-page__item::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  left: 0;
+  height: 0.35px;
+  background: var(--border-table);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .calls-page__item::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 6px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-  transform: all 0.2s ease;
+  top: 0;
 }
 
-.calls-page__item > * {
-  position: relative;
-  z-index: 1;
+.calls-page__item::after {
+  bottom: 0;
 }
 
-.calls-page__item--active {
-  border-radius: 6px;
-}
-
-.calls-page__item:hover::before {
+.calls-page__item--active,
+.calls-page__item--active:hover {
   background: var(--action-secondary-pressed-bg);
+}
+
+.calls-page__item--active::before,
+.calls-page__item--active::after {
   opacity: 1;
 }
 
-.calls-page__item--active::before {
-  background: var(--action-secondary-bg);
-  opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+  .calls-page__item:not(.calls-page__item--active):hover {
+    background: var(--action-secondary-hover-bg);
+  }
+
+  .calls-page__item:hover::before,
+  .calls-page__item:hover::after {
+    opacity: 1;
+  }
+}
+
+.calls-page__compact-popover-content {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 5px 2px;
+  row-gap: 2px;
+  grid-template-rows: 17px 15px;
+  border-radius: 5px;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.calls-page__compact-popover--active .calls-page__compact-popover-content {
+  background: var(--action-secondary-pressed-bg);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .calls-page__compact-popover:not(.calls-page__compact-popover--active):hover
+    .calls-page__compact-popover-content {
+    background: var(--action-secondary-hover-bg);
+  }
+}
+
+.calls-page__compact-name {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calls-page__compact-meta {
+  display: flex;
+  min-width: 0;
+  height: 15px;
+  justify-content: space-between;
+  gap: 10px;
+  padding-right: 5px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 12px;
+  box-sizing: border-box;
+}
+
+.calls-page__compact-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calls-page__compact-date {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .calls-page__avatar {
@@ -245,6 +319,92 @@
   flex: 0 0 auto;
   width: 24px;
   height: 24px;
+}
+
+/* Desktop compact navigation follows the 70px content column from the menu spec. */
+@media screen and (min-width: 769px) {
+  .menu--collapse .calls-page {
+    gap: 10px;
+    width: 70px;
+  }
+
+  .menu--collapse .calls-page__panel-header {
+    width: 58px;
+    gap: 10px;
+    justify-self: center;
+  }
+
+  .menu--collapse .calls-page__headline {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .menu--collapse .calls-page__header-copy,
+  .menu--collapse .calls-page__search-shell,
+  .menu--collapse .calls-page__body,
+  .menu--collapse .calls-page__info,
+  .menu--collapse .calls-page__delimetr,
+  .menu--collapse .calls-page__empty,
+  .menu--collapse .calls-page__empty-history,
+  .menu--collapse .calls-page__search-empty {
+    display: none;
+  }
+
+  .menu--collapse .calls-page__meeting-button.button-yui-kit {
+    width: 24px;
+    min-height: 24px !important;
+    height: 24px;
+    padding: 0;
+  }
+
+  .menu--collapse .calls-page__content {
+    overflow: hidden;
+    padding: 0;
+  }
+
+  .menu--collapse .calls-page__list {
+    display: grid;
+    justify-items: center;
+    max-height: calc(100vh - 124px);
+    gap: 0;
+  }
+
+  .menu--collapse .calls-page__item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 58px;
+    height: 58px;
+    padding: 0;
+  }
+
+  .menu--collapse
+    .calls-page__item:has(+ .calls-page__delimetr:not(:last-child))::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 0.35px;
+    background: var(--border-table);
+    opacity: 1;
+    pointer-events: none;
+  }
+
+  .menu--collapse .calls-page__avatar {
+    /* Do not rely on Avatar's em-based internal sizing here: it differs
+       between image and fallback states. The compact menu uses 40px circles. */
+    --size-avatar: 20px;
+    flex: 0 0 40px;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
+
+  .menu--collapse .calls-page__loading-more {
+    display: none;
+  }
 }
 
 .calls-page__details .message-call__icon--incoming,

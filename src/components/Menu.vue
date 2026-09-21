@@ -61,6 +61,7 @@
           :message-results="
             isShareSelectionActive ? [] : filteredMessageSearchResults
           "
+          :is-collapse="isCollapse"
           :is-message-search-loading="
             !isShareSelectionActive &&
             (isMessageSearchPending || isMessageSearchLoading)
@@ -72,6 +73,7 @@
 
       <CallsPage
         v-else-if="activeSection === 'calls'"
+        :is-collapse="isCollapse"
         :data-testid="`${props.dataTestid}-Menu-CallsPage`"
       />
 
@@ -88,7 +90,11 @@
 
       <MenuProfilePanel
         v-else
+        :is-collapse="isCollapse"
         :data-testid="`${props.dataTestid}-Menu-ProfilePanel`"
+        @create-chat="handleNewContactModal"
+        @create-group="handleNewGroupModal"
+        @create-bot="handleNewBotModal"
       />
     </div>
 

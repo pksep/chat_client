@@ -2,15 +2,61 @@
   position: relative;
 }
 
-.contact-list__li:has(+ .contact-list__li):not(.contact-list__skeleton-row)::after {
+.contact-list__li:has(+ .contact-list__li):not(
+    .contact-list__skeleton-row
+  )::after {
   content: '';
   position: absolute;
   right: 0;
-  bottom: -1px;
+  bottom: 0;
   left: 0;
   height: 0.35px;
   background: var(--border-table);
   pointer-events: none;
+}
+
+.contact-list__li:has(
+    > .contact-list__item:is(
+        .contact-list__item--active,
+        .contact-list__item--call-modal-hover,
+        :active
+      )
+  )::before,
+.contact-list__li:has(
+    > .contact-list__item:is(
+        .contact-list__item--active,
+        .contact-list__item--call-modal-hover,
+        :active
+      )
+  )::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  left: 0;
+  height: 0.35px;
+  background: var(--border-table);
+  pointer-events: none;
+}
+
+.contact-list__li:has(
+    > .contact-list__item:is(
+        .contact-list__item--active,
+        .contact-list__item--call-modal-hover,
+        :active
+      )
+  )::before {
+  top: 0;
+}
+
+.contact-list__li:has(
+    > .contact-list__item:is(
+        .contact-list__item--active,
+        .contact-list__item--call-modal-hover,
+        :active
+      )
+  )::after {
+  bottom: 0;
 }
 
 .contact-list__item {
@@ -21,9 +67,6 @@
   padding-inline: 10px;
   min-height: 58px;
   cursor: pointer;
-
-  border-radius: 5px;
-  transition: all 0.2s ease;
 
   &:active,
   &.contact-list__item--active {
@@ -36,9 +79,113 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .contact-list__item:hover {
-    background-color: var(--action-secondary-pressed-bg);
+  .contact-list__item:not(.contact-list__item--active):not(
+      .contact-list__item--call-modal-hover
+    ):not(:active):hover {
+    background-color: var(--action-secondary-hover-bg);
   }
+
+  .contact-list__li:has(> .contact-list__item:hover)::before,
+  .contact-list__li:has(> .contact-list__item:hover)::after {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    right: 0;
+    left: 0;
+    height: 0.35px;
+    background: var(--border-table);
+    pointer-events: none;
+  }
+
+  .contact-list__li:has(> .contact-list__item:hover)::before {
+    top: 0;
+  }
+
+  .contact-list__li:has(> .contact-list__item:hover)::after {
+    bottom: 0;
+  }
+}
+
+.contact-list__compact-popover {
+  position: fixed;
+  z-index: 1100;
+  display: block;
+  width: 250px;
+  min-height: 56px;
+  padding: 10px;
+  overflow: visible;
+  border: 0;
+  border-top: 0.5px solid var(--border-table);
+  border-radius: 15px;
+  background: var(--surface-overlay);
+  box-shadow: 0 4px 9.8px rgb(0 0 0 / 5%);
+  color: var(--text-primary);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.contact-list__compact-popover--active {
+  background: var(--surface-overlay);
+}
+
+.contact-list__compact-popover .contact-list__block--wrapper {
+  display: grid;
+  min-height: 36px;
+  height: 36px;
+  padding: 0 5px 2px;
+  row-gap: 2px;
+  border-radius: 5px;
+  background: transparent;
+  grid-template-rows: 17px 15px;
+  box-sizing: border-box;
+}
+
+.contact-list__compact-popover--active .contact-list__block--wrapper {
+  background: var(--action-secondary-pressed-bg);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .contact-list__compact-popover:not(
+      .contact-list__compact-popover--active
+    ):hover
+    .contact-list__block--wrapper {
+    background: var(--action-secondary-hover-bg);
+  }
+}
+
+.contact-list__compact-popover .contact-list__title {
+  gap: 5px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 17px;
+}
+
+.contact-list__compact-popover .contact-list__preview {
+  height: 15px;
+}
+
+.contact-list__compact-popover .contact-list__description,
+.contact-list__compact-popover .contact-list__description p,
+.contact-list__compact-popover .contact-list__description strong {
+  height: 15px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 12px;
+}
+
+.contact-list__compact-popover .contact-list__time {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 15px;
+}
+
+.contact-list__compact-popover::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -10px;
+  width: 10px;
 }
 
 .contact-list__block--wrapper {
@@ -92,6 +239,17 @@
 .contact-list__avatar {
   grid-area: avatar;
   align-self: center;
+}
+
+.contact-list__avatar-shell {
+  position: relative;
+  display: flex;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 calc(var(--size-avatar) * 2);
+  width: calc(var(--size-avatar) * 2);
+  height: calc(var(--size-avatar) * 2);
 }
 
 .contact-list__preview {
@@ -285,6 +443,7 @@ svg.icon-yui-kit.contact-list__read-icon {
   display: flex;
   place-content: center;
   text-align: center;
+  margin-left: auto;
 }
 
 .contact-list__bottom:empty {
@@ -292,7 +451,7 @@ svg.icon-yui-kit.contact-list__read-icon {
 }
 
 .contact-list {
-  gap: 2px;
+  gap: 0;
   display: grid;
   max-height: calc(100vh - 170px);
   overflow: hidden scroll;
@@ -326,7 +485,7 @@ svg.icon-yui-kit.contact-list__read-icon {
   }
 }
 
-.contact-selector__item:hover .user-profile>* {
+.contact-selector__item:hover .user-profile > * {
   cursor: pointer;
 }
 
@@ -376,7 +535,7 @@ svg.icon-yui-kit.contact-list__read-icon {
   background-color: var(--action-secondary-hover-bg);
 }
 
-.menu__info-users-list>li {
+.menu__info-users-list > li {
   margin-top: 10px;
 }
 
@@ -394,20 +553,23 @@ svg.icon-yui-kit.contact-list__read-icon {
   height: 20px;
 }
 
-.contact-list__message-status-icons>svg.icon-yui-kit {
-  color: var(--neutral-text);
+.contact-list__message-status-icons > svg.icon-yui-kit {
+  color: var(--chat-secondary);
   font-size: 20px !important;
 }
 
-.contact-list__message-status-icons.is-read>svg.icon-yui-kit {
+.contact-list__message-status-icons.is-read > svg.icon-yui-kit {
   color: var(--text-link);
 }
 
 @media (width <=768px) {
-
   .chat-container:not(:has(.chat__mobile-route-view--messages)):has(.chat-list),
-  .chat-container:not(:has(.chat__mobile-route-view--messages)):has(.mobile-list-container__content .menu-profile),
-  .chat-container:not(:has(.chat__mobile-route-view--messages)):has(.mobile-list-container__content .calls-page) {
+  .chat-container:not(:has(.chat__mobile-route-view--messages)):has(
+      .mobile-list-container__content .menu-profile
+    ),
+  .chat-container:not(:has(.chat__mobile-route-view--messages)):has(
+      .mobile-list-container__content .calls-page
+    ) {
     --header-height: 0;
   }
 
@@ -453,7 +615,7 @@ svg.icon-yui-kit.contact-list__read-icon {
     padding-top: 72px;
   }
 
-  .chats-toolbar>.line {
+  .chats-toolbar > .line {
     margin: 0 !important;
     width: 100% !important;
   }
