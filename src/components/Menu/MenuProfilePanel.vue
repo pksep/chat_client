@@ -900,9 +900,7 @@ const themeStore = useThemeStore();
 const { isDarkTheme } = storeToRefs(themeStore);
 const authUser = computed(() => getAuthUser() as IUser | null);
 const { state: isMobile } = useResizeState(MAX_W_MD);
-const canChangeTheme = computed(
-  () => !isMobile.value && !Capacitor.isNativePlatform()
-);
+const canChangeTheme = computed(() => !Capacitor.isNativePlatform());
 const statusPresets = computed(() => [
   ...USER_STATUS_PRESETS.map(status => ({ ...status, custom: false })),
   ...(isStatusPresetDesignPreview

@@ -160,7 +160,9 @@
           :data-testid="`${props.dataTestid}-MessageList-DeletedAccountMessage`"
         >
           <div class="system-message chat__deleted-account-message">
-            <span class="system-message-text">Чат с этим пользователем недоступен</span>
+            <span class="system-message-text"
+              >Чат с этим пользователем недоступен</span
+            >
           </div>
         </div>
       </template>

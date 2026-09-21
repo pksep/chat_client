@@ -68,10 +68,13 @@ dialog.modal-yui-kit.modal-yui-kit_bottom {
   padding: 0 8px;
   border: 1px solid var(--border-table);
   border-radius: 17px;
-  background: var(--white);
+  background: var(--surface-overlay);
+  color: var(--text-primary);
 
   font-size: 14px;
   cursor: pointer;
+
+  transition: all 0.2s ease;
 }
 
 .modal-info-mobile__tab--active {
