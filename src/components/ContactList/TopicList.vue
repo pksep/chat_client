@@ -1549,7 +1549,7 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
 }
 
 .contact-list__description--typing {
-  color: var(--primary-color);
+  color: var(--text-brand);
 }
 
 .contact-list__block--wrapper--selection {
@@ -1574,7 +1574,7 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
 }
 
 .contact-list__call-indicator-icon {
-  color: var(--green2);
+  color: var(--status-success);
   width: 20px;
   transform: rotate(-120deg);
 }
@@ -1621,9 +1621,8 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
 .contact-list__skeleton-avatar,
 .contact-list__skeleton-line {
   display: block;
-  background: linear-gradient(90deg, #eef2f7, #f8fafc, #eef2f7);
   background-size: 180% 100%;
-  animation: contact-list-skeleton-pulse 1.2s ease-in-out infinite;
+  animation: skeleton-animation 1.2s ease-in-out infinite;
 }
 
 .contact-list__skeleton-avatar {
@@ -1654,13 +1653,17 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
   height: 12px;
 }
 
-@keyframes contact-list-skeleton-pulse {
+@keyframes skeleton-animation {
   0% {
-    background-position: 100% 0;
+    background-color: var(--border-table);
+  }
+
+  50% {
+    background-color: var(--action-disabled-bg);
   }
 
   100% {
-    background-position: -80% 0;
+    background-color: var(--border-table);
   }
 }
 </style>
