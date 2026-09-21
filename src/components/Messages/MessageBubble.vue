@@ -33,15 +33,25 @@
       />
     </div>
     <div :class="messageArticlesStyles">
+      <ClientMessageDelivery
+        v-if="props.messageId && props.topicId"
+        :message-id="props.messageId"
+        :topic-id="props.topicId"
+        :ex="props.messageEx"
+      />
       <MessageBubbleText
         v-if="shouldRenderStandaloneText"
         v-bind="props"
+        :is-read="hasExternalChannel ? false : props.isRead"
+        :message-status="hasExternalChannel ? undefined : props.messageStatus"
         @navigate-message="handleNavigateMessage"
       />
 
       <MessageBubbleFiles
         v-if="!props.loader && docFiles.length > 0"
         v-bind="props"
+        :is-read="hasExternalChannel ? false : props.isRead"
+        :message-status="hasExternalChannel ? undefined : props.messageStatus"
         @navigate-message="handleNavigateMessage"
         @set-slider="setSliderElement"
       />
@@ -49,6 +59,8 @@
       <MessageBubbleMedia
         v-if="!props.loader && mediaFiles.length > 0"
         v-bind="props"
+        :is-read="hasExternalChannel ? false : props.isRead"
+        :message-status="hasExternalChannel ? undefined : props.messageStatus"
         @navigate-message="handleNavigateMessage"
         @set-slider="setSliderElement"
       />
@@ -98,15 +110,17 @@ import {
 } from '../../composables/useContextMenu';
 import type { IMessageBubbleProps } from './interface/interface';
 import { SliderModal } from '@pksep/yui';
+import { createLiveSliderItem } from '../../utils/live-slider-item';
 import { MediaType } from '@pksep/zod-shared-chat';
 import { IMedia } from '../interfaces/interfaces';
 import MessageContextMenu from './MessageContextMenu.vue';
 import MessageBubbleText from './MessageBubbleText.vue';
+import ClientMessageDelivery from '../Clients/ClientMessageDelivery.vue';
+import { hasExternalMessageChannel } from '../../utils/managerMessageChannel';
 import MessageBubbleFiles from './MessageBubbleFiles.vue';
 import MessageBubbleMedia from './MessageBubbleMedia.vue';
 import { useMessageMedia } from './composables/useMessageMedia';
 import { isMessageSelectionModeForTopic } from '../../composables/useSelectedMessages';
-import { ensureMediaObjectUrl } from '../../services/useMediaBlobCache';
 import {
   downloadNativeFile,
   handleNativeFileClick,
@@ -121,10 +135,20 @@ import {
 import { useBackButton } from '../../composables/useBackButton';
 import { setReactionMessage } from '../../services/useChat';
 import { parseCallTopicDefaultMessageEx } from '../../utils/call-topic';
+import {
+  buildMediaDownloadUrl,
+  triggerBrowserDownload
+} from '../../utils/media-download';
+import { VIDEO_FALLBACK_THUMBNAIL } from '../../utils/mediaPreview';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
   media: () => []
+});
+
+// Прочтение другим менеджером не подтверждает прочтение клиентом площадки.
+const hasExternalChannel = computed(() => {
+  return hasExternalMessageChannel(props.messageEx);
 });
 
 const emits = defineEmits([
@@ -141,8 +165,12 @@ const messageArticlesStyles = computed(() => ({
   message__content__articles__my: props.isMeSender
 }));
 
-const { getFullMediaPath, getRemoteThumbnailUrl, isSliderContentUrl } =
-  useMessageMedia();
+const {
+  getFullMediaPath,
+  getRemoteThumbnailUrl,
+  getSliderMediaPath,
+  isSliderContentUrl
+} = useMessageMedia();
 const isContextMenuOpen = computed(
   () => !!props.messageId && isOpen.value[props.messageId] === true
 );
@@ -151,7 +179,13 @@ const isCallTopicDefaultMessageEx = computed(() =>
 );
 
 const sliderElements = ref<
-  { path: string; fallbackPath?: string; name: string; file?: File }[]
+  {
+    path: string;
+    fallbackPath?: string;
+    name: string;
+    file?: File;
+    downloadPath?: string;
+  }[]
 >([]);
 const defaultIndexSlider = ref<number>(0);
 const isSliderOpen = ref(false);
@@ -218,48 +252,27 @@ const isSliderContentMedia = (media: IMedia) =>
     includePdf: !isAndroidNativePlatform()
   });
 
-const buildSliderItem = async (media: IMedia) => {
-  const originalPath = getFullMediaPath(media, false);
-  const fallbackPath = getRemoteThumbnailUrl(media);
-
-  if (!isNativePdfMedia(media) || !media.path) {
-    return {
-      path: originalPath,
-      fallbackPath,
-      name: media.originName || 'file'
-    };
-  }
-
-  const cachedObjectUrl = await ensureMediaObjectUrl(media.path);
-
-  if (!cachedObjectUrl) {
-    return {
-      path: originalPath,
-      fallbackPath,
-      name: media.originName || 'file'
-    };
-  }
-
-  try {
-    const blob = await fetch(cachedObjectUrl).then(response => response.blob());
-    const file = new File([blob], media.originName || 'file.pdf', {
-      type: blob.type || 'application/pdf'
-    });
+const buildSliderItem = (initialMedia: IMedia) =>
+  createLiveSliderItem(() => {
+    const media =
+      props.media?.find(item => item.id === initialMedia.id) || initialMedia;
+    const originalPath = getFullMediaPath(media, false);
+    const sliderPath = getSliderMediaPath(media);
+    const fallbackPath =
+      getRemoteThumbnailUrl(media) ||
+      (media.type === MediaType.Video
+        ? media.localThumbnailPath || VIDEO_FALLBACK_THUMBNAIL
+        : undefined);
+    const name = media.originName || 'file';
+    const downloadPath = buildMediaDownloadUrl(originalPath, name);
 
     return {
-      path: cachedObjectUrl,
+      path: sliderPath,
       fallbackPath,
-      name: media.originName || 'file',
-      file
+      name,
+      downloadPath
     };
-  } catch {
-    return {
-      path: cachedObjectUrl,
-      fallbackPath,
-      name: media.originName || 'file'
-    };
-  }
-};
+  });
 
 const downloadMediaFile = async (media: IMedia) => {
   if (await downloadNativeFile(media)) {
@@ -268,16 +281,7 @@ const downloadMediaFile = async (media: IMedia) => {
 
   const fallbackUrl = getFullMediaPath(media, false);
   const fileName = media.originName || 'file';
-  const cachedObjectUrl = await ensureMediaObjectUrl(media.path);
-
-  const link = document.createElement('a');
-
-  link.href = cachedObjectUrl || fallbackUrl;
-  link.download = fileName;
-
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  triggerBrowserDownload(fallbackUrl, fileName);
 };
 
 const handleDownloadMessageMedia = async () => {

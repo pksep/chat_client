@@ -11,6 +11,12 @@
     "build": "vue-tsc && vite build",
     "build:prod": "cross-env VITE_BASE_MODE=app vite build ",
     "test:e2e": "playwright test",
+    "test:performance": "playwright test e2e/topic-performance.spec.ts --workers=1 --reporter=line",
+    "test:network": "playwright test e2e/network- --workers=1 --reporter=line",
+    "test:users:performance": "playwright test e2e/user-directory-performance.spec.ts --workers=1 --reporter=line",
+    "test:pdf-worker": "node --experimental-strip-types scripts/verify-pdf-worker.ts",
+    "test:notifications:performance": "playwright test e2e/notification-performance.spec.ts --workers=1 --reporter=line",
+    "test:android:performance": "node --experimental-strip-types scripts/verify-android-performance.ts",
     "test:e2e:ui": "playwright test --ui",
     "verify:approval": "bun scripts/verify-mastra-approval.ts",
     "format": "prettier -w {src,scripts}/**/*.ts -w {src,scripts}/**/*.vue",
@@ -52,7 +58,7 @@
     "@livekit/track-processors": "^0.7.2",
     "@mastra/client-js": "1.40.0",
     "@pksep/reqi": "0.0.25",
-    "@pksep/yui": "^0.1.318",
+    "@pksep/yui": "0.1.320",
     "@pksep/zod-shared-chat": "0.0.6",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-notification": "^2.3.3",
@@ -78,6 +84,7 @@
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^12.0.2",
     "@tauri-apps/cli": "^2.11.2",
+    "@types/eslint-scope": "3.7.7",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "@vite-pwa/assets-generator": "^1.0.2",
@@ -89,10 +96,13 @@
     "eslint-config-prettier": "^9.1.2",
     "eslint-plugin-prettier": "^5.5.4",
     "eslint-plugin-vue": "^9.33.0",
+    "eslint-scope": "7.2.2",
     "lefthook": "^1.12.3",
+    "postcss": "8.5.26",
     "prettier": "3.2.4",
     "sass-embedded": "^1.103.1",
     "semantic-release": "^25.0.2",
+    "socket.io": "4.8.3",
     "typescript": "~5.6.3",
     "vite": "^7.1.7",
     "vite-plugin-dts": "^4.5.4",
@@ -107,5 +117,8 @@
       "@babel/plugin-transform-private-methods"
     ]
   },
-  "packageManager": "bun@1.3.14"
+  "packageManager": "bun@1.3.14",
+  "patchedDependencies": {
+    "@pksep/yui@0.1.320": "patches/@pksep%2Fyui@0.1.320.patch"
+  }
 }

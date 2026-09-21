@@ -4,8 +4,9 @@
       <div v-if="props.forwardUser" class="message-reference-forward">
         Переслано: от {{ props.forwardUser.initials }}
       </div>
-      <article
-        ref="filesArticleRef"
+      <ChatMessageSurface
+        unstyled
+        ref="filesSurfaceRef"
         :class="messageArticleStyles"
         :data-testid="`${props.dataTestid}-Article`"
       >
@@ -56,37 +57,29 @@
                 :icon="getFileIconType(media)"
               />
             </span>
-            <div :data-testid="`${props.dataTestid}-FileInfo`">
-              <div :data-testid="`${props.dataTestid}-FileDetails`">
-                <p
-                  class="message-content__file__name"
-                  :data-testid="`${props.dataTestid}-FileName`"
-                >
-                  {{ getShortName(media.originName) }}
-                </p>
-                <p
-                  class="message-content__file__size"
-                  :data-testid="`${props.dataTestid}-FileSize`"
-                >
-                  <template v-if="getFileUploadMeta(media)">
-                    <span class="message-content__file__upload-percent">
-                      <UploadProgressText
-                        :percent="getFileUploadMeta(media)?.percent ?? 0"
-                      />
-                    </span>
-                    <span class="message-content__file__upload-separator">
-                      ·
-                    </span>
-                    <span class="message-content__file__upload-size">
-                      {{ getFileUploadMeta(media)?.size }}
-                    </span>
-                  </template>
-                  <template v-else>
-                    {{ getFileFormattedSize(media) }}
-                  </template>
-                </p>
-              </div>
-            </div>
+            <ChatFileDetails
+              :name="getShortName(media.originName)"
+              :data-testid="props.dataTestid"
+            >
+              <template #size>
+                <template v-if="getFileUploadMeta(media)">
+                  <span class="message-content__file__upload-percent">
+                    <UploadProgressText
+                      :percent="getFileUploadMeta(media)?.percent ?? 0"
+                    />
+                  </span>
+                  <span class="message-content__file__upload-separator">
+                    ·
+                  </span>
+                  <span class="message-content__file__upload-size">
+                    {{ getFileUploadMeta(media)?.size }}
+                  </span>
+                </template>
+                <template v-else>
+                  {{ getFileFormattedSize(media) }}
+                </template>
+              </template>
+            </ChatFileDetails>
           </div>
         </div>
         <div
@@ -179,12 +172,13 @@
             />
           </div>
         </div>
-      </article>
+      </ChatMessageSurface>
     </div>
   </template>
 </template>
 
 <script setup lang="ts">
+import { ChatMessageSurface, ChatFileDetails } from '@pksep/yui';
 import { computed, nextTick, ref, watch } from 'vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import { MediaType } from '@pksep/zod-shared-chat';
@@ -224,7 +218,10 @@ const { isSliderContentUrl, handleDragStart, canDragMedia } = useMessageMedia();
 const messageHtmlRef = ref<HTMLElement | null>(null);
 const { handleMentionUserClick, syncMentionUserInteractivity } =
   useMentionUserClick();
-const filesArticleRef = ref<HTMLElement | null>(null);
+const filesSurfaceRef = ref<InstanceType<typeof ChatMessageSurface> | null>(
+  null
+);
+const filesArticleRef = computed(() => filesSurfaceRef.value?.element ?? null);
 const hasReplyReference = computed(() => Boolean(props.replyMessage));
 const replyReferenceWidth = useReferenceWidth(filesArticleRef, {
   freezeAfterFirstMeasure: true,

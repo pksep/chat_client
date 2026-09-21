@@ -7,6 +7,7 @@ import type {
 import {
   FAVORITE_TOPIC_DESCRIPTION,
   FAVORITE_TOPIC_NAME,
+  dedupeFavoriteTopics,
   filterFavoriteTopicSystemMessages,
   isFavoriteTopic,
   normalizeFavoriteTopic
@@ -114,6 +115,35 @@ test.describe('Избранные сообщения', () => {
         authUser.id
       )
     ).toEqual([userMessage]);
+  });
+
+  test('оставляет одно Избранное с самым свежим пользовательским содержимым', () => {
+    const emptyDuplicate = createTopic({
+      id: 'empty-favorite-topic',
+      updatedAt: new Date('2026-09-16T12:00:00Z')
+    });
+    const actualFavorite = createTopic({
+      id: 'actual-favorite-topic',
+      updatedAt: new Date('2026-09-01T12:00:00Z'),
+      lastMessage: {
+        ...createMessage('favorite-video', false, ''),
+        createdAt: new Date('2026-09-03T12:00:00Z')
+      }
+    });
+    const regularTopic = createTopic({
+      id: 'regular-topic',
+      group: {
+        ...createTopic().group,
+        description: 'Обычная группа'
+      } as ITopic['group']
+    });
+
+    expect(
+      dedupeFavoriteTopics(
+        [emptyDuplicate, actualFavorite, regularTopic],
+        authUser.id
+      ).map(topic => topic.id)
+    ).toEqual(['actual-favorite-topic', 'regular-topic']);
   });
 
   test('находится по имени и входит только в фильтр Все', () => {

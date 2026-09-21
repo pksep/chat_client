@@ -310,10 +310,6 @@ button.button-yui-kit {
     min-width: 0;
   }
 
-  .chat__header-desktop-search-row {
-    display: none;
-  }
-
   .chat__header-mobile-search-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 34px;

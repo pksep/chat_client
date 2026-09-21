@@ -1,4 +1,4 @@
-import { ref, shallowRef } from 'vue';
+import { computed, ref, shallowRef } from 'vue';
 import { getChatSDK } from '../services/useChat';
 import { getConfig } from '../services/useConfig';
 import { fetchWithAuthRedirect } from './useAuth';
@@ -10,10 +10,16 @@ import {
 } from '../services/useChatStateCache';
 import { normalizeDateValue } from '../utils/dateValue';
 import { isDeletedBotUser, isLocalBotUser } from '../utils/bot';
-import { compactPersonName } from '../utils/personName';
-import { parseUserEx } from '../utils/parseUserEx';
+import { filterVisibleUsers } from '../utils/user-directory';
 
 const users = shallowRef<IUser[]>([]);
+const usersById = computed(() => {
+  const index = new Map<string, IUser>();
+  for (const user of users.value) {
+    if (!index.has(user.id)) index.set(user.id, user);
+  }
+  return index;
+});
 const loading = ref(false);
 const error = ref<string | null>(null);
 let persistUsersTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -37,73 +43,14 @@ const mergeUserWithStoredFields = (
 };
 
 const mergeUsersWithStoredFields = (incomingUsers: IUser[]): IUser[] => {
-  const currentUsers = users.value || [];
+  const currentUsersById = usersById.value;
 
   return incomingUsers.map(incomingUser =>
     mergeUserWithStoredFields(
       incomingUser,
-      currentUsers.find(existingUser => existingUser.id === incomingUser.id)
+      currentUsersById.get(incomingUser.id)
     )
   );
-};
-
-const normalizeUserDisplayName = (user: IUser): IUser =>
-  user.isBot
-    ? user
-    : {
-        ...user,
-        initials: compactPersonName(user.initials)
-      };
-
-const getCanonicalUserScore = (user: IUser): number => {
-  const ex = parseUserEx(user.ex) as ReturnType<typeof parseUserEx> & {
-    erpUserId?: string | number;
-  };
-
-  return (
-    (ex.erpUserId !== undefined && ex.erpUserId !== null ? 4 : 0) +
-    (/^\d+$/.test(user.nickname || '') ? 2 : 0)
-  );
-};
-
-const areLikelyDuplicateUsers = (left: IUser, right: IUser): boolean => {
-  if (left.isBot || right.isBot || left.initials !== right.initials) {
-    return false;
-  }
-
-  const hasSameAvatar =
-    !!left.avatarUrl && !!right.avatarUrl && left.avatarUrl === right.avatarUrl;
-  const hasLegacyInitialsAlias =
-    left.nickname === right.initials || right.nickname === left.initials;
-
-  return hasSameAvatar || hasLegacyInitialsAlias;
-};
-
-const filterVisibleUsers = (userList: IUser[]): IUser[] => {
-  const deduplicatedUsers: IUser[] = [];
-
-  userList
-    .filter(user => !isDeletedBotUser(user))
-    .map(normalizeUserDisplayName)
-    .forEach(user => {
-      const duplicateIndex = deduplicatedUsers.findIndex(existingUser =>
-        areLikelyDuplicateUsers(existingUser, user)
-      );
-
-      if (duplicateIndex === -1) {
-        deduplicatedUsers.push(user);
-        return;
-      }
-
-      if (
-        getCanonicalUserScore(user) >
-        getCanonicalUserScore(deduplicatedUsers[duplicateIndex])
-      ) {
-        deduplicatedUsers[duplicateIndex] = user;
-      }
-    });
-
-  return deduplicatedUsers;
 };
 
 const schedulePersistUsers = () => {
@@ -124,9 +71,11 @@ export const hydrateUsersFromCache = async (
     return [...users.value];
   }
 
+  const usersBeforeLoad = users.value;
   const cachedUsers = await loadCachedUsers(userId);
 
-  if (cachedUsers.length > 0) {
+  // Поздний кеш не должен затирать обновление с сервера или сброс справочника.
+  if (cachedUsers.length > 0 && users.value === usersBeforeLoad) {
     users.value = filterVisibleUsers(cachedUsers);
   }
 
@@ -150,10 +99,9 @@ export const fetchAllUsers = async (
     const mergedUsers = mergeUsersWithStoredFields(
       filterVisibleUsers(response.data)
     );
+    const mergedIds = new Set(mergedUsers.map(user => user.id));
     const localBotUsers = (users.value || []).filter(
-      user =>
-        isLocalBotUser(user) &&
-        !mergedUsers.some(mergedUser => mergedUser.id === user.id)
+      user => isLocalBotUser(user) && !mergedIds.has(user.id)
     );
 
     users.value = [...mergedUsers, ...localBotUsers];
@@ -169,11 +117,7 @@ export const fetchAllUsers = async (
   }
 };
 
-export const getUsersList = (): IUser[] => {
-  const currentUsers = users.value || [];
-
-  return filterVisibleUsers(currentUsers);
-};
+export const getUsersList = (): IUser[] => users.value;
 
 export const fetchUsersForAuth = async (
   page = 1,
@@ -217,8 +161,7 @@ export const fetchUsersForAuth = async (
 };
 
 export const getUserById = (userId: string): IUser | undefined => {
-  const currentUsers = users.value || [];
-  return currentUsers.find(user => user.id === userId);
+  return usersById.value.get(userId);
 };
 
 export const updateLocalUserStatus = (

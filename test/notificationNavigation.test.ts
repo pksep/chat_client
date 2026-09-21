@@ -6,8 +6,7 @@ import {
   resolveNotificationMessageId
 } from '../src/services/useNotificationNavigation';
 import {
-  collectNotificationForwardPages,
-  getNotificationVisibleMessagesLimit,
+  needsNotificationMessageContext,
   mergeNotificationMessageSnapshots
 } from '../src/utils/notificationMessages';
 
@@ -151,49 +150,25 @@ describe('notification navigation', () => {
     );
   });
 
-  test('does not let a stale small unread limit hide reconciled messages', () => {
-    const messages = [
-      { id: 'message-1' },
-      { id: 'message-2' },
-      { id: 'message-3' },
-      { id: 'message-4' },
-      { id: 'message-5' }
-    ];
-
-    expect(getNotificationVisibleMessagesLimit(2, messages)).toBe(5);
+  test('не запрашивает контекст для уведомления из последней страницы', () => {
+    expect(needsNotificationMessageContext('new', [{ id: 'new' }], [])).toBe(
+      false
+    );
   });
 
-  test('fills a gap between notification context and the latest server page', async () => {
-    const requestedCursors: string[] = [];
-    const serverPages: Record<string, Array<{ id: string }>> = {
-      'message-2': [{ id: 'message-3' }, { id: 'message-4' }],
-      'message-4': [{ id: 'message-5' }, { id: 'message-6' }]
-    };
-    const pages = await collectNotificationForwardPages(
-      [{ id: 'message-1' }, { id: 'message-2' }],
-      [{ id: 'message-5' }, { id: 'message-6' }],
-      2,
-      async cursor => {
-        requestedCursors.push(cursor);
-        return serverPages[cursor] || [];
-      }
-    );
-    const merged = mergeNotificationMessageSnapshots(
-      [{ id: 'message-1' }, { id: 'message-2' }],
-      ...pages,
-      [{ id: 'message-5' }, { id: 'message-6' }],
-      [{ id: 'message-7' }]
-    );
+  test('не загружает промежуточную историю для старого уведомления из кеша', () => {
+    const history = Array.from({ length: 50000 }, (_, index) => ({
+      id: String(index)
+    }));
+    expect(
+      needsNotificationMessageContext('0', history.slice(-72), history)
+    ).toBe(false);
+  });
 
-    expect(requestedCursors).toEqual(['message-2', 'message-4']);
-    expect(merged.map(message => message.id)).toEqual([
-      'message-1',
-      'message-2',
-      'message-3',
-      'message-4',
-      'message-5',
-      'message-6',
-      'message-7'
-    ]);
+  test('восстанавливает контекст при отставании последней страницы от уведомления', () => {
+    expect(needsNotificationMessageContext('new', [{ id: 'old' }], [])).toBe(
+      true
+    );
+    expect(needsNotificationMessageContext(undefined, [], [])).toBe(false);
   });
 });

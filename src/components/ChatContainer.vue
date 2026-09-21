@@ -23,6 +23,7 @@
       :dataTestid="`${props.dataTestid}-ChatContainer-HeaderMenu`"
     />
     <Menu
+      v-if="!isMobile"
       class="chat__menu"
       :dataTestid="`${props.dataTestid}-ChatContainer-Menu`"
       @unmount-collapse="handleCollapse"
@@ -45,6 +46,7 @@
     />
     <template v-if="!isMobile">
       <Modal
+        v-if="hasOpenedGroupInfo"
         :open="state.isMenuDesktopOpen"
         class="chat__info__modal"
         position="right"
@@ -61,8 +63,10 @@
       </Modal>
 
       <Modal
+        v-if="hasOpenedUserInfo"
         :open="isUserInfoOpen"
         class="chat__user-info-modal"
+        position="right"
         width="404px"
         @close="closeUserInfo"
       >
@@ -110,18 +114,21 @@
       />
     </MobileModal>
     <NewContactModal
+      v-if="mountedCreationModals.contact"
       :open="state.isNewContactOpen"
       :data-testid="`${props.dataTestid}-ChatContainer-NewContactModal`"
       @unmount-close="closeModals"
     />
 
     <NewBotModal
+      v-if="mountedCreationModals.bot"
       :open="state.isNewBotOpen"
       :data-testid="`${props.dataTestid}-ChatContainer-NewBotModal`"
       @unmount-close="closeModals"
     />
 
     <NewGroupModal
+      v-if="mountedCreationModals.group"
       :user="authUser"
       :contacts="users"
       :open="state.isNewGroupOpen"
@@ -178,11 +185,7 @@ import {
 } from 'vue';
 import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
-import Menu from './Menu.vue';
 import Chat from './Chat.vue';
-import MenuInfo from './MenuInfo.vue';
-import UserInfoPanel from './UserInfoPanel.vue';
-import BotInfoPanel from './BotInfoPanel.vue';
 import {
   MobilePlatformEnum,
   type IChatContainerProps,
@@ -222,6 +225,10 @@ import { clearMessagesForTopic } from '../services/useMessages';
 import { getSelectedTopic } from '../composables/useTopics';
 import { isFavoriteTopic } from '../utils/favorite-topic';
 
+const Menu = defineAsyncComponent(() => import('./Menu.vue'));
+const MenuInfo = defineAsyncComponent(() => import('./MenuInfo.vue'));
+const UserInfoPanel = defineAsyncComponent(() => import('./UserInfoPanel.vue'));
+const BotInfoPanel = defineAsyncComponent(() => import('./BotInfoPanel.vue'));
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
 );
@@ -262,6 +269,12 @@ const { toggle } = useResizeState({
   storageKey: 'menu-collapse'
 });
 
+// После первого открытия сохраняем экземпляр для закрывающей анимации и черновика.
+const mountedCreationModals = reactive({
+  contact: false,
+  bot: false,
+  group: false
+});
 const state = reactive({
   isAppModalOpen: true,
   isMenuDesktopOpen: false,
@@ -319,6 +332,22 @@ const shouldRenderCallModal = computed(
 const users = computed(() => getUsersList());
 const { isUserInfoOpen, activeUser, activeTopic, closeUserInfo } =
   useUserInfoModal();
+const hasOpenedGroupInfo = ref(false);
+const hasOpenedUserInfo = ref(false);
+watch(
+  () => state.isMenuDesktopOpen,
+  open => {
+    if (open) hasOpenedGroupInfo.value = true;
+  },
+  { immediate: true }
+);
+watch(
+  isUserInfoOpen,
+  open => {
+    if (open) hasOpenedUserInfo.value = true;
+  },
+  { immediate: true }
+);
 const isBotUserInfo = computed(
   () => isBotTopic(activeTopic.value) || isBotUser(activeUser.value)
 );
@@ -384,6 +413,7 @@ const handleNewContact = async (config): Promise<void> => {
     return;
   }
   state.isNewContactOpen = config.isChapterOpen;
+  if (config.isChapterOpen) mountedCreationModals.contact = true;
 };
 
 const handleNewBot = async (config): Promise<void> => {
@@ -392,10 +422,12 @@ const handleNewBot = async (config): Promise<void> => {
   }
 
   state.isNewBotOpen = config.isChapterOpen;
+  if (config.isChapterOpen) mountedCreationModals.bot = true;
 };
 
 const handleNewGroup = (config): void => {
   state.isNewGroupOpen = config.isChapterOpen;
+  if (config.isChapterOpen) mountedCreationModals.group = true;
 };
 
 const closeModals = (): void => {

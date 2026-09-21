@@ -1,8 +1,13 @@
+import { openChatDatabase } from '../utils/chat-startup-databases';
+import {
+  discardStartupTopicRecords,
+  takeStartupTopicRecord
+} from '../utils/startup-topic-records';
+import { reviveCachedDates as deserializeValue } from '../utils/revive-cached-dates';
 import type { IMessage } from '../components/interfaces/interfaces';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
 
 const DB_NAME = 'chat-topic-messages-db';
-const DB_VERSION = 6;
 const STORE_NAME = 'topicMessages';
 const PINNED_MESSAGES_STORE_NAME = 'pinnedMessages';
 const PENDING_UPLOADS_STORE_NAME = 'pendingUploads';
@@ -14,13 +19,6 @@ const PENDING_UPLOAD_WORKER_LOAD_TIMEOUT_MS = 5000;
 const PENDING_UPLOAD_SERVICE_WORKER_URL =
   '/pending-upload-service-worker.js?v=20260901-10';
 const PENDING_UPLOAD_SERVICE_WORKER_SCOPE = '/pending-upload-cache-v3/';
-const DATE_KEYS = new Set([
-  'createdAt',
-  'updatedAt',
-  'deletedAt',
-  'lastOnline'
-]);
-let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 interface CachedTopicMessages {
   cacheKey: string;
@@ -95,9 +93,6 @@ const pendingUploadWorkerRequests = new Map<
     onProgress?: (percent: number) => void;
   }
 >();
-
-const hasIndexedDb = () =>
-  typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined';
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -183,7 +178,6 @@ const handoffPendingUploadsForRefresh = (): void => {
 };
 
 if (typeof window !== 'undefined') {
-  void getPendingUploadServiceWorker();
   window.addEventListener('pagehide', handoffPendingUploadsForRefresh);
 }
 
@@ -337,27 +331,6 @@ const serializeValue = (
     seenObjects.delete(value);
 
     return serializedObject;
-  }
-
-  return value;
-};
-
-const deserializeValue = (value: unknown, key?: string): unknown => {
-  if (typeof value === 'string' && key && DATE_KEYS.has(key)) {
-    return new Date(value);
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(item => deserializeValue(item));
-  }
-
-  if (isPlainObject(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([nestedKey, nestedValue]) => [
-        nestedKey,
-        deserializeValue(nestedValue, nestedKey)
-      ])
-    );
   }
 
   return value;
@@ -680,67 +653,7 @@ const mergeCachedMessages = (
   return Array.from(mergedByKey.values()).sort(compareMessagesByPosition);
 };
 
-const openDb = async (): Promise<IDBDatabase | null> => {
-  if (!hasIndexedDb()) {
-    return null;
-  }
-
-  if (dbPromise) {
-    return dbPromise;
-  }
-
-  dbPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'cacheKey' });
-      }
-
-      if (!db.objectStoreNames.contains(PINNED_MESSAGES_STORE_NAME)) {
-        db.createObjectStore(PINNED_MESSAGES_STORE_NAME, {
-          keyPath: 'cacheKey'
-        });
-      }
-
-      if (!db.objectStoreNames.contains(PENDING_UPLOADS_STORE_NAME)) {
-        db.createObjectStore(PENDING_UPLOADS_STORE_NAME, {
-          keyPath: 'cacheKey'
-        });
-      }
-
-      if (!db.objectStoreNames.contains(PENDING_UPLOAD_META_STORE_NAME)) {
-        db.createObjectStore(PENDING_UPLOAD_META_STORE_NAME, {
-          keyPath: 'cacheKey'
-        });
-      }
-
-      if (!db.objectStoreNames.contains(PENDING_UPLOAD_CHUNKS_STORE_NAME)) {
-        const store = db.createObjectStore(PENDING_UPLOAD_CHUNKS_STORE_NAME, {
-          keyPath: ['cacheKey', 'chunkIndex']
-        });
-        store.createIndex('cacheKey', 'cacheKey', { unique: false });
-      }
-    };
-
-    request.onsuccess = () => {
-      const db = request.result;
-      db.onversionchange = () => {
-        db.close();
-        dbPromise = null;
-      };
-      resolve(db);
-    };
-    request.onerror = () => {
-      dbPromise = null;
-      reject(request.error);
-    };
-  });
-
-  return dbPromise;
-};
+const openDb = (): Promise<IDBDatabase | null> => openChatDatabase(DB_NAME);
 
 export const loadCachedTopicMessages = async (
   topicId: string,
@@ -1317,6 +1230,7 @@ export const savePendingUploadMeta = async (params: {
   message?: IMessage;
   userId?: string;
 }): Promise<void> => {
+  discardStartupTopicRecords();
   if (!params.topicId || !params.messageId) {
     return;
   }
@@ -1379,7 +1293,8 @@ export const savePendingUploadMeta = async (params: {
 
 export const loadPendingUploadMessages = async (
   topicId: string,
-  userId = getResolvedUserId()
+  userId = getResolvedUserId(),
+  loadMissingMessages?: (messageIds: string[]) => Promise<IMessage[]>
 ): Promise<IMessage[]> => {
   if (!topicId) {
     return [];
@@ -1394,26 +1309,54 @@ export const loadPendingUploadMessages = async (
 
     const cacheKeyPrefix = `${userId || 'anonymous'}:${topicId}:`;
 
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(PENDING_UPLOAD_META_STORE_NAME, 'readonly');
-      const store = tx.objectStore(PENDING_UPLOAD_META_STORE_NAME);
-      const request = store.getAll();
-
-      request.onsuccess = () => {
-        const records = request.result as CachedPendingUploadMeta[];
-        resolve(
-          records
-            .filter(
-              record =>
-                record.topicId === topicId &&
-                record.cacheKey.startsWith(cacheKeyPrefix) &&
-                record.message
-            )
-            .map(record => deserializeValue(record.message) as IMessage)
+    const prepared = takeStartupTopicRecord<CachedPendingUploadMeta[]>(
+      DB_NAME,
+      PENDING_UPLOAD_META_STORE_NAME,
+      `${userId || 'anonymous'}:${topicId}`
+    );
+    const readCurrent = () =>
+      new Promise<CachedPendingUploadMeta[]>((resolve, reject) => {
+        const tx = db.transaction(PENDING_UPLOAD_META_STORE_NAME, 'readonly');
+        const store = tx.objectStore(PENDING_UPLOAD_META_STORE_NAME);
+        // Ключи этого топика начинаются с ':', следующий символ ';' ограничивает
+        // диапазон без чтения вложений других топиков и пользователей.
+        const request = store.getAll(
+          IDBKeyRange.bound(
+            cacheKeyPrefix,
+            `${userId || 'anonymous'}:${topicId};`,
+            false,
+            true
+          )
         );
-      };
-      request.onerror = () => reject(request.error);
-    });
+
+        request.onsuccess = () =>
+          resolve(request.result as CachedPendingUploadMeta[]);
+        request.onerror = () => reject(request.error);
+      });
+    const records = prepared
+      ? await prepared.catch(readCurrent)
+      : await readCurrent();
+    const matching = records.filter(
+      record =>
+        record.topicId === topicId && record.cacheKey.startsWith(cacheKeyPrefix)
+    );
+    const messages = matching
+      .filter(record => record.message)
+      .map(record => deserializeValue(record.message) as IMessage);
+    const missingIds = matching
+      .filter(record => !record.message)
+      .map(record => record.messageId);
+    if (missingIds.length && loadMissingMessages) {
+      try {
+        messages.push(...(await loadMissingMessages(missingIds)));
+      } catch (error) {
+        console.warn(
+          'Не удалось восстановить неотправленный текст из истории:',
+          error
+        );
+      }
+    }
+    return messages;
   } catch (error) {
     console.warn('Failed to load pending upload messages:', error);
     return [];
@@ -1469,6 +1412,7 @@ export const deletePendingUploadMeta = async (
   messageId: string,
   userId = getResolvedUserId()
 ): Promise<void> => {
+  discardStartupTopicRecords();
   if (!topicId || !messageId) {
     return;
   }

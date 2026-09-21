@@ -13,13 +13,19 @@ import {
 } from '../services/mastraApproval';
 import type { AiAttachmentReference } from '../services/aiAttachments';
 import type { AiOutputAttachment } from '../services/aiOutputAttachments';
+import type { AiActionTask, AiActionDecision } from '../services/aiActionTasks';
+import { actionTaskSummary } from '../services/aiActionTaskPresentation';
 import type { AIMessage, AIMessageReference } from '../types/messages';
+import type { AiSubmissionResult } from '../services/aiSubmission';
 import { generateUUID } from '../utils/generateUUID';
 import {
   fetchAiAutomations,
   type AiAutomationSummary
 } from '../services/aiAutomations';
-import { getOrCreateChatHistory, saveMessages } from '../services/useChatDb';
+import { getChatHistorySnapshot, saveMessages } from '../services/useChatDb';
+import { getAiErrorMessage } from '../services/aiErrorMessages';
+import { showErrorNotification } from './useNotifications';
+import { afterStartupPaint } from '../utils/after-startup-paint';
 
 export type AiAssistantTab = 'chats' | 'tasks';
 export type AiAssistantView = 'chat' | 'tasks';
@@ -38,10 +44,12 @@ export interface AiAssistantMessage {
   pinned?: boolean;
   replyTo?: AIMessageReference;
   outputAttachments?: AiOutputAttachment[];
+  actionTask?: AiActionTask;
 }
 
 export interface AiAssistantSession {
   id: string;
+  initializeServerHistory?: boolean;
   kind?: 'chat' | 'task';
   title: string;
   description: string;
@@ -79,6 +87,10 @@ interface PersistedAiState {
 }
 
 interface MastraRuntime {
+  resolveActionTask: (id: string, decision: AiActionDecision) => Promise<void>;
+  taskBusy: Ref<boolean>;
+  historyBusy: Ref<boolean>;
+  preparationStatus: Ref<string>;
   messages: Ref<AIMessage[]>;
   sendMessage: (
     input: string,
@@ -86,21 +98,26 @@ interface MastraRuntime {
     abortSignal?: AbortSignal,
     attachments?: AiAttachmentReference[],
     replyTo?: AIMessageReference,
-    modelInput?: string
-  ) => Promise<void>;
+    modelInput?: string,
+    onAccepted?: () => void
+  ) => Promise<AiSubmissionResult>;
   resolveToolApproval: (
     decision: 'approve' | 'decline',
     onFinish?: () => void,
-    abortSignal?: AbortSignal
-  ) => Promise<void>;
+    abortSignal?: AbortSignal,
+    onAccepted?: () => void
+  ) => Promise<AiSubmissionResult>;
   clearMessages: () => Promise<void>;
+  deleteConversation: () => Promise<void>;
+  dispose: () => void;
   toggleMessagePin: (messageIndex: number) => Promise<void>;
   deleteMessages: (messageIndexes: number[]) => Promise<void>;
   editMessageAndResend: (
     messageIndex: number,
     input: string,
     attachments?: AiAttachmentReference[],
-    replyTo?: AIMessageReference
+    replyTo?: AIMessageReference,
+    onAccepted?: () => void
   ) => Promise<void>;
   appendExternalMessage: (message: AIMessage) => Promise<void>;
   isInitializing: Ref<boolean>;
@@ -307,6 +324,30 @@ const syncSessionActivity = (
     setActivityStatus(activity, 'attention', runtime.lastError.value);
     return;
   }
+  if (runtime.historyBusy.value) {
+    setActivityStatus(activity, 'running', runtime.preparationStatus.value);
+    return;
+  }
+
+  const plan = runtime.messages.value.findLast(
+    message => message.actionTask
+  )?.actionTask;
+  if (plan?.status === 'waiting_approval') {
+    setActivityStatus(activity, 'attention', 'План ожидает подтверждения');
+    return;
+  }
+  if (runtime.taskBusy.value || plan?.status === 'running') {
+    setActivityStatus(activity, 'running', 'Выполняю план действий');
+    return;
+  }
+  if (plan && ['needs_review', 'partial', 'failed'].includes(plan.status)) {
+    setActivityStatus(
+      activity,
+      'attention',
+      'Выполненные шаги сохранены. Требуется внимание'
+    );
+    return;
+  }
 
   if (
     runtime.isInitializing.value ||
@@ -335,7 +376,8 @@ const syncSession = (sessionId: string, runtime: MastraRuntime): void => {
     if (
       message.loading &&
       !message.content.trim() &&
-      !message.outputAttachments?.length
+      !message.outputAttachments?.length &&
+      !message.actionTask
     )
       return [];
 
@@ -344,7 +386,9 @@ const syncSession = (sessionId: string, runtime: MastraRuntime): void => {
       {
         id,
         role: message.role,
-        text: getVisibleMessageContent(message.content),
+        text: message.actionTask
+          ? actionTaskSummary(message.actionTask)
+          : getVisibleMessageContent(message.content),
         time: formatTime(message.timestamp),
         showApproval:
           (Boolean(pendingApproval) &&
@@ -354,6 +398,7 @@ const syncSession = (sessionId: string, runtime: MastraRuntime): void => {
         approvalState: approvalStates[id] ?? null,
         pinned: Boolean(message.pinned),
         replyTo: message.replyTo,
+        actionTask: message.actionTask,
         outputAttachments: message.outputAttachments
       }
     ];
@@ -363,17 +408,23 @@ const syncSession = (sessionId: string, runtime: MastraRuntime): void => {
     .slice()
     .reverse()
     .find(
-      message => message.content.trim() || message.outputAttachments?.length
+      message =>
+        message.actionTask ||
+        message.content.trim() ||
+        message.outputAttachments?.length
     );
-  const isLoading = runtime.messages.value.some(message => message.loading);
+  const isLoading =
+    runtime.historyBusy.value ||
+    runtime.messages.value.some(message => message.loading);
 
   session.description = runtime.isInitializing.value
     ? 'Загрузка истории…'
     : isLoading
-      ? 'Думает…'
+      ? runtime.preparationStatus.value
       : shorten(
           getVisibleMessageContent(
-            lastMessage?.content ||
+            lastMessage?.actionTask?.title ||
+              lastMessage?.content ||
               lastMessage?.outputAttachments?.[0]?.name ||
               'Новый чат'
           )
@@ -405,6 +456,8 @@ const ensureRuntime = async (sessionId: string): Promise<MastraRuntime> => {
       const runtime = useMastra({
         agentId: 'generalAgent',
         chatId: sessionId,
+        initializeServerHistory:
+          getSession(sessionId)?.initializeServerHistory === true,
         approvalMode: permissionMode,
         responseMode
       }) as MastraRuntime;
@@ -415,7 +468,10 @@ const ensureRuntime = async (sessionId: string): Promise<MastraRuntime> => {
           runtime.messages,
           runtime.isInitializing,
           runtime.pendingApproval,
-          runtime.lastError
+          runtime.lastError,
+          runtime.taskBusy,
+          runtime.historyBusy,
+          runtime.preparationStatus
         ],
         () => syncSession(sessionId, runtime),
         { deep: true, immediate: true }
@@ -436,6 +492,16 @@ const activeSession = computed(() =>
   activeSessionId.value ? getSession(activeSessionId.value) : null
 );
 
+const activeTask = computed(
+  () =>
+    persisted.tasks.find(task => task.sessionId === activeSessionId.value) ||
+    null
+);
+
+const isActiveTaskSession = computed(
+  () => !!activeSession.value && isTaskSession(activeSession.value)
+);
+
 const activeRuntime = computed(() =>
   activeSessionId.value ? runtimes.get(activeSessionId.value) || null : null
 );
@@ -449,9 +515,25 @@ const isThinking = computed(() => {
   const runtime = activeRuntime.value;
   return Boolean(
     runtime?.isInitializing.value ||
-      runtime?.messages.value.some(message => message.loading)
+      runtime?.historyBusy.value ||
+      runtime?.messages.value.some(
+        message => message.loading && !message.actionTask
+      )
   );
 });
+
+const preparationStatus = computed(() =>
+  activeRuntime.value?.isInitializing.value
+    ? 'Загружаю историю'
+    : activeRuntime.value?.preparationStatus.value || 'Подготавливаю ответ'
+);
+const taskBusy = computed(() => activeRuntime.value?.taskBusy.value || false);
+/** Подтверждает точный сохранённый план без нового запроса к модели. */
+const resolveActionTask = async (id: string, decision: AiActionDecision) => {
+  if (!activeSessionId.value) return;
+  const runtime = await ensureRuntime(activeSessionId.value);
+  await runtime.resolveActionTask(id, decision);
+};
 
 const backgroundActivities = computed(() =>
   Object.values(sessionActivities)
@@ -475,8 +557,8 @@ const markSessionInactive = (sessionId: string | null): void => {
 
 const markSessionActivityViewed = (sessionId: string): void => {
   inactiveSessionIds.delete(sessionId);
-  const activity = sessionActivities[sessionId];
-  if (activity) activity.isBackground = false;
+  // Просмотр закрывает уведомление о текущем запуске; новый запуск создаст своё.
+  delete sessionActivities[sessionId];
 };
 
 const beginSessionActivity = (session: AiAssistantSession): void => {
@@ -498,13 +580,14 @@ const startNewSession = (): void => {
 };
 
 const selectSession = (sessionId: string): void => {
-  if (!getSession(sessionId)) return;
+  const session = getSession(sessionId);
+  if (!session) return;
 
   if (activeSessionId.value !== sessionId) {
     markSessionInactive(activeSessionId.value);
   }
 
-  activeTab.value = 'chats';
+  activeTab.value = isTaskSession(session) ? 'tasks' : 'chats';
   activeView.value = 'chat';
   activeSessionId.value = sessionId;
   markSessionActivityViewed(sessionId);
@@ -512,6 +595,11 @@ const selectSession = (sessionId: string): void => {
     console.error('Failed to load AI runtime:', error);
   });
 };
+
+/** Раздел определяется назначением диалога, а не текущим видом его редактора. */
+const isTaskSession = (session: AiAssistantSession): boolean =>
+  session.kind === 'task' ||
+  persisted.tasks.some(task => task.sessionId === session.id);
 
 /** Открывает ещё не сохранённую автоматизацию в разделе задач. */
 const selectTaskSession = (sessionId: string): void => {
@@ -547,6 +635,7 @@ const createSession = (
 ): AiAssistantSession => {
   const session: AiAssistantSession = {
     id: generateUUID(),
+    initializeServerHistory: true,
     kind,
     title: shorten(input, 36),
     description: 'Думает…',
@@ -587,30 +676,35 @@ const sendMessage = async (
   rawInput: string,
   attachments: AiAttachmentReference[] = [],
   replyTo?: AIMessageReference,
-  modelInput?: string
+  modelInput?: string,
+  onAccepted?: () => void
 ): Promise<string | null> => {
   const visibleInput = buildVisibleInput(rawInput, attachments);
   if (!visibleInput) return null;
 
   const currentSession = activeSession.value;
+  const submittedView = activeView.value;
   if (currentSession) {
     const runtime = await ensureRuntime(currentSession.id);
+    if (
+      activeSessionId.value !== currentSession.id ||
+      activeView.value !== submittedView
+    )
+      return null;
     const approvalDecision = approvalDecisionFromMessage(visibleInput);
     if (approvalDecision && runtime.pendingApproval.value) {
       if (isThinking.value) return null;
 
       beginSessionActivity(currentSession);
       try {
-        await runtime.resolveToolApproval(approvalDecision);
-        syncSession(currentSession.id, runtime);
-        return (
-          currentSession.messages
-            .slice()
-            .reverse()
-            .find(
-              message => message.role === 'assistant' && message.text.trim()
-            )?.text || null
+        const result = await runtime.resolveToolApproval(
+          approvalDecision,
+          undefined,
+          undefined,
+          onAccepted
         );
+        syncSession(currentSession.id, runtime);
+        return result.responseText;
       } finally {
         void refreshAutomations();
       }
@@ -625,31 +719,25 @@ const sendMessage = async (
     activeSessionId.value = null;
   }
 
-  activeTab.value = isTaskRequest ? 'tasks' : 'chats';
-  activeView.value = 'chat';
-
   const session =
     activeSession.value ||
     createSession(visibleInput, isTaskRequest ? 'task' : 'chat');
+  activeTab.value = isTaskSession(session) ? 'tasks' : 'chats';
+  activeView.value = 'chat';
   const runtime = await ensureRuntime(session.id);
   beginSessionActivity(session);
   try {
-    await runtime.sendMessage(
+    const result = await runtime.sendMessage(
       visibleInput,
       undefined,
       undefined,
       attachments,
       replyTo,
-      modelInput
+      modelInput,
+      onAccepted
     );
     syncSession(session.id, runtime);
-    return (
-      session.messages
-        .slice()
-        .reverse()
-        .find(message => message.role === 'assistant' && message.text.trim())
-        ?.text || null
-    );
+    return result.responseText;
   } finally {
     void refreshAutomations();
   }
@@ -718,7 +806,8 @@ const editMessageAndResend = async (
   messageId: string,
   rawInput: string,
   attachments: AiAttachmentReference[] = [],
-  replyTo?: AIMessageReference
+  replyTo?: AIMessageReference,
+  onAccepted?: () => void
 ): Promise<void> => {
   const sessionId = activeSessionId.value;
   const visibleInput = buildVisibleInput(rawInput, attachments);
@@ -737,7 +826,8 @@ const editMessageAndResend = async (
     messageIndex,
     visibleInput,
     attachments,
-    replyTo
+    replyTo,
+    onAccepted
   );
   syncSession(sessionId, runtime);
 };
@@ -747,17 +837,22 @@ const toggleSessionPin = (sessionId: string): void => {
   if (session) session.pinned = !session.pinned;
 };
 
-const deleteSession = (sessionId: string): void => {
-  const index = persisted.sessions.findIndex(item => item.id === sessionId);
-  if (index === -1) return;
-
-  void runtimes.get(sessionId)?.clearMessages();
+const deleteSession = async (sessionId: string): Promise<void> => {
+  if (!getSession(sessionId)) return;
+  const runtime = await ensureRuntime(sessionId);
+  try {
+    await runtime.deleteConversation();
+  } catch (error) {
+    showErrorNotification(getAiErrorMessage(error));
+    return;
+  }
   runtimeWatchers.get(sessionId)?.();
   runtimeWatchers.delete(sessionId);
   runtimes.delete(sessionId);
   delete sessionActivities[sessionId];
   inactiveSessionIds.delete(sessionId);
-  persisted.sessions.splice(index, 1);
+  const index = persisted.sessions.findIndex(item => item.id === sessionId);
+  if (index >= 0) persisted.sessions.splice(index, 1);
 
   if (activeSessionId.value === sessionId) startNewSession();
   inactiveSessionIds.delete(sessionId);
@@ -854,22 +949,29 @@ const syncAutomationResult = async (
     return;
   }
 
-  const history = await getOrCreateChatHistory(automation.sessionId);
+  const { messages: history, conversationGeneration } =
+    await getChatHistorySnapshot(automation.sessionId);
   if (history.some(item => item.sourceId === sourceId)) return;
-  await saveMessages(automation.sessionId, [...history, message]);
+  await saveMessages(
+    automation.sessionId,
+    [...history, message],
+    conversationGeneration ?? 0
+  );
   session.description = shorten(result.text);
   session.time = formatTime(result.completedAt);
 };
 
-/** Запускает лёгкую синхронизацию при открытии приложения, возврате на вкладку и раз в минуту. */
+/** Запускает синхронизацию после первого кадра, при возврате на вкладку и раз в минуту. */
 const startAutomationPolling = (): void => {
   if (automationPollingStarted || typeof window === 'undefined') return;
   automationPollingStarted = true;
-  void refreshAutomations();
-  window.addEventListener('focus', () => void refreshAutomations());
-  window.setInterval(() => {
-    if (document.visibilityState === 'visible') void refreshAutomations();
-  }, 60_000);
+  void afterStartupPaint().then(() => {
+    void refreshAutomations();
+    window.addEventListener('focus', () => void refreshAutomations());
+    window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshAutomations();
+    }, 60_000);
+  });
 };
 
 /** Открывает чат, в котором агент выполнял выбранную задачу. */
@@ -888,7 +990,12 @@ const selectTask = (taskId: string): string | null => {
 const clearSession = async (sessionId: string): Promise<void> => {
   if (!getSession(sessionId)) return;
   const runtime = await ensureRuntime(sessionId);
-  await runtime.clearMessages();
+  try {
+    await runtime.clearMessages();
+  } catch (error) {
+    showErrorNotification(getAiErrorMessage(error));
+    return;
+  }
   syncSession(sessionId, runtime);
   delete sessionActivities[sessionId];
   inactiveSessionIds.delete(sessionId);
@@ -910,8 +1017,13 @@ export const useAiAssistant = () => {
     activeView,
     activeSessionId,
     activeSession,
+    activeTask,
+    isActiveTaskSession,
     activeTitle,
     isThinking,
+    preparationStatus,
+    taskBusy,
+    resolveActionTask,
     backgroundActivities,
     isVoiceModeOpen,
     isVoiceModalVisible,

@@ -2,6 +2,8 @@ import { computed, reactive, ref } from 'vue';
 import type { IUser } from '../components/interfaces/interfaces';
 import type { AudioOutputRoute } from './useAudioOutput';
 
+export const ACTIVE_CALL_SESSION_STORAGE_KEY = 'chat:active-call-session:v1';
+
 export type CallReaction =
   | 'heart'
   | 'thumbs-up'

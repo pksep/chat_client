@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, spyOn } from 'bun:test';
 import { createRenderer } from 'vue';
 import { useResizeState } from '../src/composables/useResizeState';
 
@@ -71,6 +71,44 @@ function resize(width: number) {
 }
 
 describe('useResizeState', () => {
+  test('300 потребителей используют одно измерение на resize и снимают общий обработчик', () => {
+    let reads = 0;
+    let width = 390;
+    Object.defineProperty(testWindow, 'innerWidth', {
+      configurable: true,
+      get: () => {
+        reads++;
+        return width;
+      }
+    });
+    const add = spyOn(testWindow, 'addEventListener');
+    const remove = spyOn(testWindow, 'removeEventListener');
+    let consumers: ReturnType<typeof useResizeState>[] = [];
+    const app = renderer.createApp({
+      setup() {
+        consumers = Array.from({ length: 300 }, () => useResizeState('768px'));
+        return () => null;
+      }
+    });
+    app.mount({});
+    unmount = () => app.unmount();
+    expect(reads).toBeLessThanOrEqual(2);
+    expect(add.mock.calls.filter(([type]) => type === 'resize')).toHaveLength(
+      1
+    );
+    width = 1024;
+    const previousReads = reads;
+    testWindow.dispatchEvent(new Event('resize'));
+    expect(reads - previousReads).toBe(1);
+    expect(consumers.every(c => !c.state.value)).toBe(true);
+    app.unmount();
+    unmount = undefined;
+    expect(
+      remove.mock.calls.filter(([type]) => type === 'resize')
+    ).toHaveLength(1);
+    add.mockRestore();
+    remove.mockRestore();
+  });
   test('включает мобильную версию при 768 px до и после монтирования', () => {
     const { state, initialState } = mountResizeState('768px');
     expect(initialState).toBe(true);

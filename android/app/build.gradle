@@ -25,6 +25,12 @@ def chatAllowCleartextOverride = project.findProperty("chatAllowCleartext")
 apply plugin: 'com.android.application'
 
 android {
+    packaging {
+        dex {
+            // ART читает DEX прямо из APK без распаковки при холодном запуске.
+            useLegacyPackaging = false
+        }
+    }
     namespace = "sep.pksep.app"
     compileSdk = rootProject.ext.compileSdkVersion
 
@@ -35,7 +41,11 @@ android {
         versionCode getAppVersionCode()
         versionName getAppVersionName()
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // Явно включается только для локального профилирования release APK.
+        buildConfigField "boolean", "CHAT_STARTUP_BENCHMARK", (project.findProperty("chatStartupBenchmark") == "true").toString()
         aaptOptions {
+            // Локальный WebView читает стартовые ресурсы без распаковки ZIP.
+            noCompress 'js', 'css', 'html'
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
@@ -71,6 +81,13 @@ android {
 
     buildFeatures {
         buildConfig true
+    }
+
+    if (project.findProperty("chatStartupBenchmark") == "true") {
+        sourceSets.release {
+            java.srcDir 'src/benchmark/java'
+            manifest.srcFile 'src/benchmark/AndroidManifest.xml'
+        }
     }
 }
 

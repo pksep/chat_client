@@ -4,8 +4,19 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
+import java.io.IOException;
 
 public class ChatBackgroundSyncApiTest {
+    @Test(expected = IOException.class)
+    public void doesNotTreatTextResponseAsAFreshEmptyChat() throws IOException {
+        ChatBackgroundSyncApi.requireRows("temporary maintenance");
+    }
+
+    @Test(expected = IOException.class)
+    public void doesNotTreatMissingResponseAsAFreshEmptyChat() throws IOException {
+        ChatBackgroundSyncApi.requireRows(null);
+    }
+
     @Test
     public void retriesOnlyTransientHttpFailures() {
         assertTrue(apiError(408).isRetryable());

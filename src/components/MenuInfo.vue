@@ -95,6 +95,7 @@
   </aside>
 
   <NewContactModal
+    v-if="hasOpenedContactSelector"
     :open="state.openAddUser"
     :isAddOne="false"
     :contacts="filteredMembers"
@@ -106,7 +107,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -118,7 +119,6 @@ import ContactListInModal from './ContactList/ContactListInModal.vue';
 import InformationMenu from './InformationMenu.vue';
 import type { IMenuRightProps, ITopic, IUser } from './interfaces/interfaces';
 import { useMenuInfo } from '../composables/useMenuInfo';
-import NewContactModal from './NewChat/NewContactModal.vue';
 import ProfileAttachmentsPanel from './ProfileAttachmentsPanel.vue';
 import { useUrlWatcher } from '../composables/navigation';
 import { currentGroup, useGroup } from '../composables/useGroup';
@@ -126,6 +126,11 @@ import { isDeletedBotUser } from '../utils/bot';
 
 type MenuInfoTab = 'participants' | 'media' | 'files';
 type ProfileAttachmentsTab = 'media' | 'files';
+
+const NewContactModal = defineAsyncComponent(
+  () => import('./NewChat/NewContactModal.vue')
+);
+const hasOpenedContactSelector = ref(false);
 
 const props = withDefaults(defineProps<IMenuRightProps>(), {
   open: false,
@@ -140,6 +145,13 @@ const {
   handleCloseAddUserModal,
   filteredMembers
 } = useMenuInfo();
+watch(
+  () => state.openAddUser,
+  open => {
+    if (open) hasOpenedContactSelector.value = true;
+  },
+  { immediate: true }
+);
 
 const { addGroupMembers } = useGroup();
 

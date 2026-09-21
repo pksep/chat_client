@@ -1,5 +1,6 @@
 import { Message, Topic, Media } from '@pksep/zod-shared-chat';
 import { Reqi } from '@pksep/reqi';
+import { readJson } from './read-json';
 import {
   SearchParams,
   PaginatedResponse,
@@ -52,6 +53,7 @@ export interface ChatMessageInterface {
       lastMessageId?: string;
       afterMessageId?: string;
       newMessages?: boolean;
+      fresh?: boolean;
     }
   ): Promise<Message[]>;
   getTopicMedia(
@@ -172,11 +174,10 @@ export class ChatMessage implements ChatMessageInterface {
     const endpoint = `/search/messages${queryString ? `?${queryString}` : ''}`;
 
     try {
-      const response = (await this.reqi.get<
-        PaginatedResponse<Message & { topic: Topic }>
-      >(endpoint, { parsed: false })) as any;
-      const data = await response.json();
-      return data;
+      return await readJson<PaginatedResponse<Message & { topic: Topic }>>(
+        this.reqi,
+        endpoint
+      );
     } catch (error) {
       throw new Error(`Failed to search messages: ${(error as Error).message}`);
     }
@@ -208,6 +209,7 @@ export class ChatMessage implements ChatMessageInterface {
       lastMessageId?: string;
       afterMessageId?: string;
       newMessages?: boolean;
+      fresh?: boolean;
     }
   ): Promise<Message[]> {
     const queryParams = new URLSearchParams();
@@ -222,11 +224,9 @@ export class ChatMessage implements ChatMessageInterface {
     const endpoint = `/messages/topic/${topicId}${queryString ? `?${queryString}` : ''}`;
 
     try {
-      const response = (await this.reqi.get<Message[]>(endpoint, {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
+      return await readJson<Message[]>(this.reqi, endpoint, {
+        reusePending: !opts?.fresh
+      });
     } catch (error) {
       throw new Error(`Failed to fetch messages: ${(error as Error).message}`);
     }
@@ -246,10 +246,7 @@ export class ChatMessage implements ChatMessageInterface {
     const endpoint = `/messages/topic/${topicId}/${kind}${queryString ? `?${queryString}` : ''}`;
 
     try {
-      const response = (await this.reqi.get<TopicAttachmentsPage>(endpoint, {
-        parsed: false
-      })) as any;
-      return await response.json();
+      return await readJson<TopicAttachmentsPage>(this.reqi, endpoint);
     } catch (error) {
       throw new Error(
         `Failed to fetch topic attachments: ${(error as Error).message}`
@@ -284,11 +281,7 @@ export class ChatMessage implements ChatMessageInterface {
     const endpoint = `/messages/calls/history${queryString ? `?${queryString}` : ''}`;
 
     try {
-      const response = (await this.reqi.get<CallHistoryResponse>(endpoint, {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
+      return await readJson<CallHistoryResponse>(this.reqi, endpoint);
     } catch (error) {
       throw new Error(
         `Failed to fetch call history: ${(error as Error).message}`
@@ -298,14 +291,10 @@ export class ChatMessage implements ChatMessageInterface {
 
   async getPinnedMessages(topicId: string): Promise<Message[]> {
     try {
-      const response = (await this.reqi.get<Message[]>(
-        `/messages/topic/${topicId}/pinned`,
-        {
-          parsed: false
-        }
-      )) as any;
-      const data = await response.json();
-      return data;
+      return await readJson<Message[]>(
+        this.reqi,
+        `/messages/topic/${topicId}/pinned`
+      );
     } catch (error) {
       throw new Error(
         `Failed to fetch pinned messages: ${(error as Error).message}`
@@ -315,14 +304,10 @@ export class ChatMessage implements ChatMessageInterface {
 
   async getAroundMessage(messageId: string): Promise<Message[]> {
     try {
-      const response = (await this.reqi.get<Message[]>(
-        `/messages/${messageId}/around`,
-        {
-          parsed: false
-        }
-      )) as any;
-      const data = await response.json();
-      return data;
+      return await readJson<Message[]>(
+        this.reqi,
+        `/messages/${messageId}/around`
+      );
     } catch (error) {
       throw new Error(
         `Failed to fetch pinned messages: ${(error as Error).message}`

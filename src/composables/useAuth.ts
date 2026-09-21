@@ -6,11 +6,20 @@ import { ref, Ref } from 'vue';
 import { setAuthToken } from './useLogin';
 import { getConfig } from '../services/useConfig';
 import { configureCustomBackgroundSync } from '../services/useCustomBackgroundSync';
+import {
+  CHAT_AUTH_SESSION_KEY,
+  getChatAuthSession,
+  type StoredChatAuthSession
+} from '../utils/stored-chat-session';
+import { buildGroupCallInviteAuthorizationUrl } from '../utils/groupCallInviteUrl';
+export {
+  CHAT_AUTH_SESSION_KEY,
+  getChatAuthSession
+} from '../utils/stored-chat-session';
 
 type AuthUser = IUser;
 
 export const authedUser: Ref<AuthUser | null> = ref(null);
-export const CHAT_AUTH_SESSION_KEY = 'chat_auth_session';
 export const ERP_BOOTSTRAP_TOKEN_KEY = 'erp_bootstrap_token';
 const SKIP_STARTUP_SHELL_ON_AUTH_REDIRECT_KEY =
   'chat_skip_startup_shell_on_auth_redirect';
@@ -26,11 +35,6 @@ interface AuthResponse {
 interface DirectAuthCredentials {
   identifier: string;
   password: string;
-}
-
-interface StoredChatAuthSession {
-  token: string;
-  user?: AuthUser;
 }
 
 interface StoredBootstrapErpSession {
@@ -167,23 +171,6 @@ export const saveChatAuthSession = (
   storage.setItem(CHAT_AUTH_SESSION_KEY, JSON.stringify(session));
 };
 
-export const getChatAuthSession = (): StoredChatAuthSession | null => {
-  const raw =
-    localStorage.getItem(CHAT_AUTH_SESSION_KEY) ||
-    sessionStorage.getItem(CHAT_AUTH_SESSION_KEY);
-
-  if (!raw) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(raw) as StoredChatAuthSession;
-  } catch (error) {
-    console.error('Failed to parse chat auth session', error);
-    return null;
-  }
-};
-
 export const getStoredChatAccessToken = (): string | null => {
   return getChatAuthSession()?.token || null;
 };
@@ -262,10 +249,13 @@ export const consumeAuthRedirectStartupShellSkip = (): boolean => {
 };
 
 export const redirectToAuthorization = (): void => {
+  const authorizationUrl = buildGroupCallInviteAuthorizationUrl(
+    window.location.href
+  );
   clearErpAuthSession();
   authedUser.value = null;
   skipStartupShellOnNextAuthScreen();
-  window.location.replace(window.location.origin);
+  window.location.replace(authorizationUrl);
 };
 
 export const ensureAuthorizedResponse = (response: Response): Response => {
@@ -307,7 +297,7 @@ const getAuthErrorStatus = (error: unknown): number | null => {
 export const isAuthError = (error: unknown): boolean => {
   const status = getAuthErrorStatus(error);
 
-  if (status === 401 || status === 403) {
+  if (status === 401) {
     return true;
   }
 
@@ -318,9 +308,7 @@ export const isAuthError = (error: unknown): boolean => {
 
   return (
     message.includes('401') ||
-    message.includes('403') ||
     message.includes('unauthorized') ||
-    message.includes('forbidden') ||
     message.includes('jwt expired')
   );
 };

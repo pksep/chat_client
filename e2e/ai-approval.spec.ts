@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures/ai-history';
 
 test.setTimeout(90_000);
 
@@ -62,6 +62,106 @@ const sendEditorMessage = async (page: Page, text: string) => {
   await page.keyboard.insertText(text);
   await editor.locator('.toolbar-button.right:visible').click();
 };
+
+for (const { status, code, recover, userMessage } of [
+  {
+    status: 409,
+    code: 'AI_APPROVAL_STALE',
+    recover: true,
+    userMessage: 'Подтверждение больше не действует.'
+  },
+  {
+    status: 403,
+    code: 'AI_REQUEST_403',
+    recover: false,
+    userMessage: 'Недостаточно прав для выполнения запроса.'
+  },
+  {
+    status: 409,
+    code: 'AI_REQUEST_ALREADY_ACCEPTED',
+    recover: false,
+    userMessage: 'Этот запрос уже принят. Повторный запуск остановлен.'
+  },
+  {
+    status: 409,
+    code: 'AI_REQUEST_CONFLICT',
+    recover: false,
+    userMessage: 'Этот запрос уже принят с другим решением.'
+  }
+]) {
+  test(`устаревшее подтверждение восстанавливается только при разрешённом ответе сервера ${code}`, async ({
+    page
+  }) => {
+    const sessionId = `ai-stale-policy-${code}-${Date.now()}`;
+    await prepareAiSession(page, sessionId);
+    const requests: Array<Record<string, any>> = [];
+    let approvals = 0;
+    const approval = (runId: string) => ({
+      type: 'tool-call-approval',
+      runId,
+      payload: {
+        toolCallId: `${runId}-call`,
+        toolName: 'erp_actions_erp_entity_editor_create',
+        args: {
+          type: 'detal',
+          entityName: 'Проверка',
+          entityDesignation: 'Т-1'
+        }
+      }
+    });
+    await page.route('**/api/agents/generalAgent/stream*', async route => {
+      requests.push(route.request().postDataJSON());
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        body: `data: ${JSON.stringify(approval(requests.length === 1 ? 'old-run' : 'new-run'))}\n\n`
+      });
+    });
+    await page.route(
+      '**/api/agents/generalAgent/approve-tool-call**',
+      async route => {
+        approvals += 1;
+        await route.fulfill({
+          status,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code,
+            userMessage
+          })
+        });
+      }
+    );
+    await page.goto(`/ai/${sessionId}`);
+    await sendEditorMessage(page, 'Создай деталь Проверка Т-1');
+    await expect(
+      page.getByRole('button', { name: 'Подтвердить' })
+    ).toBeVisible();
+    await page.reload();
+    await page.getByRole('button', { name: 'Подтвердить' }).click();
+    if (recover) {
+      await expect.poll(() => requests.length).toBe(2);
+      expect(JSON.stringify(requests[1])).toContain(
+        'Сначала проверь фактический результат'
+      );
+      expect(requests[1].requestContext.approvalMode).toBe('strict');
+      expect(requests[1].requestContext.requestId).toBeTruthy();
+      expect(requests[1].requestContext.requestId).not.toBe(
+        requests[0].requestContext.requestId
+      );
+      await expect(
+        page.getByRole('button', { name: 'Подтвердить' })
+      ).toBeVisible();
+    } else {
+      await expect(
+        page
+          .locator('.ai-assistant__message--assistant .message-content__html')
+          .filter({ hasText: userMessage })
+      ).toBeVisible();
+      expect(requests).toHaveLength(1);
+    }
+    expect(approvals).toBe(1);
+  });
+}
 
 test('восстанавливает подтверждение и принимает короткое «да»', async ({
   page
@@ -171,10 +271,10 @@ test('показывает ошибку инструмента вместо пу
   await sendEditorMessage(page, 'Настрой ежедневную сводку');
 
   const assistantMessage = page.locator(
-    '.ai-assistant__message--assistant .ai-assistant__message-body p'
+    '.ai-assistant__message--assistant .message-content__html'
   );
   await expect(assistantMessage).toHaveText(
-    'Не удалось выполнить действие. Попробуйте ещё раз.'
+    'Не удалось получить итоговый ответ. Перед повтором нужно проверить, какие действия уже выполнены.'
   );
   await expect(assistantMessage).not.toHaveText('');
 });
@@ -197,7 +297,7 @@ test('заменяет пустой завершённый поток понят
   await sendEditorMessage(page, 'Покажи результат');
 
   const assistantMessage = page.locator(
-    '.ai-assistant__message--assistant .ai-assistant__message-body p'
+    '.ai-assistant__message--assistant .message-content__html'
   );
   await expect(assistantMessage).toHaveText(
     'ИИ не вернул результат. Попробуйте повторить запрос.'

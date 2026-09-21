@@ -103,6 +103,14 @@
             @zvonilka
           </span>
         </div>
+        <UserProfile
+          v-else-if="clientInquiry"
+          class="chat__header-profile user-profile--interactive"
+          :user="clientUser(clientInquiry)"
+          :description="clientPlatform(clientInquiry)"
+          data-testid="Client-Header-Profile"
+          @click.stop="handleClickHeader"
+        />
         <GroupProfile
           v-else-if="currentTopic.type === TopicType.Group"
           class="chat__header-profile"
@@ -144,8 +152,19 @@
             @click.stop="showSearch"
           />
         </div>
+        <button
+          v-if="isExternalInquiry"
+          type="button"
+          disabled
+          class="chat__header-client-call"
+          aria-label="Звонок недоступен"
+          title="Звонки внешним клиентам недоступны"
+          data-testid="Client-Header-Call"
+        >
+          <CallIcon class="chat__header__icon" />
+        </button>
         <CallIcon
-          v-if="showHeaderCallAction"
+          v-else-if="showHeaderCallAction"
           class="chat__header__icon"
           :data-testid="`${props.dataTestid}-Header-CallIcon`"
           @click.stop="handleCallAction"
@@ -188,7 +207,12 @@
               v-if="option.customIcon === 'search'"
               class="chat__header-context-menu-icon"
             />
-            <Icon v-else-if="option.iconName" :name="option.iconName" />
+            <Icon
+              v-else-if="option.iconName"
+              :name="option.iconName"
+              :width="option.iconSize"
+              :height="option.iconSize"
+            />
             {{ option.value }}
           </Button>
         </ContextMenu>
@@ -419,7 +443,14 @@
 
 <script lang="ts" setup>
 import {
+  useManagerInquiries,
+  clientUser,
+  clientPlatform,
+  isClientTopic
+} from '../../composables/useManagerInquiries';
+import {
   computed,
+  defineAsyncComponent,
   nextTick,
   onMounted,
   onUnmounted,
@@ -452,7 +483,6 @@ import type {
 } from '../interfaces/interfaces';
 import AiAvatar from '../AI/AiAvatar.vue';
 import { useAiAssistant } from '../../composables/useAiAssistant';
-import MobileChatInfo from './MobileChatInfo.vue';
 import {
   useMenuInfo,
   type IMenuInfoInformation
@@ -504,7 +534,6 @@ import {
 } from '../../services/useCallState';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
-import UserInfoPanel from '../UserInfoPanel.vue';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import { useContextMenu } from '../../composables/useContextMenu';
 import {
@@ -526,13 +555,26 @@ import { isFavoriteTopic } from '../../utils/favorite-topic';
 import { isCallTopic } from '../../utils/call-topic';
 import {
   isCallSummaryMaterialTypingInTopic,
-  loadLatestCallSummary
+  ensureCallSummaryEvents
 } from '../../services/useCallSummaries';
+
+const MobileChatInfo = defineAsyncComponent(
+  () => import('./MobileChatInfo.vue')
+);
+const UserInfoPanel = defineAsyncComponent(
+  () => import('../UserInfoPanel.vue')
+);
 
 const {
   activeTitle: aiAssistantTitle,
   activeSessionId: aiAssistantSessionId,
   activeSession: aiAssistantSession,
+  activeTask: aiAssistantTask,
+  isActiveTaskSession: isAiTaskSession,
+  startNewSession: startNewAiSession,
+  startNewTask: startNewAiTask,
+  toggleTask: toggleAiTask,
+  deleteTask: deleteAiTask,
   isVoiceModeOpen: isAiVoiceCallActive,
   isVoiceModalVisible: isAiVoiceCallModalVisible,
   voiceCallStartedAt: aiVoiceCallStartedAt,
@@ -625,6 +667,12 @@ const state = reactive({
 const currentTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : undefined
 );
+
+const { byTopic: clientInquiries } = useManagerInquiries();
+const clientInquiry = computed(() =>
+  clientInquiries.value.get(currentTopic.value?.id || '')
+);
+const isExternalInquiry = computed(() => isClientTopic(currentTopic.value));
 const isFavoriteDialogTopic = computed(
   () =>
     route.value.type === RouteTypes.FAVORITES ||
@@ -714,16 +762,21 @@ const mobileInfoMembersLabel = computed(() => {
   return `${count} ${getParticipantForm(count)}`;
 });
 const actionModalTitle = computed(() =>
-  route.value.type === RouteTypes.DIALOGS || route.value.type === RouteTypes.AI
-    ? 'Удаление чата'
-    : currentRouteGroup.value?.isAdmin
-      ? 'Удаление канала'
-      : 'Выход из канала'
+  route.value.type === RouteTypes.AI && isAiTaskSession.value
+    ? 'Удаление задачи'
+    : route.value.type === RouteTypes.DIALOGS ||
+        route.value.type === RouteTypes.AI
+      ? 'Удаление чата'
+      : currentRouteGroup.value?.isAdmin
+        ? 'Удаление канала'
+        : 'Выход из канала'
 );
 
 const actionModalDescription = computed(() =>
   route.value.type === RouteTypes.AI
-    ? 'Вы действительно хотите удалить чат?'
+    ? isAiTaskSession.value
+      ? 'Вы действительно хотите удалить задачу?'
+      : 'Вы действительно хотите удалить чат?'
     : route.value.type === RouteTypes.DIALOGS
       ? 'Вы уверены, что хотите удалить чат?'
       : currentRouteGroup.value?.isAdmin
@@ -770,7 +823,7 @@ const hasPendingCallForCurrentTopic = computed(
 );
 const showHeaderCallAction = computed(() => {
   if (route.value.type === RouteTypes.AI) {
-    return !isMobile.value && !isCallActive.value && !isAiVoiceCallActive.value;
+    return !isCallActive.value && !isAiVoiceCallActive.value;
   }
 
   return (
@@ -1178,6 +1231,7 @@ const handleCall = async () => {
 };
 
 const handleCallAction = async (): Promise<void> => {
+  if (isExternalInquiry.value) return;
   if (route.value.type === RouteTypes.AI) {
     startAiVoiceCall();
     return;
@@ -1233,6 +1287,11 @@ const handleUserProfileClick = (): void => {
 };
 
 const handleClickHeader = async (): Promise<void> => {
+  if (clientInquiry.value) {
+    openUserInfo(clientUser(clientInquiry.value), currentTopic.value);
+    return;
+  }
+  if (isExternalInquiry.value) return;
   if (
     route.value.type === RouteTypes.AI ||
     isFavoriteDialogTopic.value ||
@@ -1262,6 +1321,7 @@ const getHeaderContextMenuOptions = computed(() => {
     function: () => void;
     style?: string;
     iconName?: IconNameEnum;
+    iconSize?: number;
     customIcon?: 'search';
   }> = [];
 
@@ -1329,6 +1389,8 @@ const getHeaderContextMenuOptions = computed(() => {
       });
     }
 
+    if (isExternalInquiry.value) return options;
+
     if (route.value.type === RouteTypes.GROUP) {
       options.push({
         value: currentRouteGroup.value?.isAdmin
@@ -1349,7 +1411,43 @@ const getHeaderContextMenuOptions = computed(() => {
       });
     }
   } else {
-    if (!aiAssistantSessionId.value) return options;
+    if (!aiAssistantSessionId.value) {
+      options.push(
+        {
+          value: 'Новый чат',
+          iconName: IconNameEnum.chat,
+          function: () => {
+            startNewAiSession();
+            navigateToAI();
+          }
+        },
+        {
+          value: 'Новая задача',
+          iconName: IconNameEnum.calendar,
+          function: () => {
+            startNewAiTask();
+            navigateToAI();
+          }
+        }
+      );
+      return options;
+    }
+
+    const task = aiAssistantTask.value;
+    if (task) {
+      options.push({
+        value: task.enabled ? 'Остановить' : 'Возобновить',
+        iconName: task.enabled
+          ? IconNameEnum.minus
+          : IconNameEnum.planeRightFill,
+        iconSize: 16,
+        function: () => {
+          void toggleAiTask(task.id).catch(error => {
+            console.error('Не удалось изменить состояние задачи ИИ:', error);
+          });
+        }
+      });
+    }
 
     if (isMobile.value && isChatSearchAvailable.value) {
       options.push({
@@ -1359,15 +1457,16 @@ const getHeaderContextMenuOptions = computed(() => {
       });
     }
 
+    if (!isAiTaskSession.value)
+      options.push({
+        value: 'Очистить чат',
+        function: () => {
+          emits('unmount-clear');
+        },
+        iconName: IconNameEnum.imagePaint
+      });
     options.push({
-      value: 'Очистить чат',
-      function: () => {
-        emits('unmount-clear');
-      },
-      iconName: IconNameEnum.imagePaint
-    });
-    options.push({
-      value: 'Удалить чат',
+      value: isAiTaskSession.value ? 'Удалить задачу' : 'Удалить чат',
       function: handleOpenActionModal,
       style: 'color: var(--error-color)',
       iconName: IconNameEnum.deleteSmall
@@ -1406,7 +1505,9 @@ const handleConfirmClearHistory = (): void => {
 const handleConfirmActionModal = async (): Promise<void> => {
   if (route.value.type === RouteTypes.AI) {
     const sessionId = aiAssistantSessionId.value;
-    if (sessionId) {
+    if (aiAssistantTask.value) {
+      await deleteAiTask(aiAssistantTask.value.id);
+    } else if (sessionId) {
       deleteAiAssistantSession(sessionId);
       navigateToAI();
     }
@@ -1453,15 +1554,6 @@ watch(
     if (route.value.type === RouteTypes.GROUP) {
       getGroupById(route.value.id);
     }
-
-    if (
-      route.value.id &&
-      (route.value.type === RouteTypes.DIALOGS ||
-        route.value.type === RouteTypes.GROUP ||
-        route.value.type === RouteTypes.CALL)
-    ) {
-      void loadLatestCallSummary(route.value.id);
-    }
   },
   {
     immediate: true
@@ -1481,6 +1573,8 @@ watch(
 );
 
 onMounted(() => {
+  // Заголовку нужны события записи; материалы загружают компоненты звонка.
+  ensureCallSummaryEvents();
   headerCallTimerInterval = setInterval(() => {
     currentTime.value = Date.now();
   }, 1000);
@@ -1506,3 +1600,17 @@ onUnmounted(() => {
   currentGroup.value = null;
 });
 </script>
+
+<style scoped>
+.chat__header-client-call {
+  display: flex;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.chat__header-client-call :deep(svg) {
+  pointer-events: none;
+}
+</style>

@@ -15,6 +15,10 @@
   width: calc(100% + 20px);
 }
 
+.menu-bottom-nav--clients {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .menu-bottom-nav__button {
   display: flex;
   justify-content: center;

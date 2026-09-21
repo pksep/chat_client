@@ -1,9 +1,13 @@
 import './polyfills/legacy-webview';
+import { prepareChatDatabases } from './utils/chat-startup-databases';
+import { prepareStartupTopicRecords } from './utils/startup-topic-records';
+import type { PreparedStartupHistory } from './utils/startup-history';
 
 declare global {
   interface Window {
     __chatNativeStartupCleanup?: Promise<void>;
     __chatNativeInitialNotificationTap?: Record<string, string>;
+    __chatNativePreparedHistory?: Promise<PreparedStartupHistory | null>;
   }
 }
 
@@ -12,6 +16,7 @@ type StartupNotificationPayload = Record<string, string>;
 interface StartupNativePlugin {
   consumePendingNotificationTap?: () => Promise<StartupNotificationPayload>;
   reveal?: () => Promise<void>;
+  prepareStartupHistory?: () => Promise<PreparedStartupHistory>;
 }
 
 interface StartupCapacitorBridge {
@@ -240,9 +245,9 @@ const getTopicTargetFromPayload = (
   return { topicId, routeType };
 };
 
-const applyStartupTopicShell = async (
+const applyStartupTopicShell = (
   payload: StartupNotificationPayload
-): Promise<boolean> => {
+): boolean => {
   if (getPayloadText(payload, 'type') === 'incoming_call') {
     return false;
   }
@@ -270,7 +275,9 @@ const applyStartupTopicShell = async (
       target.routeType === 'group'
     );
 
-  await applyStartupTopicWallpaper();
+  void applyStartupTopicWallpaper().catch(error => {
+    console.warn('Не удалось подготовить фон стартового экрана:', error);
+  });
 
   return true;
 };
@@ -309,13 +316,34 @@ window.__chatNativeStartupCleanup = (async () => {
     capacitor?.getPlatform?.() === 'android';
 
   if (hasStartupTopicRoute) {
-    await applyStartupTopicWallpaper();
+    void applyStartupTopicWallpaper().catch(error => {
+      console.warn('Не удалось подготовить фон стартового экрана:', error);
+    });
   }
 
   if (isAndroidNative) {
+    prepareChatDatabases();
+    // Передаём готовый HTTP-ответ параллельно загрузке main; SDK проверит его
+    // пользователя, сервер, маршрут и возраст перед применением.
+    window.__chatNativePreparedHistory =
+      capacitor?.Plugins?.ChatBackgroundSync?.prepareStartupHistory?.().catch(
+        () => null
+      );
+    // WebView запрашивает favicon при каждом replaceState; иконку приложения задаёт Android.
+    document
+      .querySelectorAll<HTMLLinkElement>('link[rel~="icon"]')
+      .forEach(link => {
+        link.href = 'data:,';
+      });
     try {
       const pendingNotificationTap =
         await capacitor?.Plugins?.NotificationTap?.consumePendingNotificationTap?.();
+
+      // Пустой ответ тоже завершает проверку запуска: повторный native-вызов
+      // перед монтированием Vue не нужен. Новые intent подберёт слушатель.
+      if (pendingNotificationTap) {
+        window.__chatNativeInitialNotificationTap = pendingNotificationTap;
+      }
 
       if (
         pendingNotificationTap &&
@@ -323,16 +351,27 @@ window.__chatNativeStartupCleanup = (async () => {
           value => value !== null && value !== undefined && value !== ''
         )
       ) {
-        window.__chatNativeInitialNotificationTap = pendingNotificationTap;
-
-        await applyStartupTopicShell(pendingNotificationTap);
-        // Android keeps its launch splash for notification cold starts. Only
-        // reveal the WebView after the topic shell and its wallpaper are ready,
-        // so the first visible frame is useful instead of a blank surface.
-        await capacitor?.Plugins?.LaunchStartup?.reveal?.();
+        applyStartupTopicShell(pendingNotificationTap);
+        // Маршрут нужен до импорта приложения; декодирование фона и снятие
+        // native splash не должны задерживать загрузку настоящего чата.
+        void capacitor?.Plugins?.LaunchStartup?.reveal?.().catch(error => {
+          console.warn('Не удалось показать стартовый экран:', error);
+        });
       }
     } catch (error) {
       console.warn('Failed to prepare notification startup shell:', error);
+    }
+    const topicRoute = /^\/(?:dialogs|group)\/([^/]+)/.exec(
+      window.location.pathname
+    );
+    if (topicRoute) {
+      try {
+        void prepareStartupTopicRecords(
+          decodeURIComponent(topicRoute[1])
+        ).catch(() => undefined);
+      } catch {
+        // Некорректный маршрут не должен задерживать обычную обработку навигации.
+      }
     }
   }
 

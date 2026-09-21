@@ -14,15 +14,24 @@ import java.net.HttpURLConnection;
 import java.net.URLEncoder;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import sep.pksep.app.BuildConfig;
 
 final class ChatBackgroundSyncApi {
     private static final int CONNECT_TIMEOUT_MS = 15000;
     private static final int READ_TIMEOUT_MS = 20000;
 
     private final ChatBackgroundSyncStore.Session session;
+    private final int connectTimeoutMs;
+    private final int readTimeoutMs;
 
     ChatBackgroundSyncApi(ChatBackgroundSyncStore.Session session) {
+        this(session, CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS);
+    }
+
+    ChatBackgroundSyncApi(ChatBackgroundSyncStore.Session session, int connectTimeoutMs, int readTimeoutMs) {
         this.session = session;
+        this.connectTimeoutMs = connectTimeoutMs;
+        this.readTimeoutMs = readTimeoutMs;
     }
 
     SyncEventsResult fetchSyncEvents(String pts, int limit)
@@ -55,17 +64,7 @@ final class ChatBackgroundSyncApi {
 
     JSONArray fetchTopics(int limit) throws IOException, JSONException {
         Object payload = getJson("/topics?page=1&limit=" + Math.max(1, limit));
-
-        if (payload instanceof JSONArray) {
-            return (JSONArray) payload;
-        }
-
-        if (payload instanceof JSONObject) {
-            JSONArray data = ((JSONObject) payload).optJSONArray("data");
-            return data != null ? data : new JSONArray();
-        }
-
-        return new JSONArray();
+        return requireRows(payload);
     }
 
     JSONArray fetchLatestMessages(String topicId, int limit)
@@ -76,19 +75,25 @@ final class ChatBackgroundSyncApi {
         );
 
         Object payload = getJson(
-            "/messages/topic/" + encodedTopicId + "?limit=" + Math.max(1, limit)
+            "/messages/topic/" + encodedTopicId + "?limit=" + Math.max(1, limit) + "&newMessages=true"
         );
 
-        if (payload instanceof JSONArray) {
-            return (JSONArray) payload;
-        }
+        return requireRows(payload);
+    }
 
+    static JSONArray requireRows(Object payload) throws IOException {
+        if (payload instanceof JSONArray) return (JSONArray) payload;
         if (payload instanceof JSONObject) {
-            JSONArray data = ((JSONObject) payload).optJSONArray("data");
-            return data != null ? data : new JSONArray();
+            JSONArray rows = ((JSONObject) payload).optJSONArray("data");
+            if (rows != null) return rows;
         }
+        throw new IOException("Сервер вернул некорректный список чата");
+    }
 
-        return new JSONArray();
+    private void markStartupRequest(String stage) {
+        if (BuildConfig.CHAT_STARTUP_BENCHMARK && connectTimeoutMs == 1500) {
+            android.util.Log.i("ChatStartupBenchmark", stage + " " + System.currentTimeMillis());
+        }
     }
 
     void sendNotificationReply(
@@ -159,8 +164,8 @@ final class ChatBackgroundSyncApi {
             URL url = new URL(session.apiUrl + path);
             connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod(method);
-            connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
-            connection.setReadTimeout(READ_TIMEOUT_MS);
+            connection.setConnectTimeout(connectTimeoutMs);
+            connection.setReadTimeout(readTimeoutMs);
             connection.setRequestProperty("Accept", "application/json");
             connection.setRequestProperty("Authorization", "Bearer " + session.token);
 
@@ -178,11 +183,14 @@ final class ChatBackgroundSyncApi {
                 }
             }
 
+            markStartupRequest("history-connection-start");
             int statusCode = connection.getResponseCode();
+            markStartupRequest("history-headers");
             InputStream stream = statusCode >= 400
                 ? connection.getErrorStream()
                 : connection.getInputStream();
             String responseBody = readBody(stream);
+            markStartupRequest("history-body");
 
             if (statusCode >= 400) {
                 throw new ApiException(statusCode, responseBody);

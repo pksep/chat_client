@@ -2,6 +2,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { MobilePlatformEnum } from '../components/interfaces/interfaces';
+import { afterStartupPaint } from '../utils/after-startup-paint';
 import {
   RuStoreInstallStatus,
   RuStoreUpdateAvailability,
@@ -13,6 +14,7 @@ import {
   type RuStoreAppUpdateInfo,
   type RuStoreInstallState
 } from '../services/useRuStoreUpdate';
+import { markLiveKitPageReloadIntent } from '../services/live-kit-page-reload-intent';
 
 const RUSTORE_APP_URL = 'https://www.rustore.ru/catalog/app/sep.pksep.app';
 const WEB_UPDATE_INFO_URL = '/web-update.json';
@@ -43,6 +45,10 @@ const currentAppVersion = ref(__APP_VERSION__);
 let webUpdateIntervalId: number | null = null;
 let activeConsumers = 0;
 let detectPromise: Promise<void> | null = null;
+let pendingWebUpdate: Promise<void> | null = null;
+let lastWebUpdateCheckAt = 0;
+let webUpdateGeneration = 0;
+let removeWebUpdateListeners: (() => void) | null = null;
 let nativeUpdateSubscriptionPromise: Promise<void> | null = null;
 
 const shouldShowNativeUpdateBanner = (
@@ -177,12 +183,7 @@ export function useMobileApp() {
   };
 
   const fetchWebUpdateVersion = async (): Promise<number | null> => {
-    const response = await fetch(
-      `${WEB_UPDATE_INFO_URL}?t=${Date.now().toString()}`,
-      {
-        cache: 'no-store'
-      }
-    );
+    const response = await fetch(WEB_UPDATE_INFO_URL, { cache: 'no-cache' });
 
     if (!response.ok) {
       return null;
@@ -224,26 +225,53 @@ export function useMobileApp() {
     showUpdateBanner.value = isWebUpdateBanner.value;
   };
 
-  const checkWebUpdate = async () => {
-    if (Capacitor.isNativePlatform()) {
-      return;
+  const checkWebUpdate = (force = false): Promise<void> => {
+    if (pendingWebUpdate) return pendingWebUpdate;
+    if (
+      Capacitor.isNativePlatform() ||
+      !navigator.onLine ||
+      (!force &&
+        (activeConsumers === 0 ||
+          document.visibilityState !== 'visible' ||
+          Date.now() - lastWebUpdateCheckAt < WEB_UPDATE_CHECK_INTERVAL_MS))
+    ) {
+      return Promise.resolve();
     }
-
-    try {
-      const nextVersion = await fetchWebUpdateVersion();
-      applyWebUpdateVersion(nextVersion);
-    } catch (error) {
-      console.warn('Failed to check web update version:', error);
-    }
+    lastWebUpdateCheckAt = Date.now();
+    pendingWebUpdate = (async () => {
+      try {
+        const nextVersion = await fetchWebUpdateVersion();
+        applyWebUpdateVersion(nextVersion);
+      } catch (error) {
+        console.warn('Failed to check web update version:', error);
+      }
+    })().finally(() => {
+      pendingWebUpdate = null;
+    });
+    return pendingWebUpdate;
   };
 
-  const initWebUpdateHandling = async () => {
+  const initWebUpdateHandling = async (generation: number) => {
     if (Capacitor.isNativePlatform()) {
       isWebUpdateBanner.value = false;
       return;
     }
 
     await checkWebUpdate();
+
+    if (activeConsumers === 0 || generation !== webUpdateGeneration) return;
+
+    if (!removeWebUpdateListeners) {
+      const checkWhenActive = () => {
+        void checkWebUpdate();
+      };
+      document.addEventListener('visibilitychange', checkWhenActive);
+      window.addEventListener('online', checkWhenActive);
+      removeWebUpdateListeners = () => {
+        document.removeEventListener('visibilitychange', checkWhenActive);
+        window.removeEventListener('online', checkWhenActive);
+      };
+    }
 
     if (webUpdateIntervalId === null) {
       webUpdateIntervalId = window.setInterval(() => {
@@ -269,6 +297,7 @@ export function useMobileApp() {
   };
 
   const detect = async () => {
+    const generation = webUpdateGeneration;
     const ua = navigator.userAgent || '';
 
     if (/Android/i.test(ua)) {
@@ -298,11 +327,14 @@ export function useMobileApp() {
       }
     }
 
+    await afterStartupPaint();
+    if (generation !== webUpdateGeneration || activeConsumers === 0) return;
+
     isCheckingForUpdates.value = true;
 
     try {
       await loadCurrentAppInfo();
-      await initWebUpdateHandling();
+      await initWebUpdateHandling(generation);
       await initNativeUpdateHandling();
       hasCheckedForUpdates.value = true;
     } finally {
@@ -335,9 +367,6 @@ export function useMobileApp() {
   const handleUpdateClick = async () => {
     if (!isRuStoreUpdateSupported()) {
       persistCurrentWebUpdateVersion();
-      const { markLiveKitPageReloadIntent } = await import(
-        '../services/useLiveKit'
-      );
       markLiveKitPageReloadIntent();
       window.location.reload();
       return;
@@ -384,7 +413,7 @@ export function useMobileApp() {
         return;
       }
 
-      await checkWebUpdate();
+      await checkWebUpdate(true);
       hasCheckedForUpdates.value = true;
     } finally {
       isCheckingForUpdates.value = false;
@@ -491,6 +520,9 @@ export function useMobileApp() {
     }
 
     detectPromise = null;
+    webUpdateGeneration += 1;
+    removeWebUpdateListeners?.();
+    removeWebUpdateListeners = null;
   });
 
   return {

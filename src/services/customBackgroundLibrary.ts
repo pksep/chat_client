@@ -24,12 +24,14 @@ export interface CustomBackgroundApi {
     kind: CustomBackgroundKind,
     image: CustomBackgroundImage
   ): Promise<CustomBackgroundMetadata>;
+  deleteCustomBackground(kind: CustomBackgroundKind, id: string): Promise<void>;
 }
 
 export interface BackgroundLibraryCache {
   ready(): Promise<void>;
   items(): CustomBackgroundImage[];
   put(image: CustomBackgroundImage): Promise<void>;
+  remove(id: string): Promise<void>;
   getOwner(id: string): Promise<string | null>;
   setOwner(id: string, scope: string): Promise<void>;
   isMigrated(scope: string): Promise<boolean>;
@@ -42,6 +44,7 @@ export class CustomBackgroundLibrary {
   private owners = new Map<string, string>();
   private queue: Promise<unknown> = Promise.resolve();
   private refreshing: Promise<void> | null = null;
+  private refreshedAt = 0;
 
   constructor(
     private kind: CustomBackgroundKind,
@@ -52,6 +55,7 @@ export class CustomBackgroundLibrary {
   configure(scope: string | null, api?: CustomBackgroundApi) {
     this.session = scope && api ? { scope, api } : null;
     this.refreshing = null;
+    this.refreshedAt = 0;
     this.changed();
   }
 
@@ -80,8 +84,10 @@ export class CustomBackgroundLibrary {
     return owner === scope;
   }
 
-  refresh(): Promise<void> {
+  refresh(maxAgeMs = 0): Promise<void> {
     if (this.refreshing) return this.refreshing;
+    if (maxAgeMs > 0 && Date.now() - this.refreshedAt < maxAgeMs)
+      return Promise.resolve();
     const session = this.session;
     if (!session) return Promise.resolve();
     const operation = this.enqueue(async () => {
@@ -137,6 +143,7 @@ export class CustomBackgroundLibrary {
         }
       }
       if (firstError) throw firstError;
+      if (this.session === session) this.refreshedAt = Date.now();
     });
     this.refreshing = operation;
     void operation
@@ -165,6 +172,28 @@ export class CustomBackgroundLibrary {
       await this.cache.put(image);
       if (this.session !== session)
         throw new Error('Аккаунт изменился. Повторите загрузку фона');
+    });
+  }
+
+  remove(id: string): Promise<void> {
+    const session = this.session;
+
+    return this.enqueue(async () => {
+      if (!session || this.session !== session)
+        throw new Error('Для удаления фона нужно войти в аккаунт');
+      await this.cache.ready();
+      if (this.session !== session)
+        throw new Error('Аккаунт изменился. Повторите удаление фона');
+      if (!(await this.claim(id, session.scope)))
+        throw new Error('Этот фон принадлежит другому аккаунту');
+      if (this.session !== session)
+        throw new Error('Аккаунт изменился. Повторите удаление фона');
+      await session.api.deleteCustomBackground(this.kind, id);
+      if (this.session !== session)
+        throw new Error('Аккаунт изменился. Повторите удаление фона');
+      await this.cache.remove(id);
+      this.owners.delete(id);
+      this.changed();
     });
   }
 }

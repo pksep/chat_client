@@ -338,17 +338,19 @@ describe('multipart browser upload', () => {
     removePersistedMultipartUpload(file);
   });
 
-  test('persists visible progress and does not move backwards after reload', async () => {
+  test('сохраняет прогресс отправленных байтов и после перезапуска продолжает с подтверждённых частей', async () => {
     const file = createFile('progress-after-reload.bin');
     const session = createSession();
     const confirmedParts: MultipartUploadSession['uploadedParts'] = [];
     const firstProgress: number[] = [];
     const resumedProgress: number[] = [];
+    const resumedParts: number[] = [];
     let shouldInterruptPage = true;
     const transport: MultipartUploadTransport = {
       init: async () => session,
       status: async () => createSession([...confirmedParts]),
       uploadPart: async (_session, partNumber, part, onProgress) => {
+        if (!shouldInterruptPage) resumedParts.push(partNumber);
         if (partNumber === 2 && shouldInterruptPage) {
           onProgress(1);
           throw Object.assign(new Error('page interrupted'), { status: 400 });
@@ -377,12 +379,14 @@ describe('multipart browser upload', () => {
       })
     ).rejects.toMatchObject({ status: 400 });
 
-    expect(firstProgress.at(-1)).toBe(66);
+    // Отправлены 4 байта первой части и 1 байт второй из 12.
+    // Чтение второй части с диска не считается отправкой.
+    expect(firstProgress.at(-1)).toBe(41);
     expect(
       JSON.parse(storage.get(STORAGE_KEY) || '{}')[
         getMultipartFileFingerprint(file)
       ].progress
-    ).toBe(66);
+    ).toBe(41);
 
     shouldInterruptPage = false;
     await uploadMultipartFile(file, transport, {
@@ -391,7 +395,9 @@ describe('multipart browser upload', () => {
       onProgress: value => resumedProgress.push(value)
     });
 
-    expect(resumedProgress[0]).toBe(66);
+    // После перезапуска сервер подтверждает только первую часть: 4/12.
+    expect(resumedProgress[0]).toBe(33);
+    expect(resumedParts).toEqual([2, 3]);
     expect(resumedProgress.at(-1)).toBe(100);
     expect(
       resumedProgress.every(

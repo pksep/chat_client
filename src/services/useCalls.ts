@@ -1,4 +1,6 @@
 import {
+  activeGroupCalls,
+  ACTIVE_CALL_SESSION_STORAGE_KEY,
   activeCallFormattedTime,
   activeCallParticipantCount,
   activeCallTopicId,
@@ -28,6 +30,7 @@ export {
 };
 
 const loadLiveKit = () => import('./useLiveKit');
+let invitedGroupCallRestorePromise: Promise<boolean> | null = null;
 
 export const handleIncomingCall = async (
   targetUser: any,
@@ -130,6 +133,20 @@ export const syncServerActiveCalls = async (
   }>,
   replace = true
 ) => {
+  // Пустой список не требует SDK звонков; сохранённый звонок всё ещё восстанавливаем.
+  if (
+    calls.length === 0 &&
+    Object.keys(activeGroupCalls.value).length === 0 &&
+    !isCallActive.value &&
+    !isAnyCallIncoming.value &&
+    !isAnyCallDialing.value &&
+    !activeCallTopicId.value &&
+    !hasPendingGroupCall.value &&
+    !invitedGroupCallInfo.value &&
+    (typeof window === 'undefined' ||
+      !window.localStorage.getItem(ACTIVE_CALL_SESSION_STORAGE_KEY))
+  )
+    return;
   const { syncActiveCalls } = await loadLiveKit();
 
   return syncActiveCalls(calls, replace);
@@ -165,10 +182,20 @@ export const removeInvitedGroupCall = async (roomId?: string) => {
   clearInvitedGroupCall(roomId);
 };
 
-export const restoreInvitedGroupCallFromUrl = async () => {
-  const { hydrateInvitedGroupCallFromUrl } = await loadLiveKit();
+export const restoreInvitedGroupCallFromUrl = (): Promise<boolean> => {
+  if (invitedGroupCallRestorePromise) {
+    return invitedGroupCallRestorePromise;
+  }
 
-  await hydrateInvitedGroupCallFromUrl();
+  invitedGroupCallRestorePromise = loadLiveKit()
+    .then(({ hydrateInvitedGroupCallFromUrl }) =>
+      hydrateInvitedGroupCallFromUrl()
+    )
+    .finally(() => {
+      invitedGroupCallRestorePromise = null;
+    });
+
+  return invitedGroupCallRestorePromise;
 };
 
 export const copyInviteGroupCallLink = async () => {

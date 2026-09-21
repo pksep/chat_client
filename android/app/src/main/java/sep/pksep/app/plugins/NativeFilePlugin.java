@@ -27,7 +27,6 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -39,9 +38,7 @@ public class NativeFilePlugin extends Plugin {
     private static final String CACHE_DIR_NAME = "shared_files";
     private static final String EVENT_FILE_DOWNLOAD_PROGRESS = "fileDownloadProgress";
 
-    private interface DownloadProgressCallback {
-        void onProgress(long bytesDownloaded, long totalBytes);
-    }
+    private interface DownloadProgressCallback extends NativeFileTransfer.ProgressListener {}
 
     private static class DownloadedFile {
         Uri uri;
@@ -103,7 +100,7 @@ public class NativeFilePlugin extends Plugin {
         String fileName = sanitizeFileName(call.getString("fileName"));
         String mimeType = call.getString("mimeType");
         String localUri = call.getString("localUri");
-        long expectedSize = call.getLong("size", 0L);
+        long expectedSize = call.getData().optLong("size", 0L);
 
         if (url == null || url.trim().isEmpty()) {
             call.reject("url is required");
@@ -161,7 +158,7 @@ public class NativeFilePlugin extends Plugin {
         String url = call.getString("url");
         String fileName = sanitizeFileName(call.getString("fileName"));
         String mimeType = call.getString("mimeType");
-        long expectedSize = call.getLong("size", 0L);
+        long expectedSize = call.getData().optLong("size", 0L);
 
         if (url == null || url.trim().isEmpty()) {
             call.reject("url is required");
@@ -365,6 +362,9 @@ public class NativeFilePlugin extends Plugin {
                 progressCallback
             );
             outputStream.flush();
+        } catch (Exception error) {
+            targetFile.delete();
+            throw error;
         }
 
         return targetFile;
@@ -439,6 +439,9 @@ public class NativeFilePlugin extends Plugin {
                 progressCallback
             );
             outputStream.flush();
+        } catch (Exception error) {
+            targetFile.delete();
+            throw error;
         }
 
         return new DownloadedFile(null, targetFile, resolvedFileName, resolvedMimeType);
@@ -471,37 +474,7 @@ public class NativeFilePlugin extends Plugin {
             connection.setRequestProperty("User-Agent", userAgent);
         }
 
-        connection.connect();
-
-        int responseCode = connection.getResponseCode();
-        if (responseCode < 200 || responseCode >= 300) {
-            throw new IllegalStateException("Unexpected response code: " + responseCode);
-        }
-
-        long totalBytes = connection.getContentLengthLong();
-        long bytesDownloaded = 0;
-
-        if (progressCallback != null) {
-            progressCallback.onProgress(0, totalBytes);
-        }
-
-        try (InputStream inputStream = connection.getInputStream()) {
-            byte[] buffer = new byte[8192];
-            int read;
-
-            while ((read = inputStream.read(buffer)) != -1) {
-                outputStream.write(buffer, 0, read);
-                bytesDownloaded += read;
-
-                if (progressCallback != null) {
-                    progressCallback.onProgress(bytesDownloaded, totalBytes);
-                }
-            }
-
-            outputStream.flush();
-        } finally {
-            connection.disconnect();
-        }
+        NativeFileTransfer.copy(connection, outputStream, progressCallback);
     }
 
     private void notifyDownloadProgress(
@@ -544,7 +517,8 @@ public class NativeFilePlugin extends Plugin {
                 MediaStore.MediaColumns.SIZE,
                 MediaStore.MediaColumns.MIME_TYPE
             };
-            String selection = MediaStore.MediaColumns.DISPLAY_NAME + " = ?";
+            String selection = MediaStore.MediaColumns.DISPLAY_NAME + " = ? AND " +
+                MediaStore.MediaColumns.IS_PENDING + " = 0";
             String[] selectionArgs = new String[] { resolvedFileName };
 
             try (
@@ -592,7 +566,7 @@ public class NativeFilePlugin extends Plugin {
                         return candidate;
                     }
 
-                    if (fallbackFile == null && (expectedSize <= 0 || storedSize > 0)) {
+                    if (fallbackFile == null && expectedSize <= 0 && storedSize > 0) {
                         fallbackFile = candidate;
                     }
                 }

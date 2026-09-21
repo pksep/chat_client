@@ -29,9 +29,15 @@ type VideoWithFrameCallback = HTMLVideoElement & {
 
 export const VIDEO_FALLBACK_THUMBNAIL = `data:image/svg+xml;utf8,${encodeURIComponent(
   `<svg width="640" height="360" viewBox="0 0 640 360" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="640" height="360" fill="#20242B"/>
-<circle cx="320" cy="180" r="54" fill="#FFFFFF" fill-opacity="0.18"/>
-<path d="M304 151L350 180L304 209V151Z" fill="#FFFFFF"/>
+<defs>
+  <linearGradient id="video-cover" x1="32" y1="24" x2="608" y2="336" gradientUnits="userSpaceOnUse">
+    <stop stop-color="#334155"/>
+    <stop offset="1" stop-color="#172033"/>
+  </linearGradient>
+</defs>
+<rect width="640" height="360" fill="url(#video-cover)"/>
+<circle cx="572" cy="42" r="176" fill="#FFFFFF" fill-opacity="0.035"/>
+<path d="M0 320L172 205L286 278L403 164L640 326V360H0V320Z" fill="#FFFFFF" fill-opacity="0.045"/>
 </svg>`
 )}`;
 

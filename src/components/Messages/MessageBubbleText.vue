@@ -5,7 +5,7 @@
     @navigate-message="$emit('navigate-message')"
   />
   <MessageBubbleEmoji
-    v-else-if="isSingleEmojiMessage && !props.loader"
+    v-else-if="isSingleEmojiMessage && !props.loader && !$slots.reference"
     v-bind="props"
     @navigate-message="$emit('navigate-message')"
   />
@@ -16,8 +16,9 @@
       :is-me-sender="props.isMeSender"
       @navigate-message="$emit('navigate-message')"
     />
-    <article
-      ref="messageArticleRef"
+    <ChatMessageSurface
+      unstyled
+      ref="messageSurfaceRef"
       :class="messageArticleStyles"
       :data-testid="`${props.dataTestid}-Article`"
     >
@@ -34,15 +35,19 @@
         :sender-role="props.senderRole"
         :data-testid="`${props.dataTestid}-AuthorMeta`"
       />
-      <MessageReferenceBlock
-        v-if="props.replyMessage || (!showExternalForward && props.forwardUser)"
-        :forward-user="showExternalForward ? undefined : props.forwardUser"
-        :reply-message="props.replyMessage"
-        :message-ex="props.messageEx"
-        :is-me-sender="props.isMeSender"
-        :reference-width="replyReferenceWidth"
-        @navigate-message="$emit('navigate-message')"
-      />
+      <slot name="reference">
+        <MessageReferenceBlock
+          v-if="
+            props.replyMessage || (!showExternalForward && props.forwardUser)
+          "
+          :forward-user="showExternalForward ? undefined : props.forwardUser"
+          :reply-message="props.replyMessage"
+          :message-ex="props.messageEx"
+          :is-me-sender="props.isMeSender"
+          :reference-width="replyReferenceWidth"
+          @navigate-message="$emit('navigate-message')"
+        />
+      </slot>
       <div
         class="message-content message-content--text"
         :data-testid="`${props.dataTestid}-Content`"
@@ -69,6 +74,7 @@
             @click="handleMentionUserClick"
             @copy="copyMessageSelection"
           ></div>
+          <slot name="after-message" />
           <div
             v-if="!hasReactions"
             class="message-time message-time--inline"
@@ -76,6 +82,7 @@
           >
             <PinIcon
               v-if="props.isPin"
+              :data-testid="`${props.dataTestid}-PinIcon`"
               style="width: 15px; height: 15px; margin-right: -2px"
             />
             <span
@@ -110,6 +117,7 @@
         >
           <PinIcon
             v-if="props.isPin"
+            :data-testid="`${props.dataTestid}-PinIcon`"
             style="width: 15px; height: 15px; margin-right: -2px"
           />
           <span v-if="props.isEdit" :data-testid="`${props.dataTestid}-Edited`"
@@ -130,12 +138,13 @@
           />
         </div>
       </div>
-    </article>
+    </ChatMessageSurface>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { ChatMessageSurface } from '@pksep/yui';
+import { computed, nextTick, ref, useSlots, watch } from 'vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import PinIcon from '../UI/PinIcon.vue';
@@ -157,11 +166,17 @@ import { sanitizeMessageHtml } from '../../utils/sanitizeMessageHtml';
 import { copyMessageSelection } from '../../utils/copyMessageSelection';
 
 const props = defineProps<IMessageBubbleProps>();
+const slots = useSlots();
 const safeMessageHtml = computed(() => sanitizeMessageHtml(props.message));
 
 defineEmits(['navigate-message']);
 
-const messageArticleRef = ref<HTMLElement | null>(null);
+const messageSurfaceRef = ref<InstanceType<typeof ChatMessageSurface> | null>(
+  null
+);
+const messageArticleRef = computed(
+  () => messageSurfaceRef.value?.element ?? null
+);
 const messageHtmlRef = ref<HTMLElement | null>(null);
 const hasReplyReference = computed(() => Boolean(props.replyMessage));
 const replyReferenceWidth = useReferenceWidth(messageArticleRef, {
@@ -217,7 +232,8 @@ const messageArticleStyles = computed(() => [
   {
     'message__no-author': props.isMeSender,
     message__article__text: true,
-    'message__article__text--emoji': isSingleEmojiMessage.value
+    'message__article__text--emoji':
+      isSingleEmojiMessage.value && !slots.reference
   }
 ]);
 

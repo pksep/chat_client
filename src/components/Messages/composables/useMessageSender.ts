@@ -6,6 +6,13 @@ import {
   type Ref
 } from 'vue';
 import { sendMessageChat, uploadFile } from '../../../services/useChat';
+import { useManagerInquiries } from '../../../composables/useManagerInquiries';
+import {
+  managerSendError,
+  selectedManagerRoute,
+  uploadManagerFile,
+  managerUploadId
+} from '../../../composables/useManagerRoutes';
 import { generateUUID } from '../../../utils/generateUUID';
 import { fileToDataURL } from '../../../utils/fileToDataURL';
 import { stripHtml } from '../../../utils/stripHtml';
@@ -362,6 +369,7 @@ interface IQueuedFilePayload {
 }
 
 interface IAttachChunkOptions {
+  managerReplyRouteId?: string;
   topicId?: string;
   isMedia?: boolean;
   text?: string | null;
@@ -545,9 +553,9 @@ export function useMessageSender(
   const isAutoRetryCandidate = (message?: IMessage | null): boolean =>
     Boolean(
       message &&
-        !isMessageRetryExpired(message) &&
         (message.status === MessageStatus.Wait ||
-          message.status === MessageStatus.NotDelivered)
+          message.status === MessageStatus.NotDelivered) &&
+        !isMessageRetryExpired(message)
     );
 
   const canAutoRetryMessage = (message?: IMessage | null): boolean => {
@@ -1194,21 +1202,43 @@ export function useMessageSender(
 
       try {
         await waitForPreviewMetrics(currentMedia);
-        const { file, path, thumbnailPath, ex } = await uploadFile(
-          payload.file,
-          currentMedia.ex,
-          percent => {
-            changeFileUploadPercent(topicId, messageId, fileId, percent);
-          },
-          payload.isMedia,
-          {
-            traceId: uploadTraceId,
-            topicId,
-            messageId,
-            fileId,
-            source: 'message_attachment'
+        const inquiry = useManagerInquiries().byTopic.value.get(topicId);
+        const upload = async () => {
+          if (inquiry) {
+            const target = parseMessageEx(message?.ex)?.managerReplyRouteId;
+            if (typeof target !== 'string')
+              throw new Error('Выберите канал ответа и повторите отправку');
+            const path = await uploadManagerFile(
+              topicId,
+              target,
+              await managerUploadId(messageId, fileId),
+              payload.file
+            );
+            changeFileUploadPercent(topicId, messageId, fileId, 100);
+            return {
+              file: payload.file,
+              path,
+              thumbnailPath: path,
+              ex: currentMedia.ex
+            };
           }
-        );
+          return uploadFile(
+            payload.file,
+            currentMedia.ex,
+            percent => {
+              changeFileUploadPercent(topicId, messageId, fileId, percent);
+            },
+            payload.isMedia,
+            {
+              traceId: uploadTraceId,
+              topicId,
+              messageId,
+              fileId,
+              source: 'message_attachment'
+            }
+          );
+        };
+        const { file, path, thumbnailPath, ex } = await upload();
 
         changeFileLoadingStatus(topicId, messageId, fileId);
         setUploadedFileData(topicId, messageId, fileId, {
@@ -1429,7 +1459,11 @@ export function useMessageSender(
     const topicId = route.value.id;
     const routeType = route.value?.type;
     const replyMessageId = state.replyMessage?.id;
-    const replyQuoteEx = createReplyQuoteEx(state.replyMessage);
+    const managerReplyRouteId = selectedManagerRoute(topicId)?.id;
+    const replyQuoteEx = {
+      ...createReplyQuoteEx(state.replyMessage),
+      ...(managerReplyRouteId ? { managerReplyRouteId } : {})
+    };
     const forwardMessages = state.forwardMessages;
     const hasForwardMessages = forwardMessages.length > 0;
     const hasMultipleForwardMessages = forwardMessages.length > 1;
@@ -1439,6 +1473,23 @@ export function useMessageSender(
 
     if (isTextEmpty && !hasForwardMessages && !hasAttachments) return;
 
+    const channelError = managerSendError(
+      topicId,
+      queuedFiles.map(item => item.file)
+    );
+    if (channelError) {
+      showErrorNotification(channelError);
+      return;
+    }
+    if (
+      useManagerInquiries().byTopic.value.has(topicId) &&
+      (hasForwardMessages || state.editMessage)
+    ) {
+      showErrorNotification(
+        'Внешние каналы принимают новые сообщения и вложения. Пересылка и редактирование недоступны'
+      );
+      return;
+    }
     inputText.value = '';
 
     const textToSend = isTextEmpty ? '' : normalizedText;
@@ -1616,6 +1667,7 @@ export function useMessageSender(
         });
         await handleQueuedAttachmentFiles(queuedFiles, {
           topicId,
+          managerReplyRouteId,
           text: textToSend || null,
           taggedUserIds,
           replyMessage: state.replyMessage,
@@ -1730,7 +1782,9 @@ export function useMessageSender(
       }
 
       for (const part of parts) {
-        const clientId = generateUUID();
+        const clientId = useManagerInquiries().byTopic.value.has(topicId)
+          ? crypto.randomUUID()
+          : generateUUID();
         const ex = createMessageEx({
           clientId,
           ...replyQuoteEx
@@ -1881,9 +1935,22 @@ export function useMessageSender(
     }
 
     const topicId = options?.topicId ?? route.value.id;
+    const channelError = managerSendError(
+      topicId,
+      filePayloads.map(item => item.file)
+    );
+    if (channelError) {
+      showErrorNotification(channelError);
+      return;
+    }
+    const managerReplyRouteId =
+      options?.managerReplyRouteId ?? selectedManagerRoute(topicId)?.id;
     const replyMessage = options?.replyMessage ?? state.replyMessage;
     const replyMessageId = options?.replyMessageId ?? state.replyMessage?.id;
-    const replyQuoteEx = createReplyQuoteEx(replyMessage);
+    const replyQuoteEx = {
+      ...createReplyQuoteEx(replyMessage),
+      ...(managerReplyRouteId ? { managerReplyRouteId } : {})
+    };
     const forwardMessageIds =
       options?.forwardMessageIds ??
       state.forwardMessages.map(message => message.id);
@@ -1893,7 +1960,9 @@ export function useMessageSender(
       return;
     }
 
-    const clientId = generateUUID();
+    const clientId = useManagerInquiries().byTopic.value.has(topicId)
+      ? crypto.randomUUID()
+      : generateUUID();
     const messageTraceId = createTelemetryTraceId('attachment');
 
     const localMedia: IMedia[] = await Promise.all(

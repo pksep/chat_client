@@ -76,6 +76,7 @@ import {
 } from './useTelemetryDevice';
 import {
   activeGroupCalls,
+  ACTIVE_CALL_SESSION_STORAGE_KEY,
   activeScreenShare,
   callElapsedMs,
   callStartedAt,
@@ -105,6 +106,10 @@ import {
   type CallStatusNoticeKind,
   type ParticipantMediaState
 } from './useCallState';
+import {
+  isLiveKitPageReloadIntentActive,
+  markLiveKitPageReloadIntent
+} from './live-kit-page-reload-intent';
 
 export type { CallReaction } from './useCallState';
 
@@ -153,6 +158,10 @@ type CallSocketAck = {
   isNewCall?: boolean;
 };
 type InvitedGroupCallEntry = NonNullable<typeof invitedGroupCall.value>;
+type GroupCallInvitePreview = Omit<
+  InvitedGroupCallEntry,
+  'inviteToken' | 'isJoinAvailable'
+>;
 type CallTimerSnapshot = {
   startTime?: number | null;
   elapsedDurationMs?: number | null;
@@ -176,7 +185,6 @@ type PersistedActiveCallSession = {
 const HAND_RAISE_TOPIC = 'group-call-hand-raise';
 const CALL_REACTION_TOPIC = 'group-call-reaction';
 const CALL_REACTION_DURATION_MS = 4000;
-const ACTIVE_CALL_SESSION_STORAGE_KEY = 'chat:active-call-session:v1';
 
 let room: Room | null = null;
 let ignoredDisconnectedRoom: Room | null = null;
@@ -209,7 +217,6 @@ let lastCallIssueSignal: CallIssueSignal | null = null;
 let lastKnownActiveRoomRemoteParticipantCount = 0;
 let lastRemoteParticipantEmptyTelemetrySignature = '';
 let isExplicitHangupInProgress = false;
-let pageReloadIntentAt = 0;
 let pageUnloadHangupRoomId: string | null = null;
 let isLocalNetworkOffline = false;
 let nativeNetworkStatusListener: PluginListenerHandle | null = null;
@@ -226,6 +233,7 @@ const localTrackStreamCache = new Map<string, StreamCacheEntry>();
 const remoteTrackStreamCache = new Map<string, StreamCacheEntry>();
 let pendingEndCallRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingEndCallFinalizeTimeout: ReturnType<typeof setTimeout> | null = null;
+let pendingEndCallAcknowledged = false;
 let pendingNativeCallActionTimeout: ReturnType<typeof setTimeout> | null = null;
 let callStatusNoticeTimeout: ReturnType<typeof setTimeout> | null = null;
 let directCallRecoveryTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -266,7 +274,7 @@ const DIRECT_CALL_RECOVERY_TELEMETRY_INTERVAL_MS = 30_000;
 const SCREEN_SHARE_RECOVERY_RETRY_DELAY_MS = 2000;
 const LOCAL_VIDEO_QUALITY_RECOVERY_DELAY_MS = 10_000;
 const CALL_ISSUE_SIGNAL_CONTEXT_MS = 5 * 60 * 1000;
-const PAGE_RELOAD_INTENT_TTL_MS = 5000;
+const END_CALL_ACK_TIMEOUT_MS = 1200;
 const ACTIVE_CALL_CLOSE_WARNING =
   'У вас есть активный звонок. Если закрыть вкладку, звонок будет завершен.';
 const INVITED_GROUP_CALL_CONNECT_ATTEMPTS = 2;
@@ -1984,14 +1992,15 @@ const resetPendingEndCallState = () => {
   clearPendingEndCallTimers();
   pendingEndCallRoomId.value = null;
   pendingEndCallTopicId.value = null;
+  pendingEndCallAcknowledged = false;
 };
 
-const emitEndCallEvent = (
+const emitEndCallEvent = async (
   targetRoomId?: string | null,
   targetTopicId?: string | null,
   source = 'unknown',
   payload: Record<string, unknown> = {}
-): boolean => {
+): Promise<boolean> => {
   const sdk = getChatSDK();
   const me = getAuthUser();
   const telemetryPayload = {
@@ -2016,14 +2025,8 @@ const emitEndCallEvent = (
   }
 
   try {
-    sdk.sendWebSocketEvent(WebSocketEventType.END_CALL, {
-      roomId: targetRoomId,
-      topicId: targetTopicId,
-      userId: me.id
-    });
-
     recordCallTelemetryEvent(
-      'call.end.sent',
+      'call.end.send_attempted',
       {
         targetRoomId,
         targetTopicId,
@@ -2033,6 +2036,44 @@ const emitEndCallEvent = (
       },
       'warn'
     );
+
+    const ack = await sdk.sendWebSocketEventWithAck<
+      WebSocketEventType.END_CALL,
+      CallSocketAck
+    >(
+      WebSocketEventType.END_CALL,
+      {
+        roomId: targetRoomId,
+        topicId: targetTopicId,
+        userId: me.id
+      },
+      END_CALL_ACK_TIMEOUT_MS
+    );
+
+    if (ack?.accepted !== true) {
+      recordCallTelemetryEvent(
+        'call.end.ack_rejected',
+        {
+          targetRoomId,
+          targetTopicId,
+          source,
+          senderUserId: me.id,
+          ackAccepted: ack?.accepted ?? null,
+          ...telemetryPayload
+        },
+        'warn'
+      );
+      return false;
+    }
+
+    recordCallTelemetryEvent('call.end.sent', {
+      targetRoomId,
+      targetTopicId,
+      source,
+      senderUserId: me.id,
+      acknowledged: true,
+      ...telemetryPayload
+    });
 
     return true;
   } catch (error) {
@@ -2048,7 +2089,7 @@ const emitEndCallEvent = (
       },
       'error'
     );
-    throw error;
+    return false;
   }
 };
 
@@ -2064,6 +2105,7 @@ const schedulePendingEndCallConfirmation = (
   clearPendingEndCallTimers();
   pendingEndCallRoomId.value = targetRoomId;
   pendingEndCallTopicId.value = targetTopicId;
+  pendingEndCallAcknowledged = false;
   recordCallTelemetryEvent(
     'call.end.pending_confirmation_scheduled',
     {
@@ -2076,13 +2118,22 @@ const schedulePendingEndCallConfirmation = (
   pendingEndCallRetryTimeout = setTimeout(() => {
     if (
       pendingEndCallRoomId.value === targetRoomId &&
-      pendingEndCallTopicId.value === targetTopicId
+      pendingEndCallTopicId.value === targetTopicId &&
+      !pendingEndCallAcknowledged
     ) {
-      emitEndCallEvent(
+      void emitEndCallEvent(
         targetRoomId,
         targetTopicId,
         'pending_confirmation_retry'
-      );
+      ).then(acknowledged => {
+        if (
+          acknowledged &&
+          pendingEndCallRoomId.value === targetRoomId &&
+          pendingEndCallTopicId.value === targetTopicId
+        ) {
+          pendingEndCallAcknowledged = true;
+        }
+      });
     }
   }, 1500);
 
@@ -2242,7 +2293,9 @@ const restoreGroupCallEntryIfStillActive = (
 const getInviteParamsFromUrl = () => {
   if (typeof window === 'undefined') return null;
 
-  const invite = parseGroupCallInviteUrl(window.location.href);
+  const invite = parseGroupCallInviteUrl(window.location.href, {
+    allowTrustedNativeOrigin: Capacitor.isNativePlatform()
+  });
 
   if (!invite) {
     return null;
@@ -5509,16 +5562,21 @@ export const joinPendingGroupCall = async (
   }
 };
 
-export const hydrateInvitedGroupCallFromUrl = async (): Promise<boolean> => {
+export const hydrateInvitedGroupCallFromUrl = async (options?: {
+  preview?: GroupCallInvitePreview;
+}): Promise<boolean> => {
   const sdk = getChatSDK();
   const inviteParams = getInviteParamsFromUrl();
 
   if (!sdk || !inviteParams) return false;
 
-  const preview = await sdk.getGroupCallInvitePreview(
-    inviteParams.roomId,
-    inviteParams.inviteToken
-  );
+  const preview =
+    options?.preview?.roomId === inviteParams.roomId
+      ? options.preview
+      : await sdk.getGroupCallInvitePreview(
+          inviteParams.roomId,
+          inviteParams.inviteToken
+        );
 
   if (!preview) {
     handleExpiredInviteLink();
@@ -5546,13 +5604,20 @@ export const hydrateInvitedGroupCallFromUrl = async (): Promise<boolean> => {
 };
 
 export const openGroupCallInviteUrl = async (
-  value: string
+  value: string,
+  options?: {
+    allowTrustedOrigin?: boolean;
+    preview?: GroupCallInvitePreview;
+  }
 ): Promise<boolean> => {
   if (typeof window === 'undefined') {
     return false;
   }
 
-  const invite = parseGroupCallInviteUrl(value);
+  const invite = parseGroupCallInviteUrl(value, {
+    allowTrustedOrigin:
+      options?.allowTrustedOrigin ?? Capacitor.isNativePlatform()
+  });
 
   if (!invite) {
     return false;
@@ -5568,7 +5633,7 @@ export const openGroupCallInviteUrl = async (
   }
 
   window.history.replaceState({}, document.title, currentUrl.toString());
-  return hydrateInvitedGroupCallFromUrl();
+  return hydrateInvitedGroupCallFromUrl(options);
 };
 
 const joinInvitedGroupCallInternal = async (
@@ -6828,12 +6893,20 @@ export const leaveCall = () => {
   }
 
   schedulePendingEndCallConfirmation(activeRoomId, activeTopicId);
-  emitEndCallEvent(
+  void emitEndCallEvent(
     activeRoomId,
     activeTopicId,
     'user_leave',
     leaveTelemetryPayload
-  );
+  ).then(acknowledged => {
+    if (
+      acknowledged &&
+      pendingEndCallRoomId.value === activeRoomId &&
+      pendingEndCallTopicId.value === activeTopicId
+    ) {
+      pendingEndCallAcknowledged = true;
+    }
+  });
 
   if (invitedGroupCall.value?.roomId === activeRoomId) {
     invitedGroupCall.value = null;
@@ -7119,14 +7192,6 @@ const hasActiveCallForPageUnload = () =>
   !isExplicitHangupInProgress &&
   !!roomId.value &&
   (open.value || isModalVisible.value || isCalling.value || !!room);
-
-export const markLiveKitPageReloadIntent = () => {
-  pageReloadIntentAt = Date.now();
-};
-
-const isLiveKitPageReloadIntentActive = () =>
-  pageReloadIntentAt > 0 &&
-  Date.now() - pageReloadIntentAt <= PAGE_RELOAD_INTENT_TTL_MS;
 
 const sendWebClientClosingIntent = (
   source: 'beforeunload' | 'pagehide',

@@ -13,6 +13,9 @@ import java.util.Set;
 
 public final class ChatBackgroundSyncStore {
     private static final String PREFS_NAME = "chat_background_sync";
+    private static final String SESSION_PREFS_NAME = "chat_background_sync_session";
+    private static final String KEY_SESSION_INITIALIZED = "initialized";
+    private static final Object SESSION_LOCK = new Object();
     private static final String KEY_TOKEN = "session.token";
     private static final String KEY_USER_ID = "session.userId";
     private static final String KEY_API_URL = "session.apiUrl";
@@ -23,6 +26,8 @@ public final class ChatBackgroundSyncStore {
     private static final String KEY_TOPICS_SNAPSHOT = "snapshot.topics";
     private static final String KEY_MESSAGES_SNAPSHOT = "snapshot.messagesByTopic";
     private static final String KEY_SNAPSHOT_UPDATED_AT = "snapshot.updatedAt";
+    private static final String KEY_SNAPSHOT_USER_ID = "snapshot.userId";
+    private static final String KEY_SNAPSHOT_API_URL = "snapshot.apiUrl";
     private static final String KEY_STATUS = "sync.status";
     private static final String KEY_PENDING_HINTS = "sync.pendingHints";
     private static final int MAX_PENDING_TOPIC_IDS = 32;
@@ -62,52 +67,84 @@ public final class ChatBackgroundSyncStore {
         }
     }
 
-    public static void saveSession(
+    public static boolean saveSession(
         Context context,
         String token,
         String userId,
         String apiUrl
     ) {
-        prefs(context)
-            .edit()
-            .putString(KEY_TOKEN, trimToEmpty(token))
-            .putString(KEY_USER_ID, trimToEmpty(userId))
-            .putString(KEY_API_URL, normalizeApiUrl(apiUrl))
-            .apply();
+        synchronized (SESSION_LOCK) {
+            Session next = new Session(trimToEmpty(token), trimToEmpty(userId), normalizeApiUrl(apiUrl));
+            if (sameSession(getSession(context), next)) return false;
+            saveFastSession(context, next);
+            prefs(context)
+                .edit()
+                .putString(KEY_TOKEN, trimToEmpty(token))
+                .putString(KEY_USER_ID, trimToEmpty(userId))
+                .putString(KEY_API_URL, normalizeApiUrl(apiUrl))
+                .apply();
 
-        JSONObject status = newStatus("session_saved");
-        putOptValue(status, "userId", trimToNull(userId));
-        putOptValue(status, "apiUrl", trimToNull(normalizeApiUrl(apiUrl)));
-        putStatus(context, status);
+            JSONObject status = newStatus("session_saved");
+            putOptValue(status, "userId", trimToNull(userId));
+            putOptValue(status, "apiUrl", trimToNull(normalizeApiUrl(apiUrl)));
+            putStatus(context, status);
+            return true;
+        }
+    }
+
+    static boolean sameSession(Session current, Session next) {
+        return current.token.equals(next.token) && current.userId.equals(next.userId)
+            && current.apiUrl.equals(next.apiUrl);
     }
 
     public static void clearSession(Context context) {
-        prefs(context)
-            .edit()
-            .remove(KEY_TOKEN)
-            .remove(KEY_USER_ID)
-            .remove(KEY_API_URL)
-            .remove(KEY_LAST_PTS)
-            .remove(KEY_SYNC_EVENTS)
-            .remove(KEY_SYNC_FROM_PTS)
-            .remove(KEY_SYNC_TO_PTS)
-            .remove(KEY_TOPICS_SNAPSHOT)
-            .remove(KEY_MESSAGES_SNAPSHOT)
-            .remove(KEY_SNAPSHOT_UPDATED_AT)
-            .remove(KEY_PENDING_HINTS)
-            .apply();
+        synchronized (SESSION_LOCK) {
+            saveFastSession(context, new Session("", "", ""));
+            prefs(context)
+                .edit()
+                .remove(KEY_TOKEN)
+                .remove(KEY_USER_ID)
+                .remove(KEY_API_URL)
+                .remove(KEY_LAST_PTS)
+                .remove(KEY_SYNC_EVENTS)
+                .remove(KEY_SYNC_FROM_PTS)
+                .remove(KEY_SYNC_TO_PTS)
+                .remove(KEY_TOPICS_SNAPSHOT)
+                .remove(KEY_MESSAGES_SNAPSHOT)
+                .remove(KEY_SNAPSHOT_UPDATED_AT)
+                .remove(KEY_SNAPSHOT_USER_ID)
+                .remove(KEY_SNAPSHOT_API_URL)
+                .remove(KEY_PENDING_HINTS)
+                .apply();
 
-        putStatus(context, newStatus("session_cleared"));
+            putStatus(context, newStatus("session_cleared"));
+        }
     }
 
     public static Session getSession(Context context) {
-        SharedPreferences prefs = prefs(context);
+        synchronized (SESSION_LOCK) {
+            SharedPreferences fast = context.getSharedPreferences(SESSION_PREFS_NAME, Context.MODE_PRIVATE);
+            if (fast.getBoolean(KEY_SESSION_INITIALIZED, false)) return readSession(fast);
+            // Однократная миграция сохраняет авторизацию после обновления APK.
+            // Следующие открытия не разбирают XML со всеми снимками переписок.
+            Session session = readSession(prefs(context));
+            saveFastSession(context, session);
+            return session;
+        }
+    }
 
-        return new Session(
-            prefs.getString(KEY_TOKEN, ""),
-            prefs.getString(KEY_USER_ID, ""),
-            prefs.getString(KEY_API_URL, "")
-        );
+    private static Session readSession(SharedPreferences preferences) {
+        return new Session(preferences.getString(KEY_TOKEN, ""), preferences.getString(KEY_USER_ID, ""),
+            preferences.getString(KEY_API_URL, ""));
+    }
+
+    private static void saveFastSession(Context context, Session session) {
+        context.getSharedPreferences(SESSION_PREFS_NAME, Context.MODE_PRIVATE).edit()
+            .putBoolean(KEY_SESSION_INITIALIZED, true)
+            .putString(KEY_TOKEN, session.token)
+            .putString(KEY_USER_ID, session.userId)
+            .putString(KEY_API_URL, session.apiUrl)
+            .apply();
     }
 
     public static String getLastPts(Context context) {
@@ -258,6 +295,7 @@ public final class ChatBackgroundSyncStore {
     public static void saveSnapshot(
         Context context,
         String userId,
+        String apiUrl,
         String pts,
         String fromPts,
         String toPts,
@@ -269,6 +307,8 @@ public final class ChatBackgroundSyncStore {
         SharedPreferences.Editor editor = prefs(context)
             .edit()
             .putString(KEY_USER_ID, trimToEmpty(userId))
+            .putString(KEY_SNAPSHOT_USER_ID, trimToEmpty(userId))
+            .putString(KEY_SNAPSHOT_API_URL, normalizeApiUrl(apiUrl))
             .putString(KEY_SYNC_EVENTS, syncEvents != null ? syncEvents.toString() : "[]")
             .putString(KEY_SYNC_FROM_PTS, trimToEmpty(fromPts))
             .putString(KEY_SYNC_TO_PTS, trimToEmpty(toPts))
@@ -304,6 +344,8 @@ public final class ChatBackgroundSyncStore {
 
         putValue(snapshot, "available", available);
         putOptValue(snapshot, "userId", trimToNull(prefs.getString(KEY_USER_ID, "")));
+        putOptValue(snapshot, "snapshotUserId", trimToNull(prefs.getString(KEY_SNAPSHOT_USER_ID, "")));
+        putOptValue(snapshot, "snapshotApiUrl", trimToNull(prefs.getString(KEY_SNAPSHOT_API_URL, "")));
         putOptValue(snapshot, "lastPts", trimToNull(prefs.getString(KEY_LAST_PTS, "")));
         putOptValue(snapshot, "fromPts", trimToNull(prefs.getString(KEY_SYNC_FROM_PTS, "")));
         putOptValue(snapshot, "toPts", trimToNull(prefs.getString(KEY_SYNC_TO_PTS, "")));

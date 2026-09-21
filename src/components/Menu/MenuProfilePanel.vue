@@ -232,7 +232,7 @@
           >
             <div class="menu-profile__wallpapers-grid">
               <button
-                v-for="wallpaper in wallpaperPreviewItems"
+                v-for="wallpaper in displayedWallpaperPreviewItems"
                 :key="wallpaper.id"
                 type="button"
                 :class="[
@@ -243,6 +243,9 @@
                   }
                 ]"
                 @click="selectWallpaperOption(wallpaper.id)"
+                @contextmenu="
+                  handleBackgroundContextMenu('wallpaper', wallpaper, $event)
+                "
               >
                 <span
                   class="menu-profile__wallpaper-tile-preview"
@@ -312,7 +315,7 @@
           >
             <div class="menu-profile__wallpapers-grid">
               <button
-                v-for="background in callBackgroundPreviewItems"
+                v-for="background in displayedCallBackgroundPreviewItems"
                 :key="background.id"
                 type="button"
                 :class="[
@@ -323,6 +326,9 @@
                   }
                 ]"
                 @click="selectCallBackgroundOption(background.id)"
+                @contextmenu="
+                  handleBackgroundContextMenu('call', background, $event)
+                "
               >
                 <span
                   class="menu-profile__wallpaper-tile-preview"
@@ -767,6 +773,33 @@
     @apply="applyPendingCallBackground"
   />
 
+  <Teleport to="body">
+    <ContextMenu
+      :visible="!!isOpen.background"
+      :position="position"
+      :data-testid="`${props.dataTestid}-MenuProfilePanel-BackgroundContextMenu`"
+      @unmount-close="closeBackgroundContextMenu"
+    >
+      <Button
+        class="red-context-button"
+        :type="ButtonTypeEnum.popover"
+        :size="SizesEnum.small"
+        :data-testid="`${props.dataTestid}-MenuProfilePanel-BackgroundDeleteButton`"
+        @click.stop="openBackgroundDeleteConfirm"
+      >
+        <Icon :name="IconNameEnum.deleteSmall" /> Удалить
+      </Button>
+    </ContextMenu>
+  </Teleport>
+
+  <ConfirmModal
+    :open="!!pendingBackgroundDelete"
+    title="Удалить фон"
+    description="Вы уверены, что хотите удалить этот фон?"
+    @unmount-close="closeBackgroundDeleteConfirm"
+    @unmount-confirm="confirmBackgroundDelete"
+  />
+
   <ConfirmModal
     :open="isLogoutConfirmModalOpen"
     title="Выход из профиля"
@@ -829,12 +862,14 @@ import {
 } from '../../utils/userStatus';
 import { useChatWallpaper } from '../../composables/useChatWallpaper';
 import { useCallBackground } from '../../composables/useCallBackground';
+import { useContextMenu } from '../../composables/useContextMenu';
 import { fileToDataURL } from '../../utils/fileToDataURL';
 import MobileModal from '../UI/MobileModal.vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import MessageBubble from '../Messages/MessageBubble.vue';
 import ConfirmModal from '../UI/ConfirmModal.vue';
+import ContextMenu from '../ContactList/ContextMenu.vue';
 import FileIcon from '../UI/FileIcon.vue';
 import { useMobileApp } from '../../composables/useMobileApp';
 import { useThemeStore } from '../../stores/theme';
@@ -855,6 +890,11 @@ const props = withDefaults(
     dataTestid: 'MenuProfilePanel'
   }
 );
+
+type BackgroundDeleteTarget = {
+  kind: 'wallpaper' | 'call';
+  id: string;
+};
 
 const themeStore = useThemeStore();
 const { isDarkTheme } = storeToRefs(themeStore);
@@ -919,6 +959,9 @@ const isCallBackgroundPreviewOpen = ref(false);
 const isApplyingCallBackground = ref(false);
 const isProfileUpdateMenuOpen = ref(false);
 const isLogoutConfirmModalOpen = ref(false);
+const activeBackgroundContextTarget = ref<BackgroundDeleteTarget | null>(null);
+const pendingBackgroundDelete = ref<BackgroundDeleteTarget | null>(null);
+const isDeletingBackground = ref(false);
 const isSavingStatus = ref(false);
 const statusError = ref('');
 const wallpaperError = ref('');
@@ -937,14 +980,18 @@ const {
   wallpaperPreviewItems,
   selectedWallpaperId,
   selectWallpaper,
-  setCustomWallpaper
+  setCustomWallpaper,
+  deleteCustomWallpaper
 } = useChatWallpaper();
 const {
   callBackgroundPreviewItems,
   selectedCallBackgroundId,
   selectCallBackground,
-  setCustomCallBackground
+  setCustomCallBackground,
+  deleteCustomCallBackground
 } = useCallBackground();
+const { isOpen, position, openActivePopover, closeActivePopover } =
+  useContextMenu();
 const {
   updateActionLabel,
   updateProgress,
@@ -1033,12 +1080,13 @@ const profileUpdateDescription = computed(() => {
   return 'Нажмите, чтобы проверить доступные обновления';
 });
 
-preloadNotoEmojiAssets(
-  [...statusPresets.value.map(option => option.icon), '🦄'],
-  {
-    highPriority: true
-  }
-);
+watch(isStatusMenuOpen, isOpen => {
+  if (isOpen)
+    preloadNotoEmojiAssets(
+      [...statusPresets.value.map(option => option.icon), '🦄'],
+      { highPriority: true }
+    );
+});
 
 const canSaveCustomStatus = computed(
   () =>
@@ -1052,6 +1100,41 @@ const wallpaperPreviewIncomingMessage =
 const wallpaperPreviewOutgoingMessage =
   '\u0421\u043f\u0430\u0441\u0438\u0431\u043e!';
 const callBackgroundPreviewHumanSrc = '/images/human.webp';
+// Временная витрина для ручной проверки контекстного меню без изменения фонов пользователя.
+// Удалить после подтверждения дизайна.
+const isBackgroundContextMenuDesignPreview =
+  typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).has(
+    'preview-background-context-menu'
+  );
+const backgroundContextMenuDesignPreviewStyle: CSSProperties = {
+  background:
+    'linear-gradient(135deg, #d9ecff 0%, #b7d8ff 49%, #7facde 50%, #c6dcff 100%)'
+};
+const displayedWallpaperPreviewItems = computed(() =>
+  isBackgroundContextMenuDesignPreview
+    ? [
+        {
+          id: 'preview-custom-wallpaper',
+          isCustom: true,
+          previewStyle: backgroundContextMenuDesignPreviewStyle
+        },
+        ...wallpaperPreviewItems.value
+      ]
+    : wallpaperPreviewItems.value
+);
+const displayedCallBackgroundPreviewItems = computed(() =>
+  isBackgroundContextMenuDesignPreview
+    ? [
+        {
+          id: 'preview-custom-call-background',
+          isCustom: true,
+          previewStyle: backgroundContextMenuDesignPreviewStyle
+        },
+        ...callBackgroundPreviewItems.value
+      ]
+    : callBackgroundPreviewItems.value
+);
 
 const resolvePendingPreviewStyle = (
   previewItems: Array<{ id: string; previewStyle: CSSProperties }>,
@@ -1209,6 +1292,73 @@ const openLogoutConfirmModal = (): void => {
 
 const closeLogoutConfirmModal = (): void => {
   isLogoutConfirmModalOpen.value = false;
+};
+
+const handleBackgroundContextMenu = (
+  kind: BackgroundDeleteTarget['kind'],
+  background: { id: string; isCustom: boolean },
+  event: MouseEvent
+): void => {
+  if (!background.isCustom) {
+    return;
+  }
+
+  activeBackgroundContextTarget.value = { kind, id: background.id };
+  openActivePopover('background', event);
+};
+
+const closeBackgroundContextMenu = (): void => {
+  activeBackgroundContextTarget.value = null;
+  closeActivePopover('background');
+};
+
+const openBackgroundDeleteConfirm = (): void => {
+  if (!activeBackgroundContextTarget.value) {
+    return;
+  }
+
+  pendingBackgroundDelete.value = { ...activeBackgroundContextTarget.value };
+  closeBackgroundContextMenu();
+};
+
+const closeBackgroundDeleteConfirm = (): void => {
+  if (isDeletingBackground.value) {
+    return;
+  }
+
+  pendingBackgroundDelete.value = null;
+};
+
+const confirmBackgroundDelete = async (): Promise<void> => {
+  const target = pendingBackgroundDelete.value;
+
+  if (!target || isDeletingBackground.value) {
+    return;
+  }
+
+  isDeletingBackground.value = true;
+
+  try {
+    if (target.kind === 'wallpaper') {
+      wallpaperError.value = '';
+      await deleteCustomWallpaper(target.id);
+    } else {
+      callBackgroundError.value = '';
+      await deleteCustomCallBackground(target.id);
+    }
+    pendingBackgroundDelete.value = null;
+  } catch (error) {
+    console.error('Failed to delete custom background:', error);
+    const message = 'Не удалось удалить фон. Попробуйте ещё раз';
+    if (target.kind === 'wallpaper') {
+      wallpaperError.value = message;
+    } else {
+      callBackgroundError.value = message;
+    }
+    pendingBackgroundDelete.value = null;
+  } finally {
+    isDeletingBackground.value = false;
+  }
 };
 
 const handleWallpaperUpload = async (event: Event): Promise<void> => {

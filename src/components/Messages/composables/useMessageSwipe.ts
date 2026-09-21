@@ -1,4 +1,4 @@
-import { ref, onMounted, onUnmounted, type Ref } from 'vue';
+import { ref, onUnmounted, watch, type Ref } from 'vue';
 import { useBackButton } from '../../../composables/useBackButton';
 import {
   navigateToAssistant,
@@ -56,9 +56,17 @@ export function useMessageSwipe(route: Ref<{ id: string; type: string }>) {
     navigateBack();
   };
 
-  onMounted(() => {
-    addHandler(navigateBack);
-  });
+  watch(
+    () => !!route.value.id || route.value.type === RouteTypes.AI,
+    shouldHandleBack => {
+      if (shouldHandleBack) {
+        addHandler(navigateBack);
+      } else {
+        removeHandler(navigateBack);
+      }
+    },
+    { immediate: true }
+  );
 
   onUnmounted(() => {
     removeHandler(navigateBack);

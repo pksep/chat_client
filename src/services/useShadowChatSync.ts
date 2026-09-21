@@ -1,15 +1,22 @@
+import { openChatDatabase } from '../utils/chat-startup-databases';
+import {
+  discardStartupTopicRecords,
+  takeStartupTopicRecord
+} from '../utils/startup-topic-records';
+import { reviveCachedDates } from '../utils/revive-cached-dates';
 import type { IMessage } from '../components/interfaces/interfaces';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
 
 const DB_NAME = 'chat-sync-shadow-db';
-const DB_VERSION = 2;
 const EVENT_LOG_STORE = 'eventLog';
 const TOPIC_SNAPSHOT_STORE = 'topicSnapshots';
+const TOPIC_PREVIEW_STORE = 'topicPreviews';
 const READ_STATE_STORE = 'readStates';
 const SYNC_META_STORE = 'syncMeta';
 const SHADOW_SYNC_FLAG_KEY = 'chat.shadowSync.enabled';
 const SHADOW_LOADED_RANGES_VERSION = 2;
 const MAX_EVENT_LOG_RECORDS_PER_USER = 300;
+const TOPIC_PREVIEW_MESSAGES_LIMIT = 48;
 const DELETED_MESSAGES_META_PREFIX = 'deletedMessages:';
 const DELETED_MESSAGE_TOMBSTONE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -21,6 +28,9 @@ const DATE_KEYS = new Set([
   'timestamp',
   'receivedAt'
 ]);
+const deserializeValue = (value: unknown): unknown =>
+  reviveCachedDates(value, DATE_KEYS);
+
 export interface ShadowReadStateValue {
   lastReadMessageId: string | null;
   lastReadAt: string | null;
@@ -62,8 +72,12 @@ export interface ShadowRangeResolution<T> {
 
 const shadowReadStateCache = new Map<string, ShadowReadStateValue | null>();
 const shadowSyncMetaCache = new Map<string, unknown>();
+const shadowReadStateLoads = new Map<
+  string,
+  Promise<ShadowReadStateValue | null>
+>();
+const shadowSyncMetaLoads = new Map<string, Promise<unknown>>();
 const scheduledEventLogPrunes = new Set<string>();
-let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 export type ShadowSyncSource = 'http' | 'ws' | 'local';
 
@@ -114,9 +128,6 @@ interface ShadowSyncMetaRecord {
   updatedAt: string;
 }
 
-const hasIndexedDb = () =>
-  typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined';
-
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -141,27 +152,6 @@ const serializeValue = (value: unknown): unknown => {
       Object.entries(value).map(([key, nestedValue]) => [
         key,
         serializeValue(nestedValue)
-      ])
-    );
-  }
-
-  return value;
-};
-
-const deserializeValue = (value: unknown, key?: string): unknown => {
-  if (typeof value === 'string' && key && DATE_KEYS.has(key)) {
-    return new Date(value);
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(item => deserializeValue(item));
-  }
-
-  if (isPlainObject(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([nestedKey, nestedValue]) => [
-        nestedKey,
-        deserializeValue(nestedValue, nestedKey)
       ])
     );
   }
@@ -288,54 +278,7 @@ const mergeMessages = (
   return Array.from(mergedByKey.values()).sort(compareMessagesByPosition);
 };
 
-const openDb = async (): Promise<IDBDatabase | null> => {
-  if (!hasIndexedDb()) {
-    return null;
-  }
-
-  if (dbPromise) {
-    return dbPromise;
-  }
-
-  dbPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-
-      if (!db.objectStoreNames.contains(EVENT_LOG_STORE)) {
-        db.createObjectStore(EVENT_LOG_STORE, { keyPath: 'id' });
-      }
-
-      if (!db.objectStoreNames.contains(TOPIC_SNAPSHOT_STORE)) {
-        db.createObjectStore(TOPIC_SNAPSHOT_STORE, { keyPath: 'cacheKey' });
-      }
-
-      if (!db.objectStoreNames.contains(READ_STATE_STORE)) {
-        db.createObjectStore(READ_STATE_STORE, { keyPath: 'cacheKey' });
-      }
-
-      if (!db.objectStoreNames.contains(SYNC_META_STORE)) {
-        db.createObjectStore(SYNC_META_STORE, { keyPath: 'key' });
-      }
-    };
-
-    request.onsuccess = () => {
-      const db = request.result;
-      db.onversionchange = () => {
-        db.close();
-        dbPromise = null;
-      };
-      resolve(db);
-    };
-    request.onerror = () => {
-      dbPromise = null;
-      reject(request.error);
-    };
-  });
-
-  return dbPromise;
-};
+const openDb = (): Promise<IDBDatabase | null> => openChatDatabase(DB_NAME);
 
 const getShadowSyncEnabled = (): boolean => {
   if (typeof window === 'undefined') {
@@ -419,27 +362,41 @@ const scheduleShadowEventLogPrune = (userId: string): void => {
 const putRecord = async <T extends object>(
   storeName: string,
   payload: T
-): Promise<void> => {
+): Promise<boolean> => {
+  if (storeName === READ_STATE_STORE || storeName === SYNC_META_STORE)
+    discardStartupTopicRecords();
   const db = await openDb();
 
   if (!db) {
-    return;
+    return false;
   }
 
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(storeName, 'readwrite');
     const store = tx.objectStore(storeName);
-    const request = store.put(payload);
+    store.put(payload);
 
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
   });
+  return true;
 };
 
 const getRecord = async <T>(
   storeName: string,
   key: IDBValidKey
 ): Promise<T | null> => {
+  if (typeof key === 'string') {
+    const prepared = takeStartupTopicRecord<T | null>(DB_NAME, storeName, key);
+    if (prepared) {
+      try {
+        return (await prepared) || null;
+      } catch {
+        /* Читаем текущую запись после изменения или ошибки. */
+      }
+    }
+  }
   const db = await openDb();
 
   if (!db) {
@@ -454,6 +411,55 @@ const getRecord = async <T>(
     request.onsuccess = () =>
       resolve((request.result as T | undefined) || null);
     request.onerror = () => reject(request.error);
+  });
+};
+
+const putTopicSnapshotRecords = async (
+  payload: ShadowTopicSnapshotRecord
+): Promise<boolean> => {
+  const db = await openDb();
+
+  if (!db) {
+    return false;
+  }
+
+  const previewPayload: ShadowTopicSnapshotRecord = {
+    ...payload,
+    messages: payload.messages.slice(-TOPIC_PREVIEW_MESSAGES_LIMIT)
+  };
+
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(
+      [TOPIC_SNAPSHOT_STORE, TOPIC_PREVIEW_STORE],
+      'readwrite'
+    );
+    tx.objectStore(TOPIC_SNAPSHOT_STORE).put(payload);
+    tx.objectStore(TOPIC_PREVIEW_STORE).put(previewPayload);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+
+  return true;
+};
+
+const deleteTopicSnapshotRecords = async (cacheKey: string): Promise<void> => {
+  const db = await openDb();
+
+  if (!db) {
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(
+      [TOPIC_SNAPSHOT_STORE, TOPIC_PREVIEW_STORE],
+      'readwrite'
+    );
+    tx.objectStore(TOPIC_SNAPSHOT_STORE).delete(cacheKey);
+    tx.objectStore(TOPIC_PREVIEW_STORE).delete(cacheKey);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
   });
 };
 
@@ -495,9 +501,9 @@ export const saveShadowTopicSnapshot = async (
   source: ShadowSyncSource,
   userId = getResolvedUserId(),
   opts?: { replace?: boolean }
-): Promise<void> => {
+): Promise<boolean> => {
   if (!getShadowSyncEnabled() || !topicId || !userId) {
-    return;
+    return false;
   }
 
   try {
@@ -527,22 +533,9 @@ export const saveShadowTopicSnapshot = async (
         : existingMessages;
 
     if (!mergedMessages.length) {
-      const db = await openDb();
+      await deleteTopicSnapshotRecords(cacheKey);
 
-      if (!db) {
-        return;
-      }
-
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(TOPIC_SNAPSHOT_STORE, 'readwrite');
-        const store = tx.objectStore(TOPIC_SNAPSHOT_STORE);
-        const request = store.delete(cacheKey);
-
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
-
-      return;
+      return true;
     }
 
     const payload: ShadowTopicSnapshotRecord = {
@@ -554,9 +547,10 @@ export const saveShadowTopicSnapshot = async (
       source
     };
 
-    await putRecord(TOPIC_SNAPSHOT_STORE, payload);
+    return await putTopicSnapshotRecords(payload);
   } catch (error) {
     console.warn('Failed to save shadow topic snapshot:', error);
+    return false;
   }
 };
 
@@ -885,23 +879,35 @@ export const loadShadowSyncMeta = async <T>(
     return cachedValue as T;
   }
 
-  try {
-    const record = await getRecord<ShadowSyncMetaRecord>(
-      SYNC_META_STORE,
-      cacheKey
-    );
-    const value =
-      record?.value !== undefined
-        ? (deserializeValue(record.value) as T)
-        : null;
+  let loading = shadowSyncMetaLoads.get(cacheKey);
+  if (!loading) {
+    loading = (async () => {
+      try {
+        const record = await getRecord<ShadowSyncMetaRecord>(
+          SYNC_META_STORE,
+          cacheKey
+        );
+        const value =
+          record?.value !== undefined
+            ? (deserializeValue(record.value) as T)
+            : null;
 
-    shadowSyncMetaCache.set(cacheKey, value);
+        // Запись, пришедшая во время чтения, новее результата этого запроса.
+        const currentValue = shadowSyncMetaCache.get(cacheKey);
+        if (currentValue !== undefined) return currentValue;
+        shadowSyncMetaCache.set(cacheKey, value);
 
-    return value;
-  } catch (error) {
-    console.warn('Failed to load shadow sync meta:', error);
-    return null;
+        return value;
+      } catch (error) {
+        console.warn('Failed to load shadow sync meta:', error);
+        return null;
+      } finally {
+        shadowSyncMetaLoads.delete(cacheKey);
+      }
+    })();
+    shadowSyncMetaLoads.set(cacheKey, loading);
   }
+  return loading as Promise<T | null>;
 };
 
 export const saveShadowLoadedRange = async (
@@ -1107,6 +1113,30 @@ export const loadShadowTopicSnapshot = async (
   }
 };
 
+export const loadShadowTopicPreview = async (
+  topicId: string,
+  userId = getResolvedUserId()
+): Promise<IMessage[]> => {
+  if (!getShadowSyncEnabled() || !topicId || !userId) {
+    return [];
+  }
+
+  try {
+    const record = await getRecord<ShadowTopicSnapshotRecord>(
+      TOPIC_PREVIEW_STORE,
+      getTopicCacheKey(topicId, userId)
+    );
+    const messages = record?.messages
+      ? mergeMessages([], deserializeValue(record.messages) as IMessage[])
+      : [];
+
+    return filterShadowDeletedMessages(topicId, messages, userId);
+  } catch (error) {
+    console.warn('Failed to load shadow topic preview:', error);
+    return [];
+  }
+};
+
 export const loadShadowTopicPage = async (
   topicId: string,
   opts?: ShadowTopicPageOptions,
@@ -1230,25 +1260,38 @@ export const loadShadowReadState = async (
     return null;
   }
 
-  try {
-    const record = await getRecord<ShadowReadStateRecord>(
-      READ_STATE_STORE,
-      getTopicCacheKey(topicId, userId)
-    );
+  const cacheKey = getReadStateCacheKey(topicId, userId);
+  let loading = shadowReadStateLoads.get(cacheKey);
+  if (!loading) {
+    const previousValue = shadowReadStateCache.get(cacheKey);
+    loading = (async () => {
+      try {
+        const record = await getRecord<ShadowReadStateRecord>(
+          READ_STATE_STORE,
+          getTopicCacheKey(topicId, userId)
+        );
 
-    const readState = record
-      ? {
-          lastReadMessageId: record.lastReadMessageId || null,
-          lastReadAt: record.lastReadAt || null
-        }
-      : null;
-    shadowReadStateCache.set(getReadStateCacheKey(topicId, userId), readState);
+        const readState = record
+          ? {
+              lastReadMessageId: record.lastReadMessageId || null,
+              lastReadAt: record.lastReadAt || null
+            }
+          : null;
+        const currentValue = shadowReadStateCache.get(cacheKey);
+        if (currentValue !== previousValue) return currentValue || null;
+        shadowReadStateCache.set(cacheKey, readState);
 
-    return readState;
-  } catch (error) {
-    console.warn('Failed to load shadow read state:', error);
-    return null;
+        return readState;
+      } catch (error) {
+        console.warn('Failed to load shadow read state:', error);
+        return null;
+      } finally {
+        shadowReadStateLoads.delete(cacheKey);
+      }
+    })();
+    shadowReadStateLoads.set(cacheKey, loading);
   }
+  return loading;
 };
 
 export const deleteShadowTopicMessage = async (
@@ -1277,16 +1320,9 @@ export const deleteShadowTopicMessage = async (
       deserializeValue(existing.messages) as IMessage[]
     ).filter(message => message.id !== messageId);
 
-    const payload: ShadowTopicSnapshotRecord = {
-      cacheKey,
-      userId,
-      topicId,
-      messages: serializeValue(filteredMessages) as IMessage[],
-      updatedAt: new Date().toISOString(),
-      source: 'local'
-    };
-
-    await putRecord(TOPIC_SNAPSHOT_STORE, payload);
+    await saveShadowTopicSnapshot(topicId, filteredMessages, 'local', userId, {
+      replace: true
+    });
   } catch (error) {
     console.warn('Failed to delete shadow topic message:', error);
   }

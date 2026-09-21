@@ -1,5 +1,27 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 
+let viewportWidth: number | undefined;
+const resizeSubscribers = new Set<(width: number) => void>();
+const readViewportWidth = (): number => (viewportWidth ??= window.innerWidth);
+const broadcastResize = (): void => {
+  viewportWidth = window.innerWidth;
+  resizeSubscribers.forEach(update => update(viewportWidth!));
+};
+const subscribeResize = (update: (width: number) => void): (() => void) => {
+  if (!resizeSubscribers.size) {
+    viewportWidth = window.innerWidth;
+    window.addEventListener('resize', broadcastResize);
+  }
+  resizeSubscribers.add(update);
+  return () => {
+    resizeSubscribers.delete(update);
+    if (!resizeSubscribers.size) {
+      window.removeEventListener('resize', broadcastResize);
+      viewportWidth = undefined;
+    }
+  };
+};
+
 interface UseResizeStateOptions {
   breakpoint: string | number;
   inclusive?: boolean;
@@ -65,7 +87,7 @@ const getInitialActiveState = (config: UseResizeStateOptions): boolean => {
   }
 
   try {
-    return getInitialState(config, window.innerWidth).initialActive;
+    return getInitialState(config, readViewportWidth()).initialActive;
   } catch {
     return config.initialState ?? false;
   }
@@ -107,7 +129,7 @@ export function useResizeState(
 
   const isActive = ref(getInitialActiveState(config));
 
-  let resizeHandler: (() => void) | undefined;
+  let unsubscribeResize: (() => void) | undefined;
   let breakpointPx: number;
   let previousIsMobile: boolean | undefined;
 
@@ -130,7 +152,7 @@ export function useResizeState(
 
   const saveStateToStorage = (): void => {
     if (config.storageKey && breakpointPx !== undefined) {
-      const currentWidth = window.innerWidth;
+      const currentWidth = readViewportWidth();
       const currentIsMobile = matchesBreakpoint(
         currentWidth,
         breakpointPx,
@@ -161,24 +183,21 @@ export function useResizeState(
 
   onMounted(() => {
     breakpointPx = parseBreakpoint(config.breakpoint);
+    unsubscribeResize = subscribeResize(updateState);
 
     const { initialActive, initialIsMobile } = getInitialState(
       config,
-      window.innerWidth
+      readViewportWidth()
     );
 
     isActive.value = initialActive;
     previousIsMobile = initialIsMobile;
 
-    resizeHandler = () => updateState(window.innerWidth);
-    window.addEventListener('resize', resizeHandler);
-    updateState(window.innerWidth);
+    updateState(readViewportWidth());
   });
 
   onUnmounted(() => {
-    if (resizeHandler) {
-      window.removeEventListener('resize', resizeHandler);
-    }
+    unsubscribeResize?.();
   });
 
   return {

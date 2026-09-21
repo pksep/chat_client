@@ -47,6 +47,7 @@
       >
         <div
           v-if="recipient.kind === 'ai'"
+          v-emoji
           class="forward-recipient-selector__ai-profile"
         >
           <span class="forward-recipient-selector__ai-copy">
@@ -56,17 +57,20 @@
         </div>
         <UserProfile
           v-else-if="recipient.kind === 'user'"
+          v-emoji
           :user="recipient.user"
           :dataTestid="`${props.dataTestid}-TopicSelector-UserProfile${index + 1}`"
         />
         <FavoriteTopicProfile
           v-else-if="isTopicFavorite(recipient.topic)"
+          v-emoji
           class="forward-recipient-selector__topic-profile"
           :description="getTopicLastMessagePreview(recipient.topic)"
           :dataTestid="`${props.dataTestid}-TopicSelector-FavoriteProfile${index + 1}`"
         />
         <UserProfile
           v-else-if="recipient.topic.type === TopicType.DM"
+          v-emoji
           class="forward-recipient-selector__topic-profile"
           :user="recipient.topic.user"
           :description="getTopicLastMessagePreview(recipient.topic)"
@@ -74,6 +78,7 @@
         />
         <GroupProfile
           v-else
+          v-emoji
           class="forward-recipient-selector__topic-profile"
           :topic="recipient.topic"
           :description="getTopicLastMessagePreview(recipient.topic)"
@@ -217,17 +222,27 @@ const getTopicLastMessagePreview = (topic: ITopic): string | undefined => {
 };
 
 const getTopicRecipients = (
-  filter: ChatsToolbarFilter,
+  filter: Exclude<ForwardRecipientFilter, 'ai'>,
   query: string
-): ForwardRecipient[] =>
-  getTopicsByChatsToolbarFilter(
+): ForwardRecipient[] => {
+  const filteredTopics = getTopicsByChatsToolbarFilter(
     topicsWithLatestMessages.value,
     filter,
     authedUser.value?.id
-  )
+  );
+  const topicsInFilter =
+    filter === 'chats'
+      ? [
+          ...topicsWithLatestMessages.value.filter(isTopicFavorite),
+          ...filteredTopics
+        ]
+      : filteredTopics;
+
+  return topicsInFilter
     .filter(topic => !isCallBotUser(topic.user))
     .filter(topic => matchesTopicSearch(topic, query))
     .map(topic => ({ key: `topic:${topic.id}`, kind: 'topic', topic }));
+};
 
 const getUserRecipientsWithoutTopic = (query: string): ForwardRecipient[] => {
   const existingUserIds = new Set(

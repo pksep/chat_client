@@ -49,6 +49,10 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
   let resizeObserver: ResizeObserver | null = null;
   let mutationObserver: MutationObserver | null = null;
   let observedContainer: HTMLElement | null = null;
+  let observedViewport: HTMLElement | null = null;
+  let viewportHeight = 0;
+  let viewportWidth = 0;
+  let contentScrollHeight = 0;
   let observedContent: HTMLElement | null = null;
   let userScrollIntentElement: HTMLElement | null = null;
   let isRestoringScroll = false;
@@ -485,6 +489,20 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
   };
 
   const syncResizeTarget = (): void => {
+    const container = containerRef.value;
+    if (container !== observedViewport) {
+      if (observedViewport) {
+        resizeObserver?.unobserve(observedViewport);
+      }
+      observedViewport = container;
+      viewportHeight = container?.clientHeight || 0;
+      viewportWidth = container?.clientWidth || 0;
+      contentScrollHeight = container?.scrollHeight || 0;
+      if (container) {
+        resizeObserver?.observe(container);
+      }
+    }
+
     const content = getContentElement();
     if (content === observedContent) {
       return;
@@ -499,7 +517,38 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     }
   };
 
-  const handleContentResize = (): void => {
+  const syncScrollGeometry = (): boolean => {
+    const container = containerRef.value;
+    if (
+      !container ||
+      (container.clientHeight === viewportHeight &&
+        container.clientWidth === viewportWidth &&
+        container.scrollHeight === contentScrollHeight)
+    ) {
+      return false;
+    }
+
+    viewportHeight = container.clientHeight;
+    viewportWidth = container.clientWidth;
+    contentScrollHeight = container.scrollHeight;
+    if (viewportMode.value === 'live') {
+      keepBottomPinned('auto');
+    }
+    return true;
+  };
+
+  const handleContentResize = (entries: ResizeObserverEntry[]): void => {
+    // Клавиатура меняет высоту окна, но не длинной ленты сообщений.
+    // Удерживаем её нижний край до отрисовки нового размера окна.
+    if (entries.some(entry => entry.target === observedViewport)) {
+      syncScrollGeometry();
+      if (viewportMode.value === 'live') {
+        keepBottomPinned('auto');
+      } else {
+        updateBottomState();
+      }
+    }
+
     if (resizeRafId || isRestoringScroll) {
       return;
     }
@@ -605,6 +654,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     mutationObserver?.disconnect();
     mutationObserver = null;
     observedContainer = null;
+    observedViewport = null;
     observedContent = null;
     cleanupUserScrollIntentListeners();
   };
@@ -616,6 +666,9 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
 
     scrollRafId = requestAnimationFrame(() => {
       scrollRafId = 0;
+      // Scroll может прийти раньше ResizeObserver. Трансформация содержимого
+      // меняет scrollHeight вообще без resize: это не переход пользователя в историю.
+      syncScrollGeometry();
       if (updateBottomState()) {
         return;
       }

@@ -89,6 +89,19 @@
 
         <section
           :class="[
+            'mobile-list-container__section mobile-list-container__section--clients',
+            {
+              'mobile-list-container__section--direct-hidden':
+                isSectionHiddenDuringDirectTransition('clients')
+            }
+          ]"
+          :aria-hidden="activeSection !== 'clients'"
+        >
+          <ClientsPanel v-if="mountedSections.has('clients')" is-mobile />
+        </section>
+
+        <section
+          :class="[
             'mobile-list-container__section mobile-list-container__section--ai',
             {
               'mobile-list-container__section--direct-hidden':
@@ -125,6 +138,7 @@
 
   <template v-if="!isAssistantRoute">
     <NewChatMobileModal
+      v-if="hasOpenedNewChat"
       :open="state.showAddAccount"
       :is-add-one="state.newAccountTopicType === TopicType.DM"
       :selected-contact-ids="state.checkUsers"
@@ -132,6 +146,7 @@
       @unmount-contact="handleNewContact"
     />
     <NewBotMobileModal
+      v-if="hasOpenedNewBot"
       :open="state.showCreateBot"
       @unmount-close="handleCloseBotModal"
     />
@@ -143,6 +158,11 @@ let savedChatsScrollTop = 0;
 </script>
 
 <script setup lang="ts">
+import {
+  isClientTopic,
+  useManagerInquiries
+} from '../../composables/useManagerInquiries';
+import ClientsPanel from '../Clients/ClientsPanel.vue';
 import {
   reactive,
   computed,
@@ -158,8 +178,6 @@ import type {
   IMobileListEmits
 } from './interfaces/mobile-list';
 import type { IUser } from '../interfaces/interfaces';
-import NewChatMobileModal from '../NewChat/NewChatMobileModal.vue';
-import NewBotMobileModal from '../NewChat/NewBotMobileModal.vue';
 import TopicList from './TopicList.vue';
 import ChatsToolbar from '../Menu/ChatsToolbar.vue';
 import { useTopics } from '../../composables/useTopics';
@@ -198,6 +216,12 @@ import {
   normalizeAtSearchQuery
 } from '../../utils/searchMatch';
 
+const NewChatMobileModal = defineAsyncComponent(
+  () => import('../NewChat/NewChatMobileModal.vue')
+);
+const NewBotMobileModal = defineAsyncComponent(
+  () => import('../NewChat/NewBotMobileModal.vue')
+);
 const CallsPage = defineAsyncComponent(() => import('../Calls/CallsPage.vue'));
 const AIMenuPanel = defineAsyncComponent(() => import('../AI/AIMenuPanel.vue'));
 const MenuProfilePanel = defineAsyncComponent(
@@ -216,10 +240,13 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
 const { getTopicList, loading: isTopicsLoading } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
+const { byTopic: clientInquiries } = useManagerInquiries();
 const mountedSections = reactive(new Set<ChatMenuSection>(['chats']));
 const { isShareSelectionActive, selectedTopicIds, toggleShareTopic } =
   useShareSelection();
-const allTopics = computed(() => getTopicList());
+const allTopics = computed(() =>
+  getTopicList().filter(topic => !isClientTopic(topic))
+);
 const messageSearchResults = ref<IMessageSearchResult[]>([]);
 const isMessageSearchLoading = ref(false);
 const isMessageSearchPending = ref(false);
@@ -234,6 +261,7 @@ const isDragOverFiles = ref(false);
 const MENU_SECTION_ORDER: ChatMenuSection[] = [
   'chats',
   'calls',
+  'clients',
   'ai',
   'profile'
 ];
@@ -257,6 +285,8 @@ const filterMutedOnly = computed(() =>
   getChatsToolbarFilterMutedOnly(filterBadgeState.value)
 );
 
+const hasOpenedNewChat = ref(false);
+const hasOpenedNewBot = ref(false);
 const state = reactive({
   showAddAccount: false,
   showCreateBot: false,
@@ -538,6 +568,7 @@ const handleMessageSearchClick = (result: IMessageSearchResult): void => {
 };
 
 const handleShowAccount = (topicType: TopicType) => {
+  hasOpenedNewChat.value = true;
   if (isAssistantRoute.value) {
     return;
   }
@@ -569,6 +600,7 @@ const handleNewContact = (contact: IUser): void => {
 };
 
 const handleShowBot = () => {
+  hasOpenedNewBot.value = true;
   if (isAssistantRoute.value) {
     return;
   }
@@ -675,7 +707,11 @@ watch(
 );
 
 watch(
-  () => [route.value?.type, route.value?.id],
+  () => [
+    route.value?.type,
+    route.value?.id,
+    clientInquiries.value.has(route.value?.id || '')
+  ],
   ([routeType]) => {
     if (routeType === RouteTypes.CALL) {
       setActiveSection('calls');
@@ -692,7 +728,13 @@ watch(
       routeType === RouteTypes.GROUP ||
       routeType === RouteTypes.FAVORITES
     ) {
-      setActiveSection('chats');
+      const topicId = route.value?.id;
+      setActiveSection(
+        clientInquiries.value.has(topicId || '') ||
+          isClientTopic(getTopicList().find(topic => topic.id === topicId))
+          ? 'clients'
+          : 'chats'
+      );
     }
   },
   { immediate: true }

@@ -288,13 +288,15 @@ const bindSocketEvents = async (): Promise<void> => {
   );
 };
 
-const ensureSocketEvents = (): void => {
+export const ensureCallSummaryEvents = (): void => {
   if (!subscriptionPromise) {
     subscriptionPromise = bindSocketEvents().finally(() => {
       subscriptionPromise = null;
     });
   }
 };
+
+const ensureSocketEvents = ensureCallSummaryEvents;
 
 export const loadActiveCallSummaryRecorders = async (
   roomId?: string | null

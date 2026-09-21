@@ -27,3 +27,26 @@ describe('удаление своего варианта статуса', () => 
     );
   });
 });
+
+describe('удаление пользовательского фона', () => {
+  test('отправляет DELETE по адресу фона', async () => {
+    const sendRequest = mock(async () => new Response(null, { status: 204 }));
+    const api = new ChatUser({ sendRequest } as unknown as Reqi);
+
+    await api.deleteCustomBackground('chat', 'custom-wallpaper-1');
+
+    expect(sendRequest).toHaveBeenCalledWith(
+      '/users/backgrounds/chat/custom-wallpaper-1',
+      { request: { method: 'DELETE' }, parsed: false }
+    );
+  });
+
+  test('возвращает ошибку, если сервер не удалил фон', async () => {
+    const sendRequest = mock(async () => new Response(null, { status: 500 }));
+    const api = new ChatUser({ sendRequest } as unknown as Reqi);
+
+    await expect(
+      api.deleteCustomBackground('call', 'custom-call-background-1')
+    ).rejects.toThrow('Не удалось удалить фон');
+  });
+});

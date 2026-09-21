@@ -297,7 +297,11 @@ export const useMentionUserClick = () => {
     container
       .querySelectorAll<HTMLAnchorElement>(ANCHOR_SELECTOR)
       .forEach(anchor => {
-        if (!isGroupCallInviteUrl(anchor.href)) {
+        if (
+          !isGroupCallInviteUrl(anchor.href, {
+            allowTrustedOrigin: true
+          })
+        ) {
           return;
         }
 
@@ -325,12 +329,18 @@ export const useMentionUserClick = () => {
       ANCHOR_SELECTOR
     ) as HTMLAnchorElement | null;
 
-    if (anchorElement && isGroupCallInviteUrl(anchorElement.href)) {
+    if (
+      anchorElement &&
+      isGroupCallInviteUrl(anchorElement.href, {
+        allowTrustedOrigin: true
+      })
+    ) {
       const inviteUrl = anchorElement.href;
       event.preventDefault();
       event.stopPropagation();
       void import('../../../services/useLiveKit').then(
-        ({ openGroupCallInviteUrl }) => openGroupCallInviteUrl(inviteUrl)
+        ({ openGroupCallInviteUrl }) =>
+          openGroupCallInviteUrl(inviteUrl, { allowTrustedOrigin: true })
       );
       return;
     }

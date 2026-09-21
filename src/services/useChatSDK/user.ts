@@ -1,5 +1,6 @@
 import { User, Topic } from '@pksep/zod-shared-chat';
 import { Reqi } from '@pksep/reqi';
+import { readJson } from './read-json';
 import { SearchParams, PaginatedResponse } from './types';
 import type { UserStatusValue } from '../../utils/userStatus';
 import type {
@@ -60,6 +61,17 @@ export class ChatUser implements ChatUserInterface {
     return response.json();
   }
 
+  async deleteCustomBackground(
+    kind: CustomBackgroundKind,
+    id: string
+  ): Promise<void> {
+    const response = await this.reqi.sendRequest(
+      `/users/backgrounds/${kind}/${encodeURIComponent(id)}`,
+      { request: { method: 'DELETE' }, parsed: false }
+    );
+    if (!response.ok) throw new Error('Не удалось удалить фон');
+  }
+
   async getUsers(params?: SearchParams): Promise<PaginatedResponse<User>> {
     const queryParams = new URLSearchParams();
 
@@ -73,11 +85,7 @@ export class ChatUser implements ChatUserInterface {
     const endpoint = `/users${queryString ? `?${queryString}` : ''}`;
 
     try {
-      const response = (await this.reqi.get<PaginatedResponse<User>>(endpoint, {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
+      return await readJson<PaginatedResponse<User>>(this.reqi, endpoint);
     } catch (error) {
       throw new Error(`Failed to fetch users: ${(error as Error).message}`);
     }
@@ -97,11 +105,7 @@ export class ChatUser implements ChatUserInterface {
 
   async getUserProfile(userId: string): Promise<User> {
     try {
-      const response = (await this.reqi.get<User>(`/users/${userId}`, {
-        parsed: false
-      })) as any;
-      const data = await response.json();
-      return data;
+      return await readJson<User>(this.reqi, `/users/${userId}`);
     } catch (error) {
       throw new Error(
         `Failed to fetch user profile: ${(error as Error).message}`
@@ -136,14 +140,10 @@ export class ChatUser implements ChatUserInterface {
 
   async getRecentTopics(userId: string): Promise<Topic[]> {
     try {
-      const response = (await this.reqi.get<Topic[]>(
-        `/users/${userId}/recent-topics`,
-        {
-          parsed: false
-        }
-      )) as any;
-      const data = await response.json();
-      return data;
+      return await readJson<Topic[]>(
+        this.reqi,
+        `/users/${userId}/recent-topics`
+      );
     } catch (error) {
       throw new Error(
         `Failed to fetch recent topics: ${(error as Error).message}`

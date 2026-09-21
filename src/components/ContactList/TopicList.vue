@@ -1,7 +1,6 @@
 <template>
   <ul
     ref="listRootRef"
-    :key="listRenderKey"
     :class="['contact-list', props.class]"
     role="list"
     :data-testid="`${props.dataTestid}-ContactList-List`"
@@ -38,6 +37,7 @@
       v-for="(topic, index) in displayTopics"
       :key="topic.id"
       class="contact-list__li"
+      :data-topic-id="topic.id"
       role="listitem"
       tabindex="0"
       @keydown="event => handleKeyDown(topic, index, event)"
@@ -136,7 +136,8 @@
             <MessageStatusIcons
               v-if="
                 topic.lastMessage?.senderUserId === authedUser?.id &&
-                !topic.lastMessage?.isSystem
+                !topic.lastMessage?.isSystem &&
+                !hasExternalMessageChannel(topic.lastMessage?.ex)
               "
               :class="{
                 'contact-list__message-status-icons': true,
@@ -454,6 +455,7 @@
 </template>
 
 <script setup lang="ts">
+import { hasExternalMessageChannel } from '../../utils/managerMessageChannel';
 import {
   computed,
   nextTick,
@@ -480,7 +482,12 @@ import BotAvatar from '../UI/BotAvatar.vue';
 import EmojiIcon from '../UI/EmojiIcon.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { getAuthUser } from '../../composables/useAuth';
-import { IMedia, ITopic, MessageStatusEnum } from '../interfaces/interfaces';
+import {
+  IMedia,
+  IMessage,
+  ITopic,
+  MessageStatusEnum
+} from '../interfaces/interfaces';
 import { useTopics } from '../../composables/useTopics';
 import { formatListTime } from '../../composables/useTime';
 import { useResizeState } from '../../composables/useResizeState';
@@ -532,12 +539,16 @@ import {
 import { isFavoriteTopic } from '../../utils/favorite-topic';
 import {
   getClientMessageById,
-  getFullMessagesByTopicId
+  getFullMessagesByTopicId,
+  hasKnownTopicMessagesState,
+  hydrateMessagePreviewFromCache,
+  hydrateMessagesFromCache
 } from '../../services/useMessages';
 import {
   resolveLastMessageStatus,
   resolveTopicLastMessage
 } from '../../utils/topic-last-message';
+import { preloadAvatarPath } from '../../services/avatar-image-verification';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
@@ -594,8 +605,15 @@ const getClientLastMessage = (topic: ITopic) => {
     ? [...messages].reverse().find(message => !message.isSystem)
     : messages.at(-1);
 };
+const startupTopicsPending = ref(
+  isMobile.value && !!document.getElementById('startup-shell')
+);
+const initialTopicCount = Math.ceil(window.innerHeight / 64) + 2;
 const displayTopics = computed(() =>
-  props.topics.map(topic => {
+  (startupTopicsPending.value && !props.searchQuery && !props.showCheckbox
+    ? props.topics.slice(0, initialTopicCount)
+    : props.topics
+  ).map(topic => {
     const lastMessage = resolveTopicLastMessage(
       topic.lastMessage,
       getClientLastMessage(topic)
@@ -611,19 +629,69 @@ const getTopicLastMessageStatus = (topic: ITopic) =>
     topic.lastMessage,
     getClientMessageById(topic.id, topic.lastMessage?.id)
   );
-const isRecentlyReconnected = computed(() => getHasWebsocketConnection());
-const listRenderKey = ref(0);
+// Переподключение обновляет реактивные статусы, сохраняя DOM и наблюдатели превью.
 const listRootRef = ref<HTMLElement | null>(null);
 const pendingActiveTopicId = ref<string | null>(null);
 const { getFullMediaPath } = useMessageMedia();
 const currentTime = ref(Date.now());
 let currentTimeInterval: ReturnType<typeof setInterval> | null = null;
+let startupTopicsFrame = 0;
+let startupTopicsIdle = 0;
+const revealRemainingStartupTopics = (): void => {
+  startupTopicsPending.value = false;
+  if (startupTopicsFrame) cancelAnimationFrame(startupTopicsFrame);
+  if (startupTopicsIdle) window.cancelIdleCallback(startupTopicsIdle);
+  startupTopicsFrame = 0;
+  startupTopicsIdle = 0;
+  document.removeEventListener('scroll', revealStartupTopicsOnScroll, true);
+  void nextTick(syncTopicCacheObserver);
+};
+const revealStartupTopicsOnScroll = (event: Event): void => {
+  if (
+    event.target instanceof Element &&
+    listRootRef.value &&
+    event.target.contains(listRootRef.value)
+  )
+    revealRemainingStartupTopics();
+};
+const scheduleRemainingStartupTopics = (): void => {
+  if (!startupTopicsPending.value) return;
+  if (document.getElementById('startup-shell')) {
+    startupTopicsFrame = requestAnimationFrame(scheduleRemainingStartupTopics);
+    return;
+  }
+  startupTopicsFrame = requestAnimationFrame(() => {
+    startupTopicsFrame = requestAnimationFrame(() => {
+      if ('requestIdleCallback' in window) {
+        startupTopicsIdle = window.requestIdleCallback(
+          revealRemainingStartupTopics,
+          { timeout: 500 }
+        );
+      } else revealRemainingStartupTopics();
+    });
+  });
+};
 let descriptionOverflowRafId = 0;
 let descriptionOverflowSecondRafId = 0;
 let descriptionMutationObserver: MutationObserver | null = null;
 let descriptionResizeObserver: ResizeObserver | null = null;
+let topicCacheObserver: IntersectionObserver | null = null;
+let topicCacheWarmFrame = 0;
+let isStartupTopicCacheWarmReady =
+  typeof document === 'undefined' || !document.getElementById('startup-shell');
+let activeTopicCacheWarmCount = 0;
+const queuedTopicCacheWarmIds: string[] = [];
+const queuedTopicCacheWarmSet = new Set<string>();
+const activeTopicCacheWarmIds = new Set<string>();
 const TOPIC_PRESS_SCROLL_CANCEL_PX = 8;
 const TOPIC_POINTER_CLICK_MAX_DELAY_MS = 2000;
+const TOPIC_CACHE_PREVIEW_LIMIT = 48;
+const MAX_CONCURRENT_TOPIC_CACHE_WARMS = 2;
+const TOPIC_OPEN_CACHE_WAIT_MS = 80;
+// The first mobile frame only contains a few recent sender groups. Starting
+// dozens of IndexedDB reads and image decodes at once delays those visible
+// avatars on Android, so prioritize a compact recent set before navigation.
+const TOPIC_AVATAR_PRELOAD_LIMIT = 8;
 let topicPressPointerId: number | null = null;
 let topicPressStartX = 0;
 let topicPressStartY = 0;
@@ -632,6 +700,7 @@ let topicPointerDownContext: {
   topicId: string;
   timestamp: number;
 } | null = null;
+let topicOpenPreparationToken = 0;
 
 const hasSearchQuery = computed(() => props.searchQuery.trim().length > 0);
 const skeletonRows = 7;
@@ -669,6 +738,155 @@ const showSearchEmptyState = computed(
     props.messageResults.length === 0
 );
 
+const preloadTopicMessageAvatars = async (
+  messages: IMessage[],
+  allowNetwork: boolean
+): Promise<void> => {
+  const paths: string[] = [];
+  const knownPaths = new Set<string>();
+
+  for (
+    let index = messages.length - 1;
+    index >= 0 && paths.length < TOPIC_AVATAR_PRELOAD_LIMIT;
+    index -= 1
+  ) {
+    const path = messages[index]?.senderUser?.avatarUrl;
+    if (!path || knownPaths.has(path)) continue;
+    knownPaths.add(path);
+    paths.push(path);
+  }
+
+  await Promise.all(
+    paths.map(path => preloadAvatarPath(path, { allowNetwork }))
+  );
+};
+
+const runQueuedTopicCacheWarms = (): void => {
+  // IntersectionObserver видит строки и под стартовым экраном. Чтение историй
+  // и декодирование аватаров этих чатов должны начинаться после готового списка.
+  if (!isStartupTopicCacheWarmReady) {
+    if (!topicCacheWarmFrame) {
+      topicCacheWarmFrame = requestAnimationFrame(() => {
+        topicCacheWarmFrame = 0;
+        if (document.getElementById('startup-shell')) {
+          runQueuedTopicCacheWarms();
+          return;
+        }
+        topicCacheWarmFrame = requestAnimationFrame(() => {
+          topicCacheWarmFrame = 0;
+          isStartupTopicCacheWarmReady = true;
+          runQueuedTopicCacheWarms();
+        });
+      });
+    }
+    return;
+  }
+  while (
+    activeTopicCacheWarmCount < MAX_CONCURRENT_TOPIC_CACHE_WARMS &&
+    queuedTopicCacheWarmIds.length > 0
+  ) {
+    const topicId = queuedTopicCacheWarmIds.shift();
+    if (!topicId) continue;
+
+    queuedTopicCacheWarmSet.delete(topicId);
+    if (hasKnownTopicMessagesState(topicId)) continue;
+
+    activeTopicCacheWarmCount += 1;
+    activeTopicCacheWarmIds.add(topicId);
+    void hydrateMessagePreviewFromCache(
+      topicId,
+      undefined,
+      TOPIC_CACHE_PREVIEW_LIMIT
+    )
+      .then(messages => {
+        // Фоновый прогрев декодирует только локальные изображения и не
+        // обращается к CDN для топика, который пользователь ещё не открыл.
+        void preloadTopicMessageAvatars(messages, false);
+      })
+      .finally(() => {
+        activeTopicCacheWarmCount -= 1;
+        activeTopicCacheWarmIds.delete(topicId);
+        runQueuedTopicCacheWarms();
+      });
+  }
+};
+
+const warmTopicMessagesFromCache = (
+  topicId: string,
+  prioritize = false
+): void => {
+  if (
+    !topicId ||
+    props.showCheckbox ||
+    hasKnownTopicMessagesState(topicId) ||
+    activeTopicCacheWarmIds.has(topicId)
+  ) {
+    return;
+  }
+
+  if (queuedTopicCacheWarmSet.has(topicId)) {
+    if (prioritize) {
+      const index = queuedTopicCacheWarmIds.indexOf(topicId);
+      if (index > 0) {
+        queuedTopicCacheWarmIds.splice(index, 1);
+        queuedTopicCacheWarmIds.unshift(topicId);
+      }
+    }
+  } else {
+    queuedTopicCacheWarmSet.add(topicId);
+    if (prioritize) queuedTopicCacheWarmIds.unshift(topicId);
+    else queuedTopicCacheWarmIds.push(topicId);
+  }
+
+  runQueuedTopicCacheWarms();
+};
+
+const prepareTopicMessagesForOpen = async (topicId: string): Promise<void> => {
+  if (!topicId) return;
+
+  if (!hasKnownTopicMessagesState(topicId)) {
+    warmTopicMessagesFromCache(topicId, true);
+  }
+  const cachedMessagesReady = hasKnownTopicMessagesState(topicId)
+    ? Promise.resolve(getFullMessagesByTopicId(topicId))
+    : hydrateMessagesFromCache(topicId, undefined, {
+        visibleLimit: TOPIC_CACHE_PREVIEW_LIMIT,
+        allowVisibleShrink: true
+      });
+  await Promise.race([
+    cachedMessagesReady
+      .then(messages => preloadTopicMessageAvatars(messages, true))
+      .then(() => undefined)
+      .catch(() => undefined),
+    new Promise<void>(resolve =>
+      window.setTimeout(resolve, TOPIC_OPEN_CACHE_WAIT_MS)
+    )
+  ]);
+};
+
+const syncTopicCacheObserver = async (): Promise<void> => {
+  if (typeof IntersectionObserver === 'undefined' || props.showCheckbox) return;
+
+  await nextTick();
+  topicCacheObserver?.disconnect();
+  topicCacheObserver = new IntersectionObserver(
+    entries => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const topicId = (entry.target as HTMLElement).dataset.topicId;
+        if (topicId) warmTopicMessagesFromCache(topicId);
+      }
+    },
+    {
+      root: listRootRef.value?.parentElement || null,
+      rootMargin: '240px 0px'
+    }
+  );
+  listRootRef.value
+    ?.querySelectorAll<HTMLElement>('.contact-list__li[data-topic-id]')
+    .forEach(element => topicCacheObserver?.observe(element));
+};
+
 const isTopicActive = (topic: ITopic): boolean =>
   topic.id === pendingActiveTopicId.value ||
   !!isOpen[topic.id] ||
@@ -684,11 +902,6 @@ const getTopicStatusIcon = (topic: ITopic): string =>
   topic.type === TopicType.DM
     ? getTopicEffectiveUser(topic)?.status?.icon || ''
     : '';
-
-watch(isRecentlyReconnected, value => {
-  if (!value) return;
-  listRenderKey.value += 1;
-});
 
 watch(
   () =>
@@ -739,15 +952,17 @@ const syncDescriptionOverflowState = (): void => {
     root.querySelectorAll<HTMLElement>('.contact-list__description')
   );
 
-  descriptions.forEach(description => {
-    const hasOverflow = getDescriptionOverflowCandidates(description).some(
+  // Сначала все измерения, затем стили: запись класса не запускает layout каждой строки.
+  const overflows = descriptions.map(description =>
+    getDescriptionOverflowCandidates(description).some(
       element =>
         element.clientWidth > 0 && element.scrollWidth > element.clientWidth + 1
-    );
-
+    )
+  );
+  descriptions.forEach((description, index) => {
     description.classList.toggle(
       'contact-list__description--overflow',
-      hasOverflow
+      overflows[index]
     );
   });
 };
@@ -772,6 +987,10 @@ const scheduleDescriptionOverflowSync = (): void => {
 };
 
 onMounted(() => {
+  if (startupTopicsPending.value) {
+    document.addEventListener('scroll', revealStartupTopicsOnScroll, true);
+    startupTopicsFrame = requestAnimationFrame(scheduleRemainingStartupTopics);
+  }
   currentTimeInterval = setInterval(() => {
     currentTime.value = Date.now();
   }, 1000);
@@ -799,9 +1018,13 @@ onMounted(() => {
   }
 
   scheduleDescriptionOverflowSync();
+  void syncTopicCacheObserver();
 });
 
 onBeforeUnmount(() => {
+  if (startupTopicsFrame) cancelAnimationFrame(startupTopicsFrame);
+  if (startupTopicsIdle) window.cancelIdleCallback(startupTopicsIdle);
+  document.removeEventListener('scroll', revealStartupTopicsOnScroll, true);
   if (currentTimeInterval) {
     clearInterval(currentTimeInterval);
     currentTimeInterval = null;
@@ -809,10 +1032,15 @@ onBeforeUnmount(() => {
 
   window.removeEventListener('resize', scheduleDescriptionOverflowSync);
   cancelDescriptionOverflowSync();
+  if (topicCacheWarmFrame) cancelAnimationFrame(topicCacheWarmFrame);
   descriptionMutationObserver?.disconnect();
   descriptionMutationObserver = null;
   descriptionResizeObserver?.disconnect();
   descriptionResizeObserver = null;
+  topicCacheObserver?.disconnect();
+  topicCacheObserver = null;
+  queuedTopicCacheWarmIds.length = 0;
+  queuedTopicCacheWarmSet.clear();
 });
 
 watch(
@@ -825,6 +1053,14 @@ watch(
   ],
   scheduleDescriptionOverflowSync,
   { deep: true, immediate: true }
+);
+
+watch(
+  [
+    () => props.topics.map(topic => topic.id).join('|'),
+    () => props.showCheckbox
+  ],
+  () => void syncTopicCacheObserver()
 );
 
 const handlePin = (topic: ITopic): void => {
@@ -1018,7 +1254,11 @@ const resolveTopicClickTarget = (
   };
 };
 
-const handleClick = (topic: ITopic, index?: number, event?: Event): void => {
+const handleClick = async (
+  topic: ITopic,
+  index?: number,
+  event?: Event
+): Promise<void> => {
   if (isMobile.value && topicPressMoved && !(event instanceof KeyboardEvent)) {
     clearTopicPointerDownContext();
     pendingActiveTopicId.value = null;
@@ -1038,6 +1278,11 @@ const handleClick = (topic: ITopic, index?: number, event?: Event): void => {
   }
 
   const { topic: targetTopic, index: targetIndex } = clickTarget;
+  const preparationToken = ++topicOpenPreparationToken;
+  pendingActiveTopicId.value = targetTopic.id;
+  await prepareTopicMessagesForOpen(targetTopic.id);
+  if (preparationToken !== topicOpenPreparationToken) return;
+  pendingActiveTopicId.value = null;
 
   if (isMobile.value) {
     emits('unmount-topic', targetTopic, null);
@@ -1088,6 +1333,8 @@ const handleTopicPress = (topic: ITopic, event: PointerEvent): void => {
     topicId: topic.id,
     timestamp: Date.now()
   };
+
+  warmTopicMessagesFromCache(topic.id, true);
 
   if (!isMobile.value) {
     return;
