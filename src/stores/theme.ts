@@ -31,12 +31,6 @@ const THEME_CLASSES: IThemeClasses = {
   light: 'theme-light'
 };
 
-const isLightThemeOnly = (): boolean => {
-  if (Capacitor.isNativePlatform()) return true;
-
-  return typeof window !== 'undefined';
-};
-
 const syncNativeLaunchTheme = (isDarkTheme: boolean): void => {
   if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') {
     return;
@@ -155,9 +149,7 @@ export const useThemeStore = defineStore('theme', () => {
 
     // Восстанавливаем сохраненную тему только один раз при старте приложения.
     const savedThemeClass = getSavedThemeClass();
-    const initialThemeClass = isLightThemeOnly()
-      ? THEME_CLASSES.light
-      : savedThemeClass;
+    const initialThemeClass = savedThemeClass;
 
     // Синхронизируем реактивное состояние с сохраненным классом темы.
     isDarkTheme.value = getIsDarkThemeByClass(initialThemeClass);
@@ -165,10 +157,6 @@ export const useThemeStore = defineStore('theme', () => {
 
     // Применяем восстановленную тему к корневому элементу.
     applyThemeClass(initialThemeClass);
-
-    if (initialThemeClass !== savedThemeClass) {
-      saveThemeClass(initialThemeClass);
-    }
 
     // Помечаем тему как инициализированную, чтобы не выполнять этот код повторно.
     isThemeInitialized.value = true;

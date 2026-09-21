@@ -320,11 +320,12 @@ svg.icon-yui-kit.contact-list__read-icon {
 
   transition: all 0.2s ease;
 
-  border-radius: 15px;
+  border-bottom: 0.5px solid var(--border-table);
 
   &:hover {
     cursor: pointer;
   }
+
 }
 
 .contact-selector__item:hover .user-profile>* {

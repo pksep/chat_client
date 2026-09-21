@@ -19,7 +19,7 @@
         "@livekit/track-processors": "^0.7.2",
         "@mastra/client-js": "1.40.0",
         "@pksep/reqi": "0.0.25",
-        "@pksep/yui": "0.1.320",
+        "@pksep/yui": "0.1.322",
         "@pksep/zod-shared-chat": "0.0.6",
         "@tauri-apps/api": "^2.11.0",
         "@tauri-apps/plugin-notification": "^2.3.3",
@@ -76,7 +76,7 @@
     },
   },
   "patchedDependencies": {
-    "@pksep/yui@0.1.320": "patches/@pksep%2Fyui@0.1.320.patch",
+    "vue3-emoji-picker@1.1.8": "patches/vue3-emoji-picker@1.1.8.patch",
   },
   "packages": {
     "@a2a-js/sdk-v0_3": ["@a2a-js/sdk@0.3.14", "", { "dependencies": { "uuid": "^11.1.0" }, "peerDependencies": { "@bufbuild/protobuf": "^2.10.2", "@grpc/grpc-js": "^1.11.0", "express": "^4.21.2 || ^5.1.0" }, "optionalPeers": ["@bufbuild/protobuf", "@grpc/grpc-js", "express"] }, "sha512-F6Ew1AtPzCLhTn8h9yiqTe7DiDf6XVrSnq9V1YqSl9eWqPm6anMveTiKdCSb/76cW0YiJc24rNaUrVezFFHbqQ=="],
@@ -621,7 +621,7 @@
 
     "@pksep/reqi": ["@pksep/reqi@0.0.25", "", { "dependencies": { "content-type": "^1.0.5", "lz-string": "^1.5.0" } }, "sha512-sSed6Susoh0CZfBFcNRit5SruksP+S+uEZKLz2qkY97hsSbOVc8GvWoGY3O1X6b/APWNFwFq4e2jJyVP6zEGlw=="],
 
-    "@pksep/yui": ["@pksep/yui@0.1.320", "", { "dependencies": { "@floating-ui/vue": "^1.1.11", "@fontsource-variable/inter": "^5.2.8", "@fontsource/source-sans-pro": "^5.2.5", "@panzoom/panzoom": "^4.6.2", "@pksep/col-cal": "^1.0.4", "@tiptap/core": "^3.27.3", "@tiptap/extension-image": "^3.27.3", "@tiptap/extension-link": "^3.27.3", "@tiptap/extension-placeholder": "^3.27.3", "@tiptap/extension-text-style": "3.27.3", "@tiptap/pm": "^3.27.3", "@tiptap/starter-kit": "^3.27.3", "@tiptap/vue-3": "^3.27.3", "@vueuse/components": "^11.3.0", "@vueuse/core": "^11.3.0", "pdfjs-dist": "^5.7.284", "print-js": "^1.6.0", "vue": "^3.5.39", "vue3-emoji-picker": "^1.1.8", "vue3-perfect-scrollbar": "^2.0.0" } }, "sha512-k/5QDUkKGRaTrkkQJLooOd97O5HS10AYF2rZSEn5t7lTy9y7x3Uyd5xZlQxzr3dbts5eRY1Ki8Pv8sqcy17orA=="],
+    "@pksep/yui": ["@pksep/yui@0.1.322", "", { "dependencies": { "@floating-ui/vue": "^1.1.11", "@fontsource-variable/inter": "^5.2.8", "@fontsource/source-sans-pro": "^5.2.5", "@panzoom/panzoom": "^4.6.2", "@pksep/col-cal": "^1.0.4", "@tiptap/core": "^3.27.3", "@tiptap/extension-image": "^3.27.3", "@tiptap/extension-link": "^3.27.3", "@tiptap/extension-placeholder": "^3.27.3", "@tiptap/extension-text-style": "3.27.3", "@tiptap/pm": "^3.27.3", "@tiptap/starter-kit": "^3.27.3", "@tiptap/vue-3": "^3.27.3", "@vueuse/components": "^11.3.0", "@vueuse/core": "^11.3.0", "pdfjs-dist": "^5.7.284", "print-js": "^1.6.0", "vue": "^3.5.39", "vue3-emoji-picker": "^1.1.8", "vue3-perfect-scrollbar": "^2.0.0" } }, "sha512-7u1BzHqrrkTDBlcq84eEuzPuKrhjnf2OuUYTiSN9HcaOXJFD4ShW+IObQGjYg6/AX7tv3kHfiVjLpWJJg9bylg=="],
 
     "@pksep/zod-shared-chat": ["@pksep/zod-shared-chat@0.0.6", "", { "peerDependencies": { "zod": "^3.22.0" } }, "sha512-70HR9AMzkBFsnICp9nTzu1EBsWhhmFHPpe0jIcGSVae8itVDV5bPzj0MrxxxaFeg3cK8Pxd4XzdigiJZ8P6VJg=="],
 
