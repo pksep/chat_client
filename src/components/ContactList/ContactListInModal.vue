@@ -74,7 +74,7 @@
     :open="newContactOpen"
     @unmount-close="closeContactModal"
     @unmount-next="handleAddMembers"
-    title="Канал"
+    title="Добавить участников"
     close-button-text="Назад"
     start-button-text="Добавить"
     :data-testid="`${props.dataTestid}-NewChatMobileModal-Container`"
