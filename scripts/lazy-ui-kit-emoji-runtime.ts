@@ -59,7 +59,7 @@ export const lazyUiKitEmojiRuntime = (): Plugin => {
         `\\b${identifier}\\(${identifier}\\(${componentName}\\), \\{`,
         'g'
       );
-      const editorReady = editor.match(
+      const patchedEditorReady = editor.match(
         new RegExp(
           `const\\s+(${identifier})\\s*=\\s*${identifier}\\.currentTarget;\\s*` +
             `(${identifier})\\s*=\\s*\\1;\\s*` +
@@ -70,6 +70,20 @@ export const lazyUiKitEmojiRuntime = (): Plugin => {
             `${identifier}\\(\\(\\)\\s*=>\\s*\\{\\s*\\8\\(\\1\\),\\s*(${identifier})\\(\\1\\);`
         )
       );
+      const cleanEditorReady = editor.match(
+        new RegExp(
+          `const\\s+(${identifier})\\s*=\\s*${identifier}\\.currentTarget;\\s*` +
+            `(${identifier})\\s*=\\s*\\1;\\s*` +
+            `const\\s+(${identifier})\\s*=\\s*\\1\\.querySelector\\("\\.emoji-picker"\\);\\s*` +
+            `(${identifier})\\s*=\\s*!1,\\s*${identifier}\\s*=\\s*\\[\\],\\s*\\3\\s*&&\\s*` +
+            `\\((${identifier})\\(\\3\\),\\s*(${identifier})\\(\\3\\)\\),\\s*` +
+            `(${identifier})\\(\\1\\),\\s*${identifier}\\.value\\s*=\\s*!0,\\s*` +
+            `${identifier}\\(\\(\\)\\s*=>\\s*\\{\\s*\\7\\(\\1\\),\\s*(${identifier})\\(\\1\\);\\s*` +
+            `const\\s+${identifier}\\s*=\\s*\\1\\.querySelector\\("\\.emoji-picker"\\);\\s*` +
+            `${identifier}\\s*&&\\s*(${identifier})\\(${identifier}\\);`
+        )
+      );
+      const editorReady = patchedEditorReady || cleanEditorReady;
       const panelReadyName = panel.match(
         new RegExp(
           `return\\s+${identifier}\\(\\(\\)\\s*=>\\s*\\{\\s*${identifier}\\((${identifier})\\);\\s*\\}\\),`
@@ -91,11 +105,11 @@ export const lazyUiKitEmojiRuntime = (): Plugin => {
         ,
         recentReady,
         resetRecent,
-        resetGroup,
-        rememberRecent,
-        positionPicker,
-        measurePicker
+        resetGroup
       ] = editorReady;
+      const rememberRecent = patchedEditorReady ? editorReady[7] : editorReady[9];
+      const positionPicker = patchedEditorReady ? editorReady[8] : editorReady[7];
+      const measurePicker = patchedEditorReady ? editorReady[9] : editorReady[8];
       // Инициализация размера, категорий и недавних эмодзи нужна после появления
       // дочернего DOM. nextTick родителя заканчивается раньше асинхронного импорта.
       const editorWithReady = editor.replace(

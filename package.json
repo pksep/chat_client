@@ -119,7 +119,6 @@
   },
   "packageManager": "bun@1.3.14",
   "patchedDependencies": {
-    "@pksep/yui@0.1.320": "patches/@pksep%2Fyui@0.1.320.patch",
     "vue3-emoji-picker@1.1.8": "patches/vue3-emoji-picker@1.1.8.patch"
   }
 }
