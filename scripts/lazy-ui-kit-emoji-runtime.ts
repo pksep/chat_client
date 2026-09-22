@@ -59,7 +59,7 @@ export const lazyUiKitEmojiRuntime = (): Plugin => {
         `\\b${identifier}\\(${identifier}\\(${componentName}\\), \\{`,
         'g'
       );
-      const editorReady = editor.match(
+      const patchedEditorReady = editor.match(
         new RegExp(
           `const\\s+(${identifier})\\s*=\\s*${identifier}\\.currentTarget;\\s*` +
             `(${identifier})\\s*=\\s*\\1;\\s*` +
@@ -70,6 +70,42 @@ export const lazyUiKitEmojiRuntime = (): Plugin => {
             `${identifier}\\(\\(\\)\\s*=>\\s*\\{\\s*\\8\\(\\1\\),\\s*(${identifier})\\(\\1\\);`
         )
       );
+      const sourceEditorReady = editor.match(
+        new RegExp(
+          `const\\s+(${identifier})\\s*=\\s*${identifier}\\.currentTarget;\\s*` +
+            `(${identifier})\\s*=\\s*\\1;\\s*` +
+            `const\\s+(${identifier})\\s*=\\s*!(${identifier})\\.value;\\s*` +
+            `\\4\\.value\\s*=\\s*!0;\\s*` +
+            `const\\s+(${identifier})\\s*=\\s*\\1\\.querySelector\\("\\.emoji-picker"\\);\\s*` +
+            `(${identifier})\\s*=\\s*!1,\\s*${identifier}\\s*=\\s*\\[\\],\\s*` +
+            `\\5\\s*&&\\s*\\3\\s*&&\\s*\\((${identifier})\\(\\5\\),\\s*(${identifier})\\(\\5\\)\\),\\s*` +
+            `(${identifier})\\(\\1\\),\\s*${identifier}\\.value\\s*=\\s*!0,\\s*` +
+            `${identifier}\\(\\(\\)\\s*=>\\s*\\{\\s*\\9\\(\\1\\),\\s*(${identifier})\\(\\1\\);\\s*` +
+            `const\\s+${identifier}\\s*=\\s*\\1\\.querySelector\\("\\.emoji-picker"\\);\\s*` +
+            `${identifier}\\s*&&\\s*(${identifier})\\(${identifier}\\);`
+        )
+      );
+      const editorReady = patchedEditorReady
+        ? {
+            editorButtonRoot: patchedEditorReady[2],
+            recentReady: patchedEditorReady[4],
+            resetRecent: patchedEditorReady[5],
+            resetGroup: patchedEditorReady[6],
+            rememberRecent: patchedEditorReady[7],
+            positionPicker: patchedEditorReady[8],
+            measurePicker: patchedEditorReady[9]
+          }
+        : sourceEditorReady
+          ? {
+              editorButtonRoot: sourceEditorReady[2],
+              recentReady: sourceEditorReady[6],
+              resetRecent: sourceEditorReady[7],
+              resetGroup: sourceEditorReady[8],
+              rememberRecent: sourceEditorReady[11],
+              positionPicker: sourceEditorReady[9],
+              measurePicker: sourceEditorReady[10]
+            }
+          : null;
       const panelReadyName = panel.match(
         new RegExp(
           `return\\s+${identifier}\\(\\(\\)\\s*=>\\s*\\{\\s*${identifier}\\((${identifier})\\);\\s*\\}\\),`
@@ -84,18 +120,15 @@ export const lazyUiKitEmojiRuntime = (): Plugin => {
       ) {
         this.error('Изменились места подключения панели эмодзи в UI-kit.');
       }
-      const [
-        ,
-        ,
+      const {
         editorButtonRoot,
-        ,
         recentReady,
         resetRecent,
         resetGroup,
         rememberRecent,
         positionPicker,
         measurePicker
-      ] = editorReady;
+      } = editorReady;
       // Инициализация размера, категорий и недавних эмодзи нужна после появления
       // дочернего DOM. nextTick родителя заканчивается раньше асинхронного импорта.
       const editorWithReady = editor.replace(

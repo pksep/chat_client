@@ -59,6 +59,10 @@ import {
   resolveTopicLastMessage
 } from '../utils/topic-last-message';
 import { compactPersonName } from '../utils/personName';
+import {
+  applyTopicPinSetting,
+  sortTopicsByPinOrder
+} from '../utils/topic-order';
 
 const topics = ref<ITopic[]>([]);
 const topicsById = computed(
@@ -1314,15 +1318,9 @@ const createTopicsApi = () => {
   const togglePinTopic = async (topic: ITopic) => {
     try {
       const sdk = getChatSDK();
-      await sdk.togglePinTopic(topic.id);
+      const setting = await sdk.togglePinTopic(topic.id);
 
-      if (isFavoriteTopic(topic, authedUser.value?.id)) {
-        updateLocalTopicInfo(topic.id, { isPin: !topic.info.isPin });
-      } else if (topic.type === TopicType.DM) {
-        updateLocalTopicInfo(topic.id, { isPin: !topic.info.isPin });
-      } else if (topic.type === TopicType.Group) {
-        updateLocalGroupInfo(topic.id, { isPin: !topic.info.isPin });
-      }
+      updateLocalTopicInfo(topic.id, applyTopicPinSetting(topic.info, setting));
     } catch (err) {
       console.error('Failed to pin/unpin topic:', err);
     }
@@ -1465,18 +1463,7 @@ const createTopicsApi = () => {
   };
 
   const sortTopics = (topics: ITopic[]): ITopic[] => {
-    return [...topics].sort((a, b) => {
-      const aPin = a.info?.isPin || false;
-      const bPin = b.info?.isPin || false;
-      if (aPin !== bPin) {
-        return aPin ? -1 : 1;
-      }
-
-      const aTime = new Date(a.lastMessage?.createdAt ?? a.createdAt).getTime();
-      const bTime = new Date(b.lastMessage?.createdAt ?? b.createdAt).getTime();
-
-      return bTime - aTime;
-    });
+    return sortTopicsByPinOrder(topics);
   };
 
   const getTopicList = (): ITopic[] => {
