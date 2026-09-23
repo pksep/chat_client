@@ -336,11 +336,12 @@ export const syncNotificationContext = async (params: {
 
 const pendingNativeTopicClears = new Map<
   string,
-  { repeat: boolean; promise: Promise<void> }
+  { repeat: boolean; stateAt: number | null; promise: Promise<void> }
 >();
 
 export const clearTopicNotifications = async (
-  topicId?: string | null
+  topicId?: string | null,
+  stateAt?: number | null
 ): Promise<void> => {
   if (!topicId) {
     return;
@@ -348,18 +349,34 @@ export const clearTopicNotifications = async (
 
   if (Capacitor.isNativePlatform()) {
     if (Capacitor.getPlatform() === 'android') {
+      const normalizedStateAt =
+        typeof stateAt === 'number' && Number.isFinite(stateAt) && stateAt > 0
+          ? stateAt
+          : null;
       const pending = pendingNativeTopicClears.get(topicId);
       if (pending) {
         pending.repeat = true;
+        pending.stateAt =
+          pending.stateAt === null || normalizedStateAt === null
+            ? null
+            : Math.max(pending.stateAt, normalizedStateAt);
         return pending.promise;
       }
-      const task = { repeat: false, promise: Promise.resolve() };
+      const task = {
+        repeat: false,
+        stateAt: normalizedStateAt,
+        promise: Promise.resolve()
+      };
       pendingNativeTopicClears.set(topicId, task);
       task.promise = (async () => {
         try {
           do {
             task.repeat = false;
-            await RuStorePush.clearNotificationsForTopic({ topicId });
+            const nextStateAt = task.stateAt;
+            await RuStorePush.clearNotificationsForTopic({
+              topicId,
+              ...(nextStateAt === null ? {} : { stateAt: nextStateAt })
+            });
           } while (task.repeat);
         } catch (error) {
           console.warn(
@@ -394,7 +411,11 @@ export const clearTopicNotifications = async (
 
     activeWorker?.postMessage({
       type: 'CLEAR_TOPIC_NOTIFICATIONS',
-      topicId
+      topicId,
+      stateAt:
+        typeof stateAt === 'number' && Number.isFinite(stateAt) && stateAt > 0
+          ? stateAt
+          : Date.now()
     });
   } catch (error) {
     console.warn('Failed to clear web notifications for topic:', error);
