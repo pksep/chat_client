@@ -318,7 +318,9 @@ self.addEventListener('push', event => {
 
       const title = payload.title || 'New message';
       const url = getNotificationUrl(payload);
-      const isIncomingCall = payload.type === 'incoming_call';
+      const isIncomingCall =
+        payload.type === 'incoming_call' &&
+        String(payload.topicType || '').toUpperCase() !== 'GROUP';
       const tag = payload.tag || payload.roomId || topicId || 'chat-message';
 
       await self.registration.showNotification(title, {
@@ -385,7 +387,9 @@ self.addEventListener('notificationclick', event => {
   event.notification.close();
 
   const payload = event.notification.data || {};
-  const isIncomingCall = payload.type === 'incoming_call';
+  const isIncomingCall =
+    payload.type === 'incoming_call' &&
+    String(payload.topicType || '').toUpperCase() !== 'GROUP';
   const action =
     event.action === 'accept' || event.action === 'decline'
       ? event.action

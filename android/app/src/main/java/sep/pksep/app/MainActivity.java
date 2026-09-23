@@ -1181,7 +1181,13 @@ public class MainActivity extends BridgeActivity {
         }
 
         Bundle extras = intent.getExtras();
-        if (extras == null || "incoming_call".equals(extras.getString(EXTRA_TYPE))) {
+        if (
+            extras == null ||
+            IncomingCallNotificationHelper.isDirectCallPayload(
+                extras.getString(EXTRA_TYPE),
+                extras.getString(IncomingCallNotificationHelper.EXTRA_TOPIC_TYPE)
+            )
+        ) {
             return false;
         }
 
@@ -1252,9 +1258,12 @@ public class MainActivity extends BridgeActivity {
         boolean isExplicitChatNotification =
             ChatNotificationHelper.ACTION_OPEN_CHAT_NOTIFICATION.equals(
                 intent.getAction()
-            );
+        );
         boolean isIncomingCallNotification =
-            "incoming_call".equals(extras.getString(EXTRA_TYPE)) &&
+            IncomingCallNotificationHelper.isDirectCallPayload(
+                extras.getString(EXTRA_TYPE),
+                extras.getString(IncomingCallNotificationHelper.EXTRA_TOPIC_TYPE)
+            ) &&
             extras.containsKey(EXTRA_ROOM_ID);
 
         if (
@@ -1361,12 +1370,20 @@ public class MainActivity extends BridgeActivity {
             return false;
         }
 
-        if ("incoming_call".equals(intent.getStringExtra(EXTRA_TYPE))) {
+        if (
+            IncomingCallNotificationHelper.isDirectCallPayload(
+                intent.getStringExtra(EXTRA_TYPE),
+                intent.getStringExtra(IncomingCallNotificationHelper.EXTRA_TOPIC_TYPE)
+            )
+        ) {
             return true;
         }
 
         Uri data = intent.getData();
-        return data != null && "incoming_call".equals(data.getQueryParameter(EXTRA_TYPE));
+        return data != null && IncomingCallNotificationHelper.isDirectCallPayload(
+            data.getQueryParameter(EXTRA_TYPE),
+            data.getQueryParameter(IncomingCallNotificationHelper.EXTRA_TOPIC_TYPE)
+        );
     }
 
     public void setIncomingCallWindowEnabled(boolean enabled) {

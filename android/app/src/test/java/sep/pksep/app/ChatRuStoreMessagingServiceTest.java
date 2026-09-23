@@ -63,6 +63,28 @@ public class ChatRuStoreMessagingServiceTest {
     }
 
     @Test
+    public void treatsOnlyDirectCallPayloadAsIncomingCall() {
+        Map<String, String> directCall = new HashMap<>();
+        directCall.put("type", "incoming_call");
+        directCall.put("topicType", "DM");
+
+        Map<String, String> groupCall = new HashMap<>();
+        groupCall.put("type", "incoming_call");
+        groupCall.put("topicType", "GROUP");
+
+        assertTrue(ChatRuStoreMessagingService.isIncomingDirectCall(directCall));
+        assertFalse(ChatRuStoreMessagingService.isIncomingDirectCall(groupCall));
+    }
+
+    @Test
+    public void keepsLegacyIncomingCallWithoutTopicTypeWorking() {
+        Map<String, String> data = new HashMap<>();
+        data.put("type", "incoming_call");
+
+        assertTrue(ChatRuStoreMessagingService.isIncomingDirectCall(data));
+    }
+
+    @Test
     public void doesNotScheduleChatSyncWithoutTopicHint() {
         Map<String, String> data = new HashMap<>();
         data.put("messageId", "message-id");
