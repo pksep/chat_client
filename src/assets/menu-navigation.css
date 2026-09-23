@@ -54,11 +54,11 @@
 }
 
 .menu-bottom-nav__switch--previous {
-  left: 6px;
+  left: 1px;
 }
 
 .menu-bottom-nav__switch--next {
-  right: 6px;
+  right: 7px;
 }
 
 .menu-bottom-nav__switch .icon-yui-kit {

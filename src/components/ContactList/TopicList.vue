@@ -333,6 +333,7 @@
       @keydown.space.prevent="event => handleCompactPopoverClick(event)"
     >
       <TopicListItemContent
+        :key="compactHoverTopic.topic.id"
         :topic="compactHoverTopic.topic"
         :index="compactHoverTopic.index"
         :data-testid="`${props.dataTestid}-CompactPopover`"
