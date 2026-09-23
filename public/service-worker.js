@@ -5,6 +5,7 @@ try {
 }
 
 const CHAT_BACKGROUND_SYNC_TAG = 'chat-background-sync';
+const INCOMING_CALL_MAX_AGE_MS = 60_000;
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -33,6 +34,28 @@ const normalizePayload = rawData => {
     ...nestedData,
     ...rest
   };
+};
+
+const parsePushTimestamp = value => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const isFreshIncomingCallPayload = (payload, now = Date.now()) => {
+  if (
+    payload.type !== 'incoming_call' ||
+    String(payload.topicType || '').toUpperCase() === 'GROUP'
+  ) {
+    return false;
+  }
+
+  const expiresAt = parsePushTimestamp(payload.expiresAt);
+  if (expiresAt !== null && now >= expiresAt) {
+    return false;
+  }
+
+  const sentAt = parsePushTimestamp(payload.sentAt);
+  return sentAt === null || now - sentAt <= INCOMING_CALL_MAX_AGE_MS;
 };
 
 const getPayloadUrl = payload =>
@@ -113,6 +136,19 @@ const closeNotificationsForTopic = async topicId => {
       notification.data?.topicId || notification.tag || null;
 
     if (notificationTopicId === topicId) {
+      notification.close();
+    }
+  });
+};
+
+const closeIncomingCallNotification = async roomId => {
+  if (!roomId) {
+    return;
+  }
+
+  const notifications = await self.registration.getNotifications();
+  notifications.forEach(notification => {
+    if (notification.data?.roomId === roomId) {
       notification.close();
     }
   });
@@ -299,6 +335,11 @@ self.addEventListener('push', event => {
         return;
       }
 
+      if (payload.action === 'DISMISS_INCOMING_CALL') {
+        await closeIncomingCallNotification(payload.roomId);
+        return;
+      }
+
       if (payload.action === 'CHAT_SYNC') {
         await runChatBackgroundSyncFromPayload(payload, 'push');
 
@@ -318,9 +359,11 @@ self.addEventListener('push', event => {
 
       const title = payload.title || 'New message';
       const url = getNotificationUrl(payload);
-      const isIncomingCall =
-        payload.type === 'incoming_call' &&
-        String(payload.topicType || '').toUpperCase() !== 'GROUP';
+      const isIncomingCall = isFreshIncomingCallPayload(payload);
+      if (payload.type === 'incoming_call' && !isIncomingCall) {
+        await closeIncomingCallNotification(payload.roomId);
+        return;
+      }
       const tag = payload.tag || payload.roomId || topicId || 'chat-message';
 
       await self.registration.showNotification(title, {
