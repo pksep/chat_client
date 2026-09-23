@@ -32,6 +32,19 @@ public class ChatRuStoreMessagingService extends RuStoreMessagingService {
             data.putIfAbsent("messageId", messageId);
         }
 
+        long receivedAt = System.currentTimeMillis();
+        long sentAt = IncomingCallNotificationHelper.parseTimestamp(
+            data.get("sentAt"),
+            0L
+        );
+        data.put("receivedAt", String.valueOf(receivedAt));
+        if (sentAt > 0L) {
+            data.put(
+                "deliveryDelayMs",
+                String.valueOf(Math.max(0L, receivedAt - sentAt))
+            );
+        }
+
         String title = resolveNotificationText(
             remoteMessage.getNotification() != null
                 ? remoteMessage.getNotification().getTitle()
@@ -58,7 +71,14 @@ public class ChatRuStoreMessagingService extends RuStoreMessagingService {
         if ("DISMISS_INCOMING_CALL".equals(action)) {
             String roomId = data.get("roomId");
             if (roomId != null && !roomId.trim().isEmpty()) {
-                IncomingCallNotificationHelper.dismissIncomingCall(this, roomId);
+                IncomingCallNotificationHelper.dismissIncomingCall(
+                    this,
+                    roomId,
+                    IncomingCallNotificationHelper.parseTimestamp(
+                        data.get("sentAt"),
+                        receivedAt
+                    )
+                );
             } else {
                 IncomingCallNotificationHelper.dismissAllIncomingCalls(this);
             }
@@ -120,7 +140,14 @@ public class ChatRuStoreMessagingService extends RuStoreMessagingService {
         if (
             roomId == null ||
             roomId.trim().isEmpty() ||
-            MainActivity.isAppInForeground()
+            MainActivity.isAppInForeground() ||
+            !IncomingCallNotificationHelper.shouldShowIncomingCall(
+                this,
+                roomId,
+                data.get("sentAt"),
+                data.get("expiresAt"),
+                System.currentTimeMillis()
+            )
         ) {
             return;
         }
