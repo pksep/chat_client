@@ -79,7 +79,7 @@ public class ChatRuStoreMessagingService extends RuStoreMessagingService {
             return;
         }
 
-        if ("incoming_call".equals(data.get("type"))) {
+        if (isIncomingDirectCall(data)) {
             handleIncomingCall(data);
             return;
         }
@@ -143,6 +143,13 @@ public class ChatRuStoreMessagingService extends RuStoreMessagingService {
         }
 
         return null;
+    }
+
+    static boolean isIncomingDirectCall(Map<String, String> data) {
+        return data != null && IncomingCallNotificationHelper.isDirectCallPayload(
+            data.get("type"),
+            data.get("topicType")
+        );
     }
 
     static boolean shouldScheduleChatSync(Map<String, String> data) {

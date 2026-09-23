@@ -32,6 +32,14 @@ public final class IncomingCallNotificationHelper {
 
     private IncomingCallNotificationHelper() {}
 
+    static boolean isDirectCallPayload(String type, String topicType) {
+        if (!"incoming_call".equals(type)) {
+            return false;
+        }
+
+        return topicType == null || !"GROUP".equalsIgnoreCase(topicType.trim());
+    }
+
     public static void showIncomingCall(
         Context context,
         String callerId,
