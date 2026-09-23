@@ -297,7 +297,11 @@ const handleNotificationInteraction = (
   }
 
   if (normalizedData.action === 'CLEAR_CHAT_NOTIFICATIONS') {
-    void clearTopicNotifications(normalizedData.topicId);
+    void clearTopicNotifications(
+      normalizedData.topicId,
+      parsePushTimestamp(normalizedData.stateAt) ||
+        parsePushTimestamp(normalizedData.sentAt)
+    );
     return true;
   }
 
@@ -594,7 +598,10 @@ const handleNativePushReceived = (
   });
 
   if (normalizedData.action === 'CLEAR_CHAT_NOTIFICATIONS') {
-    void clearTopicNotifications(normalizedData.topicId);
+    void clearTopicNotifications(
+      normalizedData.topicId,
+      parsePushTimestamp(normalizedData.stateAt) || sentAt
+    );
     return;
   }
 

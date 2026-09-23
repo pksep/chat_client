@@ -64,7 +64,17 @@ public class ChatRuStoreMessagingService extends RuStoreMessagingService {
 
         String action = data.get("action");
         if ("CLEAR_CHAT_NOTIFICATIONS".equals(action)) {
-            ChatNotificationHelper.dismissTopicNotifications(this, data.get("topicId"));
+            ChatNotificationDismissalHelper.dismissTopicNotification(
+                this,
+                data.get("topicId"),
+                IncomingCallNotificationHelper.parseTimestamp(
+                    data.get("stateAt"),
+                    IncomingCallNotificationHelper.parseTimestamp(
+                        data.get("sentAt"),
+                        receivedAt
+                    )
+                )
+            );
             return;
         }
 
@@ -104,7 +114,16 @@ public class ChatRuStoreMessagingService extends RuStoreMessagingService {
             return;
         }
 
-        if (!MainActivity.isAppInForeground()) {
+        String topicId = ChatNotificationHelper.resolveNotificationTag(data);
+        if (
+            ChatNotificationDismissalHelper.shouldShowMessageNotification(
+                this,
+                topicId,
+                data.get("stateAt"),
+                data.get("sentAt")
+            ) &&
+            !MainActivity.isAppInForeground()
+        ) {
             ChatNotificationHelper.showChatMessage(this, data, title, body);
         }
     }

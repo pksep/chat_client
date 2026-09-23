@@ -35,4 +35,37 @@ public class ChatNotificationDismissalHelperTest {
             )
         );
     }
+
+    @Test
+    public void rejectsMessageOlderThanReadState() {
+        assertFalse(
+            ChatNotificationDismissalHelper.isMessageNotificationCurrent(
+                1_000L,
+                2_000L,
+                0L
+            )
+        );
+    }
+
+    @Test
+    public void rejectsMessageOlderThanAlreadyReceivedMessage() {
+        assertFalse(
+            ChatNotificationDismissalHelper.isMessageNotificationCurrent(
+                2_000L,
+                0L,
+                3_000L
+            )
+        );
+    }
+
+    @Test
+    public void acceptsMessageNewerThanReadAndReceivedState() {
+        assertTrue(
+            ChatNotificationDismissalHelper.isMessageNotificationCurrent(
+                4_000L,
+                2_000L,
+                3_000L
+            )
+        );
+    }
 }
