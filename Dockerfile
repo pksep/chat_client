@@ -14,7 +14,7 @@ RUN rm /etc/nginx/conf.d/default.conf
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/build /usr/share/nginx/html
-RUN chmod -R a+rX /usr/share/nginx/html
+RUN chmod 0644 /usr/share/nginx/html/images/chat-wallpapers/*
 
 EXPOSE 80
 
