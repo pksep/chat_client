@@ -30,7 +30,7 @@ dialog.modal-yui-kit.modal-yui-kit_bottom {
   justify-items: center;
   gap: 12px;
   margin: 0;
-  padding: 14px 10px 10px;
+  padding: 14px 0 10px;
 }
 
 .modal-info-mobile__start--disabled>.modal-info-mobile__avatar-button {
@@ -137,7 +137,14 @@ p.modal-info-mobile__end--paragraph {
   font-size: 14px;
 }
 
+dialog.modal-yui-kit.modal-yui-kit_bottom.chat__header-modal-info--active {
+  background-color: var(--surface-main-modal);
+}
+
 @media screen and (width <=768px) {
+
+
+
   dialog.modal-yui-kit.modal-yui-kit_bottom {
     display: grid;
   }
@@ -158,9 +165,20 @@ p.modal-info-mobile__end--paragraph {
     & .modal-yui-kit__modal-content {
       height: 100%;
       min-height: 0;
+      padding: 0;
       padding-top: 5px;
-      padding-inline: 10px;
       overflow: hidden;
+    }
+
+
+    & .mobile__modal-header {
+      padding: 0 10px;
+    }
+
+
+    & .mobile__modal-content {
+      padding: 0 10px;
+
     }
   }
 }

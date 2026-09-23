@@ -22,11 +22,10 @@
 
 .menu__info-form {
   display: grid;
-  gap: 10px;
   width: 100%;
 
   fieldset.input-yui-kit {
-    background-color: var(--table-surface-search);
+    background-color: var(--surface-input-primary);
 
     :disabled {
       background-color: transparent !important;
