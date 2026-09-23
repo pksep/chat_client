@@ -80,6 +80,7 @@
       </div>
       <div
         v-else-if="!!props.topic.lastMessage?.text"
+        :key="lastMessagePreviewKey"
         :class="[
           'contact-list__description',
           {
@@ -272,6 +273,11 @@ const topicLastMessageStatus = computed(() =>
     getClientMessageById(props.topic.id, props.topic.lastMessage?.id)
   )
 );
+const lastMessagePreviewKey = computed(() => {
+  const lastMessage = props.topic.lastMessage;
+
+  return `${props.topic.id}:${lastMessage?.id || ''}:${lastMessage?.text || ''}`;
+});
 const showMessageStatus = computed(
   () =>
     props.topic.lastMessage?.senderUserId === authedUser.value?.id &&

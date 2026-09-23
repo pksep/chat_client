@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import ru.rustore.sdk.core.feature.model.FeatureAvailabilityResult;
 import ru.rustore.sdk.pushclient.RuStorePushClient;
+import sep.pksep.app.ChatNotificationDismissalHelper;
 import sep.pksep.app.ChatNotificationHelper;
 import sep.pksep.app.NotificationChannelHelper;
 
@@ -113,10 +114,19 @@ public class RuStorePushPlugin extends Plugin {
 
     @PluginMethod
     public void clearNotificationsForTopic(PluginCall call) {
-        ChatNotificationHelper.dismissTopicNotifications(
-            getContext(),
-            call.getString("topicId")
-        );
+        Long stateAt = call.getLong("stateAt");
+        if (stateAt != null && stateAt > 0L) {
+            ChatNotificationDismissalHelper.dismissTopicNotification(
+                getContext(),
+                call.getString("topicId"),
+                stateAt
+            );
+        } else {
+            ChatNotificationHelper.dismissTopicNotifications(
+                getContext(),
+                call.getString("topicId")
+            );
+        }
         call.resolve();
     }
 

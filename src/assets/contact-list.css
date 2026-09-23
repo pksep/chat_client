@@ -115,10 +115,9 @@
   padding: 10px;
   overflow: visible;
   border: 0;
-  border-top: 0.5px solid var(--border-table);
+  border: 0.5px solid var(--border-table);
   border-radius: 15px;
   background: var(--surface-overlay);
-  box-shadow: 0 4px 9.8px rgb(0 0 0 / 5%);
   color: var(--text-primary);
   cursor: pointer;
   box-sizing: border-box;
@@ -171,6 +170,14 @@
   font-size: 12px;
   font-weight: 400;
   line-height: 12px;
+}
+
+.contact-list__compact-popover .contact-list__description .emoji-glyph {
+  width: 14px;
+  min-width: 14px;
+  height: 14px;
+  min-height: 14px;
+  vertical-align: -2px;
 }
 
 .contact-list__compact-popover .contact-list__time {
