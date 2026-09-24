@@ -108,6 +108,15 @@
         />
 
         <activity
+            android:name=".DarkNotificationTapLaunchActivity"
+            android:excludeFromRecents="false"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait"
+            android:theme="@style/AppTheme.StartupLaunchDark"
+        />
+
+        <activity
             android:name=".IncomingCallActivity"
             android:excludeFromRecents="true"
             android:exported="false"
