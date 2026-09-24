@@ -53,6 +53,7 @@
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/ios": "^8.0.1",
     "@capacitor/preferences": "^8.0.1",
+    "@capacitor/push-notifications": "^8.0.1",
     "@capawesome/capacitor-android-edge-to-edge-support": "^8.0.5",
     "@fontsource-variable/inter": "^5.2.6",
     "@livekit/track-processors": "^0.7.2",

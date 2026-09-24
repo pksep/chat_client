@@ -110,6 +110,7 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation "androidx.work:work-runtime:$workManagerVersion"
 
+    implementation "com.google.firebase:firebase-messaging:$firebaseMessagingVersion"
     implementation "ru.rustore.sdk:pushclient:7.4.0"
     implementation "ru.rustore.sdk:appupdate:10.2.0"
 
@@ -122,3 +123,5 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
+
+apply plugin: 'com.google.gms.google-services'
