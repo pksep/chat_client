@@ -1,9 +1,25 @@
 .mobile__modal-header {
   display: flex;
   align-items: center;
-  padding-top: 5px;
-  padding-bottom: 5px;
+  padding: 5px 10px;
   height: 39px;
+}
+
+dialog.mobile__modal.modal-yui-kit {
+  background-color: var(--surface-overlay);
+}
+
+.modal__new-contact .modal-yui-kit__modal-content {
+  padding: 10px 0;
+}
+
+.modal__new-contact .mobile__modal-content {
+  padding: 0 10px;
+}
+
+:is([data-theme=dark], .theme-dark) dialog.mobile__modal.modal-yui-kit {
+  border: 1px solid transparent;
+
 }
 
 .mobile__modal-header>*:first-child {

@@ -23,7 +23,7 @@
     >
       <Button
         v-if="isMobile"
-        :type="ButtonTypeEnum.ghost"
+        :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
         :data-testid="`${props.dataTestid}-Header-BackButton`"
         @click.stop="handleExit"
