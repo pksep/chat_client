@@ -13,7 +13,7 @@
       @create-bot="emits('create-bot')"
     />
 
-    <div v-if="props.isCollapse && canChangeTheme" class="menu-profile__body">
+    <div v-if="props.isCollapse" class="menu-profile__body">
       <div class="menu-profile__form">
         <div
           class="menu-profile__row menu-profile__row_theme"
@@ -65,7 +65,6 @@
         </div>
 
         <div
-          v-if="canChangeTheme"
           class="menu-profile__row menu-profile__row_theme"
           @click="themeStore.setTheme(!isDarkTheme)"
         >
@@ -857,7 +856,6 @@
 </template>
 
 <script setup lang="ts">
-import { Capacitor } from '@capacitor/core';
 import { storeToRefs } from 'pinia';
 import {
   Button,
@@ -956,7 +954,6 @@ const themeStore = useThemeStore();
 const { isDarkTheme } = storeToRefs(themeStore);
 const authUser = computed(() => getAuthUser() as IUser | null);
 const { state: isMobile } = useResizeState(MAX_W_MD);
-const canChangeTheme = computed(() => !Capacitor.isNativePlatform());
 const statusPresets = computed(() => [
   ...USER_STATUS_PRESETS.map(status => ({ ...status, custom: false })),
   ...(isStatusPresetDesignPreview
