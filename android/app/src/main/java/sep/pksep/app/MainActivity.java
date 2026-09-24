@@ -79,6 +79,7 @@ public class MainActivity extends BridgeActivity {
     private static final int LAUNCH_BACKGROUND_LIGHT_COLOR = 0xFFF8F9FD;
     private static final int LAUNCH_BACKGROUND_DARK_COLOR = 0xFF212531;
     private static final long LAUNCH_SPLASH_FALLBACK_TIMEOUT_MS = 6000L;
+    private android.animation.ValueAnimator themeColorAnimator;
     private static final long STARTUP_OVERLAY_FALLBACK_TIMEOUT_MS = 30000L;
     private static final int STARTUP_RUNTIME_PERMISSIONS_REQUEST_CODE = 4101;
     private boolean customPluginsRegistered = false;
@@ -214,6 +215,7 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onDestroy() {
+        if (themeColorAnimator != null) themeColorAnimator.cancel();
         activityCreated = false;
         super.onDestroy();
     }
@@ -1097,10 +1099,20 @@ public class MainActivity extends BridgeActivity {
     }
 
     public void setLaunchDarkTheme(boolean isDarkTheme) {
+        int previousColor = LaunchAppearance.backgroundColor(this);
         LaunchAppearance.setDark(this, isDarkTheme);
         runOnUiThread(() -> {
-            LaunchAppearance.applySystemBars(this);
-            configureBridgeWebViewBackground();
+            int fromColor = themeColorAnimator != null &&
+                themeColorAnimator.isRunning()
+                ? (int) themeColorAnimator.getAnimatedValue()
+                : previousColor;
+            if (themeColorAnimator != null) themeColorAnimator.cancel();
+            themeColorAnimator = LaunchAppearance.animateSystemBars(
+                this,
+                fromColor,
+                LaunchAppearance.backgroundColor(this),
+                bridge == null ? null : bridge.getWebView()
+            );
         });
     }
 

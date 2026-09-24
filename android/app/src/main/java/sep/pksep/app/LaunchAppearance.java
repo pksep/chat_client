@@ -1,10 +1,15 @@
 package sep.pksep.app;
 
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.ColorDrawable;
+import android.view.View;
+import android.view.animation.PathInterpolator;
+
+import androidx.core.graphics.ColorUtils;
 
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -14,6 +19,7 @@ final class LaunchAppearance {
     private static final String DARK_THEME = "dark_theme";
     private static final int LIGHT_BACKGROUND = 0xFFF8F9FD;
     private static final int DARK_BACKGROUND = 0xFF212531;
+    private static final long TRANSITION_DURATION_MS = 200L;
 
     private LaunchAppearance() {}
 
@@ -41,20 +47,46 @@ final class LaunchAppearance {
     }
 
     static void applySystemBars(Activity activity) {
-        boolean dark = isDark(activity);
-        int color = dark ? DARK_BACKGROUND : LIGHT_BACKGROUND;
+        paintSystemBars(activity, backgroundColor(activity), null);
+    }
+
+    static ValueAnimator animateSystemBars(
+        Activity activity,
+        int fromColor,
+        int toColor,
+        View webView
+    ) {
+        if (fromColor == toColor) {
+            paintSystemBars(activity, toColor, webView);
+            return null;
+        }
+        ValueAnimator animator = ValueAnimator.ofArgb(fromColor, toColor);
+        animator.setDuration(TRANSITION_DURATION_MS);
+        animator.setInterpolator(new PathInterpolator(0.25f, 0.1f, 0.25f, 1f));
+        animator.addUpdateListener(animation -> paintSystemBars(
+            activity,
+            (int) animation.getAnimatedValue(),
+            webView
+        ));
+        animator.start();
+        return animator;
+    }
+
+    private static void paintSystemBars(Activity activity, int color, View webView) {
         activity.getWindow().setBackgroundDrawable(new ColorDrawable(color));
         activity.getWindow().getDecorView().setBackgroundColor(color);
-        android.view.View content = activity.findViewById(android.R.id.content);
+        View content = activity.findViewById(android.R.id.content);
         if (content != null) content.setBackgroundColor(color);
+        if (webView != null) webView.setBackgroundColor(color);
         activity.getWindow().setStatusBarColor(color);
         activity.getWindow().setNavigationBarColor(color);
         WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(
             activity.getWindow(),
             activity.getWindow().getDecorView()
         );
-        controller.setAppearanceLightStatusBars(!dark);
-        controller.setAppearanceLightNavigationBars(!dark);
+        boolean lightBars = ColorUtils.calculateLuminance(color) > 0.5d;
+        controller.setAppearanceLightStatusBars(lightBars);
+        controller.setAppearanceLightNavigationBars(lightBars);
     }
 
     private static void updateLauncherIcon(

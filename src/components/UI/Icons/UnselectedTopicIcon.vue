@@ -41,16 +41,16 @@ import darkIconUrl from '../../../../assets/unselected-topic-dark.svg?url';
 }
 
 .unselected-topic-icon__image--dark {
-  display: none;
+  opacity: 0;
 }
 </style>
 
 <style>
 :is([data-theme='dark'], .theme-dark) .unselected-topic-icon__image--light {
-  display: none;
+  opacity: 0;
 }
 
 :is([data-theme='dark'], .theme-dark) .unselected-topic-icon__image--dark {
-  display: block;
+  opacity: 1;
 }
 </style>
