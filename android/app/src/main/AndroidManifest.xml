@@ -3,9 +3,9 @@
     <application
         android:name=".ChatApplication"
         android:allowBackup="true"
-        android:icon="@mipmap/sep_launcher_chat_bubbles_light_safe_2026"
+        android:icon="@mipmap/sep_launcher_chat_bubbles_safe_2026"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/sep_launcher_chat_bubbles_light_safe_round_2026"
+        android:roundIcon="@mipmap/sep_launcher_chat_bubbles_safe_round_2026"
         android:supportsRtl="true"
         android:usesCleartextTraffic="${chatUsesCleartextTraffic}"
         android:theme="@style/AppTheme">
