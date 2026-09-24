@@ -272,50 +272,64 @@
               </div>
             </div>
 
-            <button
-              v-if="liveKitState.isMicActive"
-              class="call-modal__control-button"
-              :disabled="isBusyNoticeVisible"
-              title="Выключить микрофон"
-              aria-label="Выключить микрофон"
-              @click="handleToggleMic"
+            <Tooltip
+              :hint="microphoneButtonTooltip"
+              :is-can-show="!isMobile"
+              data-testid="CallModal-CallControls-MicrophoneTooltip"
+              position="top-center"
+              type="black"
+              size="small"
             >
-              <MicIcon
-                :audio-level="liveKitState.audioLevel"
-                :is-speaking="liveKitState.isSpeaking"
-              />
-            </button>
-            <button
-              v-else
-              class="call-modal__control-button call-modal__control-button__inactive"
-              :disabled="isBusyNoticeVisible"
-              title="Включить микрофон"
-              aria-label="Включить микрофон"
-              @click="handleToggleMic"
-            >
-              <MicDisableIcon />
-            </button>
+              <button
+                v-if="liveKitState.isMicActive"
+                class="call-modal__control-button"
+                :disabled="isBusyNoticeVisible"
+                :aria-label="microphoneButtonTooltip"
+                @click="handleToggleMic"
+              >
+                <MicIcon
+                  :audio-level="liveKitState.audioLevel"
+                  :is-speaking="liveKitState.isSpeaking"
+                />
+              </button>
+              <button
+                v-else
+                class="call-modal__control-button call-modal__control-button__inactive"
+                :disabled="isBusyNoticeVisible"
+                :aria-label="microphoneButtonTooltip"
+                @click="handleToggleMic"
+              >
+                <MicDisableIcon />
+              </button>
+            </Tooltip>
 
-            <button
-              v-if="liveKitState.isVideoActive"
-              class="call-modal__control-button"
-              :disabled="isBusyNoticeVisible"
-              title="Выключить камеру"
-              aria-label="Выключить камеру"
-              @click="handleToggleVideo"
+            <Tooltip
+              :hint="cameraButtonTooltip"
+              :is-can-show="!isMobile"
+              data-testid="CallModal-CallControls-CameraTooltip"
+              position="top-center"
+              type="black"
+              size="small"
             >
-              <VideoIcon />
-            </button>
-            <button
-              v-else
-              class="call-modal__control-button call-modal__control-button__inactive"
-              :disabled="isBusyNoticeVisible"
-              title="Включить камеру"
-              aria-label="Включить камеру"
-              @click="handleToggleVideo"
-            >
-              <VideoDisableIcon />
-            </button>
+              <button
+                v-if="liveKitState.isVideoActive"
+                class="call-modal__control-button"
+                :disabled="isBusyNoticeVisible"
+                :aria-label="cameraButtonTooltip"
+                @click="handleToggleVideo"
+              >
+                <VideoIcon />
+              </button>
+              <button
+                v-else
+                class="call-modal__control-button call-modal__control-button__inactive"
+                :disabled="isBusyNoticeVisible"
+                :aria-label="cameraButtonTooltip"
+                @click="handleToggleVideo"
+              >
+                <VideoDisableIcon />
+              </button>
+            </Tooltip>
 
             <div
               class="call-modal__reaction-picker"
@@ -376,28 +390,27 @@
               <ScreenShareIcon />
             </button>
 
-            <button
+            <Tooltip
               v-if="!isMobile && !Capacitor.isNativePlatform()"
-              class="call-modal__control-button"
-              :class="{
-                'call-modal__control-button__inactive call-modal__control-button_alter':
-                  !liveKitState.isScreenSharingActive
-              }"
-              :disabled="isBusyNoticeVisible"
-              :title="
-                liveKitState.isScreenSharingActive
-                  ? 'Остановить демонстрацию экрана'
-                  : 'Демонстрация экрана'
-              "
-              :aria-label="
-                liveKitState.isScreenSharingActive
-                  ? 'Остановить демонстрацию экрана'
-                  : 'Демонстрация экрана'
-              "
-              @click="handleToggleScreenShare"
+              :hint="screenShareButtonTooltip"
+              data-testid="CallModal-CallControls-ScreenShareTooltip"
+              position="top-center"
+              type="black"
+              size="small"
             >
-              <ScreenShareIcon />
-            </button>
+              <button
+                class="call-modal__control-button"
+                :class="{
+                  'call-modal__control-button__inactive call-modal__control-button_alter':
+                    !liveKitState.isScreenSharingActive
+                }"
+                :disabled="isBusyNoticeVisible"
+                :aria-label="screenShareButtonTooltip"
+                @click="handleToggleScreenShare"
+              >
+                <ScreenShareIcon />
+              </button>
+            </Tooltip>
 
             <Tooltip
               v-if="!isMobile"
@@ -423,14 +436,22 @@
               </button>
             </Tooltip>
 
-            <button
-              class="call-modal__control-button call-modal__control-button--leave"
-              title="Завершить звонок"
-              aria-label="Завершить звонок"
-              @click="leaveCall"
+            <Tooltip
+              hint="Завершить звонок"
+              :is-can-show="!isMobile"
+              data-testid="CallModal-CallControls-LeaveTooltip"
+              position="top-center"
+              type="black"
+              size="small"
             >
-              <LeaveIcon />
-            </button>
+              <button
+                class="call-modal__control-button call-modal__control-button--leave"
+                aria-label="Завершить звонок"
+                @click="leaveCall"
+              >
+                <LeaveIcon />
+              </button>
+            </Tooltip>
           </div>
         </template>
       </div>
@@ -572,54 +593,85 @@
               </div>
             </div>
 
-            <button
-              v-if="liveKitState.isMicActive"
-              class="call-modal__control-button"
-              @click="handleToggleMic"
+            <Tooltip
+              :hint="microphoneButtonTooltip"
+              :is-can-show="!isCallFullscreenTouchMode && !isMobile"
+              data-testid="CallModal-Overlay-MicrophoneTooltip"
+              position="top-center"
+              type="black"
+              size="small"
             >
-              <MicIcon
-                :audio-level="liveKitState.audioLevel"
-                :is-speaking="liveKitState.isSpeaking"
-              />
-            </button>
-            <button
-              v-else
-              class="call-modal__control-button call-modal__control-button__inactive"
-              @click="handleToggleMic"
-            >
-              <MicDisableIcon />
-            </button>
+              <button
+                v-if="liveKitState.isMicActive"
+                class="call-modal__control-button"
+                :aria-label="microphoneButtonTooltip"
+                @click="handleToggleMic"
+              >
+                <MicIcon
+                  :audio-level="liveKitState.audioLevel"
+                  :is-speaking="liveKitState.isSpeaking"
+                />
+              </button>
+              <button
+                v-else
+                class="call-modal__control-button call-modal__control-button__inactive"
+                :aria-label="microphoneButtonTooltip"
+                @click="handleToggleMic"
+              >
+                <MicDisableIcon />
+              </button>
+            </Tooltip>
 
-            <button
-              v-if="liveKitState.isVideoActive"
-              class="call-modal__control-button"
-              @click="handleToggleVideo"
+            <Tooltip
+              :hint="cameraButtonTooltip"
+              :is-can-show="!isCallFullscreenTouchMode && !isMobile"
+              data-testid="CallModal-Overlay-CameraTooltip"
+              position="top-center"
+              type="black"
+              size="small"
             >
-              <VideoIcon />
-            </button>
-            <button
-              v-else
-              class="call-modal__control-button call-modal__control-button__inactive"
-              @click="handleToggleVideo"
-            >
-              <VideoDisableIcon />
-            </button>
+              <button
+                v-if="liveKitState.isVideoActive"
+                class="call-modal__control-button"
+                :aria-label="cameraButtonTooltip"
+                @click="handleToggleVideo"
+              >
+                <VideoIcon />
+              </button>
+              <button
+                v-else
+                class="call-modal__control-button call-modal__control-button__inactive"
+                :aria-label="cameraButtonTooltip"
+                @click="handleToggleVideo"
+              >
+                <VideoDisableIcon />
+              </button>
+            </Tooltip>
 
-            <button
+            <Tooltip
               v-if="
                 !isCallFullscreenTouchMode &&
                 !isMobile &&
                 !Capacitor.isNativePlatform()
               "
-              class="call-modal__control-button"
-              :class="{
-                'call-modal__control-button__inactive':
-                  !liveKitState.isScreenSharingActive
-              }"
-              @click="handleToggleScreenShare"
+              :hint="screenShareButtonTooltip"
+              data-testid="CallModal-Overlay-ScreenShareTooltip"
+              position="top-center"
+              type="black"
+              size="small"
             >
-              <ScreenShareIcon />
-            </button>
+              <button
+                class="call-modal__control-button"
+                :class="{
+                  'call-modal__control-button__inactive':
+                    !liveKitState.isScreenSharingActive
+                }"
+                :aria-label="screenShareButtonTooltip"
+                @click="handleToggleScreenShare"
+              >
+                <ScreenShareIcon />
+              </button>
+            </Tooltip>
 
             <div
               class="call-modal__reaction-picker"
@@ -685,12 +737,22 @@
                 <ScreenRecordIcon />
               </button>
             </Tooltip>
-            <button
-              class="call-modal__control-button call-modal__control-button--leave"
-              @click="leaveCall"
+            <Tooltip
+              hint="Завершить звонок"
+              :is-can-show="!isCallFullscreenTouchMode && !isMobile"
+              data-testid="CallModal-Overlay-LeaveTooltip"
+              position="top-center"
+              type="black"
+              size="small"
             >
-              <LeaveIcon />
-            </button>
+              <button
+                class="call-modal__control-button call-modal__control-button--leave"
+                aria-label="Завершить звонок"
+                @click="leaveCall"
+              >
+                <LeaveIcon />
+              </button>
+            </Tooltip>
           </div>
         </div>
       </Transition>
@@ -1797,6 +1859,17 @@ const summaryRecordButtonTooltip = computed(() =>
   isAnySummaryRecording.value
     ? 'Идет запись экрана'
     : summaryRecordButtonLabel.value
+);
+const microphoneButtonTooltip = computed(() =>
+  liveKitState.isMicActive ? 'Выключить микрофон' : 'Включить микрофон'
+);
+const cameraButtonTooltip = computed(() =>
+  liveKitState.isVideoActive ? 'Выключить камеру' : 'Включить камеру'
+);
+const screenShareButtonTooltip = computed(() =>
+  liveKitState.isScreenSharingActive
+    ? 'Выключить демонстрацию экрана'
+    : 'Включить демонстрацию экрана'
 );
 const isSummaryRecordButtonDisabled = computed(
   () =>

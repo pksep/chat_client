@@ -2,6 +2,7 @@ const DATE_KEYS = new Set([
   'createdAt',
   'updatedAt',
   'deletedAt',
+  'pinnedAt',
   'lastOnline'
 ]);
 

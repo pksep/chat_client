@@ -40,6 +40,7 @@
       :class="isMobile ? '' : 'menu__contact-list'"
       :topics="topics"
       :is-loading="loading"
+      :is-collapse="isCollapse"
       :selected-topic-id="route.id || undefined"
       data-testid="Clients-Topics"
       @unmount-topic="openTopic"

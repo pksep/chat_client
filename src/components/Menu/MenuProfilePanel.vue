@@ -1,15 +1,50 @@
 <template>
   <section
-    class="menu-profile"
+    :class="['menu-profile', { 'menu-profile--collapse': props.isCollapse }]"
     :data-testid="`${props.dataTestid}-MenuProfilePanel-Container`"
   >
+    <ChatsToolbar
+      v-if="props.isCollapse"
+      model-value=""
+      :is-collapse="true"
+      :data-testid="`${props.dataTestid}-MenuProfilePanel`"
+      @create-chat="emits('create-chat')"
+      @create-group="emits('create-group')"
+      @create-bot="emits('create-bot')"
+    />
+
+    <div v-if="props.isCollapse && canChangeTheme" class="menu-profile__body">
+      <div class="menu-profile__form">
+        <div
+          class="menu-profile__row menu-profile__row_theme"
+          @click="themeStore.setTheme(!isDarkTheme)"
+        >
+          <div class="menu-profile__group">
+            <Icon
+              class="menu-profile__icon"
+              :name="IconNameEnum.darkThemeSwitcher"
+            />
+            <div class="menu-profile__row-label">Тёмная тема</div>
+          </div>
+
+          <Toggle
+            v-model="isDarkTheme"
+            @click.stop
+            theme="minor"
+            @change="themeStore.setTheme"
+          />
+        </div>
+      </div>
+    </div>
+
     <h4
+      v-if="!props.isCollapse"
       class="menu-profile__title menu-section-heading"
       :data-testid="`${props.dataTestid}-MenuProfilePanel-Title`"
     >
       Профиль
     </h4>
-    <div v-if="authUser" class="menu-profile__body">
+    <div v-if="authUser && !props.isCollapse" class="menu-profile__body">
       <header class="menu-profile__header">
         <CachedAvatar
           class="menu-profile__avatar"
@@ -60,6 +95,13 @@
           >
             <span>Установить статус</span>
             <Icon
+              v-if="props.isCollapse"
+              class="menu-profile__status-trigger-plus"
+              :name="IconNameEnum.plus"
+              :width="24"
+              :height="24"
+            />
+            <Icon
               :name="
                 isStatusMenuOpen
                   ? IconNameEnum.chevronUp
@@ -74,6 +116,11 @@
             v-if="currentStatusLabel"
             class="menu-profile__status-current"
             :data-testid="`${props.dataTestid}-MenuProfilePanel-CurrentStatus`"
+            :role="props.isCollapse ? 'button' : undefined"
+            :tabindex="props.isCollapse ? 0 : undefined"
+            @click="props.isCollapse && toggleStatusMenu()"
+            @keydown.enter="props.isCollapse && toggleStatusMenu()"
+            @keydown.space.prevent="props.isCollapse && toggleStatusMenu()"
           >
             <span class="menu-profile__status-current-label">
               <EmojiIcon
@@ -538,7 +585,7 @@
       </div>
     </div>
 
-    <div v-else class="menu-panel menu-panel--centered">
+    <div v-else-if="!props.isCollapse" class="menu-panel menu-panel--centered">
       <p class="menu-panel__description">Профиль загружается...</p>
     </div>
   </section>
@@ -877,6 +924,7 @@ import {
   isStatusPresetDesignPreview,
   statusPresetDesignPreview
 } from './status-presets-design-preview';
+import ChatsToolbar from './ChatsToolbar.vue';
 
 const CallBackgroundPreviewModal = defineAsyncComponent(
   () => import('../CallModal/CallBackgroundPreviewModal.vue')
@@ -885,11 +933,19 @@ const CallBackgroundPreviewModal = defineAsyncComponent(
 const props = withDefaults(
   defineProps<{
     dataTestid?: string;
+    isCollapse?: boolean;
   }>(),
   {
-    dataTestid: 'MenuProfilePanel'
+    dataTestid: 'MenuProfilePanel',
+    isCollapse: false
   }
 );
+
+const emits = defineEmits<{
+  (event: 'create-chat'): void;
+  (event: 'create-group'): void;
+  (event: 'create-bot'): void;
+}>();
 
 type BackgroundDeleteTarget = {
   kind: 'wallpaper' | 'call';

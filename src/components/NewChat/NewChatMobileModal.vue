@@ -4,7 +4,7 @@
     :open="props.open"
     @unmount-close="handleCloseModal"
     @unmount-next="handleNext(state.checkMembers)"
-    :title="props.isAddOne ? 'Создать чат' : 'Канал'"
+    :title="props.isAddOne ? 'Написать сообщение' : 'Добавить участников'"
     :start-button-text="props.isAddOne ? null : 'Далее'"
     :close-button-text="'Назад'"
     :is-disabled-start-button="state.checkMembers.length === 0"
@@ -25,7 +25,7 @@
   <MobileModal
     :open="isSelectedMembers"
     @unmount-close="handleCloseGroupInfo"
-    title="Канал"
+    title="Добавить участников"
     class="modal__new-group"
     @unmount-next="handleCreateMobileGroup"
     start-button-text="Создать"

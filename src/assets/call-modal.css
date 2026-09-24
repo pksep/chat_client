@@ -172,7 +172,7 @@
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--error-color) 18%, transparent);
 }
 
-body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
+body .tooltip-yui-kit__hint[data-testid^='CallModal-'][data-testid$='Tooltip'] {
   z-index: 100000;
 }
 
@@ -2409,6 +2409,7 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
   }
 
   .call-modal__group-panel-title {
+    margin-top: 5px;
     text-align: center !important;
     padding-right: 84px;
   }

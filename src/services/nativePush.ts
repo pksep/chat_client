@@ -32,7 +32,10 @@ export interface RuStorePushPlugin {
   requestPermissions(): Promise<NativePushPermissionState>;
   register(): Promise<{ value?: string }>;
   unregister(): Promise<void>;
-  clearNotificationsForTopic(options: { topicId: string }): Promise<void>;
+  clearNotificationsForTopic(options: {
+    topicId: string;
+    stateAt?: number;
+  }): Promise<void>;
   clearNotificationForMessage(options: {
     topicId: string;
     messageId: string;

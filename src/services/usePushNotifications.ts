@@ -40,6 +40,10 @@ type NativeNotificationData = Record<string, string> & {
   callerId?: string;
   fromUserId?: string;
   roomId?: string;
+  sentAt?: string;
+  expiresAt?: string;
+  receivedAt?: string;
+  deliveryDelayMs?: string;
   startTime?: string;
   tag?: string;
   topicId?: string;
@@ -52,6 +56,7 @@ type NativeNotificationData = Record<string, string> & {
 
 const NotificationTap =
   registerPlugin<NotificationTapPlugin>('NotificationTap');
+const INCOMING_CALL_MAX_AGE_MS = 60_000;
 let nativeNotificationTapListener: PluginListenerHandle | null = null;
 let nativeNotificationTapListenerPromise: Promise<PluginListenerHandle> | null =
   null;
@@ -182,6 +187,31 @@ const normalizeNativeNotificationData = (
   };
 };
 
+const parsePushTimestamp = (value?: string): number | null => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const isFreshIncomingCallPayload = (
+  data: NativeNotificationData,
+  now = Date.now()
+): boolean => {
+  if (
+    data.type !== 'incoming_call' ||
+    String(data.topicType || '').toUpperCase() === 'GROUP'
+  ) {
+    return false;
+  }
+
+  const expiresAt = parsePushTimestamp(data.expiresAt);
+  if (expiresAt !== null && now >= expiresAt) {
+    return false;
+  }
+
+  const sentAt = parsePushTimestamp(data.sentAt);
+  return sentAt === null || now - sentAt <= INCOMING_CALL_MAX_AGE_MS;
+};
+
 const getNotificationInteractionKey = (data: NativeNotificationData) =>
   data['rustore.message_id'] ||
   data['google.message_id'] ||
@@ -267,7 +297,11 @@ const handleNotificationInteraction = (
   }
 
   if (normalizedData.action === 'CLEAR_CHAT_NOTIFICATIONS') {
-    void clearTopicNotifications(normalizedData.topicId);
+    void clearTopicNotifications(
+      normalizedData.topicId,
+      parsePushTimestamp(normalizedData.stateAt) ||
+        parsePushTimestamp(normalizedData.sentAt)
+    );
     return true;
   }
 
@@ -281,7 +315,9 @@ const handleNotificationInteraction = (
 
   if (normalizedData.type === 'incoming_call') {
     navigateToNotificationTarget(normalizedData);
-    handleCallPush({ data: normalizedData });
+    if (isFreshIncomingCallPayload(normalizedData)) {
+      handleCallPush({ data: normalizedData });
+    }
     return true;
   }
 
@@ -534,6 +570,15 @@ const handleNativePushReceived = (
   const normalizedData = normalizeNativeNotificationData(
     (notification.data || {}) as NativeNotificationData
   );
+  const receivedAt =
+    parsePushTimestamp(normalizedData.receivedAt) || Date.now();
+  const sentAt = parsePushTimestamp(normalizedData.sentAt);
+  const nativeDeliveryDelayMs = Number(normalizedData.deliveryDelayMs);
+  const deliveryDelayMs = Number.isFinite(nativeDeliveryDelayMs)
+    ? Math.max(0, nativeDeliveryDelayMs)
+    : sentAt !== null
+      ? Math.max(0, receivedAt - sentAt)
+      : undefined;
   recordTelemetryEvent({
     category: 'notification',
     name: 'notification.native.received',
@@ -545,12 +590,18 @@ const handleNativePushReceived = (
       type: normalizedData.type,
       topicId: normalizedData.topicId,
       roomId: normalizedData.roomId,
-      topicType: normalizedData.topicType
+      topicType: normalizedData.topicType,
+      sentAt,
+      receivedAt,
+      deliveryDelayMs
     }
   });
 
   if (normalizedData.action === 'CLEAR_CHAT_NOTIFICATIONS') {
-    void clearTopicNotifications(normalizedData.topicId);
+    void clearTopicNotifications(
+      normalizedData.topicId,
+      parsePushTimestamp(normalizedData.stateAt) || sentAt
+    );
     return;
   }
 
@@ -775,7 +826,7 @@ export const initPushNotifications = async () => {
 
 const handleCallPush = (notification?: { data?: NativeNotificationData }) => {
   const data = notification?.data;
-  if (data && data.type === 'incoming_call') {
+  if (data && isFreshIncomingCallPayload(data)) {
     const callerId = data.callerId || data.fromUserId;
     const roomId = data.roomId;
     const targetTopicId = data.topicId || roomId;
