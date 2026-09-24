@@ -23,6 +23,7 @@ import darkIconUrl from '../../../../assets/unselected-topic-dark.svg?url';
 <style scoped>
 .unselected-topic-icon {
   display: inline-grid;
+  position: relative;
   flex: none;
   width: 194px;
   height: 194px;
@@ -32,12 +33,14 @@ import darkIconUrl from '../../../../assets/unselected-topic-dark.svg?url';
 
 .unselected-topic-icon__image {
   display: block;
-  grid-area: 1 / 1;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
   image-rendering: auto;
   user-select: none;
+  pointer-events: none;
 }
 
 .unselected-topic-icon__image--dark {

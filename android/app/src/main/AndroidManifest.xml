@@ -61,6 +61,15 @@
             android:theme="@style/AppTheme.StartupLaunch">
         </activity>
 
+        <activity
+            android:name=".DarkNotificationLaunchActivity"
+            android:excludeFromRecents="false"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait"
+            android:theme="@style/AppTheme.StartupLaunchDark">
+        </activity>
+
         <activity-alias
             android:name=".LightLauncherActivity"
             android:enabled="true"
@@ -82,7 +91,7 @@
             android:icon="@mipmap/sep_launcher_chat_bubbles_safe_2026"
             android:roundIcon="@mipmap/sep_launcher_chat_bubbles_safe_round_2026"
             android:label="@string/app_name"
-            android:targetActivity=".NotificationLaunchActivity">
+            android:targetActivity=".DarkNotificationLaunchActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

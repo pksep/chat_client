@@ -15,6 +15,15 @@
         <item name="android:background">@null</item>
     </style>
 
+    <style name="AppTheme.NoActionBarDark" parent="AppTheme.NoActionBar">
+        <item name="android:windowBackground">@color/launch_background_dark</item>
+        <item name="android:background">@color/launch_background_dark</item>
+        <item name="android:statusBarColor">@color/launch_background_dark</item>
+        <item name="android:navigationBarColor">@color/launch_background_dark</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:windowBackground">@color/launch_background_light</item>
@@ -29,6 +38,7 @@
         <item name="android:background">@color/launch_background_dark</item>
         <item name="windowSplashScreenBackground">@color/launch_background_dark</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon_dark</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBarDark</item>
     </style>
 
     <style name="AppTheme.StartupLaunch" parent="Theme.SplashScreen">
@@ -50,6 +60,7 @@
         <item name="android:background">@color/launch_background_dark</item>
         <item name="windowSplashScreenBackground">@color/launch_background_dark</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon_dark</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBarDark</item>
         <item name="android:statusBarColor">@color/launch_background_dark</item>
         <item name="android:navigationBarColor">@color/launch_background_dark</item>
         <item name="android:windowLightStatusBar">false</item>

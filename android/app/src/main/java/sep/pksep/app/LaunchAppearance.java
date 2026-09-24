@@ -6,13 +6,19 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.ColorDrawable;
+import android.os.Build;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.animation.PathInterpolator;
 
+import androidx.core.graphics.Insets;
 import androidx.core.graphics.ColorUtils;
-
 import androidx.core.view.WindowCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
+
+import java.util.Arrays;
 
 final class LaunchAppearance {
     private static final String PREFS = "launch_appearance";
@@ -37,13 +43,10 @@ final class LaunchAppearance {
             .edit()
             .putBoolean(DARK_THEME, dark)
             .apply();
-        // Disabling the alias that launched the current task makes Android
-        // finish the visible activity, even with DONT_KILL_APP.
-        updateLauncherIcon(context, dark, false);
     }
 
     static void finishLauncherIconUpdate(Context context) {
-        updateLauncherIcon(context, isDark(context), true);
+        updateLauncherIcon(context, isDark(context));
     }
 
     static void applySystemBars(Activity activity) {
@@ -77,7 +80,10 @@ final class LaunchAppearance {
         activity.getWindow().getDecorView().setBackgroundColor(color);
         View content = activity.findViewById(android.R.id.content);
         if (content != null) content.setBackgroundColor(color);
-        if (webView != null) webView.setBackgroundColor(color);
+        if (webView != null) {
+            webView.setBackgroundColor(color);
+            paintEdgeToEdgeOverlays(webView, color);
+        }
         activity.getWindow().setStatusBarColor(color);
         activity.getWindow().setNavigationBarColor(color);
         WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(
@@ -89,11 +95,35 @@ final class LaunchAppearance {
         controller.setAppearanceLightNavigationBars(lightBars);
     }
 
-    private static void updateLauncherIcon(
-        Context context,
-        boolean dark,
-        boolean disablePrevious
-    ) {
+    private static void paintEdgeToEdgeOverlays(View webView, int color) {
+        if (!(webView.getParent() instanceof ViewGroup)) return;
+        WindowInsetsCompat windowInsets = ViewCompat.getRootWindowInsets(webView);
+        if (windowInsets == null) return;
+
+        ViewGroup parent = (ViewGroup) webView.getParent();
+        Insets statusBars = windowInsets.getInsets(
+            WindowInsetsCompat.Type.statusBars() |
+            WindowInsetsCompat.Type.displayCutout()
+        );
+        Insets navigationBars = windowInsets.getInsets(
+            WindowInsetsCompat.Type.navigationBars()
+        );
+        for (int index = 0; index < parent.getChildCount(); index++) {
+            View child = parent.getChildAt(index);
+            if (child == webView) continue;
+            boolean isStatusBarOverlay = statusBars.top > 0 &&
+                child.getTop() == 0 &&
+                child.getHeight() == statusBars.top;
+            boolean isNavigationBarOverlay = navigationBars.bottom > 0 &&
+                child.getBottom() == parent.getHeight() &&
+                child.getHeight() == navigationBars.bottom;
+            if (isStatusBarOverlay || isNavigationBarOverlay) {
+                child.setBackgroundColor(color);
+            }
+        }
+    }
+
+    private static void updateLauncherIcon(Context context, boolean dark) {
         PackageManager manager = context.getPackageManager();
         ComponentName light = new ComponentName(
             context,
@@ -109,25 +139,43 @@ final class LaunchAppearance {
         int enabledState = manager.getComponentEnabledSetting(enabled);
         boolean enabledByDefault = enabled.equals(light) &&
             enabledState == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT;
-        if (!enabledByDefault &&
-            enabledState != PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
-            manager.setComponentEnabledSetting(
-                enabled,
-                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                PackageManager.DONT_KILL_APP
-            );
-        }
-        if (!disablePrevious) return;
         int disabledState = manager.getComponentEnabledSetting(disabled);
         boolean disabledByDefault = disabled.equals(darkIcon) &&
             disabledState == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT;
-        if (!disabledByDefault &&
-            disabledState != PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
-            manager.setComponentEnabledSetting(
-                disabled,
-                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                PackageManager.DONT_KILL_APP
-            );
+        boolean alreadyUpdated = (
+            enabledByDefault ||
+            enabledState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        ) && (
+            disabledByDefault ||
+            disabledState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        );
+        if (alreadyUpdated) return;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            manager.setComponentEnabledSettings(Arrays.asList(
+                new PackageManager.ComponentEnabledSetting(
+                    enabled,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP
+                ),
+                new PackageManager.ComponentEnabledSetting(
+                    disabled,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+            ));
+            return;
         }
+
+        manager.setComponentEnabledSetting(
+            enabled,
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+            PackageManager.DONT_KILL_APP
+        );
+        manager.setComponentEnabledSetting(
+            disabled,
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+            PackageManager.DONT_KILL_APP
+        );
     }
 }

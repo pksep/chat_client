@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia';
 import { nextTick, ref } from 'vue';
 import { Capacitor } from '@capacitor/core';
-import { EdgeToEdge } from '@capawesome/capacitor-android-edge-to-edge-support';
 import { LaunchStartup } from '../services/launchStartup';
 
 /**
@@ -54,9 +53,6 @@ const syncNativeLaunchTheme = (isDarkTheme: boolean): void => {
   }
 
   void LaunchStartup.setTheme({ dark: isDarkTheme }).catch(() => undefined);
-  const color = isDarkTheme ? THEME_COLORS.dark : THEME_COLORS.light;
-  void EdgeToEdge.setStatusBarColor({ color }).catch(() => undefined);
-  void EdgeToEdge.setNavigationBarColor({ color }).catch(() => undefined);
 };
 
 /**
@@ -209,10 +205,11 @@ export const useThemeStore = defineStore('theme', () => {
     const reduceMotion = window.matchMedia(
       '(prefers-reduced-motion: reduce)'
     ).matches;
+    // Нативные панели начинают тот же 200 мс переход сразу по нажатию.
+    syncNativeLaunchTheme(shouldUseDarkTheme);
 
     if (!hasChanged || reduceMotion) {
       applyNextTheme();
-      syncNativeLaunchTheme(shouldUseDarkTheme);
     } else if (typeof document.startViewTransition === 'function') {
       const transition = document.startViewTransition(async () => {
         if (sequence !== themeSwitchSequence) return;
@@ -225,13 +222,11 @@ export const useThemeStore = defineStore('theme', () => {
         () => {
           if (sequence !== themeSwitchSequence) return;
           root.classList.remove('theme-snapshot');
-          syncNativeLaunchTheme(shouldUseDarkTheme);
         },
         () => {
           if (sequence !== themeSwitchSequence) return;
           root.classList.remove('theme-snapshot');
           applyNextTheme();
-          syncNativeLaunchTheme(shouldUseDarkTheme);
         }
       );
       const clearTransition = (): void => {
@@ -243,7 +238,6 @@ export const useThemeStore = defineStore('theme', () => {
     } else {
       beginThemeTransition();
       applyNextTheme();
-      syncNativeLaunchTheme(shouldUseDarkTheme);
     }
 
     // Сохраняем выбор пользователя для следующей загрузки приложения.
