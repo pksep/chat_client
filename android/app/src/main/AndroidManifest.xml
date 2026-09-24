@@ -3,9 +3,9 @@
     <application
         android:name=".ChatApplication"
         android:allowBackup="true"
-        android:icon="@mipmap/sep_launcher_chat_bubbles_safe_2026"
+        android:icon="@mipmap/sep_launcher_chat_bubbles_light_safe_2026"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/sep_launcher_chat_bubbles_safe_round_2026"
+        android:roundIcon="@mipmap/sep_launcher_chat_bubbles_light_safe_round_2026"
         android:supportsRtl="true"
         android:usesCleartextTraffic="${chatUsesCleartextTraffic}"
         android:theme="@style/AppTheme">
@@ -59,11 +59,35 @@
             android:launchMode="singleTop"
             android:screenOrientation="portrait"
             android:theme="@style/AppTheme.StartupLaunch">
+        </activity>
+
+        <activity-alias
+            android:name=".LightLauncherActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/sep_launcher_chat_bubbles_light_safe_2026"
+            android:roundIcon="@mipmap/sep_launcher_chat_bubbles_light_safe_round_2026"
+            android:label="@string/app_name"
+            android:targetActivity=".NotificationLaunchActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".DarkLauncherActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/sep_launcher_chat_bubbles_safe_2026"
+            android:roundIcon="@mipmap/sep_launcher_chat_bubbles_safe_round_2026"
+            android:label="@string/app_name"
+            android:targetActivity=".NotificationLaunchActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <activity
             android:name=".NotificationTapLaunchActivity"

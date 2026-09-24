@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { Capacitor } from '@capacitor/core';
+import { EdgeToEdge } from '@capawesome/capacitor-android-edge-to-edge-support';
 import { LaunchStartup } from '../services/launchStartup';
 
 /**
@@ -37,6 +38,9 @@ const syncNativeLaunchTheme = (isDarkTheme: boolean): void => {
   }
 
   void LaunchStartup.setTheme({ dark: isDarkTheme }).catch(() => undefined);
+  const color = isDarkTheme ? THEME_COLORS.dark : THEME_COLORS.light;
+  void EdgeToEdge.setStatusBarColor({ color }).catch(() => undefined);
+  void EdgeToEdge.setNavigationBarColor({ color }).catch(() => undefined);
 };
 
 /**
