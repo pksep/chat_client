@@ -84,6 +84,16 @@
         />
 
         <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="chat_default"
+        />
+
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/notification_statusbar_chat_bubbles_2026"
+        />
+
+        <meta-data
             android:name="ru.rustore.sdk.pushclient.project_id"
             android:value="@string/rustore_push_project_id"
         />
@@ -112,6 +122,16 @@
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
+
+        <service android:name=".ChatFirebaseMessagingService" android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
 
         <service android:name=".ChatRuStoreMessagingService" android:exported="true" tools:ignore="ExportedService">
             <intent-filter>
