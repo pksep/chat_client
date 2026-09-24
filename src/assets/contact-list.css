@@ -1,5 +1,10 @@
 .contact-list__li {
   position: relative;
+  margin: 2px 0;
+}
+
+.contact-list__li:first-child {
+  margin: 0 0 2px 0;
 }
 
 .contact-list__li:has(+ .contact-list__li):not(
@@ -8,9 +13,9 @@
   content: '';
   position: absolute;
   right: 0;
-  bottom: 0;
+  bottom: -3px;
   left: 0;
-  height: 0.35px;
+  height: 1px;
   background: var(--border-table);
   pointer-events: none;
 }
@@ -115,10 +120,9 @@
   padding: 10px;
   overflow: visible;
   border: 0;
-  border-top: 0.5px solid var(--border-table);
+  border: 0.5px solid var(--border-table);
   border-radius: 15px;
   background: var(--surface-overlay);
-  box-shadow: 0 4px 9.8px rgb(0 0 0 / 5%);
   color: var(--text-primary);
   cursor: pointer;
   box-sizing: border-box;
@@ -171,6 +175,14 @@
   font-size: 12px;
   font-weight: 400;
   line-height: 12px;
+}
+
+.contact-list__compact-popover .contact-list__description .emoji-glyph {
+  width: 14px;
+  min-width: 14px;
+  height: 14px;
+  min-height: 14px;
+  vertical-align: -2px;
 }
 
 .contact-list__compact-popover .contact-list__time {
@@ -259,7 +271,7 @@
   min-width: 0;
 }
 
-.contact-list__preview > .contact-list__description {
+.contact-list__preview>.contact-list__description {
   flex: 1;
 }
 
@@ -288,16 +300,12 @@
 }
 
 .contact-list__description--overflow {
-  -webkit-mask-image: linear-gradient(
-    to right,
-    #000 max(0px, calc(100% - var(--description-fade-width, 40px))),
-    transparent calc(100% - 6px)
-  );
-  mask-image: linear-gradient(
-    to right,
-    #000 max(0px, calc(100% - var(--description-fade-width, 40px))),
-    transparent calc(100% - 6px)
-  );
+  -webkit-mask-image: linear-gradient(to right,
+      #000 max(0px, calc(100% - var(--description-fade-width, 40px))),
+      transparent calc(100% - 6px));
+  mask-image: linear-gradient(to right,
+      #000 max(0px, calc(100% - var(--description-fade-width, 40px))),
+      transparent calc(100% - 6px));
 }
 
 .contact-list__search-state {
@@ -478,11 +486,12 @@ svg.icon-yui-kit.contact-list__read-icon {
 
   transition: all 0.2s ease;
 
-  border-radius: 15px;
+  border-bottom: 0.5px solid var(--border-table);
 
   &:hover {
     cursor: pointer;
   }
+
 }
 
 .contact-selector__item:hover .user-profile > * {

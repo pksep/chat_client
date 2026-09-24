@@ -118,7 +118,7 @@ const DEFAULT_CALL_BACKGROUND_GRADIENT =
   'linear-gradient(180deg, rgba(251, 253, 255, 1) 0%, rgba(236, 243, 255, 1) 100%)';
 
 const nonePreviewStyle: CSSProperties = {
-  background: 'var(--primary-backgroundLight, #F8F9FD)'
+  background: 'var(--surface-main, #F8F9FD)'
 };
 
 const buildCallBackgroundCssVariables = (

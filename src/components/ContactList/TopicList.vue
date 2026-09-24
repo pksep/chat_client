@@ -333,6 +333,7 @@
       @keydown.space.prevent="event => handleCompactPopoverClick(event)"
     >
       <TopicListItemContent
+        :key="compactHoverTopic.topic.id"
         :topic="compactHoverTopic.topic"
         :index="compactHoverTopic.index"
         :data-testid="`${props.dataTestid}-CompactPopover`"
@@ -1418,10 +1419,42 @@ const getTopicActiveCall = (topic: ITopic) => {
   cursor: pointer;
 }
 
+.contact-list__description--typing {
+  color: var(--text-brand);
+}
+
+.contact-list__block--wrapper--selection {
+  --description-fade-width: 56px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'title'
+    'preview';
+}
+
 .contact-list__selection-checkbox {
   margin-left: 12px;
   align-self: center;
   flex-shrink: 0;
+}
+
+.contact-list__call-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 20px;
+}
+
+.contact-list__call-indicator-icon {
+  color: var(--status-success);
+  width: 20px;
+  transform: rotate(-120deg);
+}
+
+.contact-list__time--call {
+  font-size: 12px;
+  line-height: 15px;
+  font-weight: 400;
+  width: 50px;
 }
 
 .contact-list__section-title {
@@ -1459,9 +1492,8 @@ const getTopicActiveCall = (topic: ITopic) => {
 .contact-list__skeleton-avatar,
 .contact-list__skeleton-line {
   display: block;
-  background: linear-gradient(90deg, #eef2f7, #f8fafc, #eef2f7);
   background-size: 180% 100%;
-  animation: contact-list-skeleton-pulse 1.2s ease-in-out infinite;
+  animation: skeleton-animation 1.2s ease-in-out infinite;
 }
 
 .contact-list__skeleton-avatar {
@@ -1492,13 +1524,17 @@ const getTopicActiveCall = (topic: ITopic) => {
   height: 12px;
 }
 
-@keyframes contact-list-skeleton-pulse {
+@keyframes skeleton-animation {
   0% {
-    background-position: 100% 0;
+    background-color: var(--border-table);
+  }
+
+  50% {
+    background-color: var(--action-disabled-bg);
   }
 
   100% {
-    background-position: -80% 0;
+    background-color: var(--border-table);
   }
 }
 </style>

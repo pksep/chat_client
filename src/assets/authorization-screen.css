@@ -175,6 +175,7 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
   max-height: 300px !important;
   max-width: 300px !important;
   box-sizing: border-box;
+  border: 0.5px solid var(--border-table) !important;
 
   font-size: 14px;
   padding-block: 5px !important;
@@ -432,11 +433,17 @@ main.authorization-screen input:-webkit-autofill:focus {
 @media screen and (width <=768px) {
   main.authorization-screen {
     --authorization-padding: 16px;
-    background-color: var(--action-primary-bg);
+    background-color: var(--surface-main);
 
     & .authorization-screen__title {
       margin: 0;
     }
+  }
+
+  #cap-os-barcode-scanner-container .scanner-dialog-inner {
+    background-color: var(--surface-overlay);
+    border: .5px solid transparent;
+    border-radius: 10px;
   }
 
   .authorization-screen__logo {
@@ -460,7 +467,6 @@ main.authorization-screen input:-webkit-autofill:focus {
     padding: 15px;
     border-radius: 15px;
     box-shadow: none;
-    background-color: var(--white);
   }
 
   .authorization-screen__card__gradient {
