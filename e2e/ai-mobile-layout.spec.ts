@@ -193,7 +193,7 @@ for (const theme of ['theme-light', 'theme-dark']) {
       ).toBeVisible();
       await permission.click();
       await permissionMenu
-        .getByRole('menuitemradio', { name: 'Запрашивать разрешения' })
+        .getByRole('menuitemradio', { name: 'Запрашивать разрешение' })
         .click();
       await expect(permission.locator('.permission-hand-icon')).toBeVisible();
       await response.click();
@@ -209,10 +209,10 @@ for (const theme of ['theme-light', 'theme-dark']) {
       if (width <= 480)
         await page.screenshot({ path: testInfo.outputPath('mode-menu.png') });
       await page
-        .getByRole('menuitemradio', { name: 'Продвинутый ответ' })
+        .getByRole('menuitemradio', { name: 'Продуманный ответ' })
         .filter({ visible: true })
         .click();
-      await expect(response).toHaveAttribute('aria-label', 'Продвинутый ответ');
+      await expect(response).toHaveAttribute('aria-label', 'Продуманный ответ');
       const responseBox = await response.boundingBox();
       expect(responseBox!.x + responseBox!.width).toBeLessThanOrEqual(width);
       await page.getByTestId(`${HEADER}-PopoverIcon`).click();

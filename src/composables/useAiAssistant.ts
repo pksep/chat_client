@@ -39,6 +39,7 @@ export interface AiAssistantMessage {
   role: AiMessageRole;
   text: string;
   time: string;
+  timestamp?: number;
   showApproval?: boolean;
   approvalState?: 'approved' | 'rejected' | null;
   pinned?: boolean;
@@ -390,6 +391,7 @@ const syncSession = (sessionId: string, runtime: MastraRuntime): void => {
           ? actionTaskSummary(message.actionTask)
           : getVisibleMessageContent(message.content),
         time: formatTime(message.timestamp),
+        timestamp: message.timestamp,
         showApproval:
           (Boolean(pendingApproval) &&
             index === lastSourceIndex &&

@@ -91,130 +91,146 @@
       </div>
 
       <div v-else class="ai-assistant__conversation">
-        <time class="ai-assistant__date">{{ conversationDate }}</time>
-        <div
-          v-for="message in activeSession?.messages || []"
+        <template
+          v-for="(message, index) in activeSession?.messages || []"
           :key="message.id"
-          :class="[
-            'message ai-assistant__message',
-            `ai-assistant__message--${message.role}`,
-            {
-              message__other: message.role === 'user',
-              'ai-assistant__message--selection-active': isSelectionMode,
-              'ai-assistant__message--selected': isMessageSelected(message.id),
-              highlighted: highlightedMessageId === message.id
-            }
-          ]"
-          :data-message-id="message.id"
-          :data-is-me-sender="message.role === 'user'"
-          @click="handleMessageSelectionClick(message, $event)"
-          @contextmenu="handleMessageContextMenu(message, $event)"
-          @copy="copyMessageSelection"
         >
+          <time
+            v-if="
+              isNewConversationDay(message, activeSession?.messages[index - 1])
+            "
+            class="ai-assistant__date"
+          >
+            {{ formatConversationDate(message.timestamp) }}
+          </time>
           <div
             :class="[
-              'ai-assistant__message-selection',
+              'message ai-assistant__message',
+              `ai-assistant__message--${message.role}`,
               {
-                'ai-assistant__message-selection--hidden': !isSelectionMode
+                message__other: message.role === 'user',
+                'ai-assistant__message--selection-active': isSelectionMode,
+                'ai-assistant__message--selected': isMessageSelected(
+                  message.id
+                ),
+                highlighted: highlightedMessageId === message.id
               }
             ]"
+            :data-message-id="message.id"
+            :data-is-me-sender="message.role === 'user'"
+            @click="handleMessageSelectionClick(message, $event)"
+            @contextmenu="handleMessageContextMenu(message, $event)"
+            @copy="copyMessageSelection"
           >
-            <Checkbox
-              v-if="isSelectionMode"
-              :model-value="isMessageSelected(message.id)"
-              :circular="CheckboxCircularEnum.circled"
-              @update:model-value="toggleMessageSelection(message.id)"
-              @click.stop
+            <div
+              :class="[
+                'ai-assistant__message-selection',
+                {
+                  'ai-assistant__message-selection--hidden': !isSelectionMode
+                }
+              ]"
+            >
+              <Checkbox
+                v-if="isSelectionMode"
+                :model-value="isMessageSelected(message.id)"
+                :circular="CheckboxCircularEnum.circled"
+                @update:model-value="toggleMessageSelection(message.id)"
+                @click.stop
+              />
+            </div>
+            <MessageBubbleFiles
+              v-if="message.outputAttachments?.length"
+              class="message__bubble ai-assistant__message-files"
+              :message="getMessageHtml(message.text)"
+              :time="message.time"
+              :is-pin="message.pinned"
+              :is-me-sender="false"
+              :is-dialog="true"
+              :media="getMessageOutputMedia(message)"
+              :data-testid="`AI-Assistant-Message-${message.id}`"
+              @set-slider="handleOutputAttachmentClick"
             />
-          </div>
-          <MessageBubbleFiles
-            v-if="message.outputAttachments?.length"
-            class="message__bubble ai-assistant__message-files"
-            :message="getMessageHtml(message.text)"
-            :time="message.time"
-            :is-pin="message.pinned"
-            :is-me-sender="false"
-            :is-dialog="true"
-            :media="getMessageOutputMedia(message)"
-            :data-testid="`AI-Assistant-Message-${message.id}`"
-            @set-slider="handleOutputAttachmentClick"
-          />
-          <MessageBubbleText
-            v-else
-            class="message__bubble ai-assistant__message-content"
-            :message="getMessageHtml(message.text)"
-            :time="message.time"
-            :is-pin="message.pinned"
-            :is-me-sender="message.role === 'user'"
-            :is-read="true"
-            :is-dialog="true"
-            :parsed-call-message="null"
-            :data-testid="`AI-Assistant-Message-${message.id}`"
-          >
-            <template v-if="visibleActionTasks.has(message.id)" #after-message>
-              <AIActionPipeline :task="visibleActionTasks.get(message.id)!" />
-            </template>
-            <template v-if="message.replyTo" #reference>
-              <div
-                :class="[
-                  'ai-assistant__message-reply',
-                  'message-reference-block',
-                  {
-                    'message-reference-block--outgoing': message.role === 'user'
-                  }
-                ]"
+            <MessageBubbleText
+              v-else
+              class="message__bubble ai-assistant__message-content"
+              :message="getMessageHtml(message.text)"
+              :time="message.time"
+              :is-pin="message.pinned"
+              :is-me-sender="message.role === 'user'"
+              :is-read="true"
+              :is-dialog="true"
+              :parsed-call-message="null"
+              :data-testid="`AI-Assistant-Message-${message.id}`"
+            >
+              <template
+                v-if="visibleActionTasks.has(message.id)"
+                #after-message
               >
-                <div class="message-reference-reply">
-                  <div class="message-reference-reply__content">
-                    <strong class="message-reference-reply__author">
-                      {{ getMessageAuthor(message.replyTo.role) }}
-                    </strong>
-                    <span class="message-reference-reply__text">
-                      {{ message.replyTo.content }}
-                    </span>
+                <AIActionPipeline :task="visibleActionTasks.get(message.id)!" />
+              </template>
+              <template v-if="message.replyTo" #reference>
+                <div
+                  :class="[
+                    'ai-assistant__message-reply',
+                    'message-reference-block',
+                    {
+                      'message-reference-block--outgoing':
+                        message.role === 'user'
+                    }
+                  ]"
+                >
+                  <div class="message-reference-reply">
+                    <div class="message-reference-reply__content">
+                      <strong class="message-reference-reply__author">
+                        {{ getMessageAuthor(message.replyTo.role) }}
+                      </strong>
+                      <span class="message-reference-reply__text">
+                        {{ message.replyTo.content }}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </template>
-          </MessageBubbleText>
-          <div
-            v-if="
-              visibleActionTasks.get(message.id)?.status ===
-                'waiting_approval' ||
-              (message.showApproval && !message.approvalState)
-            "
-            class="ai-assistant__approval"
-          >
-            <button
-              type="button"
-              class="ai-assistant__approval-reject"
-              @click="handleApproval(message.id, 'rejected')"
+              </template>
+            </MessageBubbleText>
+            <div
+              v-if="
+                visibleActionTasks.get(message.id)?.status ===
+                  'waiting_approval' ||
+                (message.showApproval && !message.approvalState)
+              "
+              class="ai-assistant__approval"
             >
-              Отменить
-            </button>
-            <button
-              type="button"
-              class="ai-assistant__approval-confirm"
-              :disabled="visibleActionTasks.has(message.id) && taskBusy"
-              @click="handleApproval(message.id, 'approved')"
-            >
-              Подтвердить
-            </button>
+              <button
+                type="button"
+                class="ai-assistant__approval-reject"
+                @click="handleApproval(message.id, 'rejected')"
+              >
+                Отклонить
+              </button>
+              <button
+                type="button"
+                class="ai-assistant__approval-confirm"
+                :disabled="visibleActionTasks.has(message.id) && taskBusy"
+                @click="handleApproval(message.id, 'approved')"
+              >
+                Подтвердить
+              </button>
+            </div>
+            <Teleport v-if="isMessageContextOpen(message.id)" to="body">
+              <AIMessageContextMenu
+                :visible="isMessageContextOpen(message.id)"
+                :position="messageContextPosition"
+                :message="message"
+                :selected-text="contextMessage?.selectedText"
+                :selection-mode="isSelectionMode"
+                :selected="isMessageSelected(message.id)"
+                :can-delete-selection="canDeleteSelectedMessages"
+                @close="closeMessageContextMenu(message.id)"
+                @action="handleMessageAction($event, message)"
+              />
+            </Teleport>
           </div>
-          <Teleport v-if="isMessageContextOpen(message.id)" to="body">
-            <AIMessageContextMenu
-              :visible="isMessageContextOpen(message.id)"
-              :position="messageContextPosition"
-              :message="message"
-              :selected-text="contextMessage?.selectedText"
-              :selection-mode="isSelectionMode"
-              :selected="isMessageSelected(message.id)"
-              :can-delete-selection="canDeleteSelectedMessages"
-              @close="closeMessageContextMenu(message.id)"
-              @action="handleMessageAction($event, message)"
-            />
-          </Teleport>
-        </div>
+        </template>
         <div v-if="isThinking" class="ai-assistant__thinking">
           {{ preparationStatus }} <span>•••</span>
         </div>
@@ -404,7 +420,7 @@
                   @click="selectPermission('ask')"
                 >
                   <PermissionHandIcon />
-                  <span>Запрашивать разрешения</span>
+                  <span>Запрашивать разрешение</span>
                 </button>
               </div>
             </div>
@@ -461,7 +477,7 @@
                   @click="selectResponseMode('advanced')"
                 >
                   <Icon :name="IconNameEnum.lightbulbFilament" />
-                  <span>Продвинутый ответ</span>
+                  <span>Продуманный ответ</span>
                 </button>
               </div>
             </div>
@@ -1086,18 +1102,25 @@ const canDeleteSelectedMessages = computed(
 );
 const permissionLabel = computed(() =>
   permissionMode.value === 'ask'
-    ? 'Запрашивать разрешения'
+    ? 'Запрашивать разрешение'
     : 'Автоматически подтверждать'
 );
 const responseModeLabel = computed(() =>
-  responseMode.value === 'advanced' ? 'Продвинутый ответ' : 'Быстрый ответ'
+  responseMode.value === 'advanced' ? 'Продуманный ответ' : 'Быстрый ответ'
 );
-const conversationDate = computed(() =>
+const formatConversationDate = (timestamp?: number): string =>
   new Intl.DateTimeFormat('ru-RU', {
     day: 'numeric',
     month: 'long'
-  }).format(new Date())
-);
+  }).format(new Date(timestamp ?? Date.now()));
+
+const isNewConversationDay = (
+  message: AiAssistantMessage,
+  previous?: AiAssistantMessage
+): boolean =>
+  !previous ||
+  new Date(message.timestamp ?? Date.now()).toDateString() !==
+    new Date(previous.timestamp ?? Date.now()).toDateString();
 
 /** Возвращает фокус, не меняя выделение пользователя в уже активном редакторе. */
 const focusComposer = (): void => {

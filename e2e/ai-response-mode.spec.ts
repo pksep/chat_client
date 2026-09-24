@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './fixtures/ai-history';
+﻿import { expect, test, type Page } from './fixtures/ai-history';
 
 test.setTimeout(90_000);
 
@@ -107,13 +107,13 @@ for (const theme of ['theme-light', 'theme-dark']) {
     if (!isMobile) await assertSendGap();
     await quickModeButton.click();
     const advancedModeOption = page.getByRole('menuitemradio', {
-      name: 'Продвинутый ответ'
+      name: 'Продуманный ответ'
     });
     await expect(advancedModeOption.locator('svg')).toBeVisible();
     await advancedModeOption.click();
 
     const advancedModeButton = page.getByRole('button', {
-      name: 'Продвинутый ответ',
+      name: 'Продуманный ответ',
       exact: true
     });
     await expect(advancedModeButton).toBeVisible();
@@ -140,7 +140,7 @@ for (const theme of ['theme-light', 'theme-dark']) {
 
     await expect(page.locator('.ai-assistant__thinking')).toBeVisible();
     await expect(advancedModeButton).toBeEnabled();
-    await expect(advancedModeButton).toContainText('Продвинутый ответ');
+    await expect(advancedModeButton).toContainText('Продуманный ответ');
     await expect(
       advancedModeButton.locator('.ai-assistant__response-trigger-skeleton')
     ).toHaveCount(0);
