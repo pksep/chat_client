@@ -1,9 +1,13 @@
 import './polyfills/legacy-webview';
+import { prepareChatDatabases } from './utils/chat-startup-databases';
+import { prepareStartupTopicRecords } from './utils/startup-topic-records';
+import type { PreparedStartupHistory } from './utils/startup-history';
 
 declare global {
   interface Window {
     __chatNativeStartupCleanup?: Promise<void>;
     __chatNativeInitialNotificationTap?: Record<string, string>;
+    __chatNativePreparedHistory?: Promise<PreparedStartupHistory | null>;
   }
 }
 
@@ -12,6 +16,7 @@ type StartupNotificationPayload = Record<string, string>;
 interface StartupNativePlugin {
   consumePendingNotificationTap?: () => Promise<StartupNotificationPayload>;
   reveal?: () => Promise<void>;
+  prepareStartupHistory?: () => Promise<PreparedStartupHistory>;
 }
 
 interface StartupCapacitorBridge {
@@ -317,6 +322,13 @@ window.__chatNativeStartupCleanup = (async () => {
   }
 
   if (isAndroidNative) {
+    prepareChatDatabases();
+    // Передаём готовый HTTP-ответ параллельно загрузке main; SDK проверит его
+    // пользователя, сервер, маршрут и возраст перед применением.
+    window.__chatNativePreparedHistory =
+      capacitor?.Plugins?.ChatBackgroundSync?.prepareStartupHistory?.().catch(
+        () => null
+      );
     // WebView запрашивает favicon при каждом replaceState; иконку приложения задаёт Android.
     document
       .querySelectorAll<HTMLLinkElement>('link[rel~="icon"]')
@@ -348,6 +360,18 @@ window.__chatNativeStartupCleanup = (async () => {
       }
     } catch (error) {
       console.warn('Failed to prepare notification startup shell:', error);
+    }
+    const topicRoute = /^\/(?:dialogs|group)\/([^/]+)/.exec(
+      window.location.pathname
+    );
+    if (topicRoute) {
+      try {
+        void prepareStartupTopicRecords(
+          decodeURIComponent(topicRoute[1])
+        ).catch(() => undefined);
+      } catch {
+        // Некорректный маршрут не должен задерживать обычную обработку навигации.
+      }
     }
   }
 

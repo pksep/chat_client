@@ -337,7 +337,7 @@
               class="ai-menu-panel__task-state ai-menu-panel__task-state--draft"
               aria-hidden="true"
             >
-              <Icon :name="IconNameEnum.circle" :width="16" :height="16" />
+              <Icon :name="IconNameEnum.taskStatus" :width="16" :height="16" />
             </span>
             <span class="ai-menu-panel__row-copy">
               <strong>{{ session.title }}</strong>
@@ -357,7 +357,17 @@
         </article>
       </template>
 
-      <MenuEmptyState v-else />
+      <MenuEmptyState
+        v-else
+        :text="
+          query.trim()
+            ? 'Ничего не найдено'
+            : activeTab === 'chats'
+              ? 'Здесь будут чаты'
+              : 'Здесь будут задачи'
+        "
+        :hide-icon="!query.trim()"
+      />
     </div>
   </section>
 

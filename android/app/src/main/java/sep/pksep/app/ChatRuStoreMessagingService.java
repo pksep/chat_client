@@ -32,6 +32,19 @@ public class ChatRuStoreMessagingService extends RuStoreMessagingService {
             data.putIfAbsent("messageId", messageId);
         }
 
+        long receivedAt = System.currentTimeMillis();
+        long sentAt = IncomingCallNotificationHelper.parseTimestamp(
+            data.get("sentAt"),
+            0L
+        );
+        data.put("receivedAt", String.valueOf(receivedAt));
+        if (sentAt > 0L) {
+            data.put(
+                "deliveryDelayMs",
+                String.valueOf(Math.max(0L, receivedAt - sentAt))
+            );
+        }
+
         String title = resolveNotificationText(
             remoteMessage.getNotification() != null
                 ? remoteMessage.getNotification().getTitle()
@@ -51,14 +64,31 @@ public class ChatRuStoreMessagingService extends RuStoreMessagingService {
 
         String action = data.get("action");
         if ("CLEAR_CHAT_NOTIFICATIONS".equals(action)) {
-            ChatNotificationHelper.dismissTopicNotifications(this, data.get("topicId"));
+            ChatNotificationDismissalHelper.dismissTopicNotification(
+                this,
+                data.get("topicId"),
+                IncomingCallNotificationHelper.parseTimestamp(
+                    data.get("stateAt"),
+                    IncomingCallNotificationHelper.parseTimestamp(
+                        data.get("sentAt"),
+                        receivedAt
+                    )
+                )
+            );
             return;
         }
 
         if ("DISMISS_INCOMING_CALL".equals(action)) {
             String roomId = data.get("roomId");
             if (roomId != null && !roomId.trim().isEmpty()) {
-                IncomingCallNotificationHelper.dismissIncomingCall(this, roomId);
+                IncomingCallNotificationHelper.dismissIncomingCall(
+                    this,
+                    roomId,
+                    IncomingCallNotificationHelper.parseTimestamp(
+                        data.get("sentAt"),
+                        receivedAt
+                    )
+                );
             } else {
                 IncomingCallNotificationHelper.dismissAllIncomingCalls(this);
             }
@@ -79,12 +109,21 @@ public class ChatRuStoreMessagingService extends RuStoreMessagingService {
             return;
         }
 
-        if ("incoming_call".equals(data.get("type"))) {
+        if (isIncomingDirectCall(data)) {
             handleIncomingCall(data);
             return;
         }
 
-        if (!MainActivity.isAppInForeground()) {
+        String topicId = ChatNotificationHelper.resolveNotificationTag(data);
+        if (
+            ChatNotificationDismissalHelper.shouldShowMessageNotification(
+                this,
+                topicId,
+                data.get("stateAt"),
+                data.get("sentAt")
+            ) &&
+            !MainActivity.isAppInForeground()
+        ) {
             ChatNotificationHelper.showChatMessage(this, data, title, body);
         }
     }
@@ -120,7 +159,14 @@ public class ChatRuStoreMessagingService extends RuStoreMessagingService {
         if (
             roomId == null ||
             roomId.trim().isEmpty() ||
-            MainActivity.isAppInForeground()
+            MainActivity.isAppInForeground() ||
+            !IncomingCallNotificationHelper.shouldShowIncomingCall(
+                this,
+                roomId,
+                data.get("sentAt"),
+                data.get("expiresAt"),
+                System.currentTimeMillis()
+            )
         ) {
             return;
         }
@@ -143,6 +189,13 @@ public class ChatRuStoreMessagingService extends RuStoreMessagingService {
         }
 
         return null;
+    }
+
+    static boolean isIncomingDirectCall(Map<String, String> data) {
+        return data != null && IncomingCallNotificationHelper.isDirectCallPayload(
+            data.get("type"),
+            data.get("topicType")
+        );
     }
 
     static boolean shouldScheduleChatSync(Map<String, String> data) {

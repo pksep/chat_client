@@ -965,6 +965,10 @@ export class ChatSDK {
     return this.user.saveCustomBackground(kind, image);
   }
 
+  deleteCustomBackground(kind: CustomBackgroundKind, id: string) {
+    return this.user.deleteCustomBackground(kind, id);
+  }
+
   async getRecentTopics(userId: string): Promise<Topic[]> {
     return this.user.getRecentTopics(userId);
   }
@@ -1163,6 +1167,7 @@ export class ChatSDK {
       lastMessageId?: string;
       afterMessageId?: string;
       newMessages?: boolean;
+      fresh?: boolean;
     }
   ): Promise<Message[]> {
     return await this.message.getMessages(topicId, opts);

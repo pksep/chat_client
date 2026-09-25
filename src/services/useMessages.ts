@@ -21,6 +21,7 @@ import { isTopicMuted } from '../composables/useTopics';
 import { useGroup } from '../composables/useGroup';
 import { useUrlWatcher } from '../composables/navigation';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
+import { takeNativeStartupHistory } from './native-startup-history';
 import {
   clearCachedTopicMessages,
   loadCachedPinnedMessages,
@@ -1357,6 +1358,49 @@ export const registerPendingOutgoingForwardBatch = (
   schedulePendingOutgoingForwardBatchCleanup(topicId);
 };
 
+export const MOBILE_NOTIFICATION_HISTORY_LIMIT = 72;
+type ReadyChatSDK = NonNullable<ReturnType<typeof getChatSDK>>;
+type NotificationHistoryResult =
+  | { ok: true; messages: Awaited<ReturnType<ReadyChatSDK['getMessages']>> }
+  | { ok: false; error: unknown };
+let prefetchedNotificationHistory: {
+  sdk: ReadyChatSDK;
+  topicId: string;
+  messageId: string;
+  startedAt: number;
+  result: Promise<NotificationHistoryResult>;
+} | null = null;
+
+export const prefetchNotificationHistory = (
+  topicId: string,
+  messageId: string
+): void => {
+  const sdk = getChatSDK();
+  if (!sdk || !topicId || !messageId || !getHasBrowserNetwork()) return;
+  prefetchedNotificationHistory = {
+    sdk,
+    topicId,
+    messageId,
+    startedAt: Date.now(),
+    result: takeNativeStartupHistory<
+      Awaited<ReturnType<ReadyChatSDK['getMessages']>>
+    >(topicId)
+      .then(
+        messages =>
+          messages ??
+          sdk.getMessages(topicId, {
+            limit: MOBILE_NOTIFICATION_HISTORY_LIMIT,
+            newMessages: true,
+            fresh: true
+          })
+      )
+      .then(
+        messages => ({ ok: true as const, messages }),
+        error => ({ ok: false as const, error })
+      )
+  };
+};
+
 export const fetchMessagesForTopic = async (
   topicId: string = route.value.id,
   opts?: {
@@ -1368,12 +1412,14 @@ export const fetchMessagesForTopic = async (
     syncLastMessage?: boolean;
     forceRefresh?: boolean;
     forceNetwork?: boolean;
+    notificationMessageId?: string;
     visibleLimit?: number;
     updateVisible?: boolean;
     revealIfEmpty?: boolean;
     allowVisibleShrink?: boolean;
     skipShadowSnapshot?: boolean;
     allowStaleFallback?: boolean;
+    onNetworkApplied?: () => void;
     maxAgeMs?: number;
   }
 ): Promise<IMessage[]> => {
@@ -1418,23 +1464,41 @@ export const fetchMessagesForTopic = async (
 
     // Запрос выбранного чата не ждёт IndexedDB. Ошибку удерживаем до await,
     // а метаданные применяем до сохранения ответа и проверки удалений.
-    const requestSdk = getChatSDK();
+    let requestSdk = getChatSDK();
     const earlyRequest =
-      opts?.forceRefresh &&
-      opts?.forceNetwork &&
-      getHasBrowserNetwork() &&
-      requestSdk
-        ? requestSdk
-            .getMessages(topicId, {
+      opts?.forceRefresh && opts?.forceNetwork && getHasBrowserNetwork()
+        ? (async () => {
+            requestSdk ||= await waitForChatSDK();
+            if (!requestSdk) return null;
+            const prefetched = prefetchedNotificationHistory;
+            if (
+              prefetched &&
+              opts.notificationMessageId &&
+              prefetched.sdk === requestSdk &&
+              prefetched.topicId === topicId &&
+              prefetched.messageId === opts.notificationMessageId &&
+              opts.newMessages &&
+              !opts.lastMessageId &&
+              !opts.afterMessageId &&
+              opts.limit === MOBILE_NOTIFICATION_HISTORY_LIMIT &&
+              Date.now() - prefetched.startedAt < 30_000
+            ) {
+              prefetchedNotificationHistory = null;
+              const result = await prefetched.result;
+              if (result.ok === false) throw result.error;
+              return result.messages;
+            }
+            return requestSdk.getMessages(topicId, {
               limit: opts.limit,
               lastMessageId: opts.lastMessageId,
               afterMessageId: opts.afterMessageId,
-              newMessages: opts.newMessages
-            })
-            .then(
-              messages => ({ ok: true as const, messages }),
-              error => ({ ok: false as const, error })
-            )
+              newMessages: opts.newMessages,
+              fresh: !!opts.notificationMessageId
+            });
+          })().then(
+            messages => ({ ok: true as const, messages }),
+            error => ({ ok: false as const, error })
+          )
         : null;
     await metadataReady;
 
@@ -1611,13 +1675,14 @@ export const fetchMessagesForTopic = async (
     if (earlyRequest && requestSdk !== getChatSDK()) return [];
     if (earlyResult?.ok === false) throw earlyResult.error;
     const messages = normalizePaginationResult(
-      earlyResult?.ok === true
+      earlyResult?.ok === true && earlyResult.messages
         ? earlyResult.messages
         : await sdk.getMessages(topicId, {
             limit: opts?.limit,
             lastMessageId: opts?.lastMessageId,
             afterMessageId: opts?.afterMessageId,
-            newMessages: opts?.newMessages
+            newMessages: opts?.newMessages,
+            fresh: !!opts?.notificationMessageId
           }),
       opts
     );
@@ -1696,6 +1761,7 @@ export const fetchMessagesForTopic = async (
       }
     }
 
+    opts?.onNetworkApplied?.();
     return messages;
   } catch (error) {
     console.warn('Failed to fetch message history:', error);
@@ -2481,6 +2547,66 @@ export const setVisibleMessagesLimitForTopic = (
 };
 
 const messageHydrationsInFlight = new Map<string, Promise<IMessage[]>>();
+const pendingMessageHydrationsInFlight = new Map<string, Promise<IMessage[]>>();
+
+export const hydratePendingMessagesFromCache = (
+  topicId: string,
+  userId = authedUser.value?.id || getChatAuthSession()?.user?.id || '',
+  visibleLimit = 48
+): Promise<IMessage[]> => {
+  const key = JSON.stringify([userId, topicId]);
+  const existing = pendingMessageHydrationsInFlight.get(key);
+  if (existing) return existing;
+  const hydration = (async () => {
+    // При свежем HTTP читаем только локальные изменения, без старой истории.
+    const [pending] = await Promise.all([
+      loadPendingUploadMessages(topicId, userId, async missingIds => {
+        // Текст мог сохраниться в истории до обновления отдельной записи outbox.
+        const [shadow, legacy] = await Promise.all([
+          loadShadowTopicSnapshot(topicId, userId),
+          loadCachedTopicMessages(topicId, userId)
+        ]);
+        const missing = new Set(missingIds);
+        return dedupeMessagesForTopic([...legacy, ...shadow]).filter(
+          message =>
+            missing.has(message.id) && isPendingOutgoingMessage(message)
+        );
+      }),
+      rememberPersistedDeletedMessageIds(topicId, userId),
+      loadShadowReadState(topicId, userId)
+    ]);
+    if (
+      (authedUser.value?.id || getChatAuthSession()?.user?.id || '') !== userId
+    )
+      return [];
+    if (pending.length) {
+      const messages = await restorePendingUploadMediaState(topicId, pending);
+      if (
+        (authedUser.value?.id || getChatAuthSession()?.user?.id || '') !==
+        userId
+      )
+        return [];
+      saveMessagesToLocal(
+        topicId,
+        prepareMessagesForPersistence(
+          dedupeMessagesForTopic([
+            ...messages,
+            ...getFullMessagesByTopicId(topicId)
+          ])
+        ),
+        {
+          syncLastMessage: false,
+          windowMode: 'latest',
+          visibleLimit,
+          skipPersist: true
+        }
+      );
+    }
+    return getMessagesByTopicId(topicId);
+  })().finally(() => pendingMessageHydrationsInFlight.delete(key));
+  pendingMessageHydrationsInFlight.set(key, hydration);
+  return hydration;
+};
 
 export const hydrateMessagesFromCache = async (
   topicId: string,
@@ -2535,11 +2661,25 @@ export const hydrateMessagePreviewFromCache = async (
     userId || authedUser.value?.id || getChatAuthSession()?.user?.id || '';
   const previewMessages = await loadShadowTopicPreview(topicId, resolvedUserId);
 
+  // Сеть или полное восстановление могли уже заполнить историю, пока читался preview.
+  if (
+    canonicalTopicStateIds.has(topicId) &&
+    getFullMessagesByTopicId(topicId).length
+  ) {
+    return getMessagesByTopicId(topicId);
+  }
+
   if (!previewMessages.length) {
     return [];
   }
 
-  const normalizedMessages = prepareMessagesForPersistence(previewMessages);
+  // Native-снимок может принести новое сообщение, пока старый preview читается с диска.
+  const normalizedMessages = prepareMessagesForPersistence(
+    dedupeMessagesForTopic([
+      ...previewMessages,
+      ...getFullMessagesByTopicId(topicId)
+    ])
+  );
   saveMessagesToLocal(topicId, normalizedMessages, {
     syncLastMessage: false,
     windowMode: 'latest',
@@ -2548,6 +2688,26 @@ export const hydrateMessagePreviewFromCache = async (
   });
 
   return getMessagesByTopicId(topicId);
+};
+
+export const hydrateNotificationMessagePreview = async (
+  topicId: string,
+  messageId: string,
+  messages: IMessage[],
+  userId: string
+): Promise<void> => {
+  if (!messages.some(message => message.id === messageId)) return;
+  await rememberPersistedDeletedMessageIds(topicId, userId);
+  if (authedUser.value?.id !== userId) return;
+  const merged = prepareMessagesForPersistence(
+    dedupeMessagesForTopic([...messages, ...getFullMessagesByTopicId(topicId)])
+  );
+  saveMessagesToLocal(topicId, merged, {
+    syncLastMessage: false,
+    windowMode: 'latest',
+    visibleLimit: defaultVisibleMessagesLimitByTopic.get(topicId) || 48,
+    skipPersist: true
+  });
 };
 
 const loadMessagesFromCache = async (
@@ -3676,14 +3836,15 @@ export const suppressNotificationSoundForTopic = (
 };
 
 const playNotificationSoundInternal = async (
-  topicId?: string
+  topicId?: string,
+  options?: { isMention?: boolean }
 ): Promise<void> => {
   const isActivelyVisible = getIsAppActivelyVisible();
   const suppressionDeadline = topicId
     ? notificationSoundSuppressedUntilByTopic.get(topicId) || 0
     : 0;
 
-  if (topicId && isTopicMuted(topicId)) {
+  if (topicId && isTopicMuted(topicId) && !options?.isMention) {
     return;
   }
 
@@ -3739,6 +3900,9 @@ const playNotificationSoundInternal = async (
   }
 };
 
-export const playNotificationSound = (topicId?: string): void => {
-  void playNotificationSoundInternal(topicId);
+export const playNotificationSound = (
+  topicId?: string,
+  options?: { isMention?: boolean }
+): void => {
+  void playNotificationSoundInternal(topicId, options);
 };

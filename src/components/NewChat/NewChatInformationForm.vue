@@ -2,7 +2,6 @@
   <form class="menu__info-form" @submit.prevent="onSubmit">
     <slot> </slot>
     <div class="menu__info-form-block form__name">
-      <label for="name" class="menu__info-title-text"> Название: </label>
       <Input
         id="name"
         class="initial"

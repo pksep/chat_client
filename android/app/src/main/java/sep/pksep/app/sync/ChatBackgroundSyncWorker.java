@@ -109,6 +109,7 @@ public class ChatBackgroundSyncWorker extends Worker {
             ChatBackgroundSyncStore.saveSnapshot(
                 context,
                 session.userId,
+                session.apiUrl,
                 hints.pts,
                 syncEvents.fromPts,
                 syncEvents.toPts,

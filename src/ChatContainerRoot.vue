@@ -6,7 +6,8 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, watch } from 'vue';
+import { Capacitor } from '@capacitor/core';
+import { nextTick, onBeforeMount, onUnmounted, watch } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 
 import type {
@@ -48,6 +49,7 @@ import { fetchPinnedMessagesForTopic } from './services/useMessages';
 import { initPushNotifications } from './services/usePushNotifications';
 import {
   clearTopicNotifications,
+  notificationTopicRefreshRequest,
   syncNotificationContext
 } from './services/useNotificationNavigation';
 import {
@@ -59,13 +61,20 @@ import { MAX_W_MD } from './utils/constants';
 import { RouteTypes } from './composables/navigation/useUrlRouting';
 import {
   getMessagesByTopicId,
+  prefetchNotificationHistory,
   deferMessagePersistsUntil,
+  hydrateMessagePreviewFromCache,
+  hydrateNotificationMessagePreview,
+  hydratePendingMessagesFromCache,
   hydrateMessagesFromCache
 } from './services/useMessages';
 import { useShareSelection } from './composables/useShareSelection';
 import { isGroupCallInviteUrl } from './utils/groupCallInviteUrl';
 import { installNotoEmojiFontFaces } from './composables/useEmojiStyle';
-import { importAnyChatBackgroundSnapshot } from './services/useChatBackgroundSync';
+import {
+  importAnyChatBackgroundSnapshot,
+  loadNativeNotificationPreview
+} from './services/useChatBackgroundSync';
 
 const props = defineProps<IChatContainerProps>();
 const emit = defineEmits<{
@@ -81,7 +90,6 @@ let removeAppVisibilityListener: (() => void) | null = null;
 const { hasPendingShareBatches, isShareSelectionActive, startShareSelection } =
   useShareSelection();
 let hydratedCacheUserId: string | undefined;
-let hasCachedStartupTopics = false;
 const MOBILE_CACHED_ACTIVE_TOPIC_LIMIT = 48;
 const ONLINE_STARTUP_BACKGROUND_SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
@@ -206,6 +214,33 @@ const hydrateActiveCachedMessages = async (userId?: string): Promise<void> => {
     return;
   }
 
+  if (isMobile.value && hasStartupNetwork()) {
+    await hydratePendingMessagesFromCache(
+      activeTopicId,
+      userId,
+      MOBILE_CACHED_ACTIVE_TOPIC_LIMIT
+    );
+    return;
+  }
+
+  if (isMobile.value) {
+    const preview = await hydrateMessagePreviewFromCache(
+      activeTopicId,
+      userId,
+      MOBILE_CACHED_ACTIVE_TOPIC_LIMIT
+    );
+    if (preview.length) {
+      runDeferredStartupTask('active topic history', async () => {
+        if (getAuthUser()?.id !== userId || route.value.id !== activeTopicId)
+          return;
+        await hydrateMessagesFromCache(activeTopicId, userId, {
+          visibleLimit: MOBILE_CACHED_ACTIVE_TOPIC_LIMIT
+        });
+      });
+      return;
+    }
+  }
+
   await hydrateMessagesFromCache(activeTopicId, userId, {
     visibleLimit: isMobile.value ? MOBILE_CACHED_ACTIVE_TOPIC_LIMIT : undefined
   });
@@ -217,9 +252,40 @@ const hydrateCriticalCache = async (userId?: string): Promise<void> => {
   const canDeferUsers =
     !!userId && !!session?.token && session.user?.id === userId;
   if (canDeferUsers && !getAuthUser()) setAuthUser(session.user!);
+  const notification = notificationTopicRefreshRequest.value;
+  if (
+    !hasStartupNetwork() &&
+    userId &&
+    notification?.messageId &&
+    notification.topicId === route.value.id
+  ) {
+    void loadNativeNotificationPreview(
+      notification.topicId,
+      notification.messageId,
+      userId,
+      getConfig().CHAT_API_DOMAIN
+    )
+      .then(messages =>
+        hydrateNotificationMessagePreview(
+          notification.topicId,
+          notification.messageId!,
+          messages,
+          userId
+        )
+      )
+      .catch(error =>
+        console.warn('Не удалось восстановить сообщение уведомления:', error)
+      );
+  }
   const usersHydration = canDeferUsers ? null : hydrateUsersFromCache(userId);
-  const topicsHydration = hydrateTopicsFromCache(userId);
-  const activeMessagesHydration = hydrateActiveCachedMessages(userId);
+  const topicsHydration = hydrateTopicsFromCache(userId).then(() => {
+    performance.mark('chat-startup:topic-cache-ready');
+  });
+  const activeMessagesHydration = hydrateActiveCachedMessages(userId).then(
+    () => {
+      performance.mark('chat-startup:pending-cache-ready');
+    }
+  );
 
   await usersHydration;
 
@@ -227,11 +293,7 @@ const hydrateCriticalCache = async (userId?: string): Promise<void> => {
     applyCachedAuthUser(userId);
   }
 
-  const [cachedTopics] = await Promise.all([
-    topicsHydration,
-    activeMessagesHydration
-  ]);
-  hasCachedStartupTopics = cachedTopics.length > 0;
+  await Promise.all([topicsHydration, activeMessagesHydration]);
   hydratedCacheUserId = userId;
   performance.mark('chat-startup:cache-ready');
 
@@ -250,7 +312,8 @@ interface FreshChatContentState {
 }
 
 const hydrateFreshChatContent = async (
-  userId?: string
+  userId?: string,
+  cacheReady?: Promise<void>
 ): Promise<FreshChatContentState> => {
   if (!hasStartupNetwork()) {
     return {
@@ -259,7 +322,7 @@ const hydrateFreshChatContent = async (
     };
   }
 
-  if (hasPriorityMessageTopicRoute() || hasCachedStartupTopics) {
+  if (hasPriorityMessageTopicRoute()) {
     return {
       usersRefreshed: false,
       topicsRefreshed: false
@@ -275,15 +338,25 @@ const hydrateFreshChatContent = async (
   }
 
   const shouldDeferTopicsRefresh = !!getActiveChatTopicId();
+  let topicsRefreshed = false;
 
   if (!shouldDeferTopicsRefresh) {
-    await fetchAllTopics({ deferMaintenanceUntil: waitForStartupPaint() });
+    await fetchAllTopics({
+      cacheReady,
+      deferMaintenanceUntil: waitForStartupPaint(),
+      onNetworkApplied: () => {
+        topicsRefreshed = true;
+      }
+    });
+    performance.mark('chat-startup:topics-resolved', {
+      detail: { isFresh: topicsRefreshed }
+    });
   }
 
   hydratedCacheUserId = userId;
   return {
     usersRefreshed,
-    topicsRefreshed: !shouldDeferTopicsRefresh
+    topicsRefreshed
   };
 };
 
@@ -507,7 +580,11 @@ const runAppInitialization = async () => {
 
     deferredStartupBackgroundSnapshotUserId = userId;
 
-    if (route.value.id && getMessagesByTopicId(route.value.id).length === 0) {
+    if (
+      !hasStartupNetwork() &&
+      route.value.id &&
+      getMessagesByTopicId(route.value.id).length === 0
+    ) {
       await importStartupBackgroundSnapshot(userId, `${source}-eager`);
       return;
     }
@@ -515,13 +592,10 @@ const runAppInitialization = async () => {
     scheduleStartupBackgroundSnapshotImport(userId, source);
   };
 
+  let initialCacheHydration = Promise.resolve();
   if (initialUserId) {
     setCurrentUserId(initialUserId);
-    await hydrateCriticalCache(initialUserId);
-    await prepareStartupBackgroundSnapshot(
-      initialUserId,
-      'startup-after-cache-hydration'
-    );
+    initialCacheHydration = hydrateCriticalCache(initialUserId);
   }
 
   try {
@@ -538,7 +612,12 @@ const runAppInitialization = async () => {
     }
 
     setAuthToken(authData.token);
-    void initPushNotifications().catch(error => {
+    // Навигация из push уже подключена в main.ts. Регистрация токена и
+    // запрос разрешения не должны занимать мост перед свежей историей.
+    const pushReady = Capacitor.isNativePlatform()
+      ? waitForStartupPaint()
+      : Promise.resolve();
+    void pushReady.then(initPushNotifications).catch(error => {
       console.warn('Не удалось инициализировать push-уведомления:', error);
     });
 
@@ -565,32 +644,38 @@ const runAppInitialization = async () => {
     setCurrentUserId(authUserId || undefined);
     if (authData.user) setAuthUser(authData.user);
 
-    if (authUserId !== hydratedCacheUserId) {
-      await hydrateCriticalCache(authUserId || undefined);
+    const cacheReady = (async () => {
+      await initialCacheHydration;
+      if (authUserId !== hydratedCacheUserId) {
+        await hydrateCriticalCache(authUserId || undefined);
+      }
       await prepareStartupBackgroundSnapshot(
         authUserId || undefined,
         'post-auth-after-cache-hydration'
       );
-    } else {
-      await prepareStartupBackgroundSnapshot(
-        authUserId || undefined,
-        'post-auth-after-cache-hydration'
-      );
-    }
+    })();
 
-    await initializeChat({
+    const chatInitialization = initializeChat({
       token: authData.token,
       apiUrl: config.CHAT_API_DOMAIN,
       wsUrl: config.CHAT_WS_DOMAIN,
-      userId: authUserId || undefined
+      userId: authUserId || undefined,
+      cacheReady
     });
-
-    const freshContentState = await hydrateFreshChatContent(
-      authUserId || undefined
+    const notification = notificationTopicRefreshRequest.value;
+    if (isMobile.value && notification?.topicId && notification.messageId) {
+      prefetchNotificationHistory(notification.topicId, notification.messageId);
+    }
+    const freshContent = hydrateFreshChatContent(
+      authUserId || undefined,
+      cacheReady
     );
+    await chatInitialization;
+    const freshContentState = await freshContent;
 
     runDeferredOnlineStartup(authUserId || undefined, freshContentState);
   } catch (error) {
+    await initialCacheHydration;
     console.error('Failed to initialize chat:', error);
 
     if (isMobile.value) {
@@ -615,7 +700,8 @@ const runAppInitialization = async () => {
   }
 };
 
-onMounted(async () => {
+// Быстрый кеш заполняется синхронно до первого рендера дочернего списка.
+onBeforeMount(async () => {
   document.addEventListener('click', handleAttachModalEmojiPickerClick, true);
   initFocusTracking();
 

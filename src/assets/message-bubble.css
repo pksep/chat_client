@@ -799,6 +799,23 @@
   background-color: var(--blue12);
 }
 
+:where([data-theme='dark'], .theme-dark) .message-reference-forward {
+  background-color: var(--surface-overlay);
+}
+
+:where([data-theme='dark'], .theme-dark)
+  .message-reference-block--outgoing
+  .message-reference-forward,
+:where([data-theme='dark'], .theme-dark)
+  .message__other+.message-file-stack
+  .message-reference-forward,
+:where([data-theme='dark'], .theme-dark)
+  .message__other
+  .message-file-stack
+  .message-reference-forward {
+  background-color: var(--table-surface-pressed);
+}
+
 .message-reference-reply {
   font: inherit;
   display: grid;

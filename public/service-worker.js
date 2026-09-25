@@ -5,6 +5,11 @@ try {
 }
 
 const CHAT_BACKGROUND_SYNC_TAG = 'chat-background-sync';
+const INCOMING_CALL_MAX_AGE_MS = 60_000;
+const NOTIFICATION_STATE_DB = 'chat-notification-state';
+const NOTIFICATION_STATE_STORE = 'topic-state';
+const notificationStateFallback = new Map();
+let notificationStateDbPromise = null;
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -33,6 +38,124 @@ const normalizePayload = rawData => {
     ...nestedData,
     ...rest
   };
+};
+
+const parsePushTimestamp = value => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const openNotificationStateDb = () => {
+  if (!notificationStateDbPromise) {
+    notificationStateDbPromise = new Promise((resolve, reject) => {
+      const request = indexedDB.open(NOTIFICATION_STATE_DB, 1);
+
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(NOTIFICATION_STATE_STORE)) {
+          db.createObjectStore(NOTIFICATION_STATE_STORE, {
+            keyPath: 'topicId'
+          });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  return notificationStateDbPromise;
+};
+
+const updateTopicNotificationState = async (topicId, updater) => {
+  if (!topicId) {
+    return null;
+  }
+
+  try {
+    const db = await openNotificationStateDb();
+    return await new Promise((resolve, reject) => {
+      const transaction = db.transaction(NOTIFICATION_STATE_STORE, 'readwrite');
+      const store = transaction.objectStore(NOTIFICATION_STATE_STORE);
+      const request = store.get(topicId);
+      let result = null;
+
+      request.onsuccess = () => {
+        const current = request.result || {
+          topicId,
+          clearedAt: 0,
+          latestAt: 0
+        };
+        const update = updater(current);
+        result = update.result;
+        store.put({
+          ...current,
+          ...update.state,
+          topicId,
+          updatedAt: Date.now()
+        });
+      };
+      request.onerror = () => reject(request.error);
+      transaction.oncomplete = () => resolve(result);
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+  } catch (error) {
+    console.warn('Не удалось сохранить состояние уведомлений:', error);
+    const current = notificationStateFallback.get(topicId) || {
+      topicId,
+      clearedAt: 0,
+      latestAt: 0
+    };
+    const update = updater(current);
+    notificationStateFallback.set(topicId, {
+      ...current,
+      ...update.state,
+      updatedAt: Date.now()
+    });
+    return update.result;
+  }
+};
+
+const markTopicNotificationsCleared = (topicId, stateAt) =>
+  updateTopicNotificationState(topicId, current => ({
+    state: {
+      clearedAt: Math.max(Number(current.clearedAt) || 0, stateAt)
+    },
+    result: true
+  }));
+
+const shouldShowTopicNotification = (topicId, stateAt) => {
+  if (!topicId || stateAt === null) {
+    return Promise.resolve(true);
+  }
+
+  return updateTopicNotificationState(topicId, current => {
+    const clearedAt = Number(current.clearedAt) || 0;
+    const latestAt = Number(current.latestAt) || 0;
+    const shouldShow = stateAt > clearedAt && stateAt > latestAt;
+
+    return {
+      state: shouldShow ? { latestAt: stateAt } : {},
+      result: shouldShow
+    };
+  });
+};
+
+const isFreshIncomingCallPayload = (payload, now = Date.now()) => {
+  if (
+    payload.type !== 'incoming_call' ||
+    String(payload.topicType || '').toUpperCase() === 'GROUP'
+  ) {
+    return false;
+  }
+
+  const expiresAt = parsePushTimestamp(payload.expiresAt);
+  if (expiresAt !== null && now >= expiresAt) {
+    return false;
+  }
+
+  const sentAt = parsePushTimestamp(payload.sentAt);
+  return sentAt === null || now - sentAt <= INCOMING_CALL_MAX_AGE_MS;
 };
 
 const getPayloadUrl = payload =>
@@ -101,7 +224,7 @@ const buildCallActionUrl = (payload, action) => {
   return targetUrl.toString();
 };
 
-const closeNotificationsForTopic = async topicId => {
+const closeNotificationsForTopic = async (topicId, stateAt = null) => {
   if (!topicId) {
     return;
   }
@@ -112,7 +235,28 @@ const closeNotificationsForTopic = async topicId => {
     const notificationTopicId =
       notification.data?.topicId || notification.tag || null;
 
-    if (notificationTopicId === topicId) {
+    const notificationStateAt = parsePushTimestamp(
+      notification.data?.stateAt || notification.data?.sentAt
+    );
+    if (
+      notificationTopicId === topicId &&
+      (stateAt === null ||
+        notificationStateAt === null ||
+        notificationStateAt <= stateAt)
+    ) {
+      notification.close();
+    }
+  });
+};
+
+const closeIncomingCallNotification = async roomId => {
+  if (!roomId) {
+    return;
+  }
+
+  const notifications = await self.registration.getNotifications();
+  notifications.forEach(notification => {
+    if (notification.data?.roomId === roomId) {
       notification.close();
     }
   });
@@ -257,7 +401,13 @@ self.addEventListener('message', event => {
   }
 
   if (event.data?.type === 'CLEAR_TOPIC_NOTIFICATIONS') {
-    event.waitUntil(closeNotificationsForTopic(event.data.topicId));
+    const stateAt = parsePushTimestamp(event.data.stateAt) || Date.now();
+    event.waitUntil(
+      Promise.all([
+        markTopicNotificationsCleared(event.data.topicId, stateAt),
+        closeNotificationsForTopic(event.data.topicId, stateAt)
+      ])
+    );
   }
 
   if (event.data?.type === 'CLEAR_ALL_NOTIFICATIONS') {
@@ -295,7 +445,17 @@ self.addEventListener('push', event => {
       const topicId = payload.topicId || payload.tag || null;
 
       if (payload.action === 'CLEAR_CHAT_NOTIFICATIONS') {
-        await closeNotificationsForTopic(topicId);
+        const stateAt =
+          parsePushTimestamp(payload.stateAt) ||
+          parsePushTimestamp(payload.sentAt) ||
+          Date.now();
+        await markTopicNotificationsCleared(topicId, stateAt);
+        await closeNotificationsForTopic(topicId, stateAt);
+        return;
+      }
+
+      if (payload.action === 'DISMISS_INCOMING_CALL') {
+        await closeIncomingCallNotification(payload.roomId);
         return;
       }
 
@@ -312,13 +472,28 @@ self.addEventListener('push', event => {
       }
 
       if (appFocused && topicId && activeTopicId === topicId) {
-        await closeNotificationsForTopic(topicId);
+        const stateAt = Date.now();
+        await markTopicNotificationsCleared(topicId, stateAt);
+        await closeNotificationsForTopic(topicId, stateAt);
         return;
       }
 
       const title = payload.title || 'New message';
       const url = getNotificationUrl(payload);
-      const isIncomingCall = payload.type === 'incoming_call';
+      const isIncomingCall = isFreshIncomingCallPayload(payload);
+      if (payload.type === 'incoming_call' && !isIncomingCall) {
+        await closeIncomingCallNotification(payload.roomId);
+        return;
+      }
+      const notificationStateAt =
+        parsePushTimestamp(payload.stateAt) ||
+        parsePushTimestamp(payload.sentAt);
+      if (
+        payload.type !== 'incoming_call' &&
+        !(await shouldShowTopicNotification(topicId, notificationStateAt))
+      ) {
+        return;
+      }
       const tag = payload.tag || payload.roomId || topicId || 'chat-message';
 
       await self.registration.showNotification(title, {
@@ -385,7 +560,9 @@ self.addEventListener('notificationclick', event => {
   event.notification.close();
 
   const payload = event.notification.data || {};
-  const isIncomingCall = payload.type === 'incoming_call';
+  const isIncomingCall =
+    payload.type === 'incoming_call' &&
+    String(payload.topicType || '').toUpperCase() !== 'GROUP';
   const action =
     event.action === 'accept' || event.action === 'decline'
       ? event.action

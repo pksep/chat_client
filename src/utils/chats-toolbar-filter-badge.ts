@@ -13,7 +13,7 @@ export type ChatsToolbarFilterBadgeState = Record<
   IChatsToolbarFilterBadgeState
 >;
 
-const getFilterBadgeState = (
+export const getTopicsUnreadBadgeState = (
   topics: ITopic[],
   authUserId?: string | null
 ): IChatsToolbarFilterBadgeState => {
@@ -38,19 +38,19 @@ export const getChatsToolbarFilterBadgeState = (
   topics: ITopic[],
   authUserId?: string | null
 ): ChatsToolbarFilterBadgeState => ({
-  all: getFilterBadgeState(
+  all: getTopicsUnreadBadgeState(
     getTopicsByChatsToolbarFilter(topics, 'all', authUserId),
     authUserId
   ),
-  chats: getFilterBadgeState(
+  chats: getTopicsUnreadBadgeState(
     getTopicsByChatsToolbarFilter(topics, 'chats', authUserId),
     authUserId
   ),
-  groups: getFilterBadgeState(
+  groups: getTopicsUnreadBadgeState(
     getTopicsByChatsToolbarFilter(topics, 'groups', authUserId),
     authUserId
   ),
-  bots: getFilterBadgeState(
+  bots: getTopicsUnreadBadgeState(
     getTopicsByChatsToolbarFilter(topics, 'bots', authUserId),
     authUserId
   )

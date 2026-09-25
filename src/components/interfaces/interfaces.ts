@@ -70,6 +70,7 @@ export type IGroup = Group & {
 
 export type ITopicInfo = Partial<TopicSetting> & {
   isMarkedUnread?: boolean;
+  pinnedAt?: string | Date;
 };
 
 export type ITopic = Topic & {
@@ -122,6 +123,8 @@ export type IMedia = Media & {
     previewWidth?: number;
     previewHeight?: number;
     fillPreview?: boolean;
+    processingStatus?: string;
+    mediaProcessing?: { status?: string };
   };
   isLoading?: boolean;
   thumbnailPath?: string | null;

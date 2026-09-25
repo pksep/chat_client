@@ -7,7 +7,6 @@ import {
   clearPendingShareBatches,
   usePendingShareIntent
 } from '../services/useShareIntent';
-import { sendSharedFilesToTopic } from '../services/useSharedFilesSender';
 import { showErrorNotification } from './useNotifications';
 import { stripHtml } from '../utils/stripHtml';
 
@@ -146,8 +145,11 @@ export const useShareSelection = () => {
     completeShareSelection();
     isSendingSharedFiles.value = false;
 
+    const sender = import('../services/useSharedFilesSender');
     const sendTasks = topics.map(topic =>
-      sendSharedFilesToTopic(topic.id, allFiles, message || fallbackMessage)
+      sender.then(({ sendSharedFilesToTopic }) =>
+        sendSharedFilesToTopic(topic.id, allFiles, message || fallbackMessage)
+      )
     );
 
     void Promise.allSettled(sendTasks).then(results => {

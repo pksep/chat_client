@@ -1,5 +1,6 @@
 import { ref, computed, watch } from 'vue';
-import { getChatSDK } from '../services/useChat';
+import { getChatSDK, waitForChatSDK } from '../services/useChat';
+import { takeNativeStartupHistory } from '../services/native-startup-history';
 import { WebSocketEventType } from '../services/useChatSDK/websocketEvents';
 import { ITopic, ITopicInfo, IUser } from '../components/interfaces/interfaces';
 import {
@@ -17,6 +18,7 @@ import { useUrlWatcher } from './navigation';
 import { authedUser } from './useAuth';
 import {
   loadCachedTopics,
+  loadFastCachedTopics,
   saveCachedTopics
 } from '../services/useChatStateCache';
 import {
@@ -48,6 +50,7 @@ import {
 import {
   FAVORITE_TOPIC_DESCRIPTION,
   FAVORITE_TOPIC_NAME,
+  dedupeFavoriteTopics,
   isFavoriteTopic,
   normalizeFavoriteTopic
 } from '../utils/favorite-topic';
@@ -56,6 +59,10 @@ import {
   resolveTopicLastMessage
 } from '../utils/topic-last-message';
 import { compactPersonName } from '../utils/personName';
+import {
+  applyTopicPinSetting,
+  sortTopicsByPinOrder
+} from '../utils/topic-order';
 
 const topics = ref<ITopic[]>([]);
 const topicsById = computed(
@@ -63,6 +70,8 @@ const topicsById = computed(
 );
 const loading = ref(false);
 const error = ref<string | null>(null);
+const topicsRefreshFailed = ref(false);
+export const getTopicsRefreshFailed = (): boolean => topicsRefreshFailed.value;
 const displayedUnreadCount = ref(0);
 const TYPING_STATE_TTL_MS = 4000;
 let persistTopicsTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -371,7 +380,11 @@ const createTopicsApi = () => {
   const normalizeTopics = (
     items: ITopic[],
     authUserId = authedUser.value?.id
-  ): ITopic[] => items.map(topic => normalizeTopic(topic, authUserId));
+  ): ITopic[] =>
+    dedupeFavoriteTopics(
+      items.map(topic => normalizeTopic(topic, authUserId)),
+      authUserId
+    );
 
   const mergeLocalBotTopics = (items: ITopic[]): ITopic[] => {
     const localBotTopics = topics.value.filter(topic => isLocalBotTopic(topic));
@@ -611,8 +624,9 @@ const createTopicsApi = () => {
       return topics.value;
     }
 
+    const fastTopics = loadFastCachedTopics(userId);
     const cachedTopics = stripEphemeralTopicState(
-      await loadCachedTopics(userId)
+      fastTopics?.length ? fastTopics : await loadCachedTopics(userId)
     );
 
     if (cachedTopics.length > 0) {
@@ -625,18 +639,50 @@ const createTopicsApi = () => {
 
   const fetchAllTopics = async (options?: {
     deferMaintenanceUntil?: Promise<void>;
+    cacheReady?: Promise<void>;
+    onNetworkApplied?: () => void;
   }): Promise<ITopic[]> => {
     loading.value = true;
     error.value = null;
 
     try {
-      const sdk = getChatSDK();
-      const response = await sdk.getTopics();
-
+      const sdk = getChatSDK() || (await waitForChatSDK());
+      if (!sdk) throw new Error('Чат ещё не подключён');
+      const startupTopics = options?.cacheReady
+        ? await takeNativeStartupHistory<ITopic[]>()
+        : null;
+      const response = startupTopics
+        ? { data: startupTopics }
+        : await sdk.getTopics();
+      await options?.cacheReady;
+      if (getChatSDK() !== sdk) return topics.value;
       setTopics(response.data);
+      topicsRefreshFailed.value = false;
+      options?.onNetworkApplied?.();
       const finishTopicMaintenance = async () => {
+        let authoritativeTopics = response.data;
+
+        if (startupTopics) {
+          try {
+            const authoritativeResponse = await sdk.getTopics();
+            if (getChatSDK() !== sdk) return;
+            authoritativeTopics = authoritativeResponse.data;
+            setTopics(authoritativeTopics);
+          } catch (maintenanceError) {
+            // Нативный быстрый снимок может быть неполным. На его основании
+            // нельзя создавать системный топик: иначе появится второй пустой
+            // экземпляр «Избранного». Повторим проверку при следующем полном
+            // успешном обновлении списка.
+            console.warn(
+              'Не удалось подтвердить полный список перед обслуживанием:',
+              maintenanceError
+            );
+            return;
+          }
+        }
+
         await ensureFavoriteTopic();
-        const serverActiveCalls = response.data
+        const serverActiveCalls = authoritativeTopics
           .filter(
             topic =>
               !!topic.activeCall?.roomId &&
@@ -676,6 +722,7 @@ const createTopicsApi = () => {
       }
       return topics.value;
     } catch (err) {
+      topicsRefreshFailed.value = true;
       error.value = (err as Error).message;
       console.error('Failed to fetch topics:', error.value);
       return topics.value || [];
@@ -693,10 +740,10 @@ const createTopicsApi = () => {
       const newTopic = await sdk.createTopic({ peerId });
 
       const normalized = normalizeTopic(newTopic as ITopic);
-      topics.value = [
+      topics.value = normalizeTopics([
         normalized,
         ...topics.value.filter(topic => topic.id !== normalized.id)
-      ];
+      ]);
       schedulePersistTopics();
       return normalized;
     } catch (err) {
@@ -1271,15 +1318,9 @@ const createTopicsApi = () => {
   const togglePinTopic = async (topic: ITopic) => {
     try {
       const sdk = getChatSDK();
-      await sdk.togglePinTopic(topic.id);
+      const setting = await sdk.togglePinTopic(topic.id);
 
-      if (isFavoriteTopic(topic, authedUser.value?.id)) {
-        updateLocalTopicInfo(topic.id, { isPin: !topic.info.isPin });
-      } else if (topic.type === TopicType.DM) {
-        updateLocalTopicInfo(topic.id, { isPin: !topic.info.isPin });
-      } else if (topic.type === TopicType.Group) {
-        updateLocalGroupInfo(topic.id, { isPin: !topic.info.isPin });
-      }
+      updateLocalTopicInfo(topic.id, applyTopicPinSetting(topic.info, setting));
     } catch (err) {
       console.error('Failed to pin/unpin topic:', err);
     }
@@ -1329,10 +1370,10 @@ const createTopicsApi = () => {
 
   const addTopicList = (value: ITopic): void => {
     const normalized = normalizeTopic(value);
-    topics.value = [
+    topics.value = normalizeTopics([
       normalized,
       ...topics.value.filter(topic => topic.id !== normalized.id)
-    ];
+    ]);
     schedulePersistTopics();
   };
 
@@ -1422,18 +1463,7 @@ const createTopicsApi = () => {
   };
 
   const sortTopics = (topics: ITopic[]): ITopic[] => {
-    return [...topics].sort((a, b) => {
-      const aPin = a.info?.isPin || false;
-      const bPin = b.info?.isPin || false;
-      if (aPin !== bPin) {
-        return aPin ? -1 : 1;
-      }
-
-      const aTime = new Date(a.lastMessage?.createdAt ?? a.createdAt).getTime();
-      const bTime = new Date(b.lastMessage?.createdAt ?? b.createdAt).getTime();
-
-      return bTime - aTime;
-    });
+    return sortTopicsByPinOrder(topics);
   };
 
   const getTopicList = (): ITopic[] => {

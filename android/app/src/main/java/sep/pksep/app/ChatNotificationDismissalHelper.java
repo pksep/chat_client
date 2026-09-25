@@ -6,6 +6,8 @@ import android.content.SharedPreferences;
 
 public final class ChatNotificationDismissalHelper {
     private static final String PREFS_NAME = "chat_notification_state";
+    private static final String CLEARED_AT_PREFIX = "cleared_at:";
+    private static final String LATEST_AT_PREFIX = "latest_at:";
 
     private ChatNotificationDismissalHelper() {}
 
@@ -29,13 +31,70 @@ public final class ChatNotificationDismissalHelper {
     }
 
     public static void dismissTopicNotification(Context context, String topicId) {
+        dismissTopicNotification(context, topicId, System.currentTimeMillis());
+    }
+
+    public static void dismissTopicNotification(
+        Context context,
+        String topicId,
+        long stateAt
+    ) {
         if (context == null || isBlank(topicId)) {
             return;
         }
 
         String normalizedTopicId = topicId.trim();
-        prefs(context).edit().remove(normalizedTopicId).apply();
-        cancelTopicNotification(context, normalizedTopicId);
+        SharedPreferences preferences = prefs(context);
+        long normalizedStateAt = stateAt > 0L
+            ? stateAt
+            : System.currentTimeMillis();
+        long clearedAt = Math.max(
+            preferences.getLong(clearedAtKey(normalizedTopicId), 0L),
+            normalizedStateAt
+        );
+        long latestAt = preferences.getLong(latestAtKey(normalizedTopicId), 0L);
+        SharedPreferences.Editor editor = preferences.edit().putLong(
+            clearedAtKey(normalizedTopicId),
+            clearedAt
+        );
+
+        if (latestAt <= clearedAt) {
+            editor.remove(normalizedTopicId).apply();
+            cancelTopicNotification(context, normalizedTopicId);
+        } else {
+            editor.apply();
+        }
+    }
+
+    public static boolean shouldShowMessageNotification(
+        Context context,
+        String topicId,
+        String stateAt,
+        String sentAt
+    ) {
+        if (context == null || isBlank(topicId)) {
+            return true;
+        }
+
+        long eventAt = parseTimestamp(stateAt, parseTimestamp(sentAt, 0L));
+        if (eventAt <= 0L) {
+            return true;
+        }
+
+        String normalizedTopicId = topicId.trim();
+        SharedPreferences preferences = prefs(context);
+        long clearedAt = preferences.getLong(clearedAtKey(normalizedTopicId), 0L);
+        long latestAt = preferences.getLong(latestAtKey(normalizedTopicId), 0L);
+
+        if (!isMessageNotificationCurrent(eventAt, clearedAt, latestAt)) {
+            return false;
+        }
+
+        preferences
+            .edit()
+            .putLong(latestAtKey(normalizedTopicId), eventAt)
+            .apply();
+        return true;
     }
 
     public static void dismissTopicNotificationIfMessageMatches(
@@ -75,6 +134,35 @@ public final class ChatNotificationDismissalHelper {
         return !isBlank(currentMessageId) &&
             !isBlank(deletedMessageId) &&
             currentMessageId.trim().equals(deletedMessageId.trim());
+    }
+
+    static boolean isMessageNotificationCurrent(
+        long eventAt,
+        long clearedAt,
+        long latestAt
+    ) {
+        return eventAt <= 0L || (eventAt > clearedAt && eventAt > latestAt);
+    }
+
+    private static long parseTimestamp(String value, long fallback) {
+        if (isBlank(value)) {
+            return fallback;
+        }
+
+        try {
+            long parsed = Long.parseLong(value.trim());
+            return parsed > 0L ? parsed : fallback;
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
+    private static String clearedAtKey(String topicId) {
+        return CLEARED_AT_PREFIX + topicId;
+    }
+
+    private static String latestAtKey(String topicId) {
+        return LATEST_AT_PREFIX + topicId;
     }
 
     private static void cancelTopicNotification(Context context, String topicId) {

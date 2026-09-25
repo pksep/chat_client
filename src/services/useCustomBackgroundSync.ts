@@ -44,7 +44,7 @@ export const configureCustomBackgroundSync = (
 
 export const createCustomBackgroundSync = (
   kind: CustomBackgroundKind,
-  cache: Pick<BackgroundLibraryCache, 'ready' | 'items' | 'put'>
+  cache: Pick<BackgroundLibraryCache, 'ready' | 'items' | 'put' | 'remove'>
 ) => {
   const ownerKey = (id: string) => `custom_background_owner_v1:${kind}:${id}`;
   const migrationKey = (scope: string) =>
@@ -72,6 +72,7 @@ export const createCustomBackgroundSync = (
     scope: () => session?.scope || null,
     save: (image: Parameters<CustomBackgroundLibrary['save']>[0]) =>
       library.save(image),
+    remove: (id: string) => library.remove(id),
     refresh: () => {
       void library
         .refresh()

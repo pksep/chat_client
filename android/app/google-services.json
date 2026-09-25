@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "348313142450",
+    "project_id": "sep-chat-d4b61",
+    "storage_bucket": "sep-chat-d4b61.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:348313142450:android:09f48d01fbbc65381c35ab",
+        "android_client_info": {
+          "package_name": "sep.pksep.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDG_bLIBYW7KvVS0bhPkpnJIdk78fkUjZs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

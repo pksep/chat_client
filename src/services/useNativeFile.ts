@@ -1,11 +1,9 @@
-import {
-  Capacitor,
-  registerPlugin,
-  type PluginListenerHandle
-} from '@capacitor/core';
+import type { PluginListenerHandle } from '@capacitor/core';
 import { reactive } from 'vue';
 import type { IMedia } from '../components/interfaces/interfaces';
+import { isAndroidNativePlatform, NativeFile } from './native-file-bridge';
 import { getConfig } from './useConfig';
+import { buildMediaObjectUrl } from '../utils/media-url';
 
 type NativeDownloadPhase =
   | 'unknown'
@@ -14,13 +12,6 @@ type NativeDownloadPhase =
   | 'downloaded'
   | 'error';
 
-interface NativeFileDownloadProgress {
-  requestId: string;
-  bytesDownloaded: number;
-  totalBytes: number;
-  percent?: number;
-}
-
 export interface NativeFileDownloadState {
   phase: NativeDownloadPhase;
   percent: number | null;
@@ -28,73 +19,6 @@ export interface NativeFileDownloadState {
   fileName?: string;
   mimeType?: string;
 }
-
-interface NativeFilePlugin {
-  addListener(
-    eventName: 'fileDownloadProgress',
-    listenerFunc: (payload: NativeFileDownloadProgress) => void
-  ): Promise<PluginListenerHandle>;
-  openFile(options: {
-    url: string;
-    fileName?: string;
-    mimeType?: string;
-  }): Promise<{ path: string; mimeType: string }>;
-  openDownloadedFile(options: {
-    url: string;
-    fileName?: string;
-    mimeType?: string;
-    size?: number;
-    localUri?: string;
-  }): Promise<{ path: string; mimeType: string }>;
-  getFileStatus(options: {
-    url: string;
-    fileName?: string;
-    mimeType?: string;
-    size?: number;
-  }): Promise<{
-    downloaded: boolean;
-    path: string;
-    fileName: string;
-    mimeType: string;
-  }>;
-  downloadFile(options: {
-    url: string;
-    fileName?: string;
-    mimeType?: string;
-  }): Promise<{ downloadId: number; fileName: string }>;
-  downloadFileToDownloads(options: {
-    requestId: string;
-    url: string;
-    fileName?: string;
-    mimeType?: string;
-    size?: number;
-  }): Promise<{ path: string; fileName: string; mimeType: string }>;
-  downloadBase64(options: {
-    base64Data: string;
-    fileName?: string;
-    mimeType?: string;
-  }): Promise<{ uri: string; fileName: string }>;
-}
-
-declare global {
-  interface Window {
-    __CHAT_NATIVE_FILE__?: {
-      isAndroidNativePlatform: () => boolean;
-      downloadFile: (options: {
-        url: string;
-        fileName?: string;
-        mimeType?: string;
-      }) => Promise<{ downloadId: number; fileName: string }>;
-      downloadBase64: (options: {
-        base64Data: string;
-        fileName?: string;
-        mimeType?: string;
-      }) => Promise<{ uri: string; fileName: string }>;
-    };
-  }
-}
-
-const NativeFile = registerPlugin<NativeFilePlugin>('NativeFile');
 
 const nativeFileDownloadStates = reactive<
   Record<string, NativeFileDownloadState>
@@ -118,16 +42,13 @@ const FILE_MIME_TYPES: Record<string, string> = {
   '7z': 'application/x-7z-compressed'
 };
 
-const isAndroidNativePlatform = () =>
-  Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
-
 const buildAbsoluteFileUrl = (path: string) => {
   if (/^(https?:|blob:|data:)/i.test(path)) {
     return path;
   }
 
   const config = getConfig();
-  return `${config.CHAT_PATH_TO_FILE_CDN}/${path}`;
+  return buildMediaObjectUrl(config.CHAT_PATH_TO_FILE_CDN, path);
 };
 
 const getFileExtension = (value?: string | null) => {
@@ -345,6 +266,11 @@ export const handleNativeFileClick = async (
     return true;
   }
 
+  if (state.phase === 'not-downloaded') {
+    await downloadNativeFileToDownloads(media);
+    return true;
+  }
+
   nativeFileDownloadStates[key] = {
     phase: 'downloading',
     percent: null
@@ -395,16 +321,4 @@ export const downloadNativeFile = async (media: IMedia): Promise<boolean> => {
   await NativeFile.downloadFile(getNativeFileOptions(media));
 
   return true;
-};
-
-export const registerNativeFileBridge = () => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.__CHAT_NATIVE_FILE__ = {
-    isAndroidNativePlatform,
-    downloadFile: options => NativeFile.downloadFile(options),
-    downloadBase64: options => NativeFile.downloadBase64(options)
-  };
 };

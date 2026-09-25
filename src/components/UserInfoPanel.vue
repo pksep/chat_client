@@ -467,7 +467,6 @@ const handleOpenChat = async () => {
 }
 
 .user-info-panel__action-button {
-  min-height: 92px;
   width: 100%;
   gap: 10px;
 }

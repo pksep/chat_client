@@ -12,9 +12,40 @@ import java.util.Iterator;
 
 import sep.pksep.app.sync.ChatBackgroundSyncScheduler;
 import sep.pksep.app.sync.ChatBackgroundSyncStore;
+import sep.pksep.app.sync.ChatStartupHistory;
+import sep.pksep.app.BuildConfig;
 
 @CapacitorPlugin(name = "ChatBackgroundSync")
 public class ChatBackgroundSyncPlugin extends Plugin {
+    @PluginMethod
+    public void prepareStartupHistory(PluginCall call) {
+        markStartupHistory("history-bridge-prepare");
+        ChatStartupHistory.prepare(getContext()).thenAccept(result -> {
+            markStartupHistory("history-bridge-prepared");
+            call.resolve(result == null ? new JSObject().put("available", false) : toJsObject(result));
+        });
+    }
+
+    @PluginMethod
+    public void takeStartupHistory(PluginCall call) {
+        markStartupHistory("history-bridge-take");
+        ChatStartupHistory.take(getContext(), call.getString("userId", ""),
+                call.getString("apiUrl", ""), call.getString("topicId", ""))
+            .thenAccept(rows -> {
+                JSObject result = new JSObject();
+                result.put("available", rows != null);
+                if (rows != null) result.put("data", rows);
+                markStartupHistory("history-bridge-resolve");
+                call.resolve(result);
+            });
+    }
+
+    private static void markStartupHistory(String stage) {
+        if (BuildConfig.CHAT_STARTUP_BENCHMARK) {
+            android.util.Log.i("ChatStartupBenchmark", stage + " " + System.currentTimeMillis());
+        }
+    }
+
     @PluginMethod
     public void saveSession(PluginCall call) {
         String token = call.getString("token", "");
@@ -26,11 +57,12 @@ public class ChatBackgroundSyncPlugin extends Plugin {
             return;
         }
 
-        ChatBackgroundSyncStore.saveSession(getContext(), token, userId, apiUrl);
+        boolean changed = ChatBackgroundSyncStore.saveSession(getContext(), token, userId, apiUrl);
 
         JSObject result = new JSObject();
         result.put("saved", true);
-        result.put("status", toJsObject(ChatBackgroundSyncStore.getStatus(getContext())));
+        // Повторное сохранение той же сессии не читает большой XML истории.
+        if (changed) result.put("status", toJsObject(ChatBackgroundSyncStore.getStatus(getContext())));
         call.resolve(result);
     }
 

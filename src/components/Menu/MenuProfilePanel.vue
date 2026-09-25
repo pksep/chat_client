@@ -1,15 +1,50 @@
 <template>
   <section
-    class="menu-profile"
+    :class="['menu-profile', { 'menu-profile--collapse': props.isCollapse }]"
     :data-testid="`${props.dataTestid}-MenuProfilePanel-Container`"
   >
+    <ChatsToolbar
+      v-if="props.isCollapse"
+      model-value=""
+      :is-collapse="true"
+      :data-testid="`${props.dataTestid}-MenuProfilePanel`"
+      @create-chat="emits('create-chat')"
+      @create-group="emits('create-group')"
+      @create-bot="emits('create-bot')"
+    />
+
+    <div v-if="props.isCollapse" class="menu-profile__body">
+      <div class="menu-profile__form">
+        <div
+          class="menu-profile__row menu-profile__row_theme"
+          @click="themeStore.setTheme(!isDarkTheme)"
+        >
+          <div class="menu-profile__group">
+            <Icon
+              class="menu-profile__icon"
+              :name="IconNameEnum.darkThemeSwitcher"
+            />
+            <div class="menu-profile__row-label">Тёмная тема</div>
+          </div>
+
+          <Toggle
+            v-model="isDarkTheme"
+            @click.stop
+            theme="minor"
+            @change="themeStore.setTheme"
+          />
+        </div>
+      </div>
+    </div>
+
     <h4
+      v-if="!props.isCollapse"
       class="menu-profile__title menu-section-heading"
       :data-testid="`${props.dataTestid}-MenuProfilePanel-Title`"
     >
       Профиль
     </h4>
-    <div v-if="authUser" class="menu-profile__body">
+    <div v-if="authUser && !props.isCollapse" class="menu-profile__body">
       <header class="menu-profile__header">
         <CachedAvatar
           class="menu-profile__avatar"
@@ -30,7 +65,6 @@
         </div>
 
         <div
-          v-if="canChangeTheme"
           class="menu-profile__row menu-profile__row_theme"
           @click="themeStore.setTheme(!isDarkTheme)"
         >
@@ -60,6 +94,13 @@
           >
             <span>Установить статус</span>
             <Icon
+              v-if="props.isCollapse"
+              class="menu-profile__status-trigger-plus"
+              :name="IconNameEnum.plus"
+              :width="24"
+              :height="24"
+            />
+            <Icon
               :name="
                 isStatusMenuOpen
                   ? IconNameEnum.chevronUp
@@ -74,6 +115,11 @@
             v-if="currentStatusLabel"
             class="menu-profile__status-current"
             :data-testid="`${props.dataTestid}-MenuProfilePanel-CurrentStatus`"
+            :role="props.isCollapse ? 'button' : undefined"
+            :tabindex="props.isCollapse ? 0 : undefined"
+            @click="props.isCollapse && toggleStatusMenu()"
+            @keydown.enter="props.isCollapse && toggleStatusMenu()"
+            @keydown.space.prevent="props.isCollapse && toggleStatusMenu()"
           >
             <span class="menu-profile__status-current-label">
               <EmojiIcon
@@ -232,7 +278,7 @@
           >
             <div class="menu-profile__wallpapers-grid">
               <button
-                v-for="wallpaper in wallpaperPreviewItems"
+                v-for="wallpaper in displayedWallpaperPreviewItems"
                 :key="wallpaper.id"
                 type="button"
                 :class="[
@@ -243,6 +289,9 @@
                   }
                 ]"
                 @click="selectWallpaperOption(wallpaper.id)"
+                @contextmenu="
+                  handleBackgroundContextMenu('wallpaper', wallpaper, $event)
+                "
               >
                 <span
                   class="menu-profile__wallpaper-tile-preview"
@@ -312,7 +361,7 @@
           >
             <div class="menu-profile__wallpapers-grid">
               <button
-                v-for="background in callBackgroundPreviewItems"
+                v-for="background in displayedCallBackgroundPreviewItems"
                 :key="background.id"
                 type="button"
                 :class="[
@@ -323,6 +372,9 @@
                   }
                 ]"
                 @click="selectCallBackgroundOption(background.id)"
+                @contextmenu="
+                  handleBackgroundContextMenu('call', background, $event)
+                "
               >
                 <span
                   class="menu-profile__wallpaper-tile-preview"
@@ -532,7 +584,7 @@
       </div>
     </div>
 
-    <div v-else class="menu-panel menu-panel--centered">
+    <div v-else-if="!props.isCollapse" class="menu-panel menu-panel--centered">
       <p class="menu-panel__description">Профиль загружается...</p>
     </div>
   </section>
@@ -767,6 +819,33 @@
     @apply="applyPendingCallBackground"
   />
 
+  <Teleport to="body">
+    <ContextMenu
+      :visible="!!isOpen.background"
+      :position="position"
+      :data-testid="`${props.dataTestid}-MenuProfilePanel-BackgroundContextMenu`"
+      @unmount-close="closeBackgroundContextMenu"
+    >
+      <Button
+        class="red-context-button"
+        :type="ButtonTypeEnum.popover"
+        :size="SizesEnum.small"
+        :data-testid="`${props.dataTestid}-MenuProfilePanel-BackgroundDeleteButton`"
+        @click.stop="openBackgroundDeleteConfirm"
+      >
+        <Icon :name="IconNameEnum.deleteSmall" /> Удалить
+      </Button>
+    </ContextMenu>
+  </Teleport>
+
+  <ConfirmModal
+    :open="!!pendingBackgroundDelete"
+    title="Удалить фон"
+    description="Вы уверены, что хотите удалить этот фон?"
+    @unmount-close="closeBackgroundDeleteConfirm"
+    @unmount-confirm="confirmBackgroundDelete"
+  />
+
   <ConfirmModal
     :open="isLogoutConfirmModalOpen"
     title="Выход из профиля"
@@ -777,7 +856,6 @@
 </template>
 
 <script setup lang="ts">
-import { Capacitor } from '@capacitor/core';
 import { storeToRefs } from 'pinia';
 import {
   Button,
@@ -829,12 +907,14 @@ import {
 } from '../../utils/userStatus';
 import { useChatWallpaper } from '../../composables/useChatWallpaper';
 import { useCallBackground } from '../../composables/useCallBackground';
+import { useContextMenu } from '../../composables/useContextMenu';
 import { fileToDataURL } from '../../utils/fileToDataURL';
 import MobileModal from '../UI/MobileModal.vue';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import MessageBubble from '../Messages/MessageBubble.vue';
 import ConfirmModal from '../UI/ConfirmModal.vue';
+import ContextMenu from '../ContactList/ContextMenu.vue';
 import FileIcon from '../UI/FileIcon.vue';
 import { useMobileApp } from '../../composables/useMobileApp';
 import { useThemeStore } from '../../stores/theme';
@@ -842,6 +922,7 @@ import {
   isStatusPresetDesignPreview,
   statusPresetDesignPreview
 } from './status-presets-design-preview';
+import ChatsToolbar from './ChatsToolbar.vue';
 
 const CallBackgroundPreviewModal = defineAsyncComponent(
   () => import('../CallModal/CallBackgroundPreviewModal.vue')
@@ -850,19 +931,29 @@ const CallBackgroundPreviewModal = defineAsyncComponent(
 const props = withDefaults(
   defineProps<{
     dataTestid?: string;
+    isCollapse?: boolean;
   }>(),
   {
-    dataTestid: 'MenuProfilePanel'
+    dataTestid: 'MenuProfilePanel',
+    isCollapse: false
   }
 );
+
+const emits = defineEmits<{
+  (event: 'create-chat'): void;
+  (event: 'create-group'): void;
+  (event: 'create-bot'): void;
+}>();
+
+type BackgroundDeleteTarget = {
+  kind: 'wallpaper' | 'call';
+  id: string;
+};
 
 const themeStore = useThemeStore();
 const { isDarkTheme } = storeToRefs(themeStore);
 const authUser = computed(() => getAuthUser() as IUser | null);
 const { state: isMobile } = useResizeState(MAX_W_MD);
-const canChangeTheme = computed(
-  () => !isMobile.value && !Capacitor.isNativePlatform()
-);
 const statusPresets = computed(() => [
   ...USER_STATUS_PRESETS.map(status => ({ ...status, custom: false })),
   ...(isStatusPresetDesignPreview
@@ -919,6 +1010,9 @@ const isCallBackgroundPreviewOpen = ref(false);
 const isApplyingCallBackground = ref(false);
 const isProfileUpdateMenuOpen = ref(false);
 const isLogoutConfirmModalOpen = ref(false);
+const activeBackgroundContextTarget = ref<BackgroundDeleteTarget | null>(null);
+const pendingBackgroundDelete = ref<BackgroundDeleteTarget | null>(null);
+const isDeletingBackground = ref(false);
 const isSavingStatus = ref(false);
 const statusError = ref('');
 const wallpaperError = ref('');
@@ -937,14 +1031,18 @@ const {
   wallpaperPreviewItems,
   selectedWallpaperId,
   selectWallpaper,
-  setCustomWallpaper
+  setCustomWallpaper,
+  deleteCustomWallpaper
 } = useChatWallpaper();
 const {
   callBackgroundPreviewItems,
   selectedCallBackgroundId,
   selectCallBackground,
-  setCustomCallBackground
+  setCustomCallBackground,
+  deleteCustomCallBackground
 } = useCallBackground();
+const { isOpen, position, openActivePopover, closeActivePopover } =
+  useContextMenu();
 const {
   updateActionLabel,
   updateProgress,
@@ -1053,6 +1151,41 @@ const wallpaperPreviewIncomingMessage =
 const wallpaperPreviewOutgoingMessage =
   '\u0421\u043f\u0430\u0441\u0438\u0431\u043e!';
 const callBackgroundPreviewHumanSrc = '/images/human.webp';
+// Временная витрина для ручной проверки контекстного меню без изменения фонов пользователя.
+// Удалить после подтверждения дизайна.
+const isBackgroundContextMenuDesignPreview =
+  typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).has(
+    'preview-background-context-menu'
+  );
+const backgroundContextMenuDesignPreviewStyle: CSSProperties = {
+  background:
+    'linear-gradient(135deg, #d9ecff 0%, #b7d8ff 49%, #7facde 50%, #c6dcff 100%)'
+};
+const displayedWallpaperPreviewItems = computed(() =>
+  isBackgroundContextMenuDesignPreview
+    ? [
+        {
+          id: 'preview-custom-wallpaper',
+          isCustom: true,
+          previewStyle: backgroundContextMenuDesignPreviewStyle
+        },
+        ...wallpaperPreviewItems.value
+      ]
+    : wallpaperPreviewItems.value
+);
+const displayedCallBackgroundPreviewItems = computed(() =>
+  isBackgroundContextMenuDesignPreview
+    ? [
+        {
+          id: 'preview-custom-call-background',
+          isCustom: true,
+          previewStyle: backgroundContextMenuDesignPreviewStyle
+        },
+        ...callBackgroundPreviewItems.value
+      ]
+    : callBackgroundPreviewItems.value
+);
 
 const resolvePendingPreviewStyle = (
   previewItems: Array<{ id: string; previewStyle: CSSProperties }>,
@@ -1210,6 +1343,73 @@ const openLogoutConfirmModal = (): void => {
 
 const closeLogoutConfirmModal = (): void => {
   isLogoutConfirmModalOpen.value = false;
+};
+
+const handleBackgroundContextMenu = (
+  kind: BackgroundDeleteTarget['kind'],
+  background: { id: string; isCustom: boolean },
+  event: MouseEvent
+): void => {
+  if (!background.isCustom) {
+    return;
+  }
+
+  activeBackgroundContextTarget.value = { kind, id: background.id };
+  openActivePopover('background', event);
+};
+
+const closeBackgroundContextMenu = (): void => {
+  activeBackgroundContextTarget.value = null;
+  closeActivePopover('background');
+};
+
+const openBackgroundDeleteConfirm = (): void => {
+  if (!activeBackgroundContextTarget.value) {
+    return;
+  }
+
+  pendingBackgroundDelete.value = { ...activeBackgroundContextTarget.value };
+  closeBackgroundContextMenu();
+};
+
+const closeBackgroundDeleteConfirm = (): void => {
+  if (isDeletingBackground.value) {
+    return;
+  }
+
+  pendingBackgroundDelete.value = null;
+};
+
+const confirmBackgroundDelete = async (): Promise<void> => {
+  const target = pendingBackgroundDelete.value;
+
+  if (!target || isDeletingBackground.value) {
+    return;
+  }
+
+  isDeletingBackground.value = true;
+
+  try {
+    if (target.kind === 'wallpaper') {
+      wallpaperError.value = '';
+      await deleteCustomWallpaper(target.id);
+    } else {
+      callBackgroundError.value = '';
+      await deleteCustomCallBackground(target.id);
+    }
+    pendingBackgroundDelete.value = null;
+  } catch (error) {
+    console.error('Failed to delete custom background:', error);
+    const message = 'Не удалось удалить фон. Попробуйте ещё раз';
+    if (target.kind === 'wallpaper') {
+      wallpaperError.value = message;
+    } else {
+      callBackgroundError.value = message;
+    }
+    pendingBackgroundDelete.value = null;
+  } finally {
+    isDeletingBackground.value = false;
+  }
 };
 
 const handleWallpaperUpload = async (event: Event): Promise<void> => {

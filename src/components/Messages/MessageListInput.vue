@@ -2,11 +2,57 @@
   <div
     ref="inputContainerRef"
     class="chat__input emoji-font-host"
+    :class="{ 'chat__input--booting': !isEditorReady }"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
     @pointerdown.capture="handleContentEditorPointerDown"
     @click.capture="handleContentEditorPopoverClick"
   >
     <ClientReplyRoutes v-if="props.topicId" :topic-id="props.topicId" />
+    <button
+      v-if="!isEditorReady"
+      type="button"
+      class="chat__input-bootstrap"
+      aria-label="Начните печатать"
+      @pointerdown.prevent="handleBootstrapInputPointerDown"
+    >
+      <svg
+        class="chat__input-bootstrap-attach"
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+      >
+        <path
+          d="M8.4 12.8 14.9 6.3a3.2 3.2 0 0 1 4.5 4.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8-8"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+      <span>Начните печатать...</span>
+      <svg
+        class="chat__input-bootstrap-smile"
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+      >
+        <circle
+          cx="12"
+          cy="12"
+          r="9"
+          stroke="currentColor"
+          stroke-width="1.8"
+        />
+        <circle cx="9" cy="10" r="1" fill="currentColor" />
+        <circle cx="15" cy="10" r="1" fill="currentColor" />
+        <path
+          d="M8.5 14.2c.9 1.2 2 1.8 3.5 1.8s2.6-.6 3.5-1.8"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+        />
+      </svg>
+    </button>
     <div :data-testid="`${props.dataTestid}-MessageList-ContentEditor`">
       <ContentEditor
         :active-send="props.forwardMessages.length > 0 || props.allowEmptySend"
@@ -24,6 +70,7 @@
         @unmount-attach-file="(...args: any[]) => $emit('attachFile', ...args)"
         @mention-change="handleMentionChange"
         @slash-change="handleSlashChange"
+        @vue:mounted="handleEditorMounted"
       >
         <template v-if="props.showCallTopicActionsToggle" #mobile-right-action>
           <button
@@ -269,6 +316,7 @@ const emit = defineEmits([
   'clearForward',
   'scrollToMessage',
   'heightChange',
+  'ready',
   'toggleCallTopicActions'
 ]);
 
@@ -460,6 +508,20 @@ const contentEditorRef =
   useTemplateRef<typeof ContentEditor>('contentEditorRef');
 const inputContainerRef = useTemplateRef<HTMLElement>('inputContainerRef');
 const isTauriFileDragging = ref(false);
+const isEditorReady = ref(false);
+let shouldFocusEditorWhenReady = false;
+
+const handleEditorMounted = async (): Promise<void> => {
+  await nextTick();
+  // EditorContent переносит DOM редактора в собственном nextTick после mounted.
+  // Перед кадром все дочерние обновления закончены и высота композера известна.
+  requestAnimationFrame(reportInputHeight);
+};
+let hasReportedEditorReady = false;
+
+const handleBootstrapInputPointerDown = (): void => {
+  shouldFocusEditorWhenReady = true;
+};
 
 const handleContentEditorPointerDown = (event: PointerEvent): void => {
   const target = event.target;
@@ -510,6 +572,7 @@ let activeTypingTopicId: string | null = null;
 let lastTypingPingAt = 0;
 let unlistenTauriFileDrop: (() => void) | null = null;
 let inputResizeObserver: ResizeObserver | null = null;
+let inputMutationObserver: MutationObserver | null = null;
 let lastReportedInputHeight = 0;
 
 const clearTypingStopTimeout = (): void => {
@@ -615,6 +678,19 @@ const reportInputHeight = (): void => {
 
   const nextHeight = Math.ceil(element.getBoundingClientRect().height);
 
+  if (
+    !hasReportedEditorReady &&
+    element.querySelector('.ProseMirror[contenteditable="true"]')
+  ) {
+    hasReportedEditorReady = true;
+    isEditorReady.value = true;
+
+    if (shouldFocusEditorWhenReady) {
+      shouldFocusEditorWhenReady = false;
+      nextTick(() => contentEditorRef.value?.focus());
+    }
+  }
+
   if (!nextHeight || nextHeight === lastReportedInputHeight) {
     return;
   }
@@ -693,7 +769,18 @@ onMounted(() => {
     inputResizeObserver.observe(inputContainerRef.value);
   }
 
-  requestAnimationFrame(reportInputHeight);
+  if ('MutationObserver' in window && inputContainerRef.value) {
+    inputMutationObserver = new MutationObserver(reportInputHeight);
+    inputMutationObserver.observe(inputContainerRef.value, {
+      childList: true,
+      subtree: true
+    });
+  }
+
+  requestAnimationFrame(() => {
+    reportInputHeight();
+    emit('ready');
+  });
 
   void bindTauriFileDrop({
     getTargetElement: () =>
@@ -710,6 +797,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   inputResizeObserver?.disconnect();
   inputResizeObserver = null;
+  inputMutationObserver?.disconnect();
+  inputMutationObserver = null;
   lastReportedInputHeight = 0;
   emit('heightChange', 0);
   unlistenTauriFileDrop?.();
@@ -718,6 +807,48 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.chat__input--booting {
+  min-height: 75px;
+}
+
+.chat__input-bootstrap {
+  box-sizing: border-box;
+  width: 100%;
+  height: 50px;
+  margin: 0;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border: 0;
+  border-radius: 28px;
+  background: var(--background-primary, #fff);
+  color: var(--text-secondary, #7d8795);
+  font: inherit;
+  font-size: 16px;
+  text-align: left;
+  cursor: text;
+}
+
+.chat__input:has(.ProseMirror[contenteditable='true'])
+  > .chat__input-bootstrap {
+  display: none;
+}
+
+.chat__input-bootstrap span {
+  flex: 1;
+}
+
+.chat__input-bootstrap svg {
+  width: 26px;
+  height: 26px;
+  flex: none;
+}
+
+.chat__input-bootstrap-attach {
+  transform: rotate(-8deg);
+}
+
 .chat__input-prompt-toggle {
   width: 30px;
   height: 30px;

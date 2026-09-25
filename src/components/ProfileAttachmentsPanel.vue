@@ -257,7 +257,7 @@ import { openAiForwardDraft } from '../composables/useAiForwardDraft';
 import type { AiAssistantSession } from '../composables/useAiAssistant';
 import { navigateToSearchResult } from '../composables/useMessageSearch';
 import { deleteMessageChat, getChatSDK } from '../services/useChat';
-import { ensureMediaObjectUrl } from '../services/useMediaBlobCache';
+import { getClientMessageById } from '../services/useMessages';
 import {
   downloadNativeFile,
   getNativeFileDownloadState,
@@ -268,7 +268,12 @@ import {
   refreshNativeFileDownloadStatus
 } from '../services/useNativeFile';
 import { getFormatFileSize, getShortName } from '../utils/getFormatFileSize';
+import {
+  buildMediaDownloadUrl,
+  triggerBrowserDownload
+} from '../utils/media-download';
 import { VIDEO_FALLBACK_THUMBNAIL } from '../utils/mediaPreview';
+import { createLiveSliderItem } from '../utils/live-slider-item';
 import type { IMessage, IMedia, ITopic } from './interfaces/interfaces';
 import type { TopicAttachmentItem as ApiTopicAttachmentItem } from '../services/useChatSDK/message';
 import ContextMenu from './ContactList/ContextMenu.vue';
@@ -334,7 +339,13 @@ const tabs: Array<{ label: string; value: ProfileAttachmentsTab }> = [
 
 const localActiveTab = ref<ProfileAttachmentsTab>('media');
 const sliderElements = ref<
-  { path: string; fallbackPath?: string; name: string; file?: File }[]
+  {
+    path: string;
+    fallbackPath?: string;
+    name: string;
+    file?: File;
+    downloadPath?: string;
+  }[]
 >([]);
 const defaultIndexSlider = ref<number>(0);
 const isSliderOpen = ref(false);
@@ -376,6 +387,7 @@ const { addHandler: addBackHandler, removeHandler: removeBackHandler } =
 const {
   getFullMediaPath,
   getRemoteThumbnailUrl,
+  getSliderMediaPath,
   isSliderContentUrl,
   primeMediaCache
 } = useMessageMedia();
@@ -1223,48 +1235,38 @@ const syncNativeFileStatuses = (): void => {
 
 watch(nativeFileStatusIdentity, syncNativeFileStatuses, { immediate: true });
 
-const buildSliderItem = async (media: IMedia) => {
-  const originalPath = getFullMediaPath(media, false);
-  const fallbackPath = getRemoteThumbnailUrl(media);
-
-  if (!isNativePdfMedia(media) || !media.path) {
-    return {
-      path: originalPath,
-      fallbackPath,
-      name: media.originName || 'file'
-    };
-  }
-
-  const cachedObjectUrl = await ensureMediaObjectUrl(media.path);
-
-  if (!cachedObjectUrl) {
-    return {
-      path: originalPath,
-      fallbackPath,
-      name: media.originName || 'file'
-    };
-  }
-
-  try {
-    const blob = await fetch(cachedObjectUrl).then(response => response.blob());
-    const file = new File([blob], media.originName || 'file.pdf', {
-      type: blob.type || 'application/pdf'
-    });
+const buildSliderItem = (initialMedia: IMedia) =>
+  createLiveSliderItem(() => {
+    const attachment = [
+      ...attachmentItemsByTab.media,
+      ...attachmentItemsByTab.files
+    ].find(item => item.media.id === initialMedia.id);
+    const cachedMedia = getClientMessageById(
+      props.topicId,
+      attachment?.message.id
+    )?.media?.find(item => item.id === initialMedia.id);
+    const media =
+      cachedMedia?.ex?.processingStatus === 'ready' ||
+      cachedMedia?.ex?.mediaProcessing?.status === 'ready'
+        ? cachedMedia
+        : attachment?.media || initialMedia;
+    const originalPath = getFullMediaPath(media, false);
+    const sliderPath = getSliderMediaPath(media);
+    const fallbackPath =
+      getRemoteThumbnailUrl(media) ||
+      (media.type === MediaType.Video
+        ? media.localThumbnailPath || VIDEO_FALLBACK_THUMBNAIL
+        : undefined);
+    const name = media.originName || 'file';
+    const downloadPath = buildMediaDownloadUrl(originalPath, name);
 
     return {
-      path: cachedObjectUrl,
+      path: sliderPath,
       fallbackPath,
-      name: media.originName || 'file',
-      file
+      name,
+      downloadPath
     };
-  } catch {
-    return {
-      path: cachedObjectUrl,
-      fallbackPath,
-      name: media.originName || 'file'
-    };
-  }
-};
+  });
 
 const downloadMediaFile = async (media: IMedia): Promise<void> => {
   if (await downloadNativeFile(media)) {
@@ -1272,17 +1274,8 @@ const downloadMediaFile = async (media: IMedia): Promise<void> => {
   }
 
   const fallbackUrl = getFullMediaPath(media, false);
-  const cachedObjectUrl = media.path
-    ? await ensureMediaObjectUrl(media.path)
-    : '';
-  const link = document.createElement('a');
-
-  link.href = cachedObjectUrl || fallbackUrl;
-  link.download = media.originName || 'file';
-
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const fileName = media.originName || 'file';
+  triggerBrowserDownload(fallbackUrl, fileName);
 };
 
 const openSlider = async (

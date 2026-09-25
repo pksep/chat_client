@@ -55,7 +55,7 @@ const darkLogoMarkup = namespaceSvgIds(
 }
 
 .chat-icon__image--dark {
-  display: none;
+  opacity: 0;
 }
 </style>
 
@@ -72,10 +72,10 @@ const darkLogoMarkup = namespaceSvgIds(
 }
 
 :is([data-theme='dark'], .theme-dark) .chat-icon__image--light {
-  display: none;
+  opacity: 0;
 }
 
 :is([data-theme='dark'], .theme-dark) .chat-icon__image--dark {
-  display: block;
+  opacity: 1;
 }
 </style>

@@ -17,6 +17,8 @@ import androidx.core.content.ContextCompat;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import sep.pksep.app.sync.ChatStartupHistory;
+
 public final class ChatNotificationHelper {
     public static final String ACTION_OPEN_CHAT_NOTIFICATION =
         "sep.pksep.app.action.OPEN_CHAT_NOTIFICATION";
@@ -54,11 +56,15 @@ public final class ChatNotificationHelper {
         NotificationChannelHelper.ensureDefaultChannel(context);
 
         String topicId = resolveNotificationTag(data);
+        ChatApplication.rememberNotificationTopic(context, topicId);
+        ChatStartupHistory.refreshCache(context, topicId);
         int requestCode = REQUEST_CODE_PROVIDER.incrementAndGet();
-        Class<?> notificationTarget = MainActivity.hasCreatedInstance()
-            ? MainActivity.class
-            : NotificationLaunchActivity.class;
-        Intent intent = new Intent(context, notificationTarget)
+        // The launcher paints the fresh server response while Chromium starts
+        // behind its native frame.
+        Class<?> launchActivity = LaunchAppearance.isDark(context)
+            ? DarkNotificationTapLaunchActivity.class
+            : NotificationTapLaunchActivity.class;
+        Intent intent = new Intent(context, launchActivity)
             .setAction(ACTION_OPEN_CHAT_NOTIFICATION)
             .addFlags(
                 Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP

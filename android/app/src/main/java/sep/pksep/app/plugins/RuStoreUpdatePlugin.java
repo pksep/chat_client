@@ -8,6 +8,7 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import sep.pksep.app.BuildConfig;
 
 import ru.rustore.sdk.appupdate.listener.InstallStateUpdateListener;
 import ru.rustore.sdk.appupdate.manager.RuStoreAppUpdateManager;
@@ -27,14 +28,43 @@ public class RuStoreUpdatePlugin extends Plugin {
     private AppUpdateInfo cachedAppUpdateInfo;
     private JSObject pendingUpdateState;
 
-    @Override
-    public void load() {
-        super.load();
+    private void withUpdateManager(PluginCall call, Runnable action) {
+        Activity activity = getActivity();
+        if (activity == null) {
+            call.reject("Activity is not available");
+            return;
+        }
+        // Менеджер нужен при проверке обновлений, а не при создании WebView.
+        // Инициализация и освобождение остаются в UI-потоке Activity.
+        activity.runOnUiThread(() -> {
+            if (activity.isFinishing() || activity.isDestroyed()) {
+                call.reject("Activity is not available");
+                return;
+            }
+            try {
+                if (updateManager == null) {
+                    markStartupBenchmark("update-manager-start");
+                    RuStoreAppUpdateManager manager =
+                        RuStoreAppUpdateManagerFactory.INSTANCE.create(getContext());
+                    InstallStateUpdateListener listener = this::handleInstallStateUpdated;
+                    manager.registerListener(listener);
+                    updateManager = manager;
+                    installStateUpdateListener = listener;
+                    flushPendingUpdateState();
+                    markStartupBenchmark("update-manager-ready");
+                }
+                action.run();
+            } catch (Exception exception) {
+                Log.e(TAG, "RuStore update request failed", exception);
+                call.reject(exception.getMessage(), exception.getClass().getSimpleName());
+            }
+        });
+    }
 
-        updateManager = RuStoreAppUpdateManagerFactory.INSTANCE.create(getContext());
-        installStateUpdateListener = this::handleInstallStateUpdated;
-        updateManager.registerListener(installStateUpdateListener);
-        flushPendingUpdateState();
+    private static void markStartupBenchmark(String stage) {
+        if (BuildConfig.CHAT_STARTUP_BENCHMARK) {
+            Log.i("ChatStartupBenchmark", stage + " " + System.currentTimeMillis());
+        }
     }
 
     @Override
@@ -52,12 +82,7 @@ public class RuStoreUpdatePlugin extends Plugin {
 
     @PluginMethod
     public void getAppUpdateInfo(PluginCall call) {
-        if (updateManager == null) {
-            call.reject("RuStore update manager is not initialized");
-            return;
-        }
-
-        updateManager
+        withUpdateManager(call, () -> updateManager
             .getAppUpdateInfo()
             .addOnSuccessListener(appUpdateInfo -> {
                 cachedAppUpdateInfo = appUpdateInfo;
@@ -69,7 +94,7 @@ public class RuStoreUpdatePlugin extends Plugin {
                     throwable.getMessage(),
                     throwable.getClass().getSimpleName()
                 );
-            });
+            }));
     }
 
     @PluginMethod
@@ -83,42 +108,34 @@ public class RuStoreUpdatePlugin extends Plugin {
     }
 
     private void startUpdateFlow(PluginCall call, int appUpdateType) {
-        if (updateManager == null) {
-            call.reject("RuStore update manager is not initialized");
-            return;
-        }
+        withUpdateManager(call, () -> {
+            if (cachedAppUpdateInfo == null) {
+                call.reject("AppUpdateInfo is not available. Call getAppUpdateInfo first.");
+                return;
+            }
 
-        if (cachedAppUpdateInfo == null) {
-            call.reject("AppUpdateInfo is not available. Call getAppUpdateInfo first.");
-            return;
-        }
-
-        updateManager
-            .startUpdateFlow(
-                cachedAppUpdateInfo,
-                new AppUpdateOptions.Builder().appUpdateType(appUpdateType).build()
-            )
-            .addOnSuccessListener(resultCode -> {
-                JSObject result = new JSObject();
-                result.put("resultCode", resultCode);
-                call.resolve(result);
-            })
-            .addOnFailureListener(throwable -> {
-                Log.e(TAG, "startUpdateFlow error", throwable);
-                call.reject(
-                    throwable.getMessage(),
-                    throwable.getClass().getSimpleName()
-                );
-            });
+            updateManager
+                .startUpdateFlow(
+                    cachedAppUpdateInfo,
+                    new AppUpdateOptions.Builder().appUpdateType(appUpdateType).build()
+                )
+                .addOnSuccessListener(resultCode -> {
+                    JSObject result = new JSObject();
+                    result.put("resultCode", resultCode);
+                    call.resolve(result);
+                })
+                .addOnFailureListener(throwable -> {
+                    Log.e(TAG, "startUpdateFlow error", throwable);
+                    call.reject(
+                        throwable.getMessage(),
+                        throwable.getClass().getSimpleName()
+                    );
+                });
+        });
     }
 
     private void completeUpdate(PluginCall call, int appUpdateType) {
-        if (updateManager == null) {
-            call.reject("RuStore update manager is not initialized");
-            return;
-        }
-
-        updateManager
+        withUpdateManager(call, () -> updateManager
             .completeUpdate(
                 new AppUpdateOptions.Builder().appUpdateType(appUpdateType).build()
             )
@@ -129,7 +146,7 @@ public class RuStoreUpdatePlugin extends Plugin {
                     throwable.getMessage(),
                     throwable.getClass().getSimpleName()
                 );
-            });
+            }));
     }
 
     private void handleInstallStateUpdated(InstallState state) {

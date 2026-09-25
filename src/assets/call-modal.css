@@ -172,7 +172,7 @@
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--error-color) 18%, transparent);
 }
 
-body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
+body .tooltip-yui-kit__hint[data-testid^='CallModal-'][data-testid$='Tooltip'] {
   z-index: 100000;
 }
 
@@ -221,6 +221,7 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
 }
 
 @keyframes call-recording-starting-pulse {
+
   0%,
   100% {
     transform: scale(1);
@@ -397,7 +398,7 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
   gap: 16px;
   z-index: 9;
 
-  & > div {
+  &>div {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -430,7 +431,8 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
   min-width: 270px;
   padding: 10px;
   border-radius: 15px;
-  background: var(--white);
+  background: var(--surface-overlay);
+  border: 0.5px solid var(--border-table);
   box-shadow: 0px 4px 9.8px 0px #0000000d;
   display: flex;
   flex-direction: column;
@@ -546,7 +548,7 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
   margin: 16px 18px 8px;
 }
 
-.call-modal__group-panel-actions > :only-child {
+.call-modal__group-panel-actions> :only-child {
   grid-column: 1 / -1;
 }
 
@@ -1111,14 +1113,14 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
     align-items: flex-start;
   }
 
-  .call-modal__group-info > div:first-child {
+  .call-modal__group-info>div:first-child {
     order: 1;
     min-width: 0;
     flex: 1 1 0;
   }
 
-  .call-modal__group-info > button,
-  .call-modal__group-info > .call-modal__group-actions {
+  .call-modal__group-info>button,
+  .call-modal__group-info>.call-modal__group-actions {
     order: 2;
     flex: 0 0 auto;
   }
@@ -1209,9 +1211,7 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
     --size-avatar: 10px !important;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__avatar
-    .avatar-yui-kit__text {
+  .call-modal__remote-grid--screen-share .call-modal__avatar .avatar-yui-kit__text {
     font-size: 13px;
   }
 
@@ -1298,8 +1298,7 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
     gap: 0;
   }
 
-  .call-modal__control-button-wrapper--call-controls
-    .call-modal__control-button {
+  .call-modal__control-button-wrapper--call-controls .call-modal__control-button {
     box-sizing: border-box;
     width: 50px;
     height: 50px;
@@ -1308,42 +1307,32 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
     background: transparent;
   }
 
-  .call-modal__control-button-wrapper--call-controls
-    .call-modal__control-button
-    svg {
+  .call-modal__control-button-wrapper--call-controls .call-modal__control-button svg {
     width: 33px;
     height: 33px;
   }
 
-  .call-modal__control-button-wrapper--call-controls
-    .call-modal__audio-output-button {
+  .call-modal__control-button-wrapper--call-controls .call-modal__audio-output-button {
     padding: 12px !important;
   }
 
-  .call-modal__control-button-wrapper--call-controls
-    .call-modal__audio-output-button
-    svg {
+  .call-modal__control-button-wrapper--call-controls .call-modal__audio-output-button svg {
     width: 24px;
     height: 24px;
     flex: 0 0 auto;
   }
 
-  .call-modal__control-button-wrapper--call-controls
-    .call-modal__control-button.call-modal__control-button__inactive {
+  .call-modal__control-button-wrapper--call-controls .call-modal__control-button.call-modal__control-button__inactive {
     color: var(--action-primary-bg, #9cbeff);
     background: var(--surface-overlay, #373d51);
   }
 
-  .call-modal__control-button-wrapper--call-controls
-    .call-modal__audio-output-button--active {
+  .call-modal__control-button-wrapper--call-controls .call-modal__audio-output-button--active {
     color: var(--white) !important;
     background: transparent !important;
   }
 
-  .call-modal__control-button-wrapper--call-controls
-    .call-modal__control-button:disabled:not(
-      .call-modal__control-button--leave
-    ) {
+  .call-modal__control-button-wrapper--call-controls .call-modal__control-button:disabled:not(.call-modal__control-button--leave) {
     color: var(--text-disabled);
     background: var(--action-disabled-bg);
   }
@@ -1394,8 +1383,7 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
     text-overflow: ellipsis;
   }
 
-  .call-modal__participant-stage--screen-share-stop-visible
-    .call-modal__remote-name {
+  .call-modal__participant-stage--screen-share-stop-visible .call-modal__remote-name {
     max-width: 42%;
   }
 
@@ -1423,9 +1411,7 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .call-modal__container--full-screen
-    .call-modal__remote-grid--group-duo
-    .call-modal__remote-tile {
+  .call-modal__container--full-screen .call-modal__remote-grid--group-duo .call-modal__remote-tile {
     min-height: 360px;
   }
 }
@@ -1617,26 +1603,21 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
     border-radius: 10px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__remote-tile.call-modal__remote-tile--local {
+  .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--local {
     border-width: 2px;
     border-color: var(--border-hover) !important;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__remote-tile.call-modal__remote-tile--speaking {
+  .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--speaking {
     border-width: 2px;
     border-color: #57d278 !important;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__remote-tile.call-modal__remote-tile--local.call-modal__remote-tile--speaking {
+  .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--local.call-modal__remote-tile--speaking {
     border-width: 2px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__avatar
-    .avatar-yui-kit__text {
+  .call-modal__remote-grid--screen-share .call-modal__avatar .avatar-yui-kit__text {
     font-size: 10px;
   }
 
@@ -1650,18 +1631,15 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
     width: 1.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(1) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(1) {
     height: 4.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(2) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(2) {
     height: 7.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(3) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(3) {
     height: 10.5px;
   }
 
@@ -1726,9 +1704,7 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
   --size-avatar: 20px;
 }
 
-.call-modal__remote-grid--screen-share
-  .call-modal__avatar
-  .avatar-yui-kit__text {
+.call-modal__remote-grid--screen-share .call-modal__avatar .avatar-yui-kit__text {
   font-size: 24px;
 }
 
@@ -1783,11 +1759,9 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
 .call-modal__connection-quality {
   --call-quality-bg: var(--action-primary-bg);
   --call-quality-active: var(--text-on-brand);
-  --call-quality-inactive: color-mix(
-    in srgb,
-    var(--text-on-brand) 36%,
-    transparent
-  );
+  --call-quality-inactive: color-mix(in srgb,
+      var(--text-on-brand) 36%,
+      transparent);
 
   position: absolute;
   top: 8px;
@@ -1832,13 +1806,11 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
   background: var(--call-quality-inactive);
 }
 
-.call-modal__connection-quality--poor
-  .call-modal__connection-quality-bar:first-child {
+.call-modal__connection-quality--poor .call-modal__connection-quality-bar:first-child {
   background: var(--call-quality-active);
 }
 
-.call-modal__connection-quality--unknown
-  .call-modal__connection-quality-bar:first-child,
+.call-modal__connection-quality--unknown .call-modal__connection-quality-bar:first-child,
 .call-modal__connection-quality--unknown .call-modal__connection-quality-bar {
   background: var(--call-quality-active);
 }
@@ -1949,17 +1921,15 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
   pointer-events: none;
 }
 
-.call-modal__video-overlay-bar > * {
+.call-modal__video-overlay-bar>* {
   pointer-events: auto;
 }
 
 .call-modal__video-overlay-bar--top {
   top: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(2, 8, 23, 0.88) 0%,
-    transparent 100%
-  );
+  background: linear-gradient(180deg,
+      rgba(2, 8, 23, 0.88) 0%,
+      transparent 100%);
 }
 
 .call-modal__video-overlay-bar--bottom {
@@ -2049,7 +2019,7 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
   }
 }
 
-.call-modal__remote-name > span {
+.call-modal__remote-name>span {
   display: block;
   min-width: 0;
   max-width: 100%;
@@ -2187,8 +2157,7 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
     height: 45px;
   }
 
-  .call-modal__control-button-wrapper--call-controls
-    .call-modal__control-button {
+  .call-modal__control-button-wrapper--call-controls .call-modal__control-button {
     width: 50px;
     height: 50px;
   }
@@ -2214,13 +2183,11 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
     border-radius: 10px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__remote-tile.call-modal__remote-tile--local {
+  .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--local {
     border-color: var(--border-hover) !important;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__remote-tile.call-modal__remote-tile--speaking {
+  .call-modal__remote-grid--screen-share .call-modal__remote-tile.call-modal__remote-tile--speaking {
     border-color: #57d278 !important;
   }
 
@@ -2228,9 +2195,7 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
     --size-avatar: 10px !important;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__avatar
-    .avatar-yui-kit__text {
+  .call-modal__remote-grid--screen-share .call-modal__avatar .avatar-yui-kit__text {
     font-size: 10px !important;
   }
 
@@ -2247,18 +2212,15 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
     width: 1.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(1) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(1) {
     height: 4.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(2) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(2) {
     height: 7.5px;
   }
 
-  .call-modal__remote-grid--screen-share
-    .call-modal__connection-quality-bar:nth-child(3) {
+  .call-modal__remote-grid--screen-share .call-modal__connection-quality-bar:nth-child(3) {
     height: 10.5px;
   }
 
@@ -2338,8 +2300,7 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
     padding-bottom: 4px;
   }
 
-  .call-modal__container--busy-notice
-    .call-modal__control-button-wrapper--call-controls {
+  .call-modal__container--busy-notice .call-modal__control-button-wrapper--call-controls {
     width: auto;
     padding: 0;
     gap: 18px;
@@ -2348,18 +2309,14 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
     justify-content: center;
   }
 
-  .call-modal__container--busy-notice
-    .call-modal__control-button-wrapper--call-controls
-    .call-modal__control-button {
+  .call-modal__container--busy-notice .call-modal__control-button-wrapper--call-controls .call-modal__control-button {
     width: 40px;
     height: 40px;
     color: #9aa7ba;
     background: #eef1f7;
   }
 
-  .call-modal__container--busy-notice
-    .call-modal__control-button-wrapper--call-controls
-    .call-modal__control-button.call-modal__control-button--leave {
+  .call-modal__container--busy-notice .call-modal__control-button-wrapper--call-controls .call-modal__control-button.call-modal__control-button--leave {
     color: var(--white);
     background: var(--red4) !important;
   }
@@ -2452,6 +2409,7 @@ body .tooltip-yui-kit__hint[data-testid$='RecordingTooltip'] {
   }
 
   .call-modal__group-panel-title {
+    margin-top: 5px;
     text-align: center !important;
     padding-right: 84px;
   }

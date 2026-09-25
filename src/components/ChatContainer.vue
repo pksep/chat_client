@@ -46,6 +46,7 @@
     />
     <template v-if="!isMobile">
       <Modal
+        v-if="hasOpenedGroupInfo"
         :open="state.isMenuDesktopOpen"
         class="chat__info__modal"
         position="right"
@@ -62,6 +63,7 @@
       </Modal>
 
       <Modal
+        v-if="hasOpenedUserInfo"
         :open="isUserInfoOpen"
         class="chat__user-info-modal"
         position="right"
@@ -183,11 +185,7 @@ import {
 } from 'vue';
 import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
-import Menu from './Menu.vue';
 import Chat from './Chat.vue';
-import MenuInfo from './MenuInfo.vue';
-import UserInfoPanel from './UserInfoPanel.vue';
-import BotInfoPanel from './BotInfoPanel.vue';
 import {
   MobilePlatformEnum,
   type IChatContainerProps,
@@ -227,6 +225,10 @@ import { clearMessagesForTopic } from '../services/useMessages';
 import { getSelectedTopic } from '../composables/useTopics';
 import { isFavoriteTopic } from '../utils/favorite-topic';
 
+const Menu = defineAsyncComponent(() => import('./Menu.vue'));
+const MenuInfo = defineAsyncComponent(() => import('./MenuInfo.vue'));
+const UserInfoPanel = defineAsyncComponent(() => import('./UserInfoPanel.vue'));
+const BotInfoPanel = defineAsyncComponent(() => import('./BotInfoPanel.vue'));
 const NewContactModal = defineAsyncComponent(
   () => import('./NewChat/NewContactModal.vue')
 );
@@ -330,6 +332,22 @@ const shouldRenderCallModal = computed(
 const users = computed(() => getUsersList());
 const { isUserInfoOpen, activeUser, activeTopic, closeUserInfo } =
   useUserInfoModal();
+const hasOpenedGroupInfo = ref(false);
+const hasOpenedUserInfo = ref(false);
+watch(
+  () => state.isMenuDesktopOpen,
+  open => {
+    if (open) hasOpenedGroupInfo.value = true;
+  },
+  { immediate: true }
+);
+watch(
+  isUserInfoOpen,
+  open => {
+    if (open) hasOpenedUserInfo.value = true;
+  },
+  { immediate: true }
+);
 const isBotUserInfo = computed(
   () => isBotTopic(activeTopic.value) || isBotUser(activeUser.value)
 );

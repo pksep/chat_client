@@ -111,7 +111,7 @@
               <div
                 v-else-if="media.type === MediaType.Video"
                 class="message-content__media-video"
-                @click="$emit('set-slider', mediaFiles, i)"
+                @click.stop="handleMediaClick(i)"
               >
                 <PlayIcon />
               </div>

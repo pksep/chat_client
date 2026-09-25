@@ -1,13 +1,12 @@
+import { openChatDatabase } from '../utils/chat-startup-databases';
 import { reviveCachedDates as deserializeValue } from '../utils/revive-cached-dates';
+import { toRaw } from 'vue';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
 
 const DB_NAME = 'chat-offline-state-db';
-const DB_VERSION = 2;
 const STORE_NAME = 'entities';
 const FAST_TOPICS_CACHE_PREFIX = 'chat-offline-fast-topics-v1';
-
-let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 type CacheEntityType = 'topics' | 'users';
 
@@ -19,13 +18,12 @@ interface CachedEntity<T> {
   updatedAt: string;
 }
 
-const hasIndexedDb = () =>
-  typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined';
-
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const serializeValue = (value: unknown): unknown => {
+  // Снимок не должен обходить реактивные getter для каждого вложенного поля.
+  value = toRaw(value);
   if (value instanceof Date) {
     return value.toISOString();
   }
@@ -55,7 +53,9 @@ const getCacheKey = (type: CacheEntityType, userId = getResolvedUserId()) =>
 const getFastTopicsCacheKey = (userId = getResolvedUserId()) =>
   `${FAST_TOPICS_CACHE_PREFIX}:${userId || 'anonymous'}`;
 
-const loadFastCachedTopics = <T>(userId = getResolvedUserId()): T[] | null => {
+export const loadFastCachedTopics = <T = ITopic>(
+  userId = getResolvedUserId()
+): T[] | null => {
   if (typeof window === 'undefined' || !userId) {
     return null;
   }
@@ -98,42 +98,7 @@ const saveFastCachedTopics = <T>(
   }
 };
 
-const openDb = async (): Promise<IDBDatabase | null> => {
-  if (!hasIndexedDb()) {
-    return null;
-  }
-
-  if (dbPromise) {
-    return dbPromise;
-  }
-
-  dbPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'cacheKey' });
-      }
-    };
-
-    request.onsuccess = () => {
-      const db = request.result;
-      db.onversionchange = () => {
-        db.close();
-        dbPromise = null;
-      };
-      resolve(db);
-    };
-    request.onerror = () => {
-      dbPromise = null;
-      reject(request.error);
-    };
-  });
-
-  return dbPromise;
-};
+const openDb = (): Promise<IDBDatabase | null> => openChatDatabase(DB_NAME);
 
 const loadCachedEntity = async <T>(
   type: CacheEntityType,

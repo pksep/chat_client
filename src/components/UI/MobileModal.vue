@@ -1,5 +1,6 @@
 <template>
   <Modal
+    v-if="hasOpened"
     :open="props.open"
     position="bottom"
     :class="['mobile__modal', props.class]"
@@ -74,6 +75,9 @@ const props = withDefaults(defineProps<IMobileModalProps>(), {
   isDisabledStartButton: false,
   dataTestid: () => 'MobileModal'
 });
+
+// Сохраняем экземпляр после первого открытия, включая анимацию закрытия.
+const hasOpened = ref(props.open);
 
 /* ------------------------
    CLOSE HANDLERS
@@ -154,6 +158,7 @@ watch(
   () => props.open,
   isOpen => {
     if (isOpen) {
+      hasOpened.value = true;
       addHandler(handleCloseModal);
     } else {
       removeHandler(handleCloseModal);
@@ -198,3 +203,5 @@ watch(
   { immediate: true }
 );
 </script>
+
+<style lang="css"></style>

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { LaunchStartup } from '../services/launchStartup';
 
@@ -22,23 +22,29 @@ export interface IThemeClasses {
 }
 
 const THEME_STORAGE_KEY = 'erp-theme-color-scheme';
-const MOBILE_THEME_MEDIA_QUERY = '(max-width: 767.98px)';
 const THEME_COLORS = {
-  dark: '#212531',
-  light: '#f8f9fd'
+  dark: '#262a38',
+  light: '#ffffff'
 };
 const THEME_CLASSES: IThemeClasses = {
   dark: 'theme-dark',
   light: 'theme-light'
 };
+const THEME_TRANSITION_DURATION_MS = 200;
+let themeTransitionTimer: ReturnType<typeof setTimeout> | undefined;
+let activeThemeTransition: ViewTransition | undefined;
+let themeSwitchSequence = 0;
 
-const isLightThemeOnly = (): boolean => {
-  if (Capacitor.isNativePlatform()) return true;
-
-  return (
-    typeof window !== 'undefined' &&
-    window.matchMedia(MOBILE_THEME_MEDIA_QUERY).matches
-  );
+const beginThemeTransition = (): void => {
+  const root = document.documentElement;
+  if (themeTransitionTimer) clearTimeout(themeTransitionTimer);
+  root.classList.add('theme-switching');
+  // Сначала применяем transition к текущим цветам, затем меняем класс темы.
+  void root.offsetWidth;
+  themeTransitionTimer = setTimeout(() => {
+    root.classList.remove('theme-switching');
+    themeTransitionTimer = undefined;
+  }, THEME_TRANSITION_DURATION_MS + 50);
 };
 
 const syncNativeLaunchTheme = (isDarkTheme: boolean): void => {
@@ -159,9 +165,7 @@ export const useThemeStore = defineStore('theme', () => {
 
     // Восстанавливаем сохраненную тему только один раз при старте приложения.
     const savedThemeClass = getSavedThemeClass();
-    const initialThemeClass = isLightThemeOnly()
-      ? THEME_CLASSES.light
-      : savedThemeClass;
+    const initialThemeClass = savedThemeClass;
 
     // Синхронизируем реактивное состояние с сохраненным классом темы.
     isDarkTheme.value = getIsDarkThemeByClass(initialThemeClass);
@@ -169,10 +173,6 @@ export const useThemeStore = defineStore('theme', () => {
 
     // Применяем восстановленную тему к корневому элементу.
     applyThemeClass(initialThemeClass);
-
-    if (initialThemeClass !== savedThemeClass) {
-      saveThemeClass(initialThemeClass);
-    }
 
     // Помечаем тему как инициализированную, чтобы не выполнять этот код повторно.
     isThemeInitialized.value = true;
@@ -184,17 +184,61 @@ export const useThemeStore = defineStore('theme', () => {
    * @param nextIsDarkTheme - Признак включения темной темы.
    */
   const setTheme = (nextIsDarkTheme: boolean): void => {
-    const shouldUseDarkTheme = nextIsDarkTheme && !isLightThemeOnly();
+    const shouldUseDarkTheme = nextIsDarkTheme;
 
     // Определяем класс темы по новому состоянию переключателя.
     const nextThemeClass = getThemeClassByState(shouldUseDarkTheme);
 
-    // Обновляем общее реактивное состояние темы.
-    isDarkTheme.value = shouldUseDarkTheme;
+    const applyNextTheme = (): void => {
+      isDarkTheme.value = shouldUseDarkTheme;
+      applyThemeClass(nextThemeClass);
+    };
+    const root = document.documentElement;
+    const hasChanged = !root.classList.contains(nextThemeClass);
+    const sequence = ++themeSwitchSequence;
+    activeThemeTransition?.skipTransition();
+    activeThemeTransition = undefined;
+    root.classList.remove('theme-snapshot');
+    if (themeTransitionTimer) clearTimeout(themeTransitionTimer);
+    themeTransitionTimer = undefined;
+    root.classList.remove('theme-switching');
+    const reduceMotion = window.matchMedia(
+      '(prefers-reduced-motion: reduce)'
+    ).matches;
+    // Нативные панели начинают тот же 200 мс переход сразу по нажатию.
     syncNativeLaunchTheme(shouldUseDarkTheme);
 
-    // Применяем выбранную тему к корневому html-элементу.
-    applyThemeClass(nextThemeClass);
+    if (!hasChanged || reduceMotion) {
+      applyNextTheme();
+    } else if (typeof document.startViewTransition === 'function') {
+      const transition = document.startViewTransition(async () => {
+        if (sequence !== themeSwitchSequence) return;
+        root.classList.add('theme-snapshot');
+        applyNextTheme();
+        await nextTick();
+      });
+      activeThemeTransition = transition;
+      void transition.ready.then(
+        () => {
+          if (sequence !== themeSwitchSequence) return;
+          root.classList.remove('theme-snapshot');
+        },
+        () => {
+          if (sequence !== themeSwitchSequence) return;
+          root.classList.remove('theme-snapshot');
+          applyNextTheme();
+        }
+      );
+      const clearTransition = (): void => {
+        if (sequence !== themeSwitchSequence) return;
+        root.classList.remove('theme-snapshot');
+        activeThemeTransition = undefined;
+      };
+      void transition.finished.then(clearTransition, clearTransition);
+    } else {
+      beginThemeTransition();
+      applyNextTheme();
+    }
 
     // Сохраняем выбор пользователя для следующей загрузки приложения.
     saveThemeClass(nextThemeClass);

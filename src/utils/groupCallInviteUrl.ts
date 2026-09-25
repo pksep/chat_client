@@ -1,6 +1,6 @@
 const CALL_INVITE_PARAM = 'callInvite';
 const CALL_ROOM_PARAM = 'callRoom';
-const TRUSTED_NATIVE_CALL_INVITE_ORIGINS = new Set(['https://chat.pksep.ru']);
+const TRUSTED_CALL_INVITE_ORIGINS = new Set(['https://chat.pksep.ru']);
 
 interface GroupCallInviteParams {
   inviteToken: string;
@@ -38,6 +38,7 @@ export const parseGroupCallInviteUrl = (
   value: string | URL,
   options?: {
     allowTrustedNativeOrigin?: boolean;
+    allowTrustedOrigin?: boolean;
     currentOrigin?: string | null;
   }
 ): GroupCallInviteParams | null => {
@@ -56,17 +57,14 @@ export const parseGroupCallInviteUrl = (
 
     const currentOrigin = resolveCurrentOrigin(options?.currentOrigin);
 
-    const allowTrustedNativeOrigin =
-      options?.allowTrustedNativeOrigin ?? isNativeClient();
-    const isTrustedNativeOrigin =
-      allowTrustedNativeOrigin &&
-      TRUSTED_NATIVE_CALL_INVITE_ORIGINS.has(url.origin);
+    const allowTrustedOrigin =
+      options?.allowTrustedOrigin ??
+      options?.allowTrustedNativeOrigin ??
+      isNativeClient();
+    const isTrustedOrigin =
+      allowTrustedOrigin && TRUSTED_CALL_INVITE_ORIGINS.has(url.origin);
 
-    if (
-      currentOrigin &&
-      url.origin !== currentOrigin &&
-      !isTrustedNativeOrigin
-    ) {
+    if (currentOrigin && url.origin !== currentOrigin && !isTrustedOrigin) {
       return null;
     }
 
@@ -91,6 +89,31 @@ export const isGroupCallInviteUrl = (
   value: string | URL,
   options?: {
     allowTrustedNativeOrigin?: boolean;
+    allowTrustedOrigin?: boolean;
     currentOrigin?: string | null;
   }
 ): boolean => Boolean(parseGroupCallInviteUrl(value, options));
+
+export const buildGroupCallInviteAuthorizationUrl = (
+  value: string | URL
+): string => {
+  const currentUrl =
+    value instanceof URL ? new URL(value.toString()) : new URL(value);
+  const authorizationUrl = new URL('/', currentUrl.origin);
+  const invite = parseGroupCallInviteUrl(currentUrl, {
+    currentOrigin: currentUrl.origin
+  });
+
+  if (!invite) {
+    return authorizationUrl.toString();
+  }
+
+  authorizationUrl.searchParams.set(CALL_ROOM_PARAM, invite.roomId);
+  authorizationUrl.searchParams.set(CALL_INVITE_PARAM, invite.inviteToken);
+
+  if (invite.organization) {
+    authorizationUrl.searchParams.set('organization', invite.organization);
+  }
+
+  return authorizationUrl.toString();
+};

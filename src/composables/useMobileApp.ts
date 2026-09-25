@@ -2,6 +2,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { MobilePlatformEnum } from '../components/interfaces/interfaces';
+import { afterStartupPaint } from '../utils/after-startup-paint';
 import {
   RuStoreInstallStatus,
   RuStoreUpdateAvailability,
@@ -13,6 +14,7 @@ import {
   type RuStoreAppUpdateInfo,
   type RuStoreInstallState
 } from '../services/useRuStoreUpdate';
+import { markLiveKitPageReloadIntent } from '../services/live-kit-page-reload-intent';
 
 const RUSTORE_APP_URL = 'https://www.rustore.ru/catalog/app/sep.pksep.app';
 const WEB_UPDATE_INFO_URL = '/web-update.json';
@@ -325,6 +327,9 @@ export function useMobileApp() {
       }
     }
 
+    await afterStartupPaint();
+    if (generation !== webUpdateGeneration || activeConsumers === 0) return;
+
     isCheckingForUpdates.value = true;
 
     try {
@@ -362,9 +367,6 @@ export function useMobileApp() {
   const handleUpdateClick = async () => {
     if (!isRuStoreUpdateSupported()) {
       persistCurrentWebUpdateVersion();
-      const { markLiveKitPageReloadIntent } = await import(
-        '../services/useLiveKit'
-      );
       markLiveKitPageReloadIntent();
       window.location.reload();
       return;

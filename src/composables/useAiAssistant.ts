@@ -25,6 +25,7 @@ import {
 import { getChatHistorySnapshot, saveMessages } from '../services/useChatDb';
 import { getAiErrorMessage } from '../services/aiErrorMessages';
 import { showErrorNotification } from './useNotifications';
+import { afterStartupPaint } from '../utils/after-startup-paint';
 
 export type AiAssistantTab = 'chats' | 'tasks';
 export type AiAssistantView = 'chat' | 'tasks';
@@ -38,6 +39,7 @@ export interface AiAssistantMessage {
   role: AiMessageRole;
   text: string;
   time: string;
+  timestamp?: number;
   showApproval?: boolean;
   approvalState?: 'approved' | 'rejected' | null;
   pinned?: boolean;
@@ -389,6 +391,7 @@ const syncSession = (sessionId: string, runtime: MastraRuntime): void => {
           ? actionTaskSummary(message.actionTask)
           : getVisibleMessageContent(message.content),
         time: formatTime(message.timestamp),
+        timestamp: message.timestamp,
         showApproval:
           (Boolean(pendingApproval) &&
             index === lastSourceIndex &&
@@ -960,15 +963,17 @@ const syncAutomationResult = async (
   session.time = formatTime(result.completedAt);
 };
 
-/** Запускает лёгкую синхронизацию при открытии приложения, возврате на вкладку и раз в минуту. */
+/** Запускает синхронизацию после первого кадра, при возврате на вкладку и раз в минуту. */
 const startAutomationPolling = (): void => {
   if (automationPollingStarted || typeof window === 'undefined') return;
   automationPollingStarted = true;
-  void refreshAutomations();
-  window.addEventListener('focus', () => void refreshAutomations());
-  window.setInterval(() => {
-    if (document.visibilityState === 'visible') void refreshAutomations();
-  }, 60_000);
+  void afterStartupPaint().then(() => {
+    void refreshAutomations();
+    window.addEventListener('focus', () => void refreshAutomations());
+    window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshAutomations();
+    }, 60_000);
+  });
 };
 
 /** Открывает чат, в котором агент выполнял выбранную задачу. */

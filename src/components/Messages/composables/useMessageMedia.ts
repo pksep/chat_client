@@ -4,6 +4,8 @@ import {
   getCachedMediaObjectUrl
 } from '../../../services/useMediaBlobCache';
 import type { IMedia } from '../../interfaces/interfaces';
+import { buildBrowserCompatibleImageUrl } from '../../../utils/media-format';
+import { buildMediaObjectUrl } from '../../../utils/media-url';
 
 export function useMessageMedia() {
   const config = getConfig();
@@ -80,11 +82,26 @@ export function useMessageMedia() {
       return EMPTY_MEDIA_SRC;
     }
 
-    if (mediaPath.endsWith('.gif')) {
-      return `${config.CHAT_PATH_TO_FILE_CDN}/${mediaPath}`;
+    const sourceUrl = buildMediaObjectUrl(
+      config.CHAT_PATH_TO_FILE_CDN,
+      mediaPath
+    );
+    return isThumb ? buildBrowserCompatibleImageUrl(sourceUrl) : sourceUrl;
+  };
+
+  const getSliderMediaPath = (media: IMedia) => {
+    const sliderPath = buildBrowserCompatibleImageUrl(
+      getFullMediaPath(media, false)
+    );
+    const pdfDetectionValue = media.originName || media.path || '';
+
+    if (!/\.pdf(?:[?#]|$)/i.test(pdfDetectionValue)) {
+      return sliderPath;
     }
 
-    return `${config.CHAT_PATH_TO_FILE_CDN}/${mediaPath}`;
+    // YUI currently detects PDF URLs only when the full value ends in `.pdf`.
+    // Keep cache-busting query parameters and add a request-safe fragment.
+    return `${sliderPath.split('#')[0]}#document.pdf`;
   };
 
   const isSliderContentUrl = (
@@ -94,8 +111,8 @@ export function useMessageMedia() {
     const cleanUrl = fileUrl?.split(/[?#]/)[0] || '';
     const extensions =
       options?.includePdf === false
-        ? 'jpg|jpeg|png|webp|svg|mp4|mp3|avif|gif|bmp|tiff|ico|webm|mkv|avi|qt|m4v'
-        : 'jpg|jpeg|png|webp|svg|mp4|mp3|avif|pdf|gif|bmp|tiff|ico|webm|mkv|avi|qt|m4v';
+        ? 'jpg|jpeg|png|webp|svg|mp4|mp3|avif|heic|heif|gif|bmp|tiff|ico|webm|mkv|avi|mov|qt|m4v'
+        : 'jpg|jpeg|png|webp|svg|mp4|mp3|avif|heic|heif|pdf|gif|bmp|tiff|ico|webm|mkv|avi|mov|qt|m4v';
 
     return new RegExp(`\\.(${extensions})$`, 'i').test(cleanUrl);
   };
@@ -113,7 +130,9 @@ export function useMessageMedia() {
       return undefined;
     }
 
-    return `${config.CHAT_PATH_TO_FILE_CDN}/${media.thumbnailPath}`;
+    return buildBrowserCompatibleImageUrl(
+      buildMediaObjectUrl(config.CHAT_PATH_TO_FILE_CDN, media.thumbnailPath)
+    );
   };
 
   const canDragMedia = (media: IMedia) =>
@@ -129,7 +148,7 @@ export function useMessageMedia() {
 
     const originalUrl = getOriginalMediaUrl(media);
     const fallbackUrl = media.path
-      ? `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`
+      ? buildMediaObjectUrl(config.CHAT_PATH_TO_FILE_CDN, media.path)
       : originalUrl;
 
     event.dataTransfer.effectAllowed = 'copy';
@@ -140,6 +159,7 @@ export function useMessageMedia() {
 
   return {
     getFullMediaPath,
+    getSliderMediaPath,
     isSliderContentUrl,
     handleDragStart,
     canDragMedia,

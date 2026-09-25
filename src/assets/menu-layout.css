@@ -69,6 +69,18 @@
   .menu:not(.menu--collapse) .menu-profile__body {
     padding-left: var(--menu-section-content-inset);
   }
+
+  .menu .contact-list__li {
+    margin: 0;
+  }
+
+  .menu
+    .contact-list__li:has(+ .contact-list__li):not(
+      .contact-list__skeleton-row
+    )::after {
+    bottom: 0;
+    height: 0.35px;
+  }
 }
 
 @media screen and (width <= 768px) {
@@ -76,7 +88,7 @@
     --menu-section-heading-height: 40px;
     --menu-section-heading-inset: 16px;
     --menu-section-content-inset: 0px;
-    --menu-section-safe-top: calc(20px + env(safe-area-inset-top, 0px));
+    --menu-section-safe-top: calc(10px + env(safe-area-inset-top, 0px));
   }
 
   .mobile-list-container .menu-section-heading {
@@ -117,6 +129,10 @@
     row-gap: 0;
   }
 
+  .mobile-list-container .contact-list__li {
+    margin: 0;
+  }
+
   .mobile-list-container .contact-list__item {
     min-height: 80px;
   }
@@ -129,7 +145,7 @@
     .contact-list__li:not(.contact-list__skeleton-row)::after {
     content: '';
     position: absolute;
-    right: 0;
+    right: 16px;
     bottom: 0;
     left: 16px;
     height: 0.35px;
