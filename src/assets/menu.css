@@ -221,7 +221,6 @@
   top: 20px;
   left: calc(var(--size-left-menu) - 12px);
   z-index: 9;
-  transition: all 0.2s ease;
 }
 
 .menu.menu--collapse .menu-bottom-nav {

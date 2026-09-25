@@ -70,21 +70,16 @@
     padding-left: var(--menu-section-content-inset);
   }
 
-  .menu:not(.menu--collapse) .contact-list__li {
+  .menu .contact-list__li {
     margin: 0;
   }
 
-  .menu:not(.menu--collapse)
+  .menu
     .contact-list__li:has(+ .contact-list__li):not(
       .contact-list__skeleton-row
     )::after {
     bottom: 0;
     height: 0.35px;
-  }
-
-  .menu:not(.menu--collapse)
-    .contact-list__li:has(> .contact-list__item:hover)::after {
-    content: none;
   }
 }
 
@@ -93,7 +88,7 @@
     --menu-section-heading-height: 40px;
     --menu-section-heading-inset: 16px;
     --menu-section-content-inset: 0px;
-    --menu-section-safe-top: calc(20px + env(safe-area-inset-top, 0px));
+    --menu-section-safe-top: calc(10px + env(safe-area-inset-top, 0px));
   }
 
   .mobile-list-container .menu-section-heading {
@@ -156,10 +151,5 @@
     height: 0.35px;
     background: var(--border-table);
     pointer-events: none;
-  }
-
-  .mobile-list-container
-    .contact-list__li:has(> .contact-list__item:hover)::after {
-    content: none;
   }
 }

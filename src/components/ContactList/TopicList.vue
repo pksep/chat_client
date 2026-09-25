@@ -311,6 +311,19 @@
 
   <Teleport to="body">
     <div
+      v-if="isMobile && hasOpenTopicContextMenu"
+      class="contact-list__context-menu-dismiss-layer"
+      aria-hidden="true"
+      @touchstart.stop
+      @pointerdown.stop
+      @pointerup.stop
+      @click.stop.prevent="dismissTopicContextMenu"
+      @contextmenu.stop.prevent="dismissTopicContextMenu"
+    ></div>
+  </Teleport>
+
+  <Teleport to="body">
+    <div
       v-if="compactHoverTopic"
       ref="compactPopoverRef"
       :class="[
@@ -470,6 +483,10 @@ const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
+
+const hasOpenTopicContextMenu = computed(() =>
+  Object.values(isOpen.value).some(Boolean)
+);
 
 const authedUser = computed(() => getAuthUser());
 const isTopicFavorite = (topic?: ITopic | null): boolean =>
@@ -767,7 +784,7 @@ const syncTopicCacheObserver = async (): Promise<void> => {
 
 const isTopicActive = (topic: ITopic): boolean =>
   topic.id === pendingActiveTopicId.value ||
-  !!isOpen[topic.id] ||
+  !!isOpen.value[topic.id] ||
   props.selectedTopicIds.has(topic.id) ||
   (!isMobile.value && topic.id === props.selectedTopicId);
 
@@ -1068,6 +1085,14 @@ const syncTopicOpenSideEffects = (
 
 const clearTopicPointerDownContext = (): void => {
   topicPointerDownContext = null;
+};
+
+const dismissTopicContextMenu = (): void => {
+  clearTopicPointerDownContext();
+  topicPressPointerId = null;
+  topicPressMoved = false;
+  pendingActiveTopicId.value = null;
+  closeActivePopover();
 };
 
 const resolveTopicClickTarget = (

@@ -83,6 +83,7 @@ main.authorization-screen:has(.authorization-screen__toolbar) {
 
   text-align: left;
   margin: 20px 0 0;
+  color: var(--text-primary);
   font-size: 24px;
   font-weight: 400;
 }

@@ -10,7 +10,7 @@ const config: CapacitorConfig = {
     EdgeToEdge: {
       backgroundColor: '#f8f9fd',
       navigationBarColor: '#f8f9fd',
-      statusBarColor: '#f8f9fd'
+      statusBarColor: '#ffffff'
     }
   }
 };

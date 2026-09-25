@@ -39,7 +39,7 @@
         >
           <div
             @click="handleFileClick(media, i)"
-            :draggable="canDragMedia(media)"
+            :draggable="!props.isMobile && canDragMedia(media)"
             @dragstart.stop="handleDragStart($event, media)"
             @contextmenu.prevent
             class="message-content__file"

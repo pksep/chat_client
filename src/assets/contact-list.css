@@ -64,6 +64,17 @@
   bottom: 0;
 }
 
+.contact-list__li:has(
+    + .contact-list__li
+      > .contact-list__item:is(
+        .contact-list__item--active,
+        .contact-list__item--call-modal-hover,
+        :active
+      )
+  )::after {
+  content: none;
+}
+
 .contact-list__item {
   --size-avatar: 25px;
   display: flex;
@@ -83,11 +94,17 @@
   background-color: var(--action-secondary-pressed-bg);
 }
 
+.contact-list__context-menu-dismiss-layer {
+  position: fixed;
+  z-index: 999;
+  inset: 0;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .contact-list__item:not(.contact-list__item--active):not(
       .contact-list__item--call-modal-hover
     ):not(:active):hover {
-    background-color: var(--action-secondary-hover-bg);
+    background-color: var(--action-secondary-pressed-bg);
   }
 
   .contact-list__li:has(> .contact-list__item:hover)::before,
@@ -108,6 +125,12 @@
 
   .contact-list__li:has(> .contact-list__item:hover)::after {
     bottom: 0;
+  }
+
+  .contact-list__li:has(
+      + .contact-list__li > .contact-list__item:hover
+    )::after {
+    content: none;
   }
 }
 
@@ -153,7 +176,7 @@
       .contact-list__compact-popover--active
     ):hover
     .contact-list__block--wrapper {
-    background: var(--action-secondary-hover-bg);
+    background: var(--action-secondary-pressed-bg);
   }
 }
 

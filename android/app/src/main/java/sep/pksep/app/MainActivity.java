@@ -168,6 +168,13 @@ public class MainActivity extends BridgeActivity {
 
         markStartupBenchmark("activity-prepared");
         super.onCreate(savedInstanceState);
+        WebView systemBarsWebView = bridge == null ? null : bridge.getWebView();
+        LaunchAppearance.applySystemBars(this, systemBarsWebView);
+        if (systemBarsWebView != null) {
+            systemBarsWebView.post(
+                () -> LaunchAppearance.applySystemBars(this, systemBarsWebView)
+            );
+        }
         requestMissingStartupRuntimePermissions();
         if (BuildConfig.CHAT_STARTUP_BENCHMARK) {
             WebView.setWebContentsDebuggingEnabled(true);
@@ -1100,17 +1107,24 @@ public class MainActivity extends BridgeActivity {
 
     public void setLaunchDarkTheme(boolean isDarkTheme) {
         int previousColor = LaunchAppearance.backgroundColor(this);
+        int previousStatusBarColor = LaunchAppearance.statusBarColor(this);
         LaunchAppearance.setDark(this, isDarkTheme);
         runOnUiThread(() -> {
             int fromColor = themeColorAnimator != null &&
                 themeColorAnimator.isRunning()
                 ? (int) themeColorAnimator.getAnimatedValue()
                 : previousColor;
+            int fromStatusBarColor = themeColorAnimator != null &&
+                themeColorAnimator.isRunning()
+                ? getWindow().getStatusBarColor()
+                : previousStatusBarColor;
             if (themeColorAnimator != null) themeColorAnimator.cancel();
             themeColorAnimator = LaunchAppearance.animateSystemBars(
                 this,
                 fromColor,
                 LaunchAppearance.backgroundColor(this),
+                fromStatusBarColor,
+                LaunchAppearance.statusBarColor(this),
                 bridge == null ? null : bridge.getWebView()
             );
         });
