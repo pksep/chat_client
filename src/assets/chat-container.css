@@ -334,6 +334,10 @@ button.button-yui-kit.red-context-button {
     --mobile-pinned-messages-offset: var(--mobile-header-height);
   }
 
+  .chat-container:has(.pinned-messages) .chat__header {
+    align-self: stretch;
+  }
+
   .chat-container:has(.chat__header-active-call) {
     --mobile-pinned-messages-offset: calc(var(--mobile-header-height) + var(--mobile-active-call-height));
     --header-height: calc(var(--mobile-header-height) + var(--mobile-active-call-height));

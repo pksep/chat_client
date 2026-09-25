@@ -49,6 +49,10 @@ defineOptions({
     'avatar description';
 }
 
+.favorite-topic-profile:not(:has(.user-profile__ex)) {
+  grid-template-areas: 'avatar title';
+}
+
 .favorite-topic-profile .user-profile__title {
   margin-bottom: 0;
 }
