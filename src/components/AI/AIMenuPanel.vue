@@ -291,11 +291,7 @@
                 aria-hidden="true"
               >
                 <Icon
-                  :name="
-                    task.enabled
-                      ? IconNameEnum.play
-                      : IconNameEnum.pause
-                  "
+                  :name="task.enabled ? IconNameEnum.play : IconNameEnum.pause"
                   :width="16"
                   :height="16"
                 />
@@ -391,9 +387,7 @@
       >
         <Icon
           class="ai-menu-panel__context-state"
-          :name="
-            task.enabled ? IconNameEnum.pause : IconNameEnum.play
-          "
+          :name="task.enabled ? IconNameEnum.pause : IconNameEnum.play"
           :width="16"
           :height="16"
         />

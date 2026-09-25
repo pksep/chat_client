@@ -114,9 +114,7 @@ const getStoredNativePushTokens = (): string[] =>
   [
     localStorage.getItem(FIREBASE_PUSH_TOKEN_STORAGE_KEY),
     localStorage.getItem(RUSTORE_PUSH_TOKEN_STORAGE_KEY)
-  ].filter(
-    (token): token is string => Boolean(token)
-  );
+  ].filter((token): token is string => Boolean(token));
 
 const isRuStorePushPlatform = (): boolean =>
   Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
