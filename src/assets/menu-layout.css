@@ -140,4 +140,9 @@
     background: var(--border-table);
     pointer-events: none;
   }
+
+  .mobile-list-container
+    .contact-list__li:has(> .contact-list__item:hover)::after {
+    content: none;
+  }
 }
