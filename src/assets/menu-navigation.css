@@ -1059,6 +1059,13 @@ dialog.menu-profile__wallpaper-modal > .modal-yui-kit__modal-content {
     color: var(--white);
   }
 
+  .mobile-list-container
+    > .menu-bottom-nav
+    .menu-bottom-nav__button--active
+    .menu-bottom-nav__icon-shell {
+    color: var(--black);
+  }
+
   .menu-profile {
     padding: 16px;
     overflow-y: auto;
