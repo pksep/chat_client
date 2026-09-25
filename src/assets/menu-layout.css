@@ -69,6 +69,23 @@
   .menu:not(.menu--collapse) .menu-profile__body {
     padding-left: var(--menu-section-content-inset);
   }
+
+  .menu:not(.menu--collapse) .contact-list__li {
+    margin: 0;
+  }
+
+  .menu:not(.menu--collapse)
+    .contact-list__li:has(+ .contact-list__li):not(
+      .contact-list__skeleton-row
+    )::after {
+    bottom: 0;
+    height: 0.35px;
+  }
+
+  .menu:not(.menu--collapse)
+    .contact-list__li:has(> .contact-list__item:hover)::after {
+    content: none;
+  }
 }
 
 @media screen and (width <= 768px) {
