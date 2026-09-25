@@ -76,11 +76,10 @@ public class MainActivity extends BridgeActivity {
         "webview_cache_apk_fingerprint";
     private static final String PREF_WEBVIEW_CACHE_VERSION_CODE =
         "webview_cache_version_code";
-    private static final String LAUNCH_APPEARANCE_PREFS = "launch_appearance";
-    private static final String PREF_LAUNCH_DARK_THEME = "dark_theme";
     private static final int LAUNCH_BACKGROUND_LIGHT_COLOR = 0xFFF8F9FD;
     private static final int LAUNCH_BACKGROUND_DARK_COLOR = 0xFF212531;
     private static final long LAUNCH_SPLASH_FALLBACK_TIMEOUT_MS = 6000L;
+    private android.animation.ValueAnimator themeColorAnimator;
     private static final long STARTUP_OVERLAY_FALLBACK_TIMEOUT_MS = 30000L;
     private static final int STARTUP_RUNTIME_PERMISSIONS_REQUEST_CODE = 4101;
     private boolean customPluginsRegistered = false;
@@ -137,12 +136,19 @@ public class MainActivity extends BridgeActivity {
         if (!launchedFromIncomingCall && !preparedNativeLaunch) {
             ChatStartupHistory.start(this, launchedFromChatNotification ? getIntent().getStringExtra(EXTRA_TOPIC_ID) : null);
         }
-        if (preparedNativeLaunch) setTheme(R.style.AppTheme_PreparedMain);
+        if (preparedNativeLaunch) {
+            setTheme(isDarkLaunchTheme()
+                ? R.style.AppTheme_PreparedMainDark
+                : R.style.AppTheme_PreparedMain);
+        } else if (isDarkLaunchTheme()) {
+            setTheme(R.style.AppTheme_NoActionBarLaunchDark);
+        }
         SplashScreen launchSplash = preparedNativeLaunch
             ? null
             : SplashScreen.installSplashScreen(this);
         configureLaunchSplash(launchSplash);
         if (!preparedNativeLaunch) applyLaunchBackground();
+        LaunchAppearance.applySystemBars(this);
         if (!launchedFromIncomingCall &&
             shouldClearWebViewCacheForCurrentVersion()) {
             markStartupBenchmark("asset-cache-cleanup-start");
@@ -202,7 +208,14 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    public void onStop() {
+        super.onStop();
+        LaunchAppearance.finishLauncherIconUpdate(this);
+    }
+
+    @Override
     public void onDestroy() {
+        if (themeColorAnimator != null) themeColorAnimator.cancel();
         activityCreated = false;
         super.onDestroy();
     }
@@ -1085,15 +1098,26 @@ public class MainActivity extends BridgeActivity {
         webView.setBackgroundColor(getLaunchBackgroundColor());
     }
 
-    public void setLaunchDarkTheme(boolean ignoredIsDarkTheme) {
-        getSharedPreferences(LAUNCH_APPEARANCE_PREFS, MODE_PRIVATE)
-            .edit()
-            .putBoolean(PREF_LAUNCH_DARK_THEME, false)
-            .apply();
+    public void setLaunchDarkTheme(boolean isDarkTheme) {
+        int previousColor = LaunchAppearance.backgroundColor(this);
+        LaunchAppearance.setDark(this, isDarkTheme);
+        runOnUiThread(() -> {
+            int fromColor = themeColorAnimator != null &&
+                themeColorAnimator.isRunning()
+                ? (int) themeColorAnimator.getAnimatedValue()
+                : previousColor;
+            if (themeColorAnimator != null) themeColorAnimator.cancel();
+            themeColorAnimator = LaunchAppearance.animateSystemBars(
+                this,
+                fromColor,
+                LaunchAppearance.backgroundColor(this),
+                bridge == null ? null : bridge.getWebView()
+            );
+        });
     }
 
     private boolean isDarkLaunchTheme() {
-        return false;
+        return LaunchAppearance.isDark(this);
     }
 
     private int getLaunchBackgroundColor() {

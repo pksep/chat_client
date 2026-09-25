@@ -89,8 +89,20 @@ export function useMessageMedia() {
     return isThumb ? buildBrowserCompatibleImageUrl(sourceUrl) : sourceUrl;
   };
 
-  const getSliderMediaPath = (media: IMedia) =>
-    buildBrowserCompatibleImageUrl(getFullMediaPath(media, false));
+  const getSliderMediaPath = (media: IMedia) => {
+    const sliderPath = buildBrowserCompatibleImageUrl(
+      getFullMediaPath(media, false)
+    );
+    const pdfDetectionValue = media.originName || media.path || '';
+
+    if (!/\.pdf(?:[?#]|$)/i.test(pdfDetectionValue)) {
+      return sliderPath;
+    }
+
+    // YUI currently detects PDF URLs only when the full value ends in `.pdf`.
+    // Keep cache-busting query parameters and add a request-safe fragment.
+    return `${sliderPath.split('#')[0]}#document.pdf`;
+  };
 
   const isSliderContentUrl = (
     fileUrl: string,

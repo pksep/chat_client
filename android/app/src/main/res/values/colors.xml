@@ -4,4 +4,6 @@
     <color name="colorPrimaryDark">#d86f7a</color>
     <color name="colorAccent">#2563eb</color>
     <color name="launch_background">#f8f9fd</color>
+    <color name="launch_background_light">#f8f9fd</color>
+    <color name="launch_background_dark">#212531</color>
 </resources>

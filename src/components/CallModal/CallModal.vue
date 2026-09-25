@@ -1507,7 +1507,21 @@ const syncMediaElementStream = (
   if (!stream) return;
 
   void element.play().catch(error => {
+    if (error instanceof DOMException && error.name === 'NotAllowedError') {
+      return;
+    }
+
     console.warn('[LiveKit] Failed to play media element:', error);
+  });
+};
+
+const resumeRemoteAudioPlayback = () => {
+  Object.values(remoteAudioRefs.value).forEach(audio => {
+    if (!audio?.srcObject || !audio.paused) {
+      return;
+    }
+
+    void audio.play().catch(() => undefined);
   });
 };
 
@@ -2552,6 +2566,8 @@ watch(
 );
 
 onMounted(() => {
+  window.addEventListener('pointerdown', resumeRemoteAudioPlayback, true);
+  window.addEventListener('keydown', resumeRemoteAudioPlayback, true);
   window.addEventListener('keydown', handleCallModalKeydown, true);
 
   if (typeof ResizeObserver !== 'undefined') {
@@ -2578,6 +2594,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  window.removeEventListener('pointerdown', resumeRemoteAudioPlayback, true);
+  window.removeEventListener('keydown', resumeRemoteAudioPlayback, true);
   window.removeEventListener('keydown', handleCallModalKeydown, true);
   clearCallBackdropTopicHover();
   remoteVideoResizeObserver?.disconnect();

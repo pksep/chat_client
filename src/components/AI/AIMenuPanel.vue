@@ -291,11 +291,7 @@
                 aria-hidden="true"
               >
                 <Icon
-                  :name="
-                    task.enabled
-                      ? IconNameEnum.planeRightFill
-                      : IconNameEnum.minus
-                  "
+                  :name="task.enabled ? IconNameEnum.play : IconNameEnum.pause"
                   :width="16"
                   :height="16"
                 />
@@ -361,7 +357,17 @@
         </article>
       </template>
 
-      <MenuEmptyState v-else />
+      <MenuEmptyState
+        v-else
+        :text="
+          query.trim()
+            ? 'Ничего не найдено'
+            : activeTab === 'chats'
+              ? 'Здесь будут чаты'
+              : 'Здесь будут задачи'
+        "
+        :hide-icon="!query.trim()"
+      />
     </div>
   </section>
 
@@ -381,9 +387,7 @@
       >
         <Icon
           class="ai-menu-panel__context-state"
-          :name="
-            task.enabled ? IconNameEnum.minus : IconNameEnum.planeRightFill
-          "
+          :name="task.enabled ? IconNameEnum.pause : IconNameEnum.play"
           :width="16"
           :height="16"
         />

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { LaunchStartup } from '../services/launchStartup';
 
@@ -29,6 +29,22 @@ const THEME_COLORS = {
 const THEME_CLASSES: IThemeClasses = {
   dark: 'theme-dark',
   light: 'theme-light'
+};
+const THEME_TRANSITION_DURATION_MS = 200;
+let themeTransitionTimer: ReturnType<typeof setTimeout> | undefined;
+let activeThemeTransition: ViewTransition | undefined;
+let themeSwitchSequence = 0;
+
+const beginThemeTransition = (): void => {
+  const root = document.documentElement;
+  if (themeTransitionTimer) clearTimeout(themeTransitionTimer);
+  root.classList.add('theme-switching');
+  // Сначала применяем transition к текущим цветам, затем меняем класс темы.
+  void root.offsetWidth;
+  themeTransitionTimer = setTimeout(() => {
+    root.classList.remove('theme-switching');
+    themeTransitionTimer = undefined;
+  }, THEME_TRANSITION_DURATION_MS + 50);
 };
 
 const syncNativeLaunchTheme = (isDarkTheme: boolean): void => {
@@ -173,12 +189,56 @@ export const useThemeStore = defineStore('theme', () => {
     // Определяем класс темы по новому состоянию переключателя.
     const nextThemeClass = getThemeClassByState(shouldUseDarkTheme);
 
-    // Обновляем общее реактивное состояние темы.
-    isDarkTheme.value = shouldUseDarkTheme;
+    const applyNextTheme = (): void => {
+      isDarkTheme.value = shouldUseDarkTheme;
+      applyThemeClass(nextThemeClass);
+    };
+    const root = document.documentElement;
+    const hasChanged = !root.classList.contains(nextThemeClass);
+    const sequence = ++themeSwitchSequence;
+    activeThemeTransition?.skipTransition();
+    activeThemeTransition = undefined;
+    root.classList.remove('theme-snapshot');
+    if (themeTransitionTimer) clearTimeout(themeTransitionTimer);
+    themeTransitionTimer = undefined;
+    root.classList.remove('theme-switching');
+    const reduceMotion = window.matchMedia(
+      '(prefers-reduced-motion: reduce)'
+    ).matches;
+    // Нативные панели начинают тот же 200 мс переход сразу по нажатию.
     syncNativeLaunchTheme(shouldUseDarkTheme);
 
-    // Применяем выбранную тему к корневому html-элементу.
-    applyThemeClass(nextThemeClass);
+    if (!hasChanged || reduceMotion) {
+      applyNextTheme();
+    } else if (typeof document.startViewTransition === 'function') {
+      const transition = document.startViewTransition(async () => {
+        if (sequence !== themeSwitchSequence) return;
+        root.classList.add('theme-snapshot');
+        applyNextTheme();
+        await nextTick();
+      });
+      activeThemeTransition = transition;
+      void transition.ready.then(
+        () => {
+          if (sequence !== themeSwitchSequence) return;
+          root.classList.remove('theme-snapshot');
+        },
+        () => {
+          if (sequence !== themeSwitchSequence) return;
+          root.classList.remove('theme-snapshot');
+          applyNextTheme();
+        }
+      );
+      const clearTransition = (): void => {
+        if (sequence !== themeSwitchSequence) return;
+        root.classList.remove('theme-snapshot');
+        activeThemeTransition = undefined;
+      };
+      void transition.finished.then(clearTransition, clearTransition);
+    } else {
+      beginThemeTransition();
+      applyNextTheme();
+    }
 
     // Сохраняем выбор пользователя для следующей загрузки приложения.
     saveThemeClass(nextThemeClass);

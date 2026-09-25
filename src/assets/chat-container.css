@@ -328,7 +328,7 @@ button.button-yui-kit.red-context-button {
 
 @media screen and (width <=768px) {
   .chat-container {
-    --mobile-header-height: 58px;
+    --mobile-header-height: 70px;
     --header-height: var(--mobile-header-height);
     --mobile-active-call-height: 45px;
     --mobile-pinned-messages-offset: var(--mobile-header-height);
