@@ -778,7 +778,7 @@
   min-height: 64px;
   padding: 10px;
   border-radius: 5px;
-  background: var(--action-secondary-pressed-bg);
+  background: var(--table-surface-search);
   border: 1px solid var(--border-hover);
 }
 
@@ -862,7 +862,7 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: var(--surface-overlay);
+  background: var(--surface-input-primary);
   color: var(--action-primary-bg);
 }
 
@@ -1043,27 +1043,6 @@ dialog.menu-profile__wallpaper-modal > .modal-yui-kit__modal-content {
   .mobile-list-container:has(.menu-profile__status-input:focus)
     > .menu-bottom-nav {
     display: none;
-  }
-
-  .mobile-list-container>.menu-bottom-nav .menu-bottom-nav__button--active .menu-bottom-nav__icon-shell,
-  .mobile-list-container>.menu-bottom-nav .menu-bottom-nav__button--active .menu-bottom-nav__avatar-shell {}
-  .mobile-list-container
-    > .menu-bottom-nav
-    .menu-bottom-nav__button--active
-    .menu-bottom-nav__icon-shell,
-  .mobile-list-container
-    > .menu-bottom-nav
-    .menu-bottom-nav__button--active
-    .menu-bottom-nav__avatar-shell {
-    background: var(--border-hover);
-    color: var(--white);
-  }
-
-  .mobile-list-container
-    > .menu-bottom-nav
-    .menu-bottom-nav__button--active
-    .menu-bottom-nav__icon-shell {
-    color: var(--black);
   }
 
   .menu-profile {
