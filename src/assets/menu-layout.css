@@ -117,6 +117,10 @@
     row-gap: 0;
   }
 
+  .mobile-list-container .contact-list__li {
+    margin: 0;
+  }
+
   .mobile-list-container .contact-list__item {
     min-height: 80px;
   }
