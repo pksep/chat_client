@@ -6,4 +6,6 @@
     <color name="launch_background">#f8f9fd</color>
     <color name="launch_background_light">#f8f9fd</color>
     <color name="launch_background_dark">#212531</color>
+    <color name="status_bar_surface_light">#ffffff</color>
+    <color name="status_bar_surface_dark">#262a38</color>
 </resources>

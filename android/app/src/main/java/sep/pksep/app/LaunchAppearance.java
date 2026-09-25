@@ -25,6 +25,8 @@ final class LaunchAppearance {
     private static final String DARK_THEME = "dark_theme";
     private static final int LIGHT_BACKGROUND = 0xFFF8F9FD;
     private static final int DARK_BACKGROUND = 0xFF212531;
+    private static final int LIGHT_STATUS_BAR = 0xFFFFFFFF;
+    private static final int DARK_STATUS_BAR = 0xFF262A38;
     private static final long TRANSITION_DURATION_MS = 200L;
 
     private LaunchAppearance() {}
@@ -36,6 +38,10 @@ final class LaunchAppearance {
 
     static int backgroundColor(Context context) {
         return isDark(context) ? DARK_BACKGROUND : LIGHT_BACKGROUND;
+    }
+
+    static int statusBarColor(Context context) {
+        return isDark(context) ? DARK_STATUS_BAR : LIGHT_STATUS_BAR;
     }
 
     static void setDark(Context context, boolean dark) {
@@ -50,52 +56,100 @@ final class LaunchAppearance {
     }
 
     static void applySystemBars(Activity activity) {
-        paintSystemBars(activity, backgroundColor(activity), null);
+        applySystemBars(activity, null);
+    }
+
+    static void applySystemBars(Activity activity, View webView) {
+        paintSystemBars(
+            activity,
+            backgroundColor(activity),
+            statusBarColor(activity),
+            webView
+        );
     }
 
     static ValueAnimator animateSystemBars(
         Activity activity,
-        int fromColor,
-        int toColor,
+        int fromBackgroundColor,
+        int toBackgroundColor,
+        int fromStatusBarColor,
+        int toStatusBarColor,
         View webView
     ) {
-        if (fromColor == toColor) {
-            paintSystemBars(activity, toColor, webView);
+        if (
+            fromBackgroundColor == toBackgroundColor &&
+            fromStatusBarColor == toStatusBarColor
+        ) {
+            paintSystemBars(
+                activity,
+                toBackgroundColor,
+                toStatusBarColor,
+                webView
+            );
             return null;
         }
-        ValueAnimator animator = ValueAnimator.ofArgb(fromColor, toColor);
+        ValueAnimator animator = ValueAnimator.ofArgb(
+            fromBackgroundColor,
+            toBackgroundColor
+        );
         animator.setDuration(TRANSITION_DURATION_MS);
         animator.setInterpolator(new PathInterpolator(0.25f, 0.1f, 0.25f, 1f));
-        animator.addUpdateListener(animation -> paintSystemBars(
-            activity,
-            (int) animation.getAnimatedValue(),
-            webView
-        ));
+        animator.addUpdateListener(animation -> {
+            int statusBarColor = ColorUtils.blendARGB(
+                fromStatusBarColor,
+                toStatusBarColor,
+                animation.getAnimatedFraction()
+            );
+            paintSystemBars(
+                activity,
+                (int) animation.getAnimatedValue(),
+                statusBarColor,
+                webView
+            );
+        });
         animator.start();
         return animator;
     }
 
-    private static void paintSystemBars(Activity activity, int color, View webView) {
-        activity.getWindow().setBackgroundDrawable(new ColorDrawable(color));
-        activity.getWindow().getDecorView().setBackgroundColor(color);
+    private static void paintSystemBars(
+        Activity activity,
+        int backgroundColor,
+        int statusBarColor,
+        View webView
+    ) {
+        activity.getWindow().setBackgroundDrawable(
+            new ColorDrawable(backgroundColor)
+        );
+        activity.getWindow().getDecorView().setBackgroundColor(backgroundColor);
         View content = activity.findViewById(android.R.id.content);
-        if (content != null) content.setBackgroundColor(color);
+        if (content != null) content.setBackgroundColor(backgroundColor);
         if (webView != null) {
-            webView.setBackgroundColor(color);
-            paintEdgeToEdgeOverlays(webView, color);
+            webView.setBackgroundColor(backgroundColor);
+            paintEdgeToEdgeOverlays(
+                webView,
+                statusBarColor,
+                backgroundColor
+            );
         }
-        activity.getWindow().setStatusBarColor(color);
-        activity.getWindow().setNavigationBarColor(color);
+        activity.getWindow().setStatusBarColor(statusBarColor);
+        activity.getWindow().setNavigationBarColor(backgroundColor);
         WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(
             activity.getWindow(),
             activity.getWindow().getDecorView()
         );
-        boolean lightBars = ColorUtils.calculateLuminance(color) > 0.5d;
-        controller.setAppearanceLightStatusBars(lightBars);
-        controller.setAppearanceLightNavigationBars(lightBars);
+        controller.setAppearanceLightStatusBars(
+            ColorUtils.calculateLuminance(statusBarColor) > 0.5d
+        );
+        controller.setAppearanceLightNavigationBars(
+            ColorUtils.calculateLuminance(backgroundColor) > 0.5d
+        );
     }
 
-    private static void paintEdgeToEdgeOverlays(View webView, int color) {
+    private static void paintEdgeToEdgeOverlays(
+        View webView,
+        int statusBarColor,
+        int navigationBarColor
+    ) {
         if (!(webView.getParent() instanceof ViewGroup)) return;
         WindowInsetsCompat windowInsets = ViewCompat.getRootWindowInsets(webView);
         if (windowInsets == null) return;
@@ -117,8 +171,9 @@ final class LaunchAppearance {
             boolean isNavigationBarOverlay = navigationBars.bottom > 0 &&
                 child.getBottom() == parent.getHeight() &&
                 child.getHeight() == navigationBars.bottom;
-            if (isStatusBarOverlay || isNavigationBarOverlay) {
-                child.setBackgroundColor(color);
+            if (isStatusBarOverlay) child.setBackgroundColor(statusBarColor);
+            if (isNavigationBarOverlay) {
+                child.setBackgroundColor(navigationBarColor);
             }
         }
     }

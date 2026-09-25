@@ -26,5 +26,5 @@
 
   document
     .querySelector('meta[name="theme-color"]')
-    ?.setAttribute('content', isDarkTheme ? '#212531' : '#f8f9fd');
+    ?.setAttribute('content', isDarkTheme ? '#262a38' : '#ffffff');
 })();

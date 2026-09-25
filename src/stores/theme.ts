@@ -23,8 +23,8 @@ export interface IThemeClasses {
 
 const THEME_STORAGE_KEY = 'erp-theme-color-scheme';
 const THEME_COLORS = {
-  dark: '#212531',
-  light: '#f8f9fd'
+  dark: '#262a38',
+  light: '#ffffff'
 };
 const THEME_CLASSES: IThemeClasses = {
   dark: 'theme-dark',
