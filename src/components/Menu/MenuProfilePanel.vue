@@ -1599,8 +1599,8 @@ const clearStatus = async (): Promise<void> => {
   await saveStatus(null);
 };
 
-const runLogoutCleanup = (): void => {
-  void cleanupPushNotificationsOnLogout().catch(error => {
+const runLogoutCleanup = async (): Promise<void> => {
+  await cleanupPushNotificationsOnLogout().catch(error => {
     console.warn('Failed to cleanup push notifications during logout:', error);
   });
 
@@ -1612,14 +1612,14 @@ const runLogoutCleanup = (): void => {
   });
 };
 
-const handleLogout = (): void => {
-  runLogoutCleanup();
+const handleLogout = async (): Promise<void> => {
+  await runLogoutCleanup();
   useLogout();
   redirectToAuthorization();
 };
 
 const confirmLogout = (): void => {
   closeLogoutConfirmModal();
-  handleLogout();
+  void handleLogout();
 };
 </script>

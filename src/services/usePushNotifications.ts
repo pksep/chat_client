@@ -848,7 +848,6 @@ export const initPushNotifications = async () => {
   };
 
   await api.post('/push/subscribe', {
-    userId,
     subscription: subscriptionPayload,
     browser
   });
