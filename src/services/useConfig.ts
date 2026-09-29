@@ -12,7 +12,8 @@ const CONFIG_KEYS: Array<keyof IChatContainerConfig> = [
   'CHAT_LIVEKIT_URL',
   'CHAT_URL',
   'CHAT_BOT_GATEWAY',
-  'CHAT_CALL_TOPIC_AUTO_PROMPT_ENABLED'
+  'CHAT_CALL_TOPIC_AUTO_PROMPT_ENABLED',
+  'CHAT_MULTIPART_UPLOAD_CONCURRENCY'
 ];
 
 export const areChatConfigsEqual = (

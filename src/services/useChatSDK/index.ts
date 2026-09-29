@@ -340,10 +340,23 @@ export class ChatSDK {
               return;
             }
 
+            let code: string | undefined;
+
+            try {
+              const response = JSON.parse(xhr.responseText) as {
+                code?: unknown;
+              };
+              code =
+                typeof response.code === 'string' ? response.code : undefined;
+            } catch {
+              // Some proxies return a non-JSON error page. The status is still
+              // enough for the regular, bounded retry policy.
+            }
+
             reject(
               Object.assign(
                 new Error(`Failed to upload multipart part: ${xhr.status}`),
-                { status: xhr.status }
+                { status: xhr.status, code }
               )
             );
           };
