@@ -49,6 +49,7 @@ export class ManagerRequestError extends Error {
 const inquiries = ref<ManagerInquiry[]>([]);
 const managers = ref<ManagerOption[]>([]);
 const allowed = ref(false);
+const resolved = ref(false);
 const loading = ref(false);
 let subscribers = 0;
 let refreshPromise: Promise<void> | null = null;
@@ -165,6 +166,7 @@ export async function refreshManagerInquiries(): Promise<void> {
       const access = await managerRequest<{ allowed: boolean }>('access');
       if (currentGeneration !== generation) return;
       allowed.value = access.allowed;
+      resolved.value = true;
       if (!access.allowed) {
         clearManagerRoutes();
         inquiries.value = [];
@@ -194,7 +196,20 @@ export async function refreshManagerInquiries(): Promise<void> {
       managers.value = people;
       lastRefreshError = '';
     } catch (cause) {
-      if (currentGeneration === generation) notifyRefreshError(cause);
+      if (currentGeneration !== generation) return;
+
+      if (cause instanceof ManagerRequestError && cause.status === 403) {
+        clearManagerRoutes();
+        allowed.value = false;
+        resolved.value = true;
+        inquiries.value = [];
+        managers.value = [];
+        lastRefreshError = '';
+
+        return;
+      }
+
+      notifyRefreshError(cause);
     } finally {
       if (currentGeneration === generation) loading.value = false;
       refreshPromise = null;
@@ -246,6 +261,7 @@ export function useManagerInboxSubscription() {
         inquiries.value = [];
         managers.value = [];
         allowed.value = false;
+        resolved.value = false;
         lastRefreshError = '';
         void (refreshPromise || Promise.resolve()).then(
           refreshManagerInquiries
@@ -277,6 +293,7 @@ export function useManagerInboxSubscription() {
     inquiries.value = [];
     managers.value = [];
     allowed.value = false;
+    resolved.value = false;
   });
 }
 
@@ -285,6 +302,7 @@ export function useManagerInquiries() {
     inquiries,
     managers,
     allowed,
+    resolved,
     loading,
     byTopic: computed(
       () => new Map(inquiries.value.map(item => [item.topic_id, item]))

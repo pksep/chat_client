@@ -97,7 +97,10 @@
           ]"
           :aria-hidden="activeSection !== 'clients'"
         >
-          <ClientsPanel v-if="mountedSections.has('clients')" is-mobile />
+          <ClientsPanel
+            v-if="managerAllowed && mountedSections.has('clients')"
+            is-mobile
+          />
         </section>
 
         <section
@@ -110,7 +113,7 @@
           ]"
           :aria-hidden="activeSection !== 'ai'"
         >
-          <AIMenuPanel v-if="mountedSections.has('ai')" />
+          <AIMenuPanel v-if="aiAllowed && mountedSections.has('ai')" />
         </section>
 
         <section
@@ -215,6 +218,7 @@ import {
   matchesTopicSearch,
   normalizeAtSearchQuery
 } from '../../utils/searchMatch';
+import { useAiAccess } from '../../composables/useAiAccess';
 
 const NewChatMobileModal = defineAsyncComponent(
   () => import('../NewChat/NewChatMobileModal.vue')
@@ -240,7 +244,9 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
 const { getTopicList, loading: isTopicsLoading } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
-const { byTopic: clientInquiries } = useManagerInquiries();
+const { allowed: managerAllowed, byTopic: clientInquiries } =
+  useManagerInquiries();
+const { allowed: aiAllowed } = useAiAccess();
 const mountedSections = reactive(new Set<ChatMenuSection>(['chats']));
 const { isShareSelectionActive, selectedTopicIds, toggleShareTopic } =
   useShareSelection();

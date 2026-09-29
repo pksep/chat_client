@@ -78,18 +78,18 @@
       />
 
       <ClientsPanel
-        v-else-if="activeSection === 'clients'"
+        v-else-if="activeSection === 'clients' && managerAllowed"
         :is-collapse="isCollapse"
       />
 
       <AIMenuPanel
-        v-else-if="activeSection === 'ai'"
+        v-else-if="activeSection === 'ai' && aiAllowed"
         :is-collapse="isCollapse"
         :data-testid="`${props.dataTestid}-Menu-AIPanel`"
       />
 
       <MenuProfilePanel
-        v-else
+        v-else-if="activeSection === 'profile'"
         :is-collapse="isCollapse"
         :data-testid="`${props.dataTestid}-Menu-ProfilePanel`"
         @create-chat="handleNewContactModal"
@@ -183,6 +183,7 @@ import {
   recordChatTopicNavigationRequest,
   type ChatTopicOpenTelemetryMeta
 } from '../services/useChatNavigationTelemetry';
+import { useAiAccess } from '../composables/useAiAccess';
 
 const CallsPage = defineAsyncComponent(() => import('./Calls/CallsPage.vue'));
 const AIMenuPanel = defineAsyncComponent(() => import('./AI/AIMenuPanel.vue'));
@@ -200,7 +201,9 @@ const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 const selectedContactId = computed(() => route.value?.id);
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
-const { byTopic: clientInquiries } = useManagerInquiries();
+const { allowed: managerAllowed, byTopic: clientInquiries } =
+  useManagerInquiries();
+const { allowed: aiAllowed } = useAiAccess();
 const {
   pendingShareBatches,
   isShareSelectionActive,

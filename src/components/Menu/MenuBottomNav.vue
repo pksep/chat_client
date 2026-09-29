@@ -100,7 +100,7 @@
     </button>
 
     <div
-      v-if="isSectionVisible('ai')"
+      v-if="aiAllowed && isSectionVisible('ai')"
       ref="aiControlRef"
       class="menu-bottom-nav__ai-control"
     >
@@ -108,7 +108,6 @@
         type="button"
         :class="getButtonClass('ai')"
         :data-testid="`${props.dataTestid}-MenuBottomNav-AI`"
-        :disabled="!isAiMenuEnabled"
         :aria-label="getSectionAriaLabel('ai')"
         @click="handleSection('ai')"
       >
@@ -248,6 +247,8 @@ import { getTopicsUnreadBadgeState } from '../../utils/chats-toolbar-filter-badg
 import { useCallHistoryStore } from '../../services/useCallHistory';
 import { parseCallMessage } from '../../utils/parseCallMessage';
 import { useCallUnreadState } from '../../services/useCallUnreadState';
+import { useAiAccess } from '../../composables/useAiAccess';
+import { showErrorNotification } from '../../composables/useNotifications';
 
 const props = withDefaults(
   defineProps<{
@@ -265,12 +266,13 @@ defineOptions({
 });
 
 const { activeSection, setActiveSection } = useChatMenu();
-const { allowed: managerAllowed } = useManagerInquiries();
+const { allowed: managerAllowed, resolved: managerAccessResolved } =
+  useManagerInquiries();
 useManagerInboxSubscription();
+const { allowed: aiAllowed } = useAiAccess();
 const { backgroundActivities, selectSession } = useAiAssistant();
 const { rawCallHistory } = useCallHistoryStore();
 const route = useUrlWatcher();
-const isAiMenuEnabled = true;
 const isActivityPanelOpen = ref(false);
 const bottomNavRef = ref<HTMLElement | null>(null);
 const aiControlRef = ref<HTMLElement | null>(null);
@@ -285,6 +287,7 @@ const sectionLabels: Record<ChatMenuSection, string> = {
 };
 
 const authUser = computed(() => getAuthUser());
+const deniedManagerUsers = new Set<string>();
 const { callsSeenAt, initializeCallsSeenState, markCallsSeen } =
   useCallUnreadState();
 
@@ -411,7 +414,7 @@ const availableSections = computed<ChatMenuSection[]>(() => [
   'chats',
   'calls',
   ...(managerAllowed.value ? (['clients'] as ChatMenuSection[]) : []),
-  'ai',
+  ...(aiAllowed.value ? (['ai'] as ChatMenuSection[]) : []),
   'profile'
 ]);
 const activeSectionIndex = computed(() =>
@@ -455,6 +458,8 @@ const closeActivityPanel = (event?: Event): void => {
 };
 
 const handleActivitySelect = (sessionId: string): void => {
+  if (!aiAllowed.value) return;
+
   closeActivityPanel();
   setActiveSection('ai');
   selectSession(sessionId);
@@ -462,6 +467,9 @@ const handleActivitySelect = (sessionId: string): void => {
 };
 
 const handleSection = (section: ChatMenuSection): void => {
+  if (section === 'ai' && !aiAllowed.value) return;
+  if (section === 'clients' && !managerAllowed.value) return;
+
   if (section === 'calls') markCallsSeen(Date.now(), authUser.value?.id);
   setActiveSection(section);
 
@@ -504,6 +512,25 @@ watch(
   [() => activeSection.value, () => rawCallHistory.value[0]?.id],
   ([section]) => {
     if (section === 'calls') markCallsSeen(Date.now(), authUser.value?.id);
+  },
+  { immediate: true }
+);
+
+/** Закрывает раздел клиентов после подтверждённого отзыва персонального права. */
+watch(
+  [managerAccessResolved, managerAllowed, () => activeSection.value],
+  ([resolved, allowed, section]): void => {
+    if (!resolved || allowed || section !== 'clients') return;
+
+    const userId = authUser.value?.id || 'unknown';
+
+    setActiveSection('chats');
+    navigateToDefault();
+
+    if (deniedManagerUsers.has(userId)) return;
+
+    deniedManagerUsers.add(userId);
+    showErrorNotification('Нет доступа к разделу «Клиенты»');
   },
   { immediate: true }
 );

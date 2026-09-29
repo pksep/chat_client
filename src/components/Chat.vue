@@ -12,8 +12,8 @@
     @animationend="handleMobileRouteAnimationEnd"
   >
     <div
-      v-if="isAiRoute || isAiVoiceCallActive"
-      v-show="isAiRoute"
+      v-if="(isAiRoute && aiAllowed) || isAiVoiceCallActive"
+      v-show="isAiRoute && aiAllowed"
       style="display: contents"
     >
       <AIAssistant ref="aiAssistantRef" />
@@ -130,6 +130,13 @@ import { hasKnownTopicMessagesState } from '../services/useMessages';
 import { useAiAssistant } from '../composables/useAiAssistant';
 import UnselectedTopicIcon from './UI/Icons/UnselectedTopicIcon.vue';
 import { loadMessageList } from '../utils/load-message-list';
+import { navigateToDefault } from '../composables/navigation';
+import { useChatMenu } from '../composables/useChatMenu';
+import {
+  useAiAccess,
+  useAiAccessSubscription
+} from '../composables/useAiAccess';
+import { showErrorNotification } from '../composables/useNotifications';
 
 const MessageList = defineAsyncComponent(loadMessageList);
 const AIAssistant = defineAsyncComponent(() => import('./AI/AIAssistant.vue'));
@@ -153,6 +160,9 @@ const messageListRef = useTemplateRef<any>('messageListRef');
 const aiAssistantRef = useTemplateRef<any>('aiAssistantRef');
 
 const route = useUrlWatcher();
+const { setActiveSection } = useChatMenu();
+useAiAccessSubscription();
+const { allowed: aiAllowed, resolved: isAiAccessResolved } = useAiAccess();
 const { isVoiceModeOpen: isAiVoiceCallActive } = useAiAssistant();
 const activeChatRouteKey = computed(() =>
   route.value.type === RouteTypes.AI ? RouteTypes.AI : route.value.id
@@ -163,6 +173,34 @@ watch(hasActiveChatRoute, active => {
   if (!active) hasMountedMobileList.value = true;
 });
 const isAiRoute = computed(() => route.value.type === RouteTypes.AI);
+const deniedAiRoutes = new Set<string>();
+
+/** Закрывает прямой AI-маршрут после подтверждённого персонального отказа. */
+const guardAiRoute = (): void => {
+  const isRestrictedRoute =
+    route.value.type === RouteTypes.AI ||
+    route.value.type === RouteTypes.ASSISTANT;
+
+  if (!isRestrictedRoute || !isAiAccessResolved.value || aiAllowed.value) {
+    return;
+  }
+
+  const denialKey = `${authUser.value?.id || 'unknown'}:${window.location.pathname}`;
+
+  setActiveSection('chats');
+  navigateToDefault();
+
+  if (deniedAiRoutes.has(denialKey)) return;
+
+  deniedAiRoutes.add(denialKey);
+  showErrorNotification('Нет доступа к разделу «AI-ассистент»');
+};
+
+watch(
+  [() => route.value.type, () => route.value.id, isAiAccessResolved, aiAllowed],
+  guardAiRoute,
+  { immediate: true }
+);
 const mobileTransitionName = ref('');
 const isMobileMessageListMounted = ref(!isMobile.value);
 const isMobileMessageContentReady = ref(!isMobile.value);
