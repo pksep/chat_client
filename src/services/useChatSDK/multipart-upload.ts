@@ -1,13 +1,22 @@
+import { getConfig } from '../useConfig';
+
 const MIB = 1024 * 1024;
 const DEFAULT_THRESHOLD = 32 * MIB;
 export const MAX_UPLOAD_FILE_SIZE_MB = 600;
 export const MAX_UPLOAD_FILE_SIZE = MAX_UPLOAD_FILE_SIZE_MB * MIB;
 export const MAX_UPLOAD_FILE_SIZE_ERROR = `Размер файла превышает лимит ${MAX_UPLOAD_FILE_SIZE_MB}MB`;
-const DEFAULT_CONCURRENCY = 3;
+// MinIO can reject simultaneous writes to different parts of the same object.
+// Keep multipart resumability, but send each file's parts sequentially.
+const DEFAULT_MULTIPART_PART_CONCURRENCY = 1;
 const DEFAULT_RETRY_COUNT = 3;
 const DEFAULT_CONTROL_REQUEST_TIMEOUT_MS = 5_000;
 const PERSISTED_UPLOADS_KEY = 'sep-chat:multipart-uploads:v1';
 const CONFLICT_RETRY_MAX_DELAY_MS = 1_000;
+// A MinIO lock timeout is not repaired by retrying the same multipart upload
+// indefinitely. Retry it once, then close that session and start one fresh.
+const STORAGE_LOCK_RETRY_COUNT = 1;
+const STORAGE_LOCK_SESSION_RESTART_COUNT = 1;
+const STORAGE_LOCK_TIMEOUT_CODE = 'MULTIPART_STORAGE_LOCK_TIMEOUT';
 let multipartFileReadTail: Promise<void> = Promise.resolve();
 
 export interface MultipartUploadedPart {
@@ -101,8 +110,9 @@ export const getMultipartUploadSettings = () => ({
     MAX_UPLOAD_FILE_SIZE
   ),
   concurrency: parsePositiveNumber(
-    import.meta.env.VITE_MULTIPART_UPLOAD_CONCURRENCY,
-    DEFAULT_CONCURRENCY,
+    getConfig().CHAT_MULTIPART_UPLOAD_CONCURRENCY ??
+      import.meta.env.VITE_MULTIPART_UPLOAD_CONCURRENCY,
+    DEFAULT_MULTIPART_PART_CONCURRENCY,
     1,
     4
   ),
@@ -387,6 +397,24 @@ const getHttpStatus = (error: unknown): number | undefined => {
   return Number.isSafeInteger(status) ? status : undefined;
 };
 
+const getErrorCode = (error: unknown): string | undefined => {
+  const code = (error as { code?: unknown })?.code;
+  return typeof code === 'string' ? code : undefined;
+};
+
+const isStorageLockTimeout = (error: unknown): boolean =>
+  getErrorCode(error) === STORAGE_LOCK_TIMEOUT_CODE;
+
+class MultipartStorageLockSessionRestartError extends Error {
+  constructor(
+    readonly session: MultipartUploadSession,
+    readonly cause: unknown
+  ) {
+    super('Multipart session must be restarted after a storage lock timeout');
+    this.name = 'MultipartStorageLockSessionRestartError';
+  }
+}
+
 const getConflictRetryDelay = (attempt: number): number =>
   Math.min(CONFLICT_RETRY_MAX_DELAY_MS, 300 * 2 ** Math.min(attempt, 5));
 
@@ -453,7 +481,8 @@ const getSessionWithRetry = async (
   transport: MultipartUploadTransport,
   persistenceKey?: string,
   signal?: AbortSignal,
-  requestTimeoutMs = DEFAULT_CONTROL_REQUEST_TIMEOUT_MS
+  requestTimeoutMs = DEFAULT_CONTROL_REQUEST_TIMEOUT_MS,
+  retryCount = DEFAULT_RETRY_COUNT
 ): Promise<MultipartUploadSession> => {
   let attempt = 0;
 
@@ -467,7 +496,7 @@ const getSessionWithRetry = async (
         requestTimeoutMs
       );
     } catch (error) {
-      if (!isTransientUploadError(error)) {
+      if (!isTransientUploadError(error) || attempt >= retryCount) {
         throw error;
       }
 
@@ -477,45 +506,26 @@ const getSessionWithRetry = async (
   }
 };
 
-export const uploadMultipartFile = async (
+const uploadMultipartFileOnce = async (
   file: File,
   transport: MultipartUploadTransport,
-  options: MultipartUploadOptions = {}
+  options: MultipartUploadOptions,
+  settings: ReturnType<typeof getMultipartUploadSettings>,
+  retryCount: number,
+  controlRequestTimeoutMs: number
 ): Promise<{
   session: MultipartUploadSession;
   completed: MultipartCompleteResult;
 }> => {
-  const settings = getMultipartUploadSettings();
-  const fileSizeError = getUploadFileSizeError(file);
-
-  if (fileSizeError) {
-    throw new Error(fileSizeError);
-  }
-
-  const concurrency = parsePositiveNumber(
-    options.concurrency,
-    settings.concurrency,
-    1,
-    4
-  );
-  const retryCount = parsePositiveNumber(
-    options.retryCount,
-    settings.retryCount,
-    0,
-    8
-  );
-  const controlRequestTimeoutMs = parsePositiveNumber(
-    options.controlRequestTimeoutMs,
-    DEFAULT_CONTROL_REQUEST_TIMEOUT_MS,
-    100,
-    30_000
-  );
+  // Only runtime configuration may change the number of workers for a file.
+  const concurrency = settings.concurrency;
   const session = await getSessionWithRetry(
     file,
     transport,
     options.persistenceKey,
     options.signal,
-    controlRequestTimeoutMs
+    controlRequestTimeoutMs,
+    retryCount
   );
 
   if (session.status === 'completed' && session.completed) {
@@ -603,9 +613,8 @@ export const uploadMultipartFile = async (
       end,
       file.type || 'application/octet-stream'
     );
-    // Read one chunk at a time across all active uploads, then let the bounded
-    // multipart XHR workers send those memory-backed chunks in parallel. Disk
-    // reads intentionally do not affect upload progress: only XHR bytes do.
+    // Read and send one part at a time for this file. Disk reads intentionally
+    // do not affect upload progress: only XHR bytes do.
     const partBuffer = await readMultipartPartIntoMemory(() =>
       readBlobIntoMemory(filePart, options.signal)
     );
@@ -670,6 +679,14 @@ export const uploadMultipartFile = async (
             throw statusError;
           }
 
+          if (isStorageLockTimeout(error)) {
+            if (failureAttempt >= STORAGE_LOCK_RETRY_COUNT) {
+              throw new MultipartStorageLockSessionRestartError(session, error);
+            }
+          } else if (failureAttempt >= retryCount) {
+            throw error;
+          }
+
           await wait(getConflictRetryDelay(failureAttempt), options.signal);
           failureAttempt += 1;
           continue;
@@ -693,12 +710,20 @@ export const uploadMultipartFile = async (
         }
 
         if (isTransientUploadError(error)) {
+          if (isStorageLockTimeout(error)) {
+            if (failureAttempt >= STORAGE_LOCK_RETRY_COUNT) {
+              throw new MultipartStorageLockSessionRestartError(session, error);
+            }
+          } else if (failureAttempt >= retryCount) {
+            throw error;
+          }
+
           await wait(getConflictRetryDelay(failureAttempt), options.signal);
           failureAttempt += 1;
           continue;
         }
 
-        if (failureAttempt === retryCount) {
+        if (failureAttempt >= retryCount) {
           throw error;
         }
 
@@ -727,6 +752,17 @@ export const uploadMultipartFile = async (
         } catch (error) {
           if (getHttpStatus(error) !== 409) {
             if (isTransientUploadError(error)) {
+              if (isStorageLockTimeout(error)) {
+                if (conflictAttempt >= STORAGE_LOCK_RETRY_COUNT) {
+                  throw new MultipartStorageLockSessionRestartError(
+                    session,
+                    error
+                  );
+                }
+              } else if (conflictAttempt >= retryCount) {
+                throw error;
+              }
+
               await wait(
                 getConflictRetryDelay(conflictAttempt),
                 options.signal
@@ -744,6 +780,17 @@ export const uploadMultipartFile = async (
             status = await getCurrentStatus();
           } catch (statusError) {
             if (!isTransientUploadError(statusError)) {
+              throw statusError;
+            }
+
+            if (isStorageLockTimeout(statusError)) {
+              if (conflictAttempt >= STORAGE_LOCK_RETRY_COUNT) {
+                throw new MultipartStorageLockSessionRestartError(
+                  session,
+                  statusError
+                );
+              }
+            } else if (conflictAttempt >= retryCount) {
               throw statusError;
             }
 
@@ -795,5 +842,61 @@ export const uploadMultipartFile = async (
     }
 
     throw error;
+  }
+};
+
+export const uploadMultipartFile = async (
+  file: File,
+  transport: MultipartUploadTransport,
+  options: MultipartUploadOptions = {}
+): Promise<{
+  session: MultipartUploadSession;
+  completed: MultipartCompleteResult;
+}> => {
+  const settings = getMultipartUploadSettings();
+  const fileSizeError = getUploadFileSizeError(file);
+
+  if (fileSizeError) {
+    throw new Error(fileSizeError);
+  }
+
+  const retryCount = parsePositiveNumber(
+    options.retryCount,
+    settings.retryCount,
+    0,
+    8
+  );
+  const controlRequestTimeoutMs = parsePositiveNumber(
+    options.controlRequestTimeoutMs,
+    DEFAULT_CONTROL_REQUEST_TIMEOUT_MS,
+    100,
+    30_000
+  );
+  let restartedSessions = 0;
+
+  for (;;) {
+    try {
+      return await uploadMultipartFileOnce(
+        file,
+        transport,
+        options,
+        settings,
+        retryCount,
+        controlRequestTimeoutMs
+      );
+    } catch (error) {
+      if (!(error instanceof MultipartStorageLockSessionRestartError)) {
+        throw error;
+      }
+
+      await transport.abort(error.session.uploadId).catch(() => undefined);
+      removePersistedMultipartUpload(file, options.persistenceKey);
+
+      if (restartedSessions >= STORAGE_LOCK_SESSION_RESTART_COUNT) {
+        throw error.cause;
+      }
+
+      restartedSessions += 1;
+    }
   }
 };
