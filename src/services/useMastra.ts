@@ -66,6 +66,7 @@ import {
   type AiActionTask,
   type AiActionDecision
 } from './aiActionTasks';
+import { createMastraStreamLifecycle } from './mastraStreamLifecycle';
 
 type Message = AIMessage;
 
@@ -82,6 +83,9 @@ interface ToolApprovalRequestError extends Error {
   status: number;
   stale: boolean;
 }
+
+const AI_STREAM_UI_FLUSH_MS = 50;
+const AI_STREAM_SAVE_DEBOUNCE_MS = 250;
 
 const useMastra = (options?: UseMastraOptions | false) => {
   if (!options) {
@@ -147,9 +151,20 @@ const useMastra = (options?: UseMastraOptions | false) => {
   const saveMessages = (id: string, history: Message[]) => {
     if (!historySnapshotLoaded)
       return Promise.reject(new Error(historyLoadError));
+    const persistedHistory = history.flatMap(message => {
+      if (!message.loading) return [message];
+      if (
+        !message.content.trim() &&
+        !message.outputAttachments?.length &&
+        !message.actionTask &&
+        !message.pendingToolApproval
+      )
+        return [];
+      return [{ ...message, loading: false }];
+    });
     return saveChatMessages(
       id,
-      history,
+      persistedHistory,
       conversationGeneration ?? 0,
       conversationProtocol
     );
@@ -190,7 +205,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
   const applyActionTask = async (
     task: AiActionTask,
-    preferredMessageId?: string
+    preferredMessageId?: string,
+    persist = true
   ) => {
     if (disposed) return;
     let index = messages.value.findIndex(
@@ -230,7 +246,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
       content: actionTaskSummary(task)
     };
     messages.value = next;
-    if (chatId) await saveMessages(chatId, next);
+    if (chatId && persist) await saveMessages(chatId, next);
   };
   const refreshActionTasks = async () => {
     if (disposed || !chatId || taskRefreshPending) return;
@@ -751,7 +767,6 @@ const useMastra = (options?: UseMastraOptions | false) => {
         disposed ||
         historyVersion !== beforeSyncVersion + (changed ? 1 : 0)
       ) {
-        onFinish?.();
         return;
       }
       if (conversationDeleted || (changed && approvalDecisionOverride)) {
@@ -763,7 +778,6 @@ const useMastra = (options?: UseMastraOptions | false) => {
       }
     } catch (error) {
       if (disposed || historyVersion !== beforeSyncVersion) {
-        onFinish?.();
         return;
       }
       if (
@@ -773,13 +787,11 @@ const useMastra = (options?: UseMastraOptions | false) => {
       ) {
         lastError.value = getAiErrorMessage(error);
         showErrorNotification(lastError.value);
-        onFinish?.();
         return;
       }
       if (!historySnapshotLoaded) {
         lastError.value = historyLoadError;
         showErrorNotification(lastError.value);
-        onFinish?.();
         return;
       }
       historyError = error;
@@ -811,7 +823,6 @@ const useMastra = (options?: UseMastraOptions | false) => {
         pendingPlan.id,
         planDecision === 'approve' ? 'approve' : 'cancel'
       );
-      onFinish?.();
       return;
     }
 
@@ -947,16 +958,14 @@ const useMastra = (options?: UseMastraOptions | false) => {
       loading: true,
       timestamp: Date.now()
     };
+    const streamLifecycle = createMastraStreamLifecycle(abortSignal);
     const run = {
       messageId: assistantMessage.id!,
       requestId: assistantMessage.requestId,
       historyVersion,
-      controller: new AbortController()
+      controller: streamLifecycle.controller
     };
     activeResponse = run;
-    const forwardAbort = () => run.controller.abort(abortSignal?.reason);
-    abortSignal?.addEventListener('abort', forwardAbort, { once: true });
-    if (abortSignal?.aborted) forwardAbort();
     const responseIndex = () =>
       !disposed && activeResponse === run
         ? messages.value.findIndex(
@@ -968,6 +977,55 @@ const useMastra = (options?: UseMastraOptions | false) => {
     messages.value = [...messages.value, assistantMessage];
     unsavedMessageIds.add(assistantMessage.id!);
     let submissionSaved = false;
+    let streamReceived = false;
+    let pendingText = '';
+    let uiFlushTimer: ReturnType<typeof setTimeout> | undefined;
+    let saveDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+    let streamSaveError: unknown;
+    let streamSavePromise = Promise.resolve();
+
+    const persistStreamSnapshot = () => {
+      const snapshot = messages.value;
+      streamSavePromise = streamSavePromise
+        .then(async () => {
+          if (isCurrentResponse()) await saveMessages(chatId!, snapshot);
+        })
+        .catch(error => {
+          streamSaveError ??= error;
+          run.controller.abort(error);
+        });
+    };
+    const scheduleStreamSave = () => {
+      clearTimeout(saveDebounceTimer);
+      saveDebounceTimer = setTimeout(() => {
+        saveDebounceTimer = undefined;
+        persistStreamSnapshot();
+      }, AI_STREAM_SAVE_DEBOUNCE_MS);
+    };
+    const flushUiUpdates = () => {
+      clearTimeout(uiFlushTimer);
+      uiFlushTimer = undefined;
+      if (!pendingText) return;
+      const text = pendingText;
+      pendingText = '';
+      const assistantMessageIndex = responseIndex();
+      if (
+        assistantMessageIndex < 0 ||
+        messages.value[assistantMessageIndex].actionTask
+      )
+        return;
+      const newMessages = [...messages.value];
+      newMessages[assistantMessageIndex] = {
+        ...newMessages[assistantMessageIndex],
+        content: newMessages[assistantMessageIndex].content + text
+      };
+      messages.value = newMessages;
+      scheduleStreamSave();
+    };
+    const bufferTextUpdate = (text: string) => {
+      pendingText += text;
+      uiFlushTimer ??= setTimeout(flushUiUpdates, AI_STREAM_UI_FLUSH_MS);
+    };
 
     try {
       await saveMessages(chatId, messages.value);
@@ -1018,6 +1076,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
           'ИИ не настроен для работы. Обратитесь к администратору.'
         );
 
+      streamLifecycle.startTimeout();
       let stream;
 
       if (pendingApproval.value && approvalDecision) {
@@ -1032,8 +1091,9 @@ const useMastra = (options?: UseMastraOptions | false) => {
             run.controller.signal,
             requestAttachments
           );
+          streamReceived = Boolean(stream);
           if (!isCurrentResponse()) {
-            void stream.body?.cancel().catch(() => undefined);
+            await stream.body?.cancel().catch(() => undefined);
             return;
           }
           clearStoredPendingApproval(approval);
@@ -1088,6 +1148,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
               )
             }
           );
+          streamReceived = Boolean(stream);
         }
       } else {
         const currentUser = messages.value.findLast(
@@ -1116,207 +1177,161 @@ const useMastra = (options?: UseMastraOptions | false) => {
             )
           }
         );
+        streamReceived = Boolean(stream);
       }
 
       if (!isCurrentResponse()) {
-        void stream?.body?.cancel().catch(() => undefined);
+        await stream?.body?.cancel().catch(() => undefined);
         return;
       }
       if (!stream)
         throw new Error(
           'ИИ не начал передачу ответа. Попробуйте позже; если ошибка повторяется, обратитесь в поддержку.'
         );
-      onFinish?.();
+      let lastToolError: string | null = null;
+      let hasAnswerAfterToolError = false;
+      let stoppedForApproval = false;
 
-      const streamProcessingPromise = new Promise((resolve, reject) => {
-        let isResolved = false;
-        let lastToolError: string | null = null;
-        let hasAnswerAfterToolError = false;
-
-        const finishStream = () => {
-          if (isResolved) return;
-          isResolved = true;
-          if (lastToolError && !hasAnswerAfterToolError) {
-            reject(
-              new Error(
-                getAiErrorMessage(lastToolError, AI_TOOL_RESULT_UNCONFIRMED)
-              )
-            );
-          } else {
-            resolve(null);
-          }
-        };
-
-        const processStream = async () => {
-          try {
-            await processMastraEventStream(
-              stream,
-              async (event): Promise<void | false> => {
-                const assistantMessageIndex = responseIndex();
-                if (assistantMessageIndex < 0) return false;
-                const task = actionTaskFromEvent(event);
-                if (task) {
-                  // План принадлежит исходному запросу, а не текущей позиции в списке.
-                  if (task.requestId !== run.requestId) return;
-                  await applyActionTask(task, run.messageId);
-                  if (isCurrentResponse()) pollActionTasks();
-                  return;
-                }
-                if (event.type === 'tool-call') {
-                  const name = String(event.payload?.toolName || '');
-                  preparationStatus.value =
-                    name === 'ai_action_plan'
-                      ? 'Сохраняю план действий'
-                      : name === 'ai_action_catalog'
-                        ? 'Проверяю доступные действия'
-                        : /attachment.*read/.test(name)
-                          ? 'Изучаю вложения'
-                          : /search|find|list|get/.test(name)
-                            ? 'Ищу информацию'
-                            : 'Выполняю действие';
-                }
-                if (event.type === 'step-finish') {
-                  return;
-                }
-
-                const toolError = getMastraToolError(event);
-                if (toolError) {
-                  // Ошибка отдельного шага не завершает запуск: агент может
-                  // исправить параметры или объяснить причину следующим ответом.
-                  lastToolError = toolError;
-                  hasAnswerAfterToolError = false;
-                  return;
-                }
-
-                // Успех одного переноса не сбрасывает весь набор: следующие
-                // файлы и их подтверждения используют те же номера вложений.
-
-                if (['tool-result', 'tool-output'].includes(event.type || '')) {
-                  const outputAttachments = extractAiOutputAttachments(
-                    event.payload
-                  );
-                  if (
-                    outputAttachments.length > 0 &&
-                    assistantMessageIndex < messages.value.length
-                  ) {
-                    const newMessages = [...messages.value];
-                    const current = newMessages[assistantMessageIndex];
-                    const uniqueAttachments = new Map(
-                      (current.outputAttachments || []).map(attachment => [
-                        attachment.path,
-                        attachment
-                      ])
-                    );
-                    outputAttachments.forEach(attachment =>
-                      uniqueAttachments.set(attachment.path, attachment)
-                    );
-                    newMessages[assistantMessageIndex] = {
-                      ...current,
-                      outputAttachments: [...uniqueAttachments.values()]
-                    };
-                    messages.value = newMessages;
-                    await saveMessages(chatId, messages.value);
-                  }
-                }
-
-                if (event.type === 'tool-call-approval') {
-                  const { payload } = event;
-
-                  if (
-                    typeof event.runId === 'string' &&
-                    typeof payload?.toolCallId === 'string' &&
-                    typeof payload?.toolName === 'string'
-                  ) {
-                    const nextPendingApproval: PendingToolApproval = {
-                      runId: event.runId,
-                      toolCallId: payload.toolCallId,
-                      toolName: payload.toolName,
-                      args:
-                        payload.args && typeof payload.args === 'object'
-                          ? payload.args
-                          : {}
-                    };
-
-                    if (assistantMessageIndex < messages.value.length) {
-                      const newMessages = [...messages.value];
-                      newMessages[assistantMessageIndex] = {
-                        ...newMessages[assistantMessageIndex],
-                        content: formatApprovalMessage(nextPendingApproval),
-                        loading: false,
-                        pendingToolApproval: nextPendingApproval
-                      };
-                      messages.value = newMessages;
-                    }
-
-                    pendingApproval.value = nextPendingApproval;
-                    await saveMessages(chatId, messages.value);
-                  }
-
-                  if (!isResolved) {
-                    isResolved = true;
-                    resolve(null);
-                  }
-                  return false;
-                }
-
-                if (event.type === 'text-delta' && event.payload?.text) {
-                  if (event.payload.text.trim()) hasAnswerAfterToolError = true;
-                  if (
-                    assistantMessageIndex < messages.value.length &&
-                    !messages.value[assistantMessageIndex].actionTask
-                  ) {
-                    const newMessages = [...messages.value];
-                    newMessages[assistantMessageIndex] = {
-                      ...newMessages[assistantMessageIndex],
-                      content:
-                        newMessages[assistantMessageIndex].content +
-                        event.payload.text
-                    };
-                    messages.value = newMessages;
-
-                    await saveMessages(chatId, messages.value);
-                  }
-                } else if (event.type === 'finish') {
-                  finishStream();
-                  return false;
-                } else if (event.type === 'error') {
-                  throw new Error(getAiErrorMessage(event.payload));
-                }
-              },
-              run.controller.signal
-            );
-            finishStream();
-          } catch (streamError) {
-            if (!isResolved) {
-              isResolved = true;
-              reject(
-                new Error(
-                  getAiErrorMessage(
-                    streamError,
-                    'Соединение с сервисом прервалось. Попробуйте ещё раз.'
-                  )
-                )
-              );
+      try {
+        await processMastraEventStream(
+          stream,
+          async (event): Promise<void | false> => {
+            const assistantMessageIndex = responseIndex();
+            if (assistantMessageIndex < 0) return false;
+            const task = actionTaskFromEvent(event);
+            if (task) {
+              flushUiUpdates();
+              // План принадлежит исходному запросу, а не текущей позиции в списке.
+              if (task.requestId !== run.requestId) return;
+              await applyActionTask(task, run.messageId, false);
+              scheduleStreamSave();
+              if (isCurrentResponse()) pollActionTasks();
+              return;
             }
-          }
-        };
+            if (event.type === 'tool-call') {
+              const name = String(event.payload?.toolName || '');
+              preparationStatus.value =
+                name === 'ai_action_plan'
+                  ? 'Сохраняю план действий'
+                  : name === 'ai_action_catalog'
+                    ? 'Проверяю доступные действия'
+                    : /attachment.*read/.test(name)
+                      ? 'Изучаю вложения'
+                      : /search|find|list|get/.test(name)
+                        ? 'Ищу информацию'
+                        : 'Выполняю действие';
+            }
+            if (event.type === 'step-finish') return;
 
-        processStream().catch(err => {
-          if (!isResolved) {
-            isResolved = true;
-            reject(
-              new Error(
-                getAiErrorMessage(
-                  err,
-                  'Соединение с сервисом прервалось. Попробуйте ещё раз.'
-                )
+            const toolError = getMastraToolError(event);
+            if (toolError) {
+              // Ошибка отдельного шага не завершает запуск: агент может
+              // исправить параметры или объяснить причину следующим ответом.
+              lastToolError = toolError;
+              hasAnswerAfterToolError = false;
+              return;
+            }
+
+            // Успех одного переноса не сбрасывает весь набор: следующие
+            // файлы и их подтверждения используют те же номера вложений.
+            if (['tool-result', 'tool-output'].includes(event.type || '')) {
+              const outputAttachments = extractAiOutputAttachments(
+                event.payload
+              );
+              if (
+                outputAttachments.length > 0 &&
+                assistantMessageIndex < messages.value.length
+              ) {
+                const newMessages = [...messages.value];
+                const current = newMessages[assistantMessageIndex];
+                const uniqueAttachments = new Map(
+                  (current.outputAttachments || []).map(attachment => [
+                    attachment.path,
+                    attachment
+                  ])
+                );
+                outputAttachments.forEach(attachment =>
+                  uniqueAttachments.set(attachment.path, attachment)
+                );
+                newMessages[assistantMessageIndex] = {
+                  ...current,
+                  outputAttachments: [...uniqueAttachments.values()]
+                };
+                messages.value = newMessages;
+                scheduleStreamSave();
+              }
+            }
+
+            if (event.type === 'tool-call-approval') {
+              flushUiUpdates();
+              const { payload } = event;
+
+              if (
+                typeof event.runId === 'string' &&
+                typeof payload?.toolCallId === 'string' &&
+                typeof payload?.toolName === 'string'
+              ) {
+                const nextPendingApproval: PendingToolApproval = {
+                  runId: event.runId,
+                  toolCallId: payload.toolCallId,
+                  toolName: payload.toolName,
+                  args:
+                    payload.args && typeof payload.args === 'object'
+                      ? payload.args
+                      : {}
+                };
+
+                if (assistantMessageIndex < messages.value.length) {
+                  const newMessages = [...messages.value];
+                  newMessages[assistantMessageIndex] = {
+                    ...newMessages[assistantMessageIndex],
+                    content: formatApprovalMessage(nextPendingApproval),
+                    loading: false,
+                    pendingToolApproval: nextPendingApproval
+                  };
+                  messages.value = newMessages;
+                }
+
+                pendingApproval.value = nextPendingApproval;
+                scheduleStreamSave();
+              }
+
+              stoppedForApproval = true;
+              return false;
+            }
+
+            if (event.type === 'text-delta' && event.payload?.text) {
+              if (event.payload.text.trim()) hasAnswerAfterToolError = true;
+              if (
+                assistantMessageIndex < messages.value.length &&
+                !messages.value[assistantMessageIndex].actionTask
               )
-            );
-          }
-        });
-      });
+                bufferTextUpdate(event.payload.text);
+            } else if (event.type === 'finish') {
+              // SDK закрывает body сразу после finish; дочитывание до EOF не
+              // даёт отмене reader конкурировать с этим штатным закрытием.
+              return;
+            } else if (event.type === 'error') {
+              throw new Error(getAiErrorMessage(event.payload));
+            }
+          },
+          run.controller.signal
+        );
+      } catch (streamError) {
+        throw new Error(
+          getAiErrorMessage(
+            streamSaveError ?? streamError,
+            'Соединение с сервисом прервалось. Попробуйте ещё раз.'
+          )
+        );
+      } finally {
+        flushUiUpdates();
+      }
 
-      await streamProcessingPromise;
+      if (!stoppedForApproval && lastToolError && !hasAnswerAfterToolError)
+        throw new Error(
+          getAiErrorMessage(lastToolError, AI_TOOL_RESULT_UNCONFIRMED)
+        );
 
       const completedMessage = messages.value[responseIndex()];
       if (
@@ -1352,7 +1367,11 @@ const useMastra = (options?: UseMastraOptions | false) => {
         messages.value = newMessages;
       }
     } finally {
-      abortSignal?.removeEventListener('abort', forwardAbort);
+      streamLifecycle.dispose();
+      clearTimeout(uiFlushTimer);
+      flushUiUpdates();
+      clearTimeout(saveDebounceTimer);
+      saveDebounceTimer = undefined;
       const assistantMessageIndex = responseIndex();
       let finalMessage: Message | undefined;
       if (assistantMessageIndex >= 0) {
@@ -1364,14 +1383,19 @@ const useMastra = (options?: UseMastraOptions | false) => {
         messages.value = newMessages;
         finalMessage = newMessages[assistantMessageIndex];
       }
-      const approvalWasAlreadyPersisted = Boolean(
-        pendingApproval.value && finalMessage?.pendingToolApproval
-      );
       const responseText = lastError.value
         ? null
         : finalMessage?.content ?? null;
+      if (streamReceived) {
+        try {
+          onFinish?.();
+        } catch (error) {
+          console.error('Не удалось завершить обработку AI stream:', error);
+        }
+      }
+      await streamSavePromise;
       try {
-        if (isCurrentResponse() && chatId && !approvalWasAlreadyPersisted) {
+        if (isCurrentResponse() && chatId) {
           await saveMessages(chatId, messages.value);
         }
         if (isCurrentResponse()) {
