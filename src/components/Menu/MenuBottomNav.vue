@@ -248,7 +248,6 @@ import { useCallHistoryStore } from '../../services/useCallHistory';
 import { parseCallMessage } from '../../utils/parseCallMessage';
 import { useCallUnreadState } from '../../services/useCallUnreadState';
 import { useAiAccess } from '../../composables/useAiAccess';
-import { showErrorNotification } from '../../composables/useNotifications';
 
 const props = withDefaults(
   defineProps<{
@@ -287,7 +286,6 @@ const sectionLabels: Record<ChatMenuSection, string> = {
 };
 
 const authUser = computed(() => getAuthUser());
-const deniedManagerUsers = new Set<string>();
 const { callsSeenAt, initializeCallsSeenState, markCallsSeen } =
   useCallUnreadState();
 
@@ -516,21 +514,14 @@ watch(
   { immediate: true }
 );
 
-/** Закрывает раздел клиентов после подтверждённого отзыва персонального права. */
+/** Молча закрывает раздел клиентов после подтверждённого отзыва права. */
 watch(
   [managerAccessResolved, managerAllowed, () => activeSection.value],
   ([resolved, allowed, section]): void => {
     if (!resolved || allowed || section !== 'clients') return;
 
-    const userId = authUser.value?.id || 'unknown';
-
     setActiveSection('chats');
     navigateToDefault();
-
-    if (deniedManagerUsers.has(userId)) return;
-
-    deniedManagerUsers.add(userId);
-    showErrorNotification('Нет доступа к разделу «Клиенты»');
   },
   { immediate: true }
 );

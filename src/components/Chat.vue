@@ -136,7 +136,6 @@ import {
   useAiAccess,
   useAiAccessSubscription
 } from '../composables/useAiAccess';
-import { showErrorNotification } from '../composables/useNotifications';
 
 const MessageList = defineAsyncComponent(loadMessageList);
 const AIAssistant = defineAsyncComponent(() => import('./AI/AIAssistant.vue'));
@@ -173,9 +172,8 @@ watch(hasActiveChatRoute, active => {
   if (!active) hasMountedMobileList.value = true;
 });
 const isAiRoute = computed(() => route.value.type === RouteTypes.AI);
-const deniedAiRoutes = new Set<string>();
 
-/** Закрывает прямой AI-маршрут после подтверждённого персонального отказа. */
+/** Молча закрывает недоступный прямой AI-маршрут. */
 const guardAiRoute = (): void => {
   const isRestrictedRoute =
     route.value.type === RouteTypes.AI ||
@@ -185,15 +183,8 @@ const guardAiRoute = (): void => {
     return;
   }
 
-  const denialKey = `${authUser.value?.id || 'unknown'}:${window.location.pathname}`;
-
   setActiveSection('chats');
   navigateToDefault();
-
-  if (deniedAiRoutes.has(denialKey)) return;
-
-  deniedAiRoutes.add(denialKey);
-  showErrorNotification('Нет доступа к разделу «AI-ассистент»');
 };
 
 watch(
