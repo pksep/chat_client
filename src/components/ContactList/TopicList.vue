@@ -1497,6 +1497,10 @@ const getTopicActiveCall = (topic: ITopic) => {
   text-align: center;
 }
 
+.contact-list__search-state--empty {
+  padding: 100px 16px 0;
+}
+
 .contact-list__item--message-result {
   cursor: pointer;
 }
