@@ -1483,7 +1483,7 @@
   }
 
   .ai-menu-panel__row-main {
-    padding-inline: 0;
+    padding-inline: 16px;
   }
 
   .ai-menu-panel__empty {
@@ -1658,7 +1658,8 @@
 
   .ai-assistant__conversation {
     gap: 8px;
-    padding: 14px 8px 10px;
+    padding-block: 14px 10px;
+    padding-inline: 10px;
   }
 
   .ai-assistant__permission-trigger--desktop {

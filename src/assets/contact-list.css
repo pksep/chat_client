@@ -598,6 +598,9 @@ svg.icon-yui-kit.contact-list__read-icon {
 @media (width <=768px) {
   .chat-container:not(:has(.chat__mobile-route-view--messages)):has(.chat-list),
   .chat-container:not(:has(.chat__mobile-route-view--messages)):has(
+      .chat-folders-panel--mobile
+    ),
+  .chat-container:not(:has(.chat__mobile-route-view--messages)):has(
       .mobile-list-container__content .menu-profile
     ),
   .chat-container:not(:has(.chat__mobile-route-view--messages)):has(

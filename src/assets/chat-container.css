@@ -29,6 +29,7 @@
 @import url('./bot.css');
 @import url('./ai-assistant.css');
 @import url('./menu-layout.css');
+@import url('./chat-folders.css');
 
 .chat_container_alert {
   background-color: var(--error-dark-color);
@@ -97,6 +98,10 @@
 
 .chat-container:has(.menu.menu--collapse) {
   --size-left-menu: 90px;
+}
+
+.chat-container:has(.menu.menu--folders:not(.menu--collapse)) {
+  --size-left-menu: 435px;
 }
 
 .chat-container.menu-collapse {

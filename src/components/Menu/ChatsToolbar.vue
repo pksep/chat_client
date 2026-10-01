@@ -1,5 +1,11 @@
 <template>
-  <div class="chats-toolbar" :data-testid="`${props.dataTestid}-ChatsToolbar`">
+  <div
+    :class="[
+      'chats-toolbar',
+      { 'chats-toolbar--with-folders': !!$slots.folders }
+    ]"
+    :data-testid="`${props.dataTestid}-ChatsToolbar`"
+  >
     <div class="chats-toolbar__headline menu-section-heading">
       <h4
         v-if="!props.isCollapse"
@@ -67,10 +73,15 @@
 
     <Line :data-testid="`${props.dataTestid}-ChatsToolbar-Line`" />
 
+    <div v-if="$slots.folders" class="chats-toolbar__folders">
+      <slot name="folders" />
+    </div>
+
     <div class="chats-toolbar__controls">
       <Search
         v-if="!props.isCollapse"
         class="chats-toolbar__search"
+        height="var(--chats-toolbar-search-height, 42px)"
         :model-value="props.modelValue"
         @update:model-value="value => emits('update:modelValue', value)"
         :data-testid="`${props.dataTestid}-ChatsToolbar-Search`"
