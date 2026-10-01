@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="340355">
+<fb version="0.19.6" size="346618">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <inserted t="I">8</inserted>
-    <seconds t="F">195.081337101</seconds>
+    <seconds t="F">186.429058401</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-10-01T09:29:07Z</when>
+    <when t="T">2026-10-01T16:45:02Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -23315,16 +23315,357 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.41).</text>
     <when t="T">2026-10-01T02:29:41Z</when>
   </f>
   <f>
-    <_id t="I">1201</_id>
-    <_job t="I">36842473205</_job>
-    <_time t="T">2026-10-01T09:25:56Z</_time>
+    <_id t="I">1202</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:41:59Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-508</branch>
+    <details t="S">The pull request pksep/chat_client#429 has been opened by @ekn1000.</details>
+    <event_id t="I">16194647881</event_id>
+    <event_type t="S">PullRequestEvent</event_type>
+    <is_human t="I">1</is_human>
+    <issue t="I">429</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-10-01T13:43:41Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1203</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:00Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-504</branch>
+    <details t="S">The pull request pksep/chat_client#428 has been opened by @ekn1000.</details>
+    <event_id t="I">16189586812</event_id>
+    <event_type t="S">PullRequestEvent</event_type>
+    <is_human t="I">1</is_human>
+    <issue t="I">428</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-10-01T12:41:42Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1205</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:07Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-504</branch>
+    <comments t="I">1</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">1</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#428 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">25</files>
+    <hoc t="I">3260</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">428</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-10-01T12:48:25Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1206</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:14Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-508</branch>
+    <comments t="I">1</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">1</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#429 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">3</files>
+    <hoc t="I">211</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">429</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-10-01T13:44:13Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1207</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:16Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">16164910268</events_were_scanned>
+    <events_were_scanned t="I">16194695327</events_were_scanned>
     <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">395</min_pull_was_found>
+    <min_pull_was_found t="I">428</min_pull_was_found>
     <repository t="I">1053332035</repository>
     <what t="S">iterate</what>
     <where t="S">github</where>
+  </f>
+  <f>
+    <_id t="I">1208</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:18Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">ai</branch>
+    <details t="S">The missing pull pksep/chat_client#396 has been opened by @sertimberrners-lee.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">396</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-08T11:53:50Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
+  </f>
+  <f>
+    <_id t="I">1209</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:19Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-290</branch>
+    <details t="S">The missing pull pksep/chat_client#397 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">397</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-08T12:21:21Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1210</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:20Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">canary</branch>
+    <details t="S">The missing pull pksep/chat_client#398 has been opened by @sertimberrners-lee.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">398</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-08T13:08:24Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
+  </f>
+  <f>
+    <_id t="I">1211</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:21Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-291</branch>
+    <details t="S">The missing pull pksep/chat_client#399 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">399</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-10T08:17:50Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1212</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:22Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-291</branch>
+    <details t="S">The missing pull pksep/chat_client#400 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">400</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-10T08:37:54Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1213</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:22Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-294</branch>
+    <details t="S">The missing pull pksep/chat_client#401 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">401</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-14T12:19:57Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1214</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:23Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">manager</branch>
+    <details t="S">The missing pull pksep/chat_client#402 has been opened by @sertimberrners-lee.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">402</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-14T13:34:11Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
+  </f>
+  <f>
+    <_id t="I">1215</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:24Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-295</branch>
+    <details t="S">The missing pull pksep/chat_client#403 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">403</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-14T14:09:09Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1216</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:25Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">ai</branch>
+    <details t="S">The missing pull pksep/chat_client#404 has been opened by @sertimberrners-lee.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">404</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-15T09:01:35Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
+  </f>
+  <f>
+    <_id t="I">1217</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:25Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">manager</branch>
+    <details t="S">The missing pull pksep/chat_client#405 has been opened by @sertimberrners-lee.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">405</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-16T06:25:36Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
+  </f>
+  <f>
+    <_id t="I">1218</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:27Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">canary</branch>
+    <details t="S">The missing pull pksep/chat_client#406 has been opened by @sertimberrners-lee.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">406</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-16T06:41:19Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
+  </f>
+  <f>
+    <_id t="I">1219</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:28Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">canary</branch>
+    <details t="S">The missing pull pksep/chat_client#407 has been opened by @sertimberrners-lee.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">407</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-16T11:15:50Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
+  </f>
+  <f>
+    <_id t="I">1220</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:29Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">main</branch>
+    <details t="S">The missing pull pksep/chat_client#408 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">408</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-16T13:36:49Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1221</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:30Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-297</branch>
+    <details t="S">The missing pull pksep/chat_client#409 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">409</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-17T08:11:15Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1222</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:30Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">erp-487</branch>
+    <details t="S">The missing pull pksep/chat_client#410 has been opened by @sherkios.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">410</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-17T08:49:09Z</when>
+    <where t="S">github</where>
+    <who t="I">54083024</who>
+  </f>
+  <f>
+    <_id t="I">1223</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:31Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">manager</branch>
+    <details t="S">The missing pull pksep/chat_client#411 has been opened by @sertimberrners-lee.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">411</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-17T12:10:46Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
+  </f>
+  <f>
+    <_id t="I">1224</_id>
+    <_job t="I">36893782156</_job>
+    <_time t="T">2026-10-01T16:42:32Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">manager</branch>
+    <details t="S">The missing pull pksep/chat_client#412 has been opened by @sertimberrners-lee.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">412</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-09-18T05:38:58Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
   </f>
 </fb>
