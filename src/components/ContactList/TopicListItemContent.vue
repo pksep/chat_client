@@ -42,7 +42,10 @@
       </div>
     </h5>
 
-    <div v-if="!props.showCheckbox" class="contact-list__top">
+    <div
+      v-if="!props.showCheckbox && !props.showLastOnline"
+      class="contact-list__top"
+    >
       <MessageStatusIcons
         v-if="showMessageStatus"
         :class="{
@@ -66,7 +69,20 @@
 
     <div class="contact-list__preview">
       <div
-        v-if="props.topic.typingUserIds?.length"
+        v-if="props.showLastOnline && topicPresenceText"
+        :class="[
+          'contact-list__description',
+          'contact-list__description--last-online',
+          {
+            'contact-list__description--online': topicPresenceIsOnline
+          }
+        ]"
+        :data-testid="`${props.dataTestid}-ContactList-LastOnline${props.index + 1}`"
+      >
+        {{ topicPresenceText }}
+      </div>
+      <div
+        v-else-if="!props.showLastOnline && props.topic.typingUserIds?.length"
         :class="[
           'contact-list__description',
           'contact-list__description--typing',
@@ -79,7 +95,7 @@
         <TypingIndicator :label="topicTypingLabel" />
       </div>
       <div
-        v-else-if="!!props.topic.lastMessage?.text"
+        v-else-if="!props.showLastOnline && !!props.topic.lastMessage?.text"
         :key="lastMessagePreviewKey"
         :class="[
           'contact-list__description',
@@ -95,6 +111,7 @@
       </div>
       <div
         v-else-if="
+          !props.showLastOnline &&
           props.topic.lastMessage?.media?.length > 0 &&
           props.topic.lastMessage.media[0].type === MediaType.File
         "
@@ -110,7 +127,9 @@
         <p>Медиа</p>
       </div>
       <div
-        v-else-if="props.topic.lastMessage?.media?.length > 0"
+        v-else-if="
+          !props.showLastOnline && props.topic.lastMessage?.media?.length > 0
+        "
         :class="[
           'contact-list__description',
           'contact-list__description__media',
@@ -139,7 +158,10 @@
         <p>{{ getTopicLastMessageLabel(props.topic.lastMessage.media) }}</p>
       </div>
 
-      <div v-if="!props.showCheckbox" class="contact-list__bottom">
+      <div
+        v-if="!props.showCheckbox && !props.showLastOnline"
+        class="contact-list__bottom"
+      >
         <div
           v-if="props.topic.hasUnreadReaction && unreadReactionMessageId"
           class="contact-list__reaction-indicator"
@@ -194,7 +216,7 @@ import { hasExternalMessageChannel } from '../../utils/managerMessageChannel';
 import { getAuthUser } from '../../composables/useAuth';
 import { formatListTime } from '../../composables/useTime';
 import { useTopics } from '../../composables/useTopics';
-import { getUserById } from '../../composables/useUsers';
+import { getUserById, getUserLastOnline } from '../../composables/useUsers';
 import { useMessageMedia } from '../Messages/composables/useMessageMedia';
 import type { IMedia, ITopic } from '../interfaces/interfaces';
 import { MessageStatusEnum } from '../interfaces/interfaces';
@@ -214,7 +236,9 @@ import {
 } from '../../utils/topicUnreadBadge';
 import { resolveLastMessageStatus } from '../../utils/topic-last-message';
 import { stripHtml } from '../../utils/stripHtml';
+import { formatLastSeen } from '../../utils/dateUtils';
 import { formatUserStatusText } from '../../utils/userStatus';
+import { getBotUsername, isBotTopic, isDeletedBotUser } from '../../utils/bot';
 import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
 import AttachFileIcon from '../UI/AttachFileIcon.vue';
 import EmojiIcon from '../UI/EmojiIcon.vue';
@@ -230,6 +254,7 @@ interface ITopicListItemContentProps {
   index: number;
   dataTestid?: string;
   showCheckbox?: boolean;
+  showLastOnline?: boolean;
   currentTime?: number;
   forceDescriptionFade?: boolean;
 }
@@ -237,6 +262,7 @@ interface ITopicListItemContentProps {
 const props = withDefaults(defineProps<ITopicListItemContentProps>(), {
   dataTestid: 'TopicListItemContent',
   showCheckbox: false,
+  showLastOnline: false,
   currentTime: 0,
   forceDescriptionFade: false
 });
@@ -267,6 +293,36 @@ const topicStatusLabel = computed(() =>
     ? formatUserStatusText(topicEffectiveUser.value?.status)
     : ''
 );
+const topicPresenceText = computed(() => {
+  const user = topicEffectiveUser.value;
+
+  if (
+    !props.showLastOnline ||
+    props.topic.type !== TopicType.DM ||
+    topicIsFavorite.value ||
+    !user
+  ) {
+    return '';
+  }
+
+  if (isDeletedBotUser(user)) return 'Оффлайн';
+  if (isBotTopic(props.topic)) return `@${getBotUsername(user)}`;
+  if (authedUser.value?.id === user.id) return `@${user.nickname || ''}`;
+
+  return formatLastSeen(getUserLastOnline(user));
+});
+const topicPresenceIsOnline = computed(() => {
+  const user = topicEffectiveUser.value;
+
+  return (
+    !!user &&
+    props.topic.type === TopicType.DM &&
+    !topicIsFavorite.value &&
+    !isDeletedBotUser(user) &&
+    !getUserLastOnline(user) &&
+    authedUser.value?.id !== user.id
+  );
+});
 const topicLastMessageStatus = computed(() =>
   resolveLastMessageStatus(
     props.topic.lastMessage,
@@ -371,6 +427,17 @@ const emitReactionClick = (event: Event): void => {
 <style scoped>
 .contact-list__description--typing {
   color: var(--primary-color);
+}
+
+.contact-list__description--last-online {
+  height: 17px;
+  margin-top: 0;
+  font-size: 14px;
+  line-height: 17px;
+}
+
+.contact-list__description--online {
+  color: var(--primary-base);
 }
 
 .contact-list__block--wrapper--selection {

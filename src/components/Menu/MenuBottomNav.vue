@@ -248,6 +248,7 @@ import { getTopicsUnreadBadgeState } from '../../utils/chats-toolbar-filter-badg
 import { useCallHistoryStore } from '../../services/useCallHistory';
 import { parseCallMessage } from '../../utils/parseCallMessage';
 import { useCallUnreadState } from '../../services/useCallUnreadState';
+import { useChatFolders } from '../../composables/useChatFolders';
 
 const props = withDefaults(
   defineProps<{
@@ -265,6 +266,7 @@ defineOptions({
 });
 
 const { activeSection, setActiveSection } = useChatMenu();
+const { closeFolderManager } = useChatFolders();
 const { allowed: managerAllowed } = useManagerInquiries();
 useManagerInboxSubscription();
 const { backgroundActivities, selectSession } = useAiAssistant();
@@ -462,6 +464,7 @@ const handleActivitySelect = (sessionId: string): void => {
 };
 
 const handleSection = (section: ChatMenuSection): void => {
+  closeFolderManager();
   if (section === 'calls') markCallsSeen(Date.now(), authUser.value?.id);
   setActiveSection(section);
 
