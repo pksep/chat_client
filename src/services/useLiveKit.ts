@@ -441,7 +441,8 @@ const getActiveCallTimerSnapshotFallback =
 
 const persistActiveCallSession = (
   activeRoomId = roomId.value,
-  activeTopicId = topicId.value
+  activeTopicId = topicId.value,
+  inviteToken?: string
 ): void => {
   if (typeof window === 'undefined' || !activeRoomId) {
     return;
@@ -459,6 +460,7 @@ const persistActiveCallSession = (
     roomId: activeRoomId,
     topicId: activeTopicId ?? null,
     inviteToken:
+      inviteToken ||
       getCallInviteToken(activeRoomId) ||
       (existingSession?.roomId === activeRoomId
         ? existingSession.inviteToken
@@ -2172,7 +2174,7 @@ const matchesPendingEndCall = (
 
 const getRawLiveKitCallStatus = async (
   targetRoomId?: string | null,
-  options: { includeRoomState?: boolean } = {}
+  options: { includeRoomState?: boolean; inviteToken?: string } = {}
 ): Promise<LiveKitCallStatus | null> => {
   if (!targetRoomId) {
     return null;
@@ -2183,7 +2185,7 @@ const getRawLiveKitCallStatus = async (
     return null;
   }
 
-  const inviteToken = getCallInviteToken(targetRoomId);
+  const inviteToken = options.inviteToken ?? getCallInviteToken(targetRoomId);
   const status = await sdk.getLiveKitCallStatus(targetRoomId, {
     ...options,
     inviteToken
@@ -2197,9 +2199,10 @@ const getRawLiveKitCallStatus = async (
 
 const getLiveKitCallStatus = async (
   targetRoomId?: string | null,
-  targetTopicId?: string | null
+  targetTopicId?: string | null,
+  options: { inviteToken?: string } = {}
 ): Promise<LiveKitCallStatus | null> => {
-  const status = await getRawLiveKitCallStatus(targetRoomId);
+  const status = await getRawLiveKitCallStatus(targetRoomId, options);
 
   if (!status) {
     return null;
@@ -4321,13 +4324,13 @@ const setupRoomListeners = (activeRoom: Room) => {
     });
 };
 
-const getToken = async (activeRoomId: string) => {
+const getToken = async (activeRoomId: string, inviteToken?: string) => {
   const sdk = getChatSDK();
   if (!sdk) return null;
 
-  const inviteToken = getCallInviteToken(activeRoomId);
-  if (inviteToken) {
-    return sdk.getInviteLiveKitToken(activeRoomId, inviteToken);
+  const resolvedInviteToken = inviteToken ?? getCallInviteToken(activeRoomId);
+  if (resolvedInviteToken) {
+    return sdk.getInviteLiveKitToken(activeRoomId, resolvedInviteToken);
   }
 
   return sdk.getLiveKitToken(activeRoomId);
@@ -4370,7 +4373,7 @@ const isExpectedConnectAbort = (
   );
 };
 
-const connectToRoom = async () => {
+const connectToRoom = async (options: { inviteToken?: string } = {}) => {
   if (connectPromise) {
     return connectPromise;
   }
@@ -4406,9 +4409,11 @@ const connectToRoom = async () => {
       topicId: activeTopicId
     });
 
-    const token = await getToken(activeRoomId);
+    const token = await getToken(activeRoomId, options.inviteToken);
     if (!token) {
-      const callStatus = await sdk.getLiveKitCallStatus(activeRoomId);
+      const callStatus = await sdk.getLiveKitCallStatus(activeRoomId, {
+        inviteToken: options.inviteToken
+      });
       recordCallTelemetryEvent(
         'call.token.failed',
         {
@@ -4572,7 +4577,7 @@ const connectToRoom = async () => {
     syncLocalParticipantSpeakingState(nextRoom);
     syncRemoteParticipantState();
     syncConnectionState(nextRoom);
-    persistActiveCallSession(activeRoomId, activeTopicId);
+    persistActiveCallSession(activeRoomId, activeTopicId, options.inviteToken);
     recordCallConnectionQualityIfChanged();
     adaptMediaQualityToConnection(
       nextRoom,
@@ -4603,7 +4608,9 @@ const connectInvitedGroupCallWithRetry = async (
   const callStatus =
     attempt === 1
       ? initialCallStatus
-      : await getLiveKitCallStatus(invite.roomId, invite.topicId);
+      : await getLiveKitCallStatus(invite.roomId, invite.topicId, {
+          inviteToken: invite.inviteToken
+        });
 
   if (!callStatus?.active) {
     clearUnavailableCallState(invite.roomId, invite.topicId);
@@ -4628,7 +4635,7 @@ const connectInvitedGroupCallWithRetry = async (
   let connectError: unknown = null;
 
   try {
-    await connectToRoom();
+    await connectToRoom({ inviteToken: invite.inviteToken });
   } catch (error) {
     connectError = error;
   }
@@ -5747,7 +5754,15 @@ export const handleCallAnswered = async (
   answeredStartTime?: number | null,
   answeredElapsedDurationMs?: number
 ) => {
-  markIncomingCallDismissed(answeredRoomId, answeredTopicId);
+  const me = getAuthUser();
+  const isLocalInvitedGroupAnswer =
+    answeredUserId === me?.id &&
+    !!answeredRoomId &&
+    invitedGroupCall.value?.roomId === answeredRoomId;
+
+  if (!isLocalInvitedGroupAnswer) {
+    markIncomingCallDismissed(answeredRoomId, answeredTopicId);
+  }
 
   if (answeredTopicId) {
     const topicsApi = useTopics();
@@ -5826,7 +5841,6 @@ export const handleCallAnswered = async (
     open.value = true;
   }
 
-  const me = getAuthUser();
   if (
     me &&
     answeredUserId === me.id &&
@@ -6009,9 +6023,18 @@ export const dismissIncomingCallState = (
   targetRoomId?: string,
   targetTopicId?: string
 ) => {
-  markIncomingCallDismissed(targetRoomId, targetTopicId);
+  const preservesActiveInviteAuthorization =
+    !!targetRoomId &&
+    invitedGroupCall.value?.roomId === targetRoomId &&
+    (roomId.value === targetRoomId || isAcceptingLocally || isCalling.value);
+
+  if (!preservesActiveInviteAuthorization) {
+    markIncomingCallDismissed(targetRoomId, targetTopicId);
+  }
   removePendingGroupCallEntry(targetTopicId);
-  removeInvitedGroupCallEntry(targetRoomId);
+  if (!preservesActiveInviteAuthorization) {
+    removeInvitedGroupCallEntry(targetRoomId);
+  }
 
   const matchesCurrentIncomingCall =
     isIncoming.value &&
