@@ -77,6 +77,8 @@
         !topics.length &&
         !isCollapse
       "
+      :text="search.trim() ? 'Ничего не найдено' : 'Здесь будут чаты'"
+      :hide-icon="!search.trim()"
       data-testid="Clients-Empty"
     />
   </section>
