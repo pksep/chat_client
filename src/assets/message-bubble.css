@@ -229,6 +229,11 @@
   gap: 8px;
 }
 
+.message__article--emoji-referenced .message-footer-row {
+  justify-self: stretch;
+  width: 100%;
+}
+
 .message__article__text--emoji {
   background-color: transparent;
   border-radius: 0;

@@ -207,6 +207,14 @@
               v-if="option.customIcon === 'search'"
               class="chat__header-context-menu-icon"
             />
+            <UnmuteIcon
+              v-else-if="option.customIcon === 'notificationOn'"
+              class="chat__header-context-menu-icon"
+            />
+            <MuteIcon
+              v-else-if="option.customIcon === 'notificationOff'"
+              class="chat__header-context-menu-icon"
+            />
             <Icon
               v-else-if="option.iconName"
               :name="option.iconName"
@@ -517,6 +525,8 @@ import { TopicType } from '../../services/useChatSDK/types';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
 import HeaderContextSearchIcon from '../UI/HeaderContextSearchIcon.vue';
+import MuteIcon from '../UI/MuteIcon.vue';
+import UnmuteIcon from '../UI/UnmuteIcon.vue';
 import LoadingIcon from '../UI/LoadingIcon.vue';
 import TypingIndicator from '../UI/TypingIndicator.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
@@ -1322,7 +1332,7 @@ const getHeaderContextMenuOptions = computed(() => {
     style?: string;
     iconName?: IconNameEnum;
     iconSize?: number;
-    customIcon?: 'search';
+    customIcon?: 'search' | 'notificationOn' | 'notificationOff';
   }> = [];
 
   if (isFavoriteDialogTopic.value) {
@@ -1383,9 +1393,9 @@ const getHeaderContextMenuOptions = computed(() => {
         function: () => {
           toggleMuteTopic(currentTopic.value);
         },
-        iconName: currentTopic.value?.info?.isMute
-          ? IconNameEnum.distrub
-          : IconNameEnum.noDistrub
+        customIcon: currentTopic.value?.info?.isMute
+          ? 'notificationOn'
+          : 'notificationOff'
       });
     }
 

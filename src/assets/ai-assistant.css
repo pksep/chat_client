@@ -335,34 +335,33 @@
   display: grid;
   place-content: center;
   justify-items: center;
-  gap: 14px;
+  gap: 10px;
   min-height: 270px;
   color: var(--text-secondary);
 }
 
 .ai-menu-panel__empty-face {
-  width: 74px;
-  height: 74px;
+  width: 84px;
+  height: 84px;
   color: var(--border-table);
-}
-
-.ai-menu-panel__empty-face circle,
-.ai-menu-panel__empty-face path {
-  stroke: currentColor;
-  stroke-width: 4;
-  stroke-linecap: round;
-}
-
-.ai-menu-panel__empty-face circle:not(:first-child) {
-  fill: currentColor;
-  stroke: none;
 }
 
 .ai-menu-panel__empty p {
   order: -1;
   margin: 0;
+  color: var(--text-primary);
   font-size: 14px;
   line-height: 17px;
+}
+
+.ai-menu-panel__empty--without-icon p {
+  color: var(--text-secondary);
+}
+
+.ai-menu-panel__empty:not(.ai-menu-panel__empty--without-icon) {
+  box-sizing: border-box;
+  place-content: start center;
+  padding-top: 100px;
 }
 
 .chat-container:has(.chat--ai-route) {
