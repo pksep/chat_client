@@ -94,6 +94,50 @@ test('обрабатывает приглашение сразу для авто
   }
 });
 
+test('не сбрасывает авторизацию при просроченной ссылке на звонок', async ({
+  page
+}, testInfo) => {
+  test.setTimeout(60_000);
+  const fixture = await createAndroidPerformanceServer({
+    port: 5360 + testInfo.parallelIndex,
+    topicCount: 1,
+    messagesPerTopic: 2,
+    userCount: 2
+  });
+  fixture.state.invitePreviewStatus = 401;
+
+  try {
+    await page.addInitScript(
+      ({ organization, config, user }) => {
+        localStorage.setItem(
+          'chat_runtime_organizations',
+          JSON.stringify([{ url: organization, config }])
+        );
+        localStorage.setItem('chat_runtime_last_organization', organization);
+        localStorage.setItem(
+          'chat_auth_session',
+          JSON.stringify({ token: 'authorized-call-invite-token', user })
+        );
+      },
+      {
+        organization: fixture.origin,
+        config: fixture.config,
+        user: fixture.user
+      }
+    );
+
+    await page.goto('/?callRoom=expired-room&callInvite=expired-signed-invite');
+
+    await expect
+      .poll(() => countInvitePreviewRequests(fixture), { timeout: 30_000 })
+      .toBeGreaterThan(0);
+    await expect(page).not.toHaveURL(/callInvite=/);
+    await expect(page.getByTestId('AuthorizationScreen')).toBeHidden();
+  } finally {
+    await fixture.close();
+  }
+});
+
 test('не открывает авторизацию при клике по production-ссылке внутри локального чата', async ({
   page,
   context

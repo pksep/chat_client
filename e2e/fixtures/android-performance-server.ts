@@ -104,7 +104,8 @@ export async function createAndroidPerformanceServer({
     lagLatest: false,
     failMessages: false,
     missingFavorite: false,
-    favoriteCreatedAt: null as number | null
+    favoriteCreatedAt: null as number | null,
+    invitePreviewStatus: 404 as 401 | 404
   };
   const server = createServer(async (request, response) => {
     const url = new URL(request.url!, origin);
@@ -240,7 +241,7 @@ export async function createAndroidPerformanceServer({
       return;
     }
     if (pathname === '/calls/invite-preview') {
-      response.statusCode = 404;
+      response.statusCode = state.invitePreviewStatus;
       json({ message: 'Test call invite is unavailable' });
       return;
     }

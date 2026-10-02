@@ -90,6 +90,20 @@ export interface WebSocketEvent {
 
 const UPLOAD_RETRY_MAX_DELAY_MS = 5000;
 const VIDEO_UPLOAD_COVER_TIMEOUT_MS = 8000;
+const PUBLIC_CALL_INVITE_PATHS = [
+  '/calls/invite-preview',
+  '/calls/invite-livekit-token'
+] as const;
+
+const isPublicCallInviteRequest = (url: unknown): boolean => {
+  if (typeof url !== 'string') {
+    return false;
+  }
+
+  return PUBLIC_CALL_INVITE_PATHS.some(
+    path => url === path || url.startsWith(`${path}?`)
+  );
+};
 
 interface UploadTarget {
   objectName: string;
@@ -184,9 +198,15 @@ export class ChatSDK {
       }
 
       (reqi as any)[methodName] = (...args: any[]) => {
-        return withErpRefreshOnAuthError(() =>
-          originalMethod.apply(reqi, args)
-        );
+        const request = () => originalMethod.apply(reqi, args);
+
+        // Invite endpoints are public. Their 401 means that the invite is
+        // invalid or expired, not that the current user's chat session ended.
+        if (isPublicCallInviteRequest(args[0])) {
+          return request();
+        }
+
+        return withErpRefreshOnAuthError(request);
       };
     }
 
