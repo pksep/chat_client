@@ -3,8 +3,7 @@
     :class="[
       'chat-folder-editor',
       {
-        'chat-folder-editor--mobile': props.mobile,
-        'chat-folder-editor--has-error': !!props.error
+        'chat-folder-editor--mobile': props.mobile
       }
     ]"
   >
@@ -47,10 +46,6 @@
       @unmount-topic="emits('toggle-topic', $event)"
     />
 
-    <p v-if="props.error" class="chat-folder-editor__error">
-      {{ props.error }}
-    </p>
-
     <footer v-if="props.showFooter" class="chat-folder-editor__footer">
       <Button
         :type="ButtonTypeEnum.primary"
@@ -83,12 +78,11 @@ const props = withDefaults(
     selectedTopicIds: Set<string>;
     canSubmit: boolean;
     isSaving: boolean;
-    error?: string;
     submitLabel: string;
     showFooter?: boolean;
     mobile?: boolean;
   }>(),
-  { error: '', showFooter: true, mobile: false }
+  { showFooter: true, mobile: false }
 );
 
 const emits = defineEmits<{

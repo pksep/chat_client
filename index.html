@@ -57,7 +57,7 @@
         inset: 0;
         z-index: 2600;
         display: grid;
-        grid-template-columns: 345px minmax(0, 1fr);
+        grid-template-columns: 435px minmax(0, 1fr);
         height: 100dvh;
         min-height: 100dvh;
         background: var(--surface-main);
@@ -84,15 +84,111 @@
       }
 
       .startup-shell__content {
+        position: relative;
         display: grid;
         grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
         min-width: 0;
         min-height: 0;
-        padding: 20px 10px 0;
+        padding: 20px 10px 0 100px;
         border-right: 0.5px solid var(--border-table);
         background: var(--surface-input-primary);
         box-sizing: border-box;
         transition: all 0.2s ease;
+      }
+
+      .startup-shell__folders {
+        position: absolute;
+        inset: 0 auto 0 0;
+        display: flex;
+        box-sizing: border-box;
+        width: 90px;
+        padding-top: 20px;
+        flex-direction: column;
+        gap: 10px;
+        overflow: hidden;
+        background: var(--surface-input-primary);
+      }
+
+      .startup-shell__folders::after {
+        content: '';
+        position: absolute;
+        inset: 0 0 0 auto;
+        width: 1px;
+        background: var(--border-table);
+      }
+
+      @media (min-resolution: 2dppx) {
+        .startup-shell__folders::after {
+          width: 0.5px;
+        }
+      }
+
+      .startup-shell__folder-items {
+        display: flex;
+        min-height: 0;
+        padding-inline: 10px;
+        flex: 1;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .startup-shell__folder-item {
+        position: relative;
+        display: grid;
+        box-sizing: border-box;
+        width: 70px;
+        min-height: 72px;
+        padding: 10px 5px;
+        justify-items: center;
+        gap: 2px;
+      }
+
+      .startup-shell__folder-item:first-child {
+        min-height: 52px;
+        padding-block: 0;
+      }
+
+      .startup-shell__folder-item:first-child + .startup-shell__folder-item {
+        margin-top: 22px;
+      }
+
+      .startup-shell__folder-item + .startup-shell__folder-item::before {
+        content: '';
+        position: absolute;
+        inset: 0 0 auto;
+        height: 0.5px;
+        transform: translateY(-50%);
+        background: var(--border-table);
+      }
+
+      .startup-shell__folder-item:first-child
+        + .startup-shell__folder-item::before {
+        top: -10px;
+      }
+
+      .startup-shell__folder-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+      }
+
+      .startup-shell__folder-name {
+        width: 45px;
+        height: 12px;
+        border-radius: 6px;
+      }
+
+      .startup-shell__folder-item--manage {
+        display: none;
+      }
+
+      .startup-shell__folder-footer {
+        display: grid;
+        box-sizing: border-box;
+        height: 58px;
+        padding: 10px 19px;
+        place-items: center;
+        flex: 0 0 58px;
       }
 
       .startup-shell__toolbar {
@@ -199,7 +295,9 @@
       .startup-shell__message-media,
       .startup-shell__message-media-icon,
       .startup-shell__composer-text,
-      .startup-shell__composer-toolbar-button {
+      .startup-shell__composer-toolbar-button,
+      .startup-shell__folder-avatar,
+      .startup-shell__folder-name {
         background: linear-gradient(
           90deg,
           var(--border-table),
@@ -463,12 +561,67 @@
 
         .startup-shell__content {
           display: grid;
-          grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+          grid-template-rows: auto auto 82px auto auto minmax(0, 1fr) auto;
           min-height: 100dvh;
-          padding: 10px 0 0;
+          padding: calc(20px + env(safe-area-inset-top, 0px)) 0 0;
           border-right: 0;
           background: var(--surface-input-primary);
           transition: all 0.2s ease;
+        }
+
+        .startup-shell__folders {
+          position: static;
+          width: 100%;
+          height: 72px;
+          min-height: 72px;
+          padding: 0;
+          flex-direction: row;
+        }
+
+        .startup-shell__folders::after,
+        .startup-shell__folder-item::before,
+        .startup-shell__folder-footer {
+          display: none;
+        }
+
+        .startup-shell__folder-items {
+          width: 100%;
+          height: 72px;
+          padding: 0 10px 0 16px;
+          flex-direction: row;
+          gap: 20px;
+        }
+
+        .startup-shell__folder-item {
+          height: 72px;
+          min-height: 72px;
+          padding: 10px 5px;
+          align-content: center;
+          flex: 0 0 70px;
+        }
+
+        .startup-shell__folder-item:first-child {
+          min-height: 72px;
+          padding-block: 10px;
+        }
+
+        .startup-shell__folder-item:first-child + .startup-shell__folder-item {
+          margin-top: 0;
+        }
+
+        .startup-shell__folder-item::after {
+          content: '';
+          position: absolute;
+          top: 1px;
+          right: -10px;
+          width: 0.5px;
+          height: 70px;
+          transform: translateX(50%);
+          background: var(--border-table);
+        }
+
+        .startup-shell__folder-item--manage {
+          display: grid;
         }
 
         .startup-shell__toolbar {
@@ -614,8 +767,7 @@
           display: contents;
         }
 
-        html.startup-shell-topic-route
-          .startup-shell__composer-toolbar-button {
+        html.startup-shell-topic-route .startup-shell__composer-toolbar-button {
           display: none;
           width: 22px;
           height: 22px;
@@ -765,6 +917,35 @@
           <div class="startup-shell__create"></div>
         </div>
         <div class="startup-shell__divider"></div>
+        <div class="startup-shell__folders">
+          <div class="startup-shell__folder-items">
+            <div class="startup-shell__folder-item">
+              <div class="startup-shell__folder-avatar"></div>
+              <div class="startup-shell__folder-name"></div>
+            </div>
+            <div class="startup-shell__folder-item">
+              <div class="startup-shell__folder-avatar"></div>
+              <div class="startup-shell__folder-name"></div>
+            </div>
+            <div class="startup-shell__folder-item">
+              <div class="startup-shell__folder-avatar"></div>
+              <div class="startup-shell__folder-name"></div>
+            </div>
+            <div class="startup-shell__folder-item">
+              <div class="startup-shell__folder-avatar"></div>
+              <div class="startup-shell__folder-name"></div>
+            </div>
+            <div
+              class="startup-shell__folder-item startup-shell__folder-item--manage"
+            >
+              <div class="startup-shell__folder-avatar"></div>
+              <div class="startup-shell__folder-name"></div>
+            </div>
+          </div>
+          <div class="startup-shell__folder-footer">
+            <div class="startup-shell__folder-avatar"></div>
+          </div>
+        </div>
         <div class="startup-shell__search"></div>
         <div class="startup-shell__filters">
           <div class="startup-shell__chip"></div>

@@ -99,4 +99,20 @@ describe('API папок чатов', () => {
     assert.equal(chatFolderIcons[0], 'folder');
     assert.equal(chatFolderIcons.at(-1), 'home');
   });
+
+  it('сохраняет порядок и раздел одним запросом', async () => {
+    const folders = [{ ...folder, position: 0 }];
+    const api = new ChatFolderApi({
+      patch: async (path, body, options) => {
+        assert.equal(path, '/chat-folders/reorder');
+        assert.deepEqual(body, { scope: 'clients', folderIds: [folder.id] });
+        assert.deepEqual(options, { parsed: false });
+        return Response.json(folders);
+      }
+    } as unknown as Reqi);
+    assert.deepEqual(
+      await api.reorderChatFolders('clients', [folder.id]),
+      folders
+    );
+  });
 });

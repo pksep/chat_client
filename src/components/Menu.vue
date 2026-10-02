@@ -12,6 +12,8 @@
 
     <ChatFolderRail
       v-if="!isCollapse && !isShareSelectionActive"
+      :scope="activeSection === 'clients' ? 'clients' : 'chats'"
+      :loading="isChatFoldersLoading"
       :folders="activeSection === 'clients' ? clientFolders : chatFolders"
       :topics="activeSection === 'clients' ? clientFolderTopics : allTopics"
       :selected-folder-id="
