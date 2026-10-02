@@ -35,6 +35,7 @@ import {
   ChatFolderApi,
   ChatFolderInterface,
   type ChatFolder,
+  type ChatFolderScope,
   type CreateChatFolderPayload,
   type SaveChatFolderPayload
 } from './chat-folder';
@@ -1032,6 +1033,13 @@ export class ChatSDK {
 
   async deleteChatFolder(folderId: string): Promise<void> {
     return this.chatFolder.deleteChatFolder(folderId);
+  }
+
+  async reorderChatFolders(
+    scope: ChatFolderScope,
+    folderIds: string[]
+  ): Promise<ChatFolder[]> {
+    return this.chatFolder.reorderChatFolders(scope, folderIds);
   }
 
   async createTopic(topicData: { peerId: string }): Promise<Topic> {

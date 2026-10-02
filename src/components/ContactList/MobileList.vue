@@ -62,6 +62,7 @@
               <template v-if="!isShareSelectionActive" #folders>
                 <ChatFolderRail
                   mobile
+                  :loading="isChatFoldersLoading"
                   :folders="chatFolders"
                   :topics="allTopics"
                   :selected-folder-id="activeFolderId"

@@ -34,17 +34,7 @@
     @close="closeIosInstallHelp"
   />
 
-  <PushNotification
-    v-for="(notification, index) in notificationState.items"
-    :key="notification.key"
-    class="app-notification-stack__item"
-    :style="getNotificationStyle(index)"
-    :title="notification.title"
-    :push-key="notification.key"
-    :description="notification.description"
-    :type="notification.type"
-    @close="closeNotification(notification.key)"
-  />
+  <NotificationStack />
 </template>
 <script lang="ts" setup>
 import {
@@ -56,7 +46,7 @@ import {
   ref
 } from 'vue';
 import { Capacitor } from '@capacitor/core';
-import { PushNotification } from '@pksep/yui';
+import NotificationStack from './components/UI/NotificationStack.vue';
 import { IChatContainerConfig } from './components/interfaces/interfaces';
 import ChatContainerRoot from './ChatContainerRoot.vue';
 import { useIosInstallPrompt } from './composables/useIosInstallPrompt';
@@ -71,7 +61,6 @@ import {
   saveChatAuthSession
 } from './composables/useAuth';
 import { fetchUsersForAuth } from './composables/useUsers';
-import { useNotifications } from './composables/useNotifications';
 import { initShareIntentHandling } from './services/useShareIntent';
 import {
   dispatchNativeStartupReady,
@@ -147,21 +136,10 @@ const selectedOrganization = ref(
 const isAddingNewOrganization = ref(!organizations.value.length);
 const serverUrl = ref(selectedOrganization.value);
 const isCredentialsStep = ref(false);
-const { state: notificationState, closeNotification } = useNotifications();
 const {
   isOpen: isIosInstallPromptOpen,
   closeInstallHelp: closeIosInstallHelp
 } = useIosInstallPrompt();
-
-const getNotificationStyle = (index: number) => ({
-  position: 'fixed',
-  top: `${16 + index * 88}px`,
-  right: '16px',
-  left: 'auto',
-  bottom: 'auto',
-  margin: '0',
-  zIndex: `${3000 - index}`
-});
 
 const waitForAnimationFrame = () =>
   new Promise<void>(resolve => {
@@ -1238,21 +1216,5 @@ onBeforeUnmount(() => {
   100% {
     background-position: -80% 0;
   }
-}
-
-.app-notification-stack__item {
-  width: min(305px, calc(100vw - 32px));
-  min-height: 77px;
-  box-sizing: border-box;
-  box-shadow: 0 4px 9.8px rgb(0 0 0 / 5%);
-  pointer-events: auto;
-}
-
-.app-notification-stack__item.push-notification-yui-kit_info {
-  --text-brand: var(--action-primary-bg);
-}
-
-.app-notification-stack__item :deep(.notification-yui-kit) {
-  box-shadow: none;
 }
 </style>

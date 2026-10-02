@@ -6,6 +6,7 @@ export interface ChatFolder {
   name: string;
   icon: ChatFolderIcon;
   scope?: ChatFolderScope;
+  position?: number;
   topicIds: readonly string[];
   createdAt: string;
   updatedAt: string;
@@ -57,6 +58,10 @@ export interface ChatFolderInterface {
     payload: SaveChatFolderPayload
   ): Promise<ChatFolder>;
   deleteChatFolder(folderId: string): Promise<void>;
+  reorderChatFolders(
+    scope: ChatFolderScope,
+    folderIds: string[]
+  ): Promise<ChatFolder[]>;
 }
 
 export class ChatFolderApi implements ChatFolderInterface {
@@ -93,5 +98,17 @@ export class ChatFolderApi implements ChatFolderInterface {
 
   async deleteChatFolder(folderId: string): Promise<void> {
     await this.reqi.delete(`/chat-folders/${folderId}`, { parsed: false });
+  }
+
+  async reorderChatFolders(
+    scope: ChatFolderScope,
+    folderIds: string[]
+  ): Promise<ChatFolder[]> {
+    const response = (await this.reqi.patch<ChatFolder[]>(
+      '/chat-folders/reorder',
+      { scope, folderIds },
+      { parsed: false }
+    )) as Response;
+    return response.json();
   }
 }

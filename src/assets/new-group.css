@@ -64,7 +64,27 @@ dialog.new-group .menu-info__group-info h4 {
 
 .contact-selector {
   display: grid;
+  align-content: flex-start;
   gap: 10px;
+}
+
+.contact-selector:has(> .contact-selector__add) {
+  min-height: 0;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.contact-selector:has(> .contact-selector__add):has(
+    > .contact-selector__badges
+  ) {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+}
+
+.contact-selector:has(> .contact-selector__add) > .contact-selector__empty {
+  min-height: 0;
+}
+
+.contact-selector > .contact-selector__add {
+  align-self: end;
 }
 
 .new-group__tab2-profile {
@@ -101,8 +121,7 @@ dialog.new-group.modal-yui-kit {
 
   dialog.new-group
     > .modal-yui-kit__modal-content:has(.menu-info__modal-wrapper),
-  dialog.new-group
-    > .modal-yui-kit__modal-content:has(> .contact-selector) {
+  dialog.new-group > .modal-yui-kit__modal-content:has(> .contact-selector) {
     grid-template-rows: 34px minmax(0, 404px);
   }
 
