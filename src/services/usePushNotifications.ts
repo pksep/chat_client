@@ -849,7 +849,10 @@ export const initPushNotifications = async () => {
     try {
       await api.post('/push/unsubscribe', { endpoint: previousEndpoint });
     } catch (error) {
-      console.warn('Failed to remove the previous web push subscription:', error);
+      console.warn(
+        'Failed to remove the previous web push subscription:',
+        error
+      );
     }
 
     try {
