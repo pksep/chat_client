@@ -94,6 +94,74 @@ test('обрабатывает приглашение сразу для авто
   }
 });
 
+test('запрашивает invite LiveKit-токен после ANSWER_CALL', async ({
+  page
+}, testInfo) => {
+  test.setTimeout(60_000);
+  const fixture = await createAndroidPerformanceServer({
+    port: 5360 + testInfo.parallelIndex,
+    topicCount: 1,
+    messagesPerTopic: 2,
+    userCount: 2
+  });
+  fixture.state.callInviteActive = true;
+
+  const roomId = 'invite-token-room';
+  const inviteToken = 'invite-token-that-must-be-preserved';
+  const inviteTokenRequest = () =>
+    fixture.requests.filter(request =>
+      request.path.startsWith('/api/calls/invite-livekit-token?')
+    );
+  const regularTokenRequest = () =>
+    fixture.requests.filter(request =>
+      request.path.startsWith('/api/calls/livekit-token?')
+    );
+
+  try {
+    await page.addInitScript(
+      ({ organization, config, user }) => {
+        localStorage.setItem(
+          'chat_runtime_organizations',
+          JSON.stringify([{ url: organization, config }])
+        );
+        localStorage.setItem('chat_runtime_last_organization', organization);
+        localStorage.setItem(
+          'chat_auth_session',
+          JSON.stringify({ token: 'authorized-call-invite-token', user })
+        );
+      },
+      {
+        organization: fixture.origin,
+        config: fixture.config,
+        user: fixture.user
+      }
+    );
+
+    await page.goto(`/?callRoom=${roomId}&callInvite=${inviteToken}`);
+
+    await expect(page.getByTestId('AuthorizationScreen')).toBeHidden();
+    await expect
+      .poll(() => inviteTokenRequest().length, { timeout: 30_000 })
+      .toBeGreaterThan(0);
+
+    expect(regularTokenRequest()).toHaveLength(0);
+    expect(inviteTokenRequest()[0]?.path).toContain(
+      `roomId=${roomId}&invite=${inviteToken}`
+    );
+    expect(
+      fixture.connections.find(event => event.event === 'answerCall')
+    ).toMatchObject({
+      payload: {
+        userId: fixture.user.id,
+        roomId,
+        inviteToken
+      }
+    });
+  } finally {
+    await fixture.close();
+  }
+});
+
 test('не открывает авторизацию при клике по production-ссылке внутри локального чата', async ({
   page,
   context

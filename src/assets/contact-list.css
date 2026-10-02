@@ -82,6 +82,7 @@
   gap: 10px;
   padding-inline: 10px;
   min-height: 58px;
+  border-radius: 5px;
   cursor: pointer;
 
   &:active,
@@ -345,7 +346,7 @@
   align-content: start;
   row-gap: 10px;
   min-height: 220px;
-  padding-top: 50px;
+  padding: 100px 16px 0;
 }
 
 .contact-list__search-state-title {
@@ -596,6 +597,9 @@ svg.icon-yui-kit.contact-list__read-icon {
 
 @media (width <=768px) {
   .chat-container:not(:has(.chat__mobile-route-view--messages)):has(.chat-list),
+  .chat-container:not(:has(.chat__mobile-route-view--messages)):has(
+      .chat-folders-panel--mobile
+    ),
   .chat-container:not(:has(.chat__mobile-route-view--messages)):has(
       .mobile-list-container__content .menu-profile
     ),

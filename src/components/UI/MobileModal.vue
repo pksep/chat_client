@@ -53,6 +53,7 @@
     >
       <slot />
     </div>
+    <slot name="footer" />
   </Modal>
 </template>
 

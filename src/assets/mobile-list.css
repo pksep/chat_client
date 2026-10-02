@@ -107,7 +107,7 @@
 
 @media screen and (width <=768px) {
   .mobile-list-container {
-    --mobile-list-height: 0;
+    --mobile-list-height: 0px;
 
     &::-webkit-scrollbar {
       width: 0;

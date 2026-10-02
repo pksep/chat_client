@@ -33,40 +33,68 @@
           :data-testid="`${props.dataTestid}-ChatList-Section`"
           @scroll.passive="handleContentScroll"
         >
-          <ChatsToolbar
-            :model-value="toolbarState.search"
-            :filter="toolbarState.filter"
-            :filter-counts="filterCounts"
-            :filter-muted-only="filterMutedOnly"
-            class="mobile-list-container__toolbar"
-            :data-testid="`${props.dataTestid}-MobileList`"
-            @update:model-value="setSearch"
-            @update:filter="setFilter"
-            @create-chat="handleShowAccount(TopicType.DM)"
-            @create-group="handleShowAccount(TopicType.Group)"
-            @create-bot="handleShowBot"
+          <ChatFoldersPanel
+            v-if="isManagingFolders && !isShareSelectionActive"
+            mobile
+            :topics="allTopics"
+            :folders="chatFolders"
+            :loading="isChatFoldersLoading"
+            :selected-folder-id="activeFolderId"
+            @close="closeFolderManager"
+            @select-folder="handleSelectFolder"
+            @select-topic="handleTopicSelect"
           />
 
-          <div class="chat-list">
-            <TopicList
-              :topics="contactList"
-              :data-testid="`${props.dataTestid}-ContactList`"
-              :selected-topic-id="selectedTopicId"
-              :show-checkbox="isShareSelectionActive"
-              :selected-topic-ids="selectedTopicIds"
-              :search-query="toolbarState.search"
-              :is-loading="isTopicsLoading"
-              :message-results="
-                isShareSelectionActive ? [] : filteredMessageSearchResults
-              "
-              :is-message-search-loading="
-                !isShareSelectionActive &&
-                (isMessageSearchPending || isMessageSearchLoading)
-              "
-              @unmount-topic="handleTopicSelect"
-              @unmount-message="handleMessageSearchClick"
-            />
-          </div>
+          <template v-else>
+            <ChatsToolbar
+              :model-value="toolbarState.search"
+              :filter="toolbarState.filter"
+              :filter-counts="filterCounts"
+              :filter-muted-only="filterMutedOnly"
+              class="mobile-list-container__toolbar"
+              :data-testid="`${props.dataTestid}-MobileList`"
+              @update:model-value="setSearch"
+              @update:filter="setFilter"
+              @create-chat="handleShowAccount(TopicType.DM)"
+              @create-group="handleShowAccount(TopicType.Group)"
+              @create-bot="handleShowBot"
+            >
+              <template v-if="!isShareSelectionActive" #folders>
+                <ChatFolderRail
+                  mobile
+                  :folders="chatFolders"
+                  :topics="allTopics"
+                  :selected-folder-id="activeFolderId"
+                  :is-managing="false"
+                  is-active
+                  :auth-user-id="authUserId"
+                  @select="handleSelectFolder"
+                  @manage="openFolderManager"
+                />
+              </template>
+            </ChatsToolbar>
+
+            <div class="chat-list">
+              <TopicList
+                :topics="contactList"
+                :data-testid="`${props.dataTestid}-ContactList`"
+                :selected-topic-id="selectedTopicId"
+                :show-checkbox="isShareSelectionActive"
+                :selected-topic-ids="selectedTopicIds"
+                :search-query="toolbarState.search"
+                :is-loading="isTopicsLoading"
+                :message-results="
+                  isShareSelectionActive ? [] : filteredMessageSearchResults
+                "
+                :is-message-search-loading="
+                  !isShareSelectionActive &&
+                  (isMessageSearchPending || isMessageSearchLoading)
+                "
+                @unmount-topic="handleTopicSelect"
+                @unmount-message="handleMessageSearchClick"
+              />
+            </div>
+          </template>
         </section>
 
         <section
@@ -135,6 +163,11 @@
     </div>
     <MenuBottomNav
       :is-collapse="false"
+      :class="{
+        'menu-bottom-nav--folders':
+          !isShareSelectionActive &&
+          (activeSection === 'chats' || activeSection === 'clients')
+      }"
       :data-testid="`${props.dataTestid}-MobileList-BottomNav`"
     />
   </div>
@@ -219,6 +252,9 @@ import {
   normalizeAtSearchQuery
 } from '../../utils/searchMatch';
 import { useAiAccess } from '../../composables/useAiAccess';
+import { useChatFolders } from '../../composables/useChatFolders';
+import ChatFoldersPanel from '../Menu/ChatFoldersPanel.vue';
+import ChatFolderRail from '../Menu/ChatFolderRail.vue';
 
 const NewChatMobileModal = defineAsyncComponent(
   () => import('../NewChat/NewChatMobileModal.vue')
@@ -262,6 +298,17 @@ const pendingSelectedTopicId = ref<string | undefined>();
 let messageSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let messageSearchRequestToken = 0;
 const authUserId = computed(() => getAuthUser()?.id || '');
+const {
+  folders: chatFolders,
+  activeFolderId,
+  activeFolder,
+  isManagingFolders,
+  isLoading: isChatFoldersLoading,
+  loadFolders,
+  selectFolder,
+  openFolderManager,
+  closeFolderManager
+} = useChatFolders();
 const dragEnterDepth = ref(0);
 const isDragOverFiles = ref(false);
 const MENU_SECTION_ORDER: ChatMenuSection[] = [
@@ -331,10 +378,14 @@ const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
   return true;
 };
 
+const matchesActiveFolder = (topic?: ITopic | null): boolean =>
+  !!topic &&
+  (!activeFolder.value || activeFolder.value.topicIds.includes(topic.id));
+
 const contactList = computed(() => {
   const query = normalizeAtSearchQuery(toolbarState.search);
-  const filteredByType = allTopics.value.filter(topic =>
-    matchesToolbarFilter(topic)
+  const filteredByType = allTopics.value.filter(
+    topic => matchesToolbarFilter(topic) && matchesActiveFolder(topic)
   );
 
   if (!query) {
@@ -353,7 +404,9 @@ const filteredMessageSearchResults = computed(() => {
     const topic =
       result.topic || allTopics.value.find(t => t.id === result.topicId);
 
-    return matchesToolbarFilter(topic || null);
+    return (
+      matchesToolbarFilter(topic || null) && matchesActiveFolder(topic || null)
+    );
   });
 });
 
@@ -573,6 +626,12 @@ const handleMessageSearchClick = (result: IMessageSearchResult): void => {
   navigateToSearchResult(result);
 };
 
+const handleSelectFolder = (folderId: string | null): void => {
+  selectFolder(folderId);
+  setSearch('');
+  void restoreChatsScrollPosition();
+};
+
 const handleShowAccount = (topicType: TopicType) => {
   hasOpenedNewChat.value = true;
   if (isAssistantRoute.value) {
@@ -713,6 +772,14 @@ watch(
 );
 
 watch(
+  [isTopicsLoading, authUserId],
+  ([loading, userId]) => {
+    if (!loading && userId) void loadFolders();
+  },
+  { immediate: true }
+);
+
+watch(
   () => [
     route.value?.type,
     route.value?.id,
@@ -776,6 +843,7 @@ watch(
 onMounted(() => {
   applySectionTrackOffset();
   void restoreChatsScrollPosition();
+  void loadFolders();
 });
 
 onBeforeUnmount(() => {

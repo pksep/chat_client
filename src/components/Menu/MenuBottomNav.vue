@@ -248,6 +248,7 @@ import { useCallHistoryStore } from '../../services/useCallHistory';
 import { parseCallMessage } from '../../utils/parseCallMessage';
 import { useCallUnreadState } from '../../services/useCallUnreadState';
 import { useAiAccess } from '../../composables/useAiAccess';
+import { useChatFolders } from '../../composables/useChatFolders';
 
 const props = withDefaults(
   defineProps<{
@@ -265,6 +266,7 @@ defineOptions({
 });
 
 const { activeSection, setActiveSection } = useChatMenu();
+const { closeFolderManager } = useChatFolders();
 const { allowed: managerAllowed, resolved: managerAccessResolved } =
   useManagerInquiries();
 useManagerInboxSubscription();
@@ -468,6 +470,7 @@ const handleSection = (section: ChatMenuSection): void => {
   if (section === 'ai' && !aiAllowed.value) return;
   if (section === 'clients' && !managerAllowed.value) return;
 
+  closeFolderManager();
   if (section === 'calls') markCallsSeen(Date.now(), authUser.value?.id);
   setActiveSection(section);
 

@@ -32,6 +32,13 @@ import type {
 import type { UserStatusValue } from '../../utils/userStatus';
 import { ChatTopic, ChatTopicInterface } from './topic';
 import {
+  ChatFolderApi,
+  ChatFolderInterface,
+  type ChatFolder,
+  type CreateChatFolderPayload,
+  type SaveChatFolderPayload
+} from './chat-folder';
+import {
   ChatMessage,
   ChatMessageInterface,
   type TopicAttachmentsOptions,
@@ -111,6 +118,7 @@ export class ChatSDK {
   private auth: ChatAuthInterface;
   private user: ChatUserInterface;
   private topic: ChatTopicInterface;
+  private chatFolder: ChatFolderInterface;
   private message: ChatMessageInterface;
   private group: ChatGroupInterface;
   private media: ChatMediaInterface;
@@ -130,6 +138,7 @@ export class ChatSDK {
     this.auth = new ChatAuth(this.apiUrl, this.token);
     this.user = new ChatUser(this.reqi);
     this.topic = new ChatTopic(this.reqi);
+    this.chatFolder = new ChatFolderApi(this.reqi);
     this.message = new ChatMessage(this.reqi);
     this.group = new ChatGroup(this.reqi);
     this.media = new ChatMedia(this.reqi);
@@ -1002,6 +1011,27 @@ export class ChatSDK {
 
   async getTopics(): Promise<PaginatedResponse<ITopic>> {
     return this.topic.getTopics();
+  }
+
+  async getChatFolders(): Promise<ChatFolder[]> {
+    return this.chatFolder.getChatFolders();
+  }
+
+  async createChatFolder(
+    payload: CreateChatFolderPayload
+  ): Promise<ChatFolder> {
+    return this.chatFolder.createChatFolder(payload);
+  }
+
+  async updateChatFolder(
+    folderId: string,
+    payload: SaveChatFolderPayload
+  ): Promise<ChatFolder> {
+    return this.chatFolder.updateChatFolder(folderId, payload);
+  }
+
+  async deleteChatFolder(folderId: string): Promise<void> {
+    return this.chatFolder.deleteChatFolder(folderId);
   }
 
   async createTopic(topicData: { peerId: string }): Promise<Topic> {

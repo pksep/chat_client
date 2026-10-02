@@ -117,6 +117,7 @@
           :index="index"
           :data-testid="props.dataTestid"
           :show-checkbox="props.showCheckbox"
+          :show-last-online="props.showLastOnline"
           :current-time="currentTime"
           @reaction-click="event => handleReactionClick(topic, index, event)"
         />
@@ -440,6 +441,7 @@ import { preloadAvatarPath } from '../../services/avatar-image-verification';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
+  showLastOnline?: boolean;
   selectedTopicIds?: Set<string | number>;
   searchQuery?: string;
   toolbarFilter?: string;
@@ -459,6 +461,7 @@ const {
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
+  showLastOnline: false,
   selectedTopicIds: () => new Set<string | number>(),
   searchQuery: '',
   toolbarFilter: '',
@@ -1495,6 +1498,10 @@ const getTopicActiveCall = (topic: ITopic) => {
   font-size: 14px;
   line-height: 20px;
   text-align: center;
+}
+
+.contact-list__search-state--empty {
+  padding: 100px 16px 0;
 }
 
 .contact-list__item--message-result {
