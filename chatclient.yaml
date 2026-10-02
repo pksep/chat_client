@@ -3,10 +3,10 @@
   cycles: 1
   deleted: 8
   inserted: 8
-  seconds: 241.226814423
+  seconds: 320.104858086
   version: 0.60.0
   what: judges-summary
-  when: 2026-10-01 21:27:10.281192396 Z
+  when: 2026-10-02 01:10:40.337490458 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -21768,6 +21768,7 @@
   is_human: 1
   issue: 396
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -21792,6 +21793,7 @@
   is_human: 1
   issue: 397
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -21816,6 +21818,7 @@
   is_human: 1
   issue: 398
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -21840,6 +21843,7 @@
   is_human: 1
   issue: 399
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -21864,6 +21868,7 @@
   is_human: 1
   issue: 400
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -21888,6 +21893,7 @@
   is_human: 1
   issue: 401
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -21912,6 +21918,7 @@
   is_human: 1
   issue: 402
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -21936,6 +21943,7 @@
   is_human: 1
   issue: 403
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -21960,6 +21968,7 @@
   is_human: 1
   issue: 404
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -21984,6 +21993,7 @@
   is_human: 1
   issue: 405
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -22008,6 +22018,7 @@
   is_human: 1
   issue: 406
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -22032,6 +22043,7 @@
   is_human: 1
   issue: 407
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -22056,6 +22068,7 @@
   is_human: 1
   issue: 408
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -22080,6 +22093,7 @@
   is_human: 1
   issue: 409
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -22104,6 +22118,7 @@
   is_human: 1
   issue: 410
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -22128,23 +22143,13 @@
   is_human: 1
   issue: 411
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
   when: 2026-09-17 12:19:51.000000000 Z
   where: github
   who: 49451722
-- _id: 1242
-  _job: 36928101265
-  _time: 2026-10-01 21:24:31.149496827 Z
-  _version: 0.19.6/0.60.0/0.17.11
-  earliest_issue_was_found: 1
-  events_were_scanned: 22726110435
-  latest_issue_was_found: 72
-  min_pull_was_found: 429
-  repository: 1053332035
-  what: iterate
-  where: github
 - _id: 1243
   _job: 36928101265
   _time: 2026-10-01 21:24:32.861880358 Z
@@ -22338,5 +22343,363 @@
   repository: 1053332035
   what: pull-was-opened
   when: 2026-09-30 13:02:24.000000000 Z
+  where: github
+  who: 333335434
+- _id: 1258
+  _job: 36949095679
+  _time: 2026-10-02 01:05:24.957851468 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  earliest_issue_was_found: 1
+  events_were_scanned: 22736275134
+  latest_issue_was_found: 72
+  min_pull_was_found: 429
+  repository: 1053332035
+  what: iterate
+  where: github
+- _id: 1259
+  _job: 36949095679
+  _time: 2026-10-02 01:05:39.401578807 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-298
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#413 has been "pull-was-merged".
+  failed_builds: 0
+  files: 7
+  hoc: 229
+  is_human: 1
+  issue: 413
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-18 07:35:58.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1260
+  _job: 36949095679
+  _time: 2026-10-02 01:05:47.174678556 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: mini-fixes2
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#414 has been "pull-was-merged".
+  failed_builds: 0
+  files: 12
+  hoc: 443
+  is_human: 1
+  issue: 414
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-18 13:02:06.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1261
+  _job: 36949095679
+  _time: 2026-10-02 01:05:50.404423492 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-300
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#415 has been "pull-was-merged".
+  failed_builds: 0
+  files: 20
+  hoc: 2462
+  is_human: 1
+  issue: 415
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-21 13:00:09.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1262
+  _job: 36949095679
+  _time: 2026-10-02 01:05:53.672099633 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-302
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#416 has been "pull-was-merged".
+  failed_builds: 0
+  files: 9
+  hoc: 439
+  is_human: 1
+  issue: 416
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-22 10:22:28.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1263
+  _job: 36949095679
+  _time: 2026-10-02 01:05:57.061411592 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-213
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#417 has been "pull-was-merged".
+  failed_builds: 0
+  files: 3
+  hoc: 92
+  is_human: 1
+  issue: 417
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-22 13:13:20.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1264
+  _job: 36949095679
+  _time: 2026-10-02 01:06:00.657523362 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-304
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#418 has been "pull-was-merged".
+  failed_builds: 0
+  files: 16
+  hoc: 741
+  is_human: 1
+  issue: 418
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-23 09:23:15.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1265
+  _job: 36949095679
+  _time: 2026-10-02 01:06:03.933436267 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-501
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#419 has been "pull-was-merged".
+  failed_builds: 0
+  files: 11
+  hoc: 325
+  is_human: 1
+  issue: 419
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-24 08:26:10.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1266
+  _job: 36949095679
+  _time: 2026-10-02 01:06:07.103930312 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-304
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#420 has been "pull-was-merged".
+  failed_builds: 0
+  files: 71
+  hoc: 1024
+  is_human: 1
+  issue: 420
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-25 07:56:41.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1267
+  _job: 36949095679
+  _time: 2026-10-02 01:06:10.359058582 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-502
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#421 has been "pull-was-merged".
+  failed_builds: 0
+  files: 21
+  hoc: 337
+  is_human: 1
+  issue: 421
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-25 11:57:41.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1268
+  _job: 36949095679
+  _time: 2026-10-02 01:06:13.878755714 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: canary
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#422 has been "pull-was-merged".
+  failed_builds: 0
+  files: 249
+  hoc: 15806
+  is_human: 1
+  issue: 422
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-25 11:59:10.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1269
+  _job: 36949095679
+  _time: 2026-10-02 01:06:17.094124944 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-505
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#423 has been "pull-was-merged".
+  failed_builds: 0
+  files: 7
+  hoc: 305
+  is_human: 1
+  issue: 423
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-29 09:04:24.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1270
+  _job: 36949095679
+  _time: 2026-10-02 01:06:20.372808142 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-254
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#424 has been "pull-was-merged".
+  failed_builds: 0
+  files: 2
+  hoc: 11
+  is_human: 1
+  issue: 424
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-29 09:37:04.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1271
+  _job: 36949095679
+  _time: 2026-10-02 01:06:23.725266346 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-260
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#425 has been "pull-was-merged".
+  failed_builds: 0
+  files: 4
+  hoc: 897
+  is_human: 1
+  issue: 425
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-09-29 11:43:49.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1272
+  _job: 36949095679
+  _time: 2026-10-02 01:06:28.013407832 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: CHAT-507
+  comments: 1
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 1
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#427 has been "pull-was-merged".
+  failed_builds: 0
+  files: 8
+  hoc: 111
+  is_human: 1
+  issue: 427
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-10-01 06:28:53.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1273
+  _job: 36949095679
+  _time: 2026-10-02 01:06:32.875856955 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  details: 'We found out that the user #333335434 is known in GitHub as @birdsyeah.'
+  is_human: 1
+  name: birdsyeah
+  what: who-has-name
+  when: 2026-10-02 01:06:33.226778625 Z
   where: github
   who: 333335434
