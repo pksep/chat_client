@@ -58,14 +58,14 @@
             :size="SizesEnum.small"
             @click="handleNewSession"
           >
-            <MessageIcon /> Новый чат
+            <MessageIcon aria-hidden="true" /> Создать чат
           </Button>
           <Button
             :type="ButtonTypeEnum.popover"
             :size="SizesEnum.small"
             @click="handleNewTask"
           >
-            <TasksSuggestionIcon /> Новая задача
+            <CreateTaskIcon /> Создать задачу
           </Button>
         </ContextMenu>
       </Teleport>
@@ -516,6 +516,7 @@ import MessageIcon from '../UI/MessageIcon.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import UnpinIcon from '../UI/UnpinIcon.vue';
 import TasksSuggestionIcon from './TasksSuggestionIcon.vue';
+import CreateTaskIcon from './CreateTaskIcon.vue';
 import AIActivityPanel from './AIActivityPanel.vue';
 
 const props = withDefaults(

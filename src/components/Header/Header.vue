@@ -219,6 +219,15 @@
               v-else-if="option.customIcon === 'notificationOff'"
               class="chat__header-context-menu-icon"
             />
+            <MessageIcon
+              v-else-if="option.customIcon === 'createChat'"
+              class="chat__header-context-menu-icon"
+              aria-hidden="true"
+            />
+            <CreateTaskIcon
+              v-else-if="option.customIcon === 'createTask'"
+              class="chat__header-context-menu-icon"
+            />
             <Icon
               v-else-if="option.iconName"
               :name="option.iconName"
@@ -493,6 +502,7 @@ import type {
   IUser
 } from '../interfaces/interfaces';
 import AiAvatar from '../AI/AiAvatar.vue';
+import CreateTaskIcon from '../AI/CreateTaskIcon.vue';
 import MenuSearch from '../UI/MenuSearch.vue';
 import { useAiAssistant } from '../../composables/useAiAssistant';
 import {
@@ -528,6 +538,7 @@ import { TopicType } from '../../services/useChatSDK/types';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
 import HeaderContextSearchIcon from '../UI/HeaderContextSearchIcon.vue';
+import MessageIcon from '../UI/MessageIcon.vue';
 import MuteIcon from '../UI/MuteIcon.vue';
 import UnmuteIcon from '../UI/UnmuteIcon.vue';
 import LoadingIcon from '../UI/LoadingIcon.vue';
@@ -1364,7 +1375,12 @@ const getHeaderContextMenuOptions = computed(() => {
     style?: string;
     iconName?: IconNameEnum;
     iconSize?: number;
-    customIcon?: 'search' | 'notificationOn' | 'notificationOff';
+    customIcon?:
+      | 'search'
+      | 'notificationOn'
+      | 'notificationOff'
+      | 'createChat'
+      | 'createTask';
   }> = [];
 
   if (isFavoriteDialogTopic.value) {
@@ -1456,16 +1472,16 @@ const getHeaderContextMenuOptions = computed(() => {
     if (!aiAssistantSessionId.value) {
       options.push(
         {
-          value: 'Новый чат',
-          iconName: IconNameEnum.chat,
+          value: 'Создать чат',
+          customIcon: 'createChat',
           function: () => {
             startNewAiSession();
             navigateToAI();
           }
         },
         {
-          value: 'Новая задача',
-          iconName: IconNameEnum.calendar,
+          value: 'Создать задачу',
+          customIcon: 'createTask',
           function: () => {
             startNewAiTask();
             navigateToAI();

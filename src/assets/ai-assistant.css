@@ -71,7 +71,8 @@
   transform: translate(10px, 10px);
 }
 
-.ai-menu-panel__create-menu .tasks-suggestion-icon {
+.ai-menu-panel__create-menu svg {
+  flex-shrink: 0;
   width: 24px;
   height: 24px;
 }

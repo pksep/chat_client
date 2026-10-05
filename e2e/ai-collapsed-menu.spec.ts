@@ -437,7 +437,7 @@ for (const entry of ['раздел задач', 'новая задача', 'со
     if (entry === 'новая задача') {
       await panel.getByRole('button', { name: 'Создать', exact: true }).click();
       await page
-        .getByRole('button', { name: 'Новая задача', exact: true })
+        .getByRole('button', { name: 'Создать задачу', exact: true })
         .click();
     } else {
       await tasksTab.click();
@@ -704,13 +704,13 @@ test('троеточие доступно на стартовом экране �
   await expect(headerTrigger).toBeVisible({ timeout: 60_000 });
   await headerTrigger.click();
   const menu = page.locator('.chat__header-context-menu:visible');
-  await menu.getByRole('button', { name: 'Новая задача', exact: true }).click();
+  await menu.getByRole('button', { name: 'Создать задачу', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Автоматизированные задачи' })
   ).toBeVisible();
   await expect(headerTrigger).toBeVisible();
   await headerTrigger.click();
-  await menu.getByRole('button', { name: 'Новый чат', exact: true }).click();
+  await menu.getByRole('button', { name: 'Создать чат', exact: true }).click();
   await expect(page.locator('.ai-assistant__suggestions')).toBeVisible();
   await expect(headerTrigger).toBeVisible();
 });
