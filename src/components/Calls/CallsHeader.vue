@@ -3,8 +3,9 @@
     class="chats-toolbar calls-page__panel-header"
     :data-testid="`${props.dataTestid}-Container`"
   >
-    <div
-      class="chats-toolbar__headline calls-page__headline menu-section-heading"
+    <MenuSectionHeading
+      as="div"
+      class="chats-toolbar__headline calls-page__headline"
     >
       <div class="calls-page__header-copy">
         <h4
@@ -57,7 +58,7 @@
           </Button>
         </ContextMenu>
       </Teleport>
-    </div>
+    </MenuSectionHeading>
 
     <Line :data-testid="`${props.dataTestid}-Line`" />
   </header>
@@ -66,6 +67,7 @@
 <script setup lang="ts">
 import { Button, ButtonTypeEnum, MessageTypeEnum, SizesEnum } from '@pksep/yui';
 import Line from '../UI/Line.vue';
+import MenuSectionHeading from '../UI/MenuSectionHeading.vue';
 import LinkIcon from '../UI/LinkIcon.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import AddIcon from './AddIcon.vue';

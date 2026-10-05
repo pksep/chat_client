@@ -153,6 +153,10 @@ const navigateToCall = (topicId: string): void => {
   updateUrl({ type: RouteTypes.CALL, id: topicId });
 };
 
+const navigateToCallsList = (): void => {
+  updateUrl({ type: RouteTypes.CALL, id: null });
+};
+
 const navigateToFavorites = (topicId: string): void => {
   updateUrl({ type: RouteTypes.FAVORITES, id: topicId });
 };
@@ -169,6 +173,14 @@ const navigateToAI = (sessionId: string | null = null): void => {
 
 const navigateToDefault = (): void => {
   updateUrl({ type: RouteTypes.DEFAULT, id: null });
+};
+
+const navigateBackFromChat = (route: { type: string | null }): void => {
+  if (route.type === RouteTypes.AI) navigateToAssistant();
+  else if (route.type === RouteTypes.DIALOGS) navigateToDialogsList();
+  else if (route.type === RouteTypes.GROUP) navigateToGroupsList();
+  else if (route.type === RouteTypes.CALL) navigateToCallsList();
+  else navigateToDefault();
 };
 
 const initRoute = (): void => {
@@ -195,6 +207,8 @@ export {
   navigateToGroup,
   navigateToGroupsList,
   navigateToCall,
+  navigateToCallsList,
+  navigateBackFromChat,
   navigateToFavorites,
   navigateToAssistant,
   navigateToAI,

@@ -221,3 +221,79 @@ test('Смена мобильного и десктопного вида сох�
     /menu-bottom-nav__button--active/
   );
 });
+
+for (const scope of ['Chats', 'Clients']) {
+  test(`Нижнее меню выходит из настроек папок ${scope} без анимации и сохраняет переходы основных разделов`, async ({
+    page,
+    isMobile
+  }) => {
+    test.skip(!isMobile, 'Мобильное нижнее меню');
+    await page.route('**/chat-folders', route => route.fulfill({ json: [] }));
+    await page.goto('/');
+    const nav = page.locator('.menu-bottom-nav:visible');
+    await expect(nav).toBeVisible({ timeout: 30_000 });
+    await expect(
+      nav.locator('[data-testid$="MenuBottomNav-Clients"]')
+    ).toBeVisible();
+    const track = page.locator('.mobile-list-container__section-track');
+    await track.evaluate(element => {
+      (window as any).sectionTransitions = [];
+      element.addEventListener('transitionrun', event => {
+        const transition = event as TransitionEvent;
+        if (
+          transition.target === element &&
+          transition.propertyName === 'transform'
+        ) {
+          (window as any).sectionTransitions.push(transition.propertyName);
+        }
+      });
+    });
+    const resetTransitions = () =>
+      page.evaluate(() => {
+        (window as any).sectionTransitions = [];
+      });
+    const finishTransition = () =>
+      track.evaluate(element =>
+        Promise.all(
+          element.getAnimations().map(animation => animation.finished)
+        )
+      );
+    const button = (section: string) =>
+      nav.locator(`[data-testid$="MenuBottomNav-${section}"]`);
+
+    for (const target of ['Chats', 'Calls', 'Clients', 'AI', 'Profile']) {
+      await button(scope).click();
+      await finishTransition();
+      await page
+        .locator('.mobile-list-container__section[aria-hidden="false"]')
+        .getByTestId('ChatFolders-Rail-Manage')
+        .click();
+      await expect(page.getByTestId('ChatFolders-Panel')).toBeVisible();
+      await resetTransitions();
+      await button(target).click();
+      await expect(page.getByTestId('ChatFolders-Panel')).toHaveCount(0);
+      await expect(button(target)).toHaveClass(
+        /menu-bottom-nav__button--active/
+      );
+      await page.evaluate(
+        () =>
+          new Promise<void>(resolve => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          })
+      );
+      expect(
+        await track.evaluate(element => element.getAnimations().length)
+      ).toBe(0);
+      expect(
+        await page.evaluate(() => (window as any).sectionTransitions)
+      ).toEqual([]);
+
+      await resetTransitions();
+      await button(target === 'Calls' ? 'Profile' : 'Calls').click();
+      await expect
+        .poll(() => page.evaluate(() => (window as any).sectionTransitions))
+        .toContain('transform');
+      await finishTransition();
+    }
+  });
+}

@@ -448,7 +448,6 @@
     v-if="
       !shouldRenderUserMessageSkeleton &&
       !isSelectionMode &&
-      !isMobileTopicSearchMode &&
       activeTopic &&
       shouldShowDockedCallTopicActions
     "
@@ -595,8 +594,7 @@ import {
 import { isUnreadTrackableMessage } from '../utils/messageTracking';
 import {
   consumePendingSearchNavigation,
-  getPendingSearchNavigation,
-  isMobileTopicSearchActive
+  getPendingSearchNavigation
 } from '../composables/useMessageSearch';
 import {
   normalizeReplyQuoteOccurrenceIndex,
@@ -901,13 +899,12 @@ const authUserId = computed(() =>
 const isSelectionMode = computed(() =>
   isMessageSelectionModeForTopic(route.value.id)
 );
-const isMobileTopicSearchMode = computed(
-  () => isMobile.value && isMobileTopicSearchActive.value
-);
 const activeTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : null
 );
-const isActiveCallTopic = computed(() => isCallTopic(activeTopic.value));
+const isActiveCallTopic = computed(
+  () => route.value.type === RouteTypes.CALL || isCallTopic(activeTopic.value)
+);
 const isCallTopicActionsOpen = ref(false);
 const shouldShowCallTopicActionsToggle = computed(
   () => isCompactMessageInput.value && isActiveCallTopic.value
@@ -988,7 +985,6 @@ const shouldRenderMessageComposer = computed(
   () =>
     !isDefaultRoute.value &&
     !isSelectionMode.value &&
-    !isMobileTopicSearchMode.value &&
     !isDeletedAccountTopic.value
 );
 const topicUnreadCount = computed(() =>

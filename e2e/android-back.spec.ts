@@ -6,6 +6,81 @@ import {
 
 test.beforeEach(async ({ page }) => installAndroidBackMock(page));
 
+test('стрелка Назад сохраняет размер и эффекты во всех хедерах', async ({
+  page
+}) => {
+  for (const width of [320, 390, 600, 768]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/e2e/fixtures/android-back.html?headers');
+    const buttons = page
+      .getByTestId('Fixture-Headers')
+      .locator('button.chat__header-back');
+    await expect(buttons).toHaveCount(5);
+    for (const button of await buttons.all()) {
+      await expect(button).toHaveCSS('width', '30px');
+      await expect(button).toHaveCSS('height', '30px');
+      await expect(button).toHaveClass(/popover-yui-kit/);
+    }
+    const button = buttons.first();
+    const idle = await button.evaluate(
+      element => getComputedStyle(element).backgroundColor
+    );
+    await button.hover();
+    await expect(button).not.toHaveCSS('background-color', idle);
+    const hover = await button.evaluate(
+      element => getComputedStyle(element).backgroundColor
+    );
+    await page.mouse.down();
+    await expect(button).not.toHaveCSS('background-color', hover);
+    await expect(button).not.toHaveCSS('background-color', idle);
+    await expect(button).toHaveCSS('width', '30px');
+    await expect(button).toHaveCSS('height', '30px');
+    await page.mouse.up();
+  }
+});
+
+test('Звонилка сохраняет оформление при загрузке данных и возвращается к звонкам', async ({
+  page,
+  isMobile
+}) => {
+  test.skip(!isMobile, 'Мобильный хедер');
+  await page.goto('/e2e/fixtures/android-back.html');
+  await page.getByTestId('Fixture-OpenCallTopic').click();
+  const title = page.getByTestId('Fixture-CallHeader-Header-CallTopicTitle');
+  const back = page.getByTestId('Fixture-CallHeader-Header-BackButton');
+  const message = page.locator('[data-message-id="call-style-message"]');
+  const titleStyle = () =>
+    title.evaluate(element => {
+      const style = getComputedStyle(element);
+      return [
+        style.fontFamily,
+        style.fontSize,
+        style.fontWeight,
+        style.lineHeight
+      ];
+    });
+  await expect(title).toHaveText('Звонилка');
+  await expect(message).toBeVisible();
+  await expect(page.locator('.message-group__avatar-slot')).toHaveCount(0);
+  await expect(back).toHaveCSS('width', '30px');
+  await expect(back).toHaveCSS('height', '30px');
+  const initialStyle = await titleStyle();
+  for (const state of ['Clear', 'Load']) {
+    await page.getByTestId(`Fixture-${state}CallMetadata`).click();
+    await expect(title).toHaveText('Звонилка');
+    await expect(page.locator('.message-group__avatar-slot')).toHaveCount(0);
+    expect(await titleStyle()).toEqual(initialStyle);
+  }
+  await back.click();
+  await expect(page).toHaveURL(/\/call$/);
+  await expect(page.getByTestId('Fixture-CallTopic')).toHaveCount(0);
+  await page.getByTestId('Fixture-OpenCallTopic').click();
+  await androidBack(page);
+  await expect(page).toHaveURL(/\/call$/);
+  await expect(page.getByTestId('Fixture-CallTopic')).toHaveCount(0);
+  await noExit(page);
+});
+
 async function folderFixture(page: Page, scope = 'chats') {
   const mutations: string[] = [];
   await page.route('**/folder-menu-api/**', route => {

@@ -1,16 +1,20 @@
 <template>
   <Modal
     v-if="hasOpened"
-    :open="props.open"
+    :open="isModalOpen"
     position="bottom"
     :class="['mobile__modal', props.class]"
     @close="handleCloseModal"
     :data-testid="`${dataTestid}-MobileModal-Container`"
   >
-    <header
-      ref="headerRef"
+    <MenuSectionHeading
+      :shared="props.menuHeading"
+      :centered="props.menuHeading"
       :class="[headerClass, 'mobile__modal-header']"
       :data-testid="`${dataTestid}-MobileModal-Header`"
+      @touchstart.passive="onTouchStart"
+      @touchmove.passive="onTouchMove"
+      @touchend="onTouchEndHeader"
     >
       <slot name="header">
         <button
@@ -38,7 +42,7 @@
           {{ props.startButtonText }}
         </button>
       </slot>
-    </header>
+    </MenuSectionHeading>
 
     <Line
       v-if="showDivider"
@@ -58,9 +62,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 import Modal from './Modal.vue';
 import Line from './Line.vue';
+import MenuSectionHeading from './MenuSectionHeading.vue';
 import type {
   IMobileModalProps,
   IMobileModalEmits
@@ -72,12 +77,14 @@ const props = withDefaults(defineProps<IMobileModalProps>(), {
   showCloseButton: true,
   closeButtonText: 'Отмена',
   showDivider: true,
+  menuHeading: false,
   isDisabledStartButton: false,
   dataTestid: () => 'MobileModal'
 });
 
 // Сохраняем экземпляр после первого открытия, включая анимацию закрытия.
-const hasOpened = ref(props.open);
+const hasOpened = ref(false);
+const isModalOpen = ref(false);
 
 /* ------------------------
    CLOSE HANDLERS
@@ -93,7 +100,6 @@ const handleStartStep = () => {
 /* ------------------------
    SWIPE LOGIC
 ------------------------ */
-const headerRef = ref<HTMLElement | null>(null);
 const contentRef = ref<HTMLElement | null>(null);
 
 let startX = 0;
@@ -154,26 +160,13 @@ const onTouchEndContent = (e: TouchEvent) => {
 
 watch(
   () => props.open,
-  isOpen => {
-    if (isOpen) {
+  async isOpen => {
+    if (isOpen && !hasOpened.value) {
       hasOpened.value = true;
+      // Сначала монтируем закрытую модалку, чтобы первое открытие тоже анимировалось.
+      await nextTick();
     }
-  },
-  { immediate: true }
-);
-
-watch(
-  headerRef,
-  (el, oldEl) => {
-    oldEl?.removeEventListener('touchstart', onTouchStart);
-    oldEl?.removeEventListener('touchmove', onTouchMove);
-    oldEl?.removeEventListener('touchend', onTouchEndHeader);
-
-    if (el) {
-      el.addEventListener('touchstart', onTouchStart, { passive: true });
-      el.addEventListener('touchmove', onTouchMove, { passive: true });
-      el.addEventListener('touchend', onTouchEndHeader);
-    }
+    isModalOpen.value = props.open;
   },
   { immediate: true }
 );

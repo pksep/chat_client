@@ -289,7 +289,10 @@ const {
   settled: accessSettled,
   cachedMenuCount
 } = useChatAccess();
-const { closeFolderManager } = useChatFolders();
+const { closeFolderManager, isManagingFolders: isManagingChatFolders } =
+  useChatFolders();
+const { isManagingFolders: isManagingClientFolders } =
+  useChatFolders('clients');
 useManagerInboxSubscription();
 const { backgroundActivities, selectSession } = useAiAssistant();
 const { rawCallHistory } = useCallHistoryStore();
@@ -492,9 +495,13 @@ const handleActivitySelect = (sessionId: string): void => {
 };
 
 const handleSection = (section: ChatMenuSection): void => {
+  const animate =
+    !isManagingChatFolders.value &&
+    !isManagingClientFolders.value &&
+    !route.value.id;
   closeFolderManager();
   if (section === 'calls') markCallsSeen(Date.now(), authUser.value?.id);
-  setActiveSection(section);
+  setActiveSection(section, { animate });
 
   const selectedTopic = getTopicList().find(
     topic => topic.id === route.value.id

@@ -77,6 +77,10 @@ for (const theme of ['light', 'dark']) {
         true
       );
       expect(transitions.every(move => move.duration === '0.18s')).toBe(true);
+      await expect(first.locator(avatarSelector)).toHaveCSS(
+        'transition-duration',
+        '0s'
+      );
       const previewBox = (await preview.boundingBox())!;
       expect(previewBox.width).toBeCloseTo(firstBox.width, 1);
       expect(previewBox.height).toBeCloseTo(firstBox.height, 1);

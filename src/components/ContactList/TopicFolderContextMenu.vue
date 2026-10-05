@@ -1,92 +1,96 @@
 <template>
-  <ContextMenu
-    class="topic-folder-context-menu"
-    :class="{ 'topic-folder-context-menu--folders': folders.length }"
-    :visible="true"
-    :position="props.position"
-    :data-testid="props.dataTestid"
-    @unmount-close="emit('close')"
-    @keydown.stop
-    @keydown.esc.stop.prevent="handleEscape"
-  >
-    <template v-if="!isMobile || !showFolders">
-      <slot name="before" />
-      <Button
-        v-if="folders.length"
-        ref="triggerRef"
-        class="topic-folder-context-menu__trigger"
-        :class="{ 'topic-folder-context-menu__trigger--active': showFolders }"
-        :type="ButtonTypeEnum.popover"
-        :size="SizesEnum.small"
-        aria-haspopup="menu"
-        :aria-expanded="showFolders"
-        :aria-controls="panelId"
-        :data-testid="`${props.dataTestid}-AddToFolder`"
-        @click.stop="openFolders()"
-        @mouseenter="handleHover"
-        @mouseleave="scheduleClose"
-        @keydown.right.stop.prevent="openFolders(true)"
-      >
-        <ChatFolderIcon name="folder" />
-        <span class="topic-folder-context-menu__label">Добавить в папку</span>
-        <Icon :name="IconNameEnum.chevronRight" :width="20" :height="20" />
-      </Button>
-      <slot name="after" />
-    </template>
-    <div
-      v-if="showFolders && folders.length"
-      :id="panelId"
-      ref="panelRef"
-      class="topic-folder-context-menu__folders"
-      :class="{ 'topic-folder-context-menu__folders--mobile': isMobile }"
-      :style="isMobile ? undefined : panelPosition"
-      role="menu"
-      aria-label="Добавить в папку"
-      :aria-busy="!!savingFolderId"
-      :data-testid="`${props.dataTestid}-Folders`"
-      @mouseenter="cancelClose"
-      @mouseleave="scheduleClose"
-      @focusin="cancelClose"
-      @keydown.left.stop.prevent="backToMenu"
-      @keydown.down.stop.prevent="moveFolderFocus($event, 1)"
-      @keydown.up.stop.prevent="moveFolderFocus($event, -1)"
+  <Teleport to="body" :disabled="!isMobile">
+    <ContextMenu
+      class="topic-folder-context-menu"
+      :class="{ 'topic-folder-context-menu--folders': folders.length }"
+      :visible="true"
+      :position="props.position"
+      :data-testid="props.dataTestid"
+      @unmount-close="emit('close')"
+      @keydown.stop
+      @keydown.esc.stop.prevent="handleEscape"
     >
-      <Button
-        v-if="isMobile"
-        class="topic-folder-context-menu__back"
-        :type="ButtonTypeEnum.popover"
-        :size="SizesEnum.small"
-        :data-testid="`${props.dataTestid}-FoldersBack`"
-        @click.stop="backToMenu"
+      <template v-if="!isMobile || !showFolders">
+        <slot name="before" />
+        <Button
+          v-if="folders.length"
+          ref="triggerRef"
+          class="topic-folder-context-menu__trigger"
+          :class="{ 'topic-folder-context-menu__trigger--active': showFolders }"
+          :type="ButtonTypeEnum.popover"
+          :size="SizesEnum.small"
+          aria-haspopup="menu"
+          :aria-expanded="showFolders"
+          :aria-controls="panelId"
+          :data-testid="`${props.dataTestid}-AddToFolder`"
+          @click.stop="openFolders()"
+          @mouseenter="handleHover"
+          @mouseleave="scheduleClose"
+          @keydown.right.stop.prevent="openFolders(true)"
+        >
+          <ChatFolderIcon name="folder" />
+          <span class="topic-folder-context-menu__label">Добавить в папку</span>
+          <Icon :name="IconNameEnum.chevronRight" :width="20" :height="20" />
+        </Button>
+        <slot name="after" />
+      </template>
+      <div
+        v-if="showFolders && folders.length"
+        :id="panelId"
+        ref="panelRef"
+        class="topic-folder-context-menu__folders"
+        :class="{ 'topic-folder-context-menu__folders--mobile': isMobile }"
+        :style="isMobile ? undefined : panelPosition"
+        role="menu"
+        aria-label="Добавить в папку"
+        :aria-busy="!!savingFolderId"
+        :data-testid="`${props.dataTestid}-Folders`"
+        @mouseenter="cancelClose"
+        @mouseleave="scheduleClose"
+        @focusin="cancelClose"
+        @keydown.left.stop.prevent="backToMenu"
+        @keydown.down.stop.prevent="moveFolderFocus($event, 1)"
+        @keydown.up.stop.prevent="moveFolderFocus($event, -1)"
       >
-        <Icon :name="IconNameEnum.arrowLeft" :width="20" :height="20" />
-        Добавить в папку
-      </Button>
-      <Button
-        v-for="folder in folders"
-        :key="folder.id"
-        class="topic-folder-context-menu__folder"
-        :type="ButtonTypeEnum.popover"
-        :size="SizesEnum.small"
-        role="menuitemcheckbox"
-        :aria-checked="folder.topicIds.includes(props.topicId)"
-        :disabled="!!savingFolderId"
-        :title="folder.name"
-        :data-testid="`${props.dataTestid}-Folder-${folder.id}`"
-        @click.stop="selectFolder(folder.id)"
-      >
-        <ChatFolderIcon :name="folder.icon || 'folder'" />
-        <span class="topic-folder-context-menu__label">{{ folder.name }}</span>
-        <Icon
-          v-if="folder.topicIds.includes(props.topicId)"
-          class="topic-folder-context-menu__check"
-          :name="IconNameEnum.checked"
-          :width="20"
-          :height="20"
-        />
-      </Button>
-    </div>
-  </ContextMenu>
+        <Button
+          v-if="isMobile"
+          class="topic-folder-context-menu__back"
+          :type="ButtonTypeEnum.popover"
+          :size="SizesEnum.small"
+          :data-testid="`${props.dataTestid}-FoldersBack`"
+          @click.stop="backToMenu"
+        >
+          <Icon :name="IconNameEnum.arrowLeft" :width="20" :height="20" />
+          Добавить в папку
+        </Button>
+        <Button
+          v-for="folder in folders"
+          :key="folder.id"
+          class="topic-folder-context-menu__folder"
+          :type="ButtonTypeEnum.popover"
+          :size="SizesEnum.small"
+          role="menuitemcheckbox"
+          :aria-checked="folder.topicIds.includes(props.topicId)"
+          :disabled="!!savingFolderId"
+          :title="folder.name"
+          :data-testid="`${props.dataTestid}-Folder-${folder.id}`"
+          @click.stop="selectFolder(folder.id)"
+        >
+          <ChatFolderIcon :name="folder.icon || 'folder'" />
+          <span class="topic-folder-context-menu__label">{{
+            folder.name
+          }}</span>
+          <Icon
+            v-if="folder.topicIds.includes(props.topicId)"
+            class="topic-folder-context-menu__check"
+            :name="IconNameEnum.checked"
+            :width="20"
+            :height="20"
+          />
+        </Button>
+      </div>
+    </ContextMenu>
+  </Teleport>
 </template>
 
 <script setup lang="ts">

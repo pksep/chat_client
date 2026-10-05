@@ -37,13 +37,14 @@
       </div>
     </div>
 
-    <h4
+    <MenuSectionHeading
       v-if="!props.isCollapse"
-      class="menu-profile__title menu-section-heading"
+      as="h4"
+      class="menu-profile__title"
       :data-testid="`${props.dataTestid}-MenuProfilePanel-Title`"
     >
       Профиль
-    </h4>
+    </MenuSectionHeading>
     <div v-if="authUser && !props.isCollapse" class="menu-profile__body">
       <header class="menu-profile__header">
         <CachedAvatar
@@ -862,6 +863,7 @@ import {
 } from '../../composables/useBackButton';
 import { storeToRefs } from 'pinia';
 import Modal from '../UI/Modal.vue';
+import MenuSectionHeading from '../UI/MenuSectionHeading.vue';
 import {
   Button,
   ButtonTypeEnum,

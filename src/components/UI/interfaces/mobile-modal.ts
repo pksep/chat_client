@@ -11,6 +11,7 @@ export interface IMobileModalProps {
   startButtonText?: string;
   title?: string;
   showDivider?: boolean;
+  menuHeading?: boolean;
   class?: CSSClass;
   headerClass?: CSSClass;
   dataTestid?: string;
