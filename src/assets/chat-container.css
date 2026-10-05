@@ -82,11 +82,11 @@
   }
 }
 
-.chat-container:has(.chat__header-desktop-search-row) {
+.chat-container:has(:is(.chat__header-desktop-search-row, .chat__header-mobile-search-row)) {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.chat-container:has(.chat__header-desktop-search-row) .chat {
+.chat-container:has(:is(.chat__header-desktop-search-row, .chat__header-mobile-search-row)) .chat {
   --basic-height: 100%;
 }
 
@@ -340,6 +340,10 @@ button.button-yui-kit.red-context-button {
     --mobile-pinned-messages-offset: var(--mobile-header-height);
   }
 
+  .chat-container:has(> .chat__header-wrapper) {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
   .chat-container:has(.pinned-messages) .chat__header {
     align-self: stretch;
   }
@@ -347,7 +351,11 @@ button.button-yui-kit.red-context-button {
   .chat-container:has(.chat__header-active-call) {
     --mobile-pinned-messages-offset: calc(var(--mobile-header-height) + var(--mobile-active-call-height));
     --header-height: calc(var(--mobile-header-height) + var(--mobile-active-call-height));
-    --mobile-pinned-messages-offset: calc(var(--mobile-header-height) + var(--mobile-active-call-height));
+  }
+
+  .chat-container:has(.chat__header-mobile-search-row) :is(.chat__input, .call-topic-actions) {
+    visibility: hidden;
+    pointer-events: none;
   }
 
   .chat__info {

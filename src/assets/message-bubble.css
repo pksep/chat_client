@@ -1512,7 +1512,8 @@ div.message-content__file {
   --blockquote-bg-color: var(--surface-overlay);
 }
 
-.chat__input {
+.chat__input,
+.chat__header-mobile-search-controls {
   align-self: end;
   padding: 0 10px 15px 15px;
   position: relative;
@@ -1686,7 +1687,8 @@ div.message-content__file {
 }
 
 @media screen and (width <=480px) {
-  .chat__input {
+  .chat__input,
+  .chat__header-mobile-search-controls {
     box-sizing: border-box;
     padding: 5px 10px calc(20px + env(safe-area-inset-bottom, 0px));
     position: fixed;

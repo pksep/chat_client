@@ -1,5 +1,6 @@
 <template>
   <header
+    ref="headerRef"
     :class="['chat__header-wrapper', $attrs.class]"
     :data-testid="`${props.dataTestid}-Header-Container`"
   >
@@ -237,7 +238,7 @@
       @click.stop
       @keydown.capture="handleTopicSearchKeydown"
     >
-      <Search
+      <MenuSearch
         ref="desktopTopicSearchRef"
         class="chat__header-search"
         :model-value="topicSearchQuery"
@@ -306,7 +307,7 @@
       @click.stop
       @keydown.capture="handleTopicSearchKeydown"
     >
-      <Search
+      <MenuSearch
         ref="mobileTopicSearchRef"
         class="chat__header-search"
         :model-value="topicSearchQuery"
@@ -320,7 +321,7 @@
         :data-testid="`${props.dataTestid}-Header-MobileSearchClose`"
         @click.stop="hideSearch"
       >
-        <Icon :name="IconNameEnum.crossLarge" color="var(--chat-secondary)" />
+        <Icon :name="IconNameEnum.crossLarge" color="var(--text-secondary)" />
       </Button>
     </div>
   </header>
@@ -381,7 +382,7 @@
         :data-testid="`${props.dataTestid}-Header-MobileSearchBottomClose`"
         @click.stop="hideSearch"
       >
-        <Icon :name="IconNameEnum.crossLarge" color="var(--chat-secondary)" />
+        <Icon :name="IconNameEnum.crossLarge" color="var(--text-secondary)" />
       </Button>
     </div>
   </div>
@@ -483,7 +484,6 @@ import {
   IconNameEnum,
   ButtonTypeEnum,
   SizesEnum,
-  Search,
   Tooltip
 } from '@pksep/yui';
 
@@ -493,6 +493,7 @@ import type {
   IUser
 } from '../interfaces/interfaces';
 import AiAvatar from '../AI/AiAvatar.vue';
+import MenuSearch from '../UI/MenuSearch.vue';
 import { useAiAssistant } from '../../composables/useAiAssistant';
 import {
   useMenuInfo,
@@ -882,6 +883,7 @@ const topicSearchTotal = ref(0);
 const topicSearchActiveIndex = ref(0);
 const desktopTopicSearchRef = ref<SearchComponentRef>(null);
 const mobileTopicSearchRef = ref<SearchComponentRef>(null);
+const headerRef = ref<HTMLElement | null>(null);
 
 const isTopicSearchLoading = ref(false);
 const hasTopicSearchQuery = computed(
@@ -1043,12 +1045,36 @@ const focusTopicSearchInput = (): void => {
     searchRef instanceof Element ? searchRef : searchRef?.$el;
   const input = searchElement?.querySelector?.('input');
 
-  input?.focus?.();
+  input?.focus?.({ preventScroll: true });
+};
+
+const preserveMobileMessagePosition = (update: () => void): void => {
+  const container = headerRef.value?.closest('.chat-container');
+  const messageList = isMobile.value
+    ? Array.from(
+        container?.querySelectorAll<HTMLElement>(
+          '.chat__message-wrapper, .ai-assistant__scroll'
+        ) || []
+      ).find(element => element.getClientRects().length > 0)
+    : null;
+  const scrollTop = messageList?.scrollTop ?? 0;
+  const top = messageList?.getBoundingClientRect().top ?? 0;
+
+  update();
+
+  if (messageList) {
+    void nextTick().then(() => {
+      messageList.scrollTop =
+        scrollTop + messageList.getBoundingClientRect().top - top;
+    });
+  }
 };
 
 const showSearch = (): void => {
-  state.isSearchInputEnable = true;
-  setMobileTopicSearchActive(isMobile.value && isChatSearchAvailable.value);
+  preserveMobileMessagePosition(() => {
+    state.isSearchInputEnable = true;
+    setMobileTopicSearchActive(isMobile.value && isChatSearchAvailable.value);
+  });
   void nextTick().then(focusTopicSearchInput);
 };
 
@@ -1076,9 +1102,11 @@ const resetTopicSearch = (): void => {
 };
 
 const hideSearch = (): void => {
-  state.isSearchInputEnable = false;
-  setMobileTopicSearchActive(false);
-  resetTopicSearch();
+  preserveMobileMessagePosition(() => {
+    state.isSearchInputEnable = false;
+    setMobileTopicSearchActive(false);
+    resetTopicSearch();
+  });
 };
 
 const navigateTopicSearchResult = (index: number): void => {

@@ -1345,16 +1345,25 @@ const navigateToAiMessage = async (
   highlightedMessageId.value = messageId;
   await nextTick();
 
+  const container = scrollRef.value;
   const messageElement = Array.from(
-    scrollRef.value?.querySelectorAll<HTMLElement>('[data-message-id]') || []
+    container?.querySelectorAll<HTMLElement>('[data-message-id]') || []
   ).find(element => element.dataset.messageId === messageId);
 
-  if (!messageElement) {
+  if (!messageElement || !container) {
     highlightedMessageId.value = null;
     return false;
   }
 
-  messageElement.scrollIntoView({ behavior, block: 'center' });
+  const messageBounds = messageElement.getBoundingClientRect();
+  container.scrollTo({
+    top:
+      container.scrollTop +
+      messageBounds.top -
+      container.getBoundingClientRect().top -
+      (container.clientHeight - messageBounds.height) / 2,
+    behavior
+  });
   messageHighlightTimeoutId = window.setTimeout(() => {
     if (highlightedMessageId.value === messageId) {
       highlightedMessageId.value = null;
@@ -1968,7 +1977,7 @@ watch(
   async () => {
     const target = activeSearchTarget.value;
     if (!target || target.sessionId !== activeSessionId.value) return;
-    await navigateToAiMessage(target.messageId);
+    await navigateToAiMessage(target.messageId, 'auto');
   },
   { flush: 'post' }
 );
