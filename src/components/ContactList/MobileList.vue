@@ -271,7 +271,7 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
 
 const { getTopicList, loading: isTopicsLoading } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
-const { activeSection, setActiveSection } = useChatMenu();
+const { activeSection, animateSectionChange, setActiveSection } = useChatMenu();
 const mountedSections = reactive(new Set<ChatMenuSection>(['chats']));
 const { isShareSelectionActive, selectedTopicIds, toggleShareTopic } =
   useShareSelection();
@@ -406,7 +406,8 @@ const activeSectionIndex = computed(() =>
   Math.max(0, MENU_SECTION_ORDER.indexOf(activeSection.value))
 );
 const sectionTrackBaseStyle = computed(() => ({
-  '--mobile-menu-section-offset': `${activeSectionIndex.value * -100}%`
+  '--mobile-menu-section-offset': `${activeSectionIndex.value * -100}%`,
+  transition: animateSectionChange.value ? undefined : 'none'
 }));
 
 const emits = defineEmits<IMobileListEmits>();
@@ -772,7 +773,11 @@ watch(
   () => activeSection.value,
   (section, previousSection) => {
     mountedSections.add(section);
-    hideIntermediateSectionsForDirectTransition(previousSection, section);
+    if (animateSectionChange.value) {
+      hideIntermediateSectionsForDirectTransition(previousSection, section);
+    } else {
+      clearDirectSectionTransitionState();
+    }
     applySectionTrackOffset();
 
     if (previousSection === 'chats') {
