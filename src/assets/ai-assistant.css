@@ -742,10 +742,6 @@
   outline-offset: 2px;
 }
 
-.ai-assistant__message.highlighted .message__article {
-  background-color: #767f9de5;
-}
-
 .ai-assistant__message-files,
 .ai-assistant__message-content {
   grid-column: 2;
