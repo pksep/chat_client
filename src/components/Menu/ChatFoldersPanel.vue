@@ -7,24 +7,23 @@
     data-testid="ChatFolders-Panel"
     @click="closeFolderMenu"
   >
-    <header class="chat-folders-panel__header menu-section-heading">
+    <MenuSectionHeading class="chat-folders-panel__header">
       <h4>Папки</h4>
       <Button
-        :type="ButtonTypeEnum.ghost"
+        :type="ButtonTypeEnum.secondary"
         :size="SizesEnum.little"
         class="chat-folders-panel__add"
         aria-label="Создать папку"
         data-testid="ChatFolders-CreateButton"
         @click="openCreateEditor"
       >
-        <Icon :name="IconNameEnum.plus" />
+        <Icon :name="IconNameEnum.plus" viewBox="0 0 24 24" />
       </Button>
-    </header>
+    </MenuSectionHeading>
 
-    <Search
+    <MenuSearch
       v-model="folderSearch"
       class="chat-folders-panel__search"
-      height="40px"
       placeholder="Поиск"
       data-testid="ChatFolders-Search"
     />
@@ -57,6 +56,7 @@
 
     <ul
       v-else
+      v-menu-list-press
       ref="containerRef"
       class="chat-folders-panel__list"
       :aria-busy="props.loading || isReordering"
@@ -67,11 +67,18 @@
       @keydown="onKeydown"
     >
       <TransitionGroup name="chat-folder-sort">
-        <li v-for="folder in orderedFolders" :key="folder.id">
+        <li
+          v-for="folder in orderedFolders"
+          :key="folder.id"
+          :class="[
+            'menu-list-row',
+            { 'menu-list-row--active': props.selectedFolderId === folder.id }
+          ]"
+        >
           <button
             type="button"
             :class="[
-              'chat-folders-panel__folder',
+              'chat-folders-panel__folder menu-list-item',
               { 'chat-folder-drag-source': draggedFolderId === folder.id }
             ]"
             :data-testid="`ChatFolders-Folder-${folder.id}`"
@@ -173,6 +180,7 @@
     close-button-text="Назад"
     :title="editorTitle"
     :show-divider="false"
+    menu-heading
     data-testid="ChatFolders-Editor"
     @unmount-close="closeEditor"
     @unmount-next="saveEditor"
@@ -222,7 +230,11 @@
   >
     <aside v-if="detailsFolder" class="chat-folder-details">
       <div class="chat-folder-details__info">
-        <header class="chat-folder-details__header">
+        <MenuSectionHeading
+          :shared="props.mobile"
+          :centered="props.mobile"
+          class="chat-folder-details__header"
+        >
           <Button
             v-if="props.mobile"
             :type="ButtonTypeEnum.ghost"
@@ -234,7 +246,7 @@
           </Button>
           <div class="chat-folder-details__header-title">
             <strong>Информация о папке</strong>
-            <span>{{ detailsChatsLabel }}</span>
+            <span v-if="!props.mobile">{{ detailsChatsLabel }}</span>
           </div>
           <Button
             v-if="!props.mobile"
@@ -246,7 +258,11 @@
           >
             <Icon :name="IconNameEnum.crossLarge" />
           </Button>
-        </header>
+        </MenuSectionHeading>
+
+        <span v-if="props.mobile" class="chat-folder-details__subtitle">
+          {{ detailsChatsLabel }}
+        </span>
 
         <div ref="iconRowRef" class="chat-folder-details__icon-row">
           <button
@@ -347,6 +363,8 @@
 </template>
 
 <script setup lang="ts">
+import MenuSearch from '../UI/MenuSearch.vue';
+import { vMenuListPress } from '../../directives/menu-list-press';
 import { computed, ref } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import type { ITopic } from '../interfaces/interfaces';
@@ -373,6 +391,7 @@ import TopicList from '../ContactList/TopicList.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import MobileModal from '../UI/MobileModal.vue';
+import MenuSectionHeading from '../UI/MenuSectionHeading.vue';
 import MessageIcon from '../UI/MessageIcon.vue';
 import ChatFolderEditorForm from './ChatFolderEditorForm.vue';
 import ChatFolderGlyph from './ChatFolderIcon.vue';
@@ -386,7 +405,6 @@ import {
   Icon,
   IconNameEnum,
   Input,
-  Search,
   SizesEnum
 } from '@pksep/yui';
 

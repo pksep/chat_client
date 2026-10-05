@@ -30,6 +30,7 @@
 @import url('./ai-assistant.css');
 @import url('./menu-layout.css');
 @import url('./chat-folders.css');
+@import url('./menu-list-items.css');
 
 .chat_container_alert {
   background-color: var(--error-dark-color);

@@ -19,7 +19,7 @@
     </label>
 
     <div class="chat-folder-editor__label">Добавить чаты:</div>
-    <Search
+    <MenuSearch
       :model-value="props.search"
       class="chat-folder-editor__search"
       placeholder="Поиск"
@@ -66,7 +66,8 @@ import type { ITopic } from '../interfaces/interfaces';
 import type { ChatsToolbarFilter } from '../../composables/useChatsToolbarState';
 import TopicList from '../ContactList/TopicList.vue';
 import ChatsToolbarFilters from './ChatsToolbarFilters.vue';
-import { Button, ButtonTypeEnum, Input, Search, SizesEnum } from '@pksep/yui';
+import { Button, ButtonTypeEnum, Input, SizesEnum } from '@pksep/yui';
+import MenuSearch from '../UI/MenuSearch.vue';
 
 const props = withDefaults(
   defineProps<{

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 for (const theme of ['light', 'dark']) {
   for (const area of ['rail', 'list']) {
-    test(`Плавное перемещение папок без изменения цветов: ${area}, ${theme}`, async ({
+    test(`Перемещение папок без переходов и изменения цветов: ${area}, ${theme}`, async ({
       page,
       isMobile
     }) => {
@@ -63,20 +63,14 @@ for (const theme of ['light', 'dark']) {
       );
       const preview = page.locator('.chat-folder-drag-preview');
       await expect(preview).toBeVisible();
-      await expect
-        .poll(() => page.evaluate(() => (window as any).folderMoves.length))
-        .toBeGreaterThan(0);
-      const transitions = await page.evaluate(
-        () =>
-          (window as any).folderMoves as {
-            property: string;
-            duration: string;
-          }[]
+      expect(await page.evaluate(() => (window as any).folderMoves)).toEqual(
+        []
       );
-      expect(transitions.every(move => move.property === 'transform')).toBe(
-        true
+      await expect(first).toHaveCSS('transition-duration', '0s');
+      await expect(first.locator(avatarSelector)).toHaveCSS(
+        'transition-duration',
+        '0s'
       );
-      expect(transitions.every(move => move.duration === '0.18s')).toBe(true);
       const previewBox = (await preview.boundingBox())!;
       expect(previewBox.width).toBeCloseTo(firstBox.width, 1);
       expect(previewBox.height).toBeCloseTo(firstBox.height, 1);

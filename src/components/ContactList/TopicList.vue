@@ -1,5 +1,6 @@
 <template>
   <ul
+    v-menu-list-press
     ref="listRootRef"
     :class="['contact-list', props.class]"
     role="list"
@@ -37,7 +38,10 @@
     <li
       v-for="(topic, index) in displayTopics"
       :key="topic.id"
-      class="contact-list__li"
+      :class="[
+        'contact-list__li menu-list-row',
+        { 'menu-list-row--active': isTopicActive(topic) }
+      ]"
       :data-topic-id="topic.id"
       role="listitem"
       tabindex="0"
@@ -46,7 +50,7 @@
     >
       <div
         :class="[
-          'contact-list__item',
+          'contact-list__item menu-list-item',
           {
             'contact-list__item--active': isTopicActive(topic),
             'contact-list__item--selection': props.showCheckbox
@@ -214,7 +218,7 @@
     <li
       v-for="(result, index) in props.messageResults"
       :key="`message-${result.id}`"
-      class="contact-list__li"
+      class="contact-list__li menu-list-row"
       role="listitem"
       tabindex="0"
       :data-testid="`${props.dataTestid}-ContactList-MessageResult${index + 1}`"
@@ -222,7 +226,7 @@
       @keydown.space="handleMessageResultClick(result)"
     >
       <div
-        class="contact-list__item contact-list__item--message-result"
+        class="contact-list__item contact-list__item--message-result menu-list-item"
         role="button"
         tabindex="0"
         @click="handleMessageResultClick(result)"
@@ -376,6 +380,7 @@
 </template>
 
 <script setup lang="ts">
+import { vMenuListPress } from '../../directives/menu-list-press';
 import SkeletonBlock from '../UI/SkeletonBlock.vue';
 import {
   computed,

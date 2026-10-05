@@ -380,8 +380,8 @@ test('показывает задачи и AI-чаты единым списко
         (firstChatBox!.x + firstChatBox!.width)
     )
   ).toBeLessThanOrEqual(0.5);
-  expect(delimiterBox!.y - (firstChatBox!.y + firstChatBox!.height)).toBe(2);
-  expect(secondChatBox!.y - (delimiterBox!.y + delimiterBox!.height)).toBe(2);
+  expect(delimiterBox!.y - (firstChatBox!.y + firstChatBox!.height)).toBe(0);
+  expect(secondChatBox!.y - (delimiterBox!.y + delimiterBox!.height)).toBe(0);
 
   await regularChat.click();
   await expect(
