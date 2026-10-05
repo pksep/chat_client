@@ -7,9 +7,22 @@ import Modal from '../../src/components/UI/Modal.vue';
 import MobileModal from '../../src/components/UI/MobileModal.vue';
 import ModalCroppedAvatar from '../../src/components/UI/ModalCroppedAvatar.vue';
 import ContextMenu from '../../src/components/ContactList/ContextMenu.vue';
+import Header from '../../src/components/Header/Header.vue';
+import MessageListUserItems from '../../src/components/Messages/MessageListUserItems.vue';
+import { setTopics } from '../../src/composables/useTopics';
+import { emojiDirective } from '../../src/directives/emoji';
+import type {
+  IMessage,
+  ITopic
+} from '../../src/components/interfaces/interfaces';
+import { CALL_TOPIC_DESCRIPTION_PREFIX } from '../../src/utils/call-topic';
 import { useBackButton } from '../../src/composables/useBackButton';
 import { useMessageSwipe } from '../../src/components/Messages/composables/useMessageSwipe';
-import { initRoute } from '../../src/composables/navigation/useUrlRouting';
+import {
+  initRoute,
+  navigateToCall,
+  RouteTypes
+} from '../../src/composables/navigation/useUrlRouting';
 import { useUrlWatcher } from '../../src/composables/navigation/useUrlWatcher';
 import {
   open as callOpen,
@@ -28,8 +41,28 @@ const image = new File(
   'avatar.svg',
   { type: 'image/svg+xml' }
 );
+const showHeaders = new URLSearchParams(location.search).has('headers');
 history.replaceState({}, '', '/dialogs/android-back-topic');
 initRoute();
+
+const callTopic = {
+  id: 'android-back-call-topic',
+  type: 'GROUP',
+  name: 'Временное имя группы',
+  group: { id: 'android-back-call-topic', name: 'Временное имя группы' },
+  info: { unreadCount: 0 }
+} as ITopic;
+const callMessages = [
+  {
+    id: 'call-style-message',
+    topicId: callTopic.id,
+    text: 'Материалы звонка',
+    senderUserId: 'call-style-peer',
+    senderUser: { id: 'call-style-peer', initials: 'Звонилка' },
+    createdAt: '2026-10-05T10:00:00Z',
+    media: []
+  }
+] as IMessage[];
 
 createApp({
   setup() {
@@ -53,9 +86,51 @@ createApp({
       h('button', { 'data-testid': id, onClick: action }, id);
     return () =>
       h('main', [
+        showHeaders
+          ? h(
+              'section',
+              { 'data-testid': 'Fixture-Headers' },
+              ['dialogs', 'group', 'favorites', 'ai', 'call'].map(type =>
+                h(Header, {
+                  dataTestid: `Fixture-${type}`,
+                  displayRoute: { type, id: null }
+                })
+              )
+            )
+          : null,
         button('Fixture-OpenModal', () => {
           baseOpen.value = true;
         }),
+        button('Fixture-OpenCallTopic', () => {
+          setTopics([callTopic]);
+          navigateToCall(callTopic.id);
+        }),
+        button('Fixture-ClearCallMetadata', () => setTopics([])),
+        button('Fixture-LoadCallMetadata', () =>
+          setTopics([
+            {
+              ...callTopic,
+              group: {
+                ...callTopic.group,
+                description: `${CALL_TOPIC_DESCRIPTION_PREFIX}test-room:test-user`
+              }
+            } as ITopic
+          ])
+        ),
+        route.value.type === RouteTypes.CALL && route.value.id
+          ? h(
+              'section',
+              { class: 'chat', 'data-testid': 'Fixture-CallTopic' },
+              [
+                h(Header, { dataTestid: 'Fixture-CallHeader' }),
+                h(MessageListUserItems, {
+                  dataTestid: 'Fixture-CallMessages',
+                  messages: callMessages,
+                  authUserId: 'test-user'
+                })
+              ]
+            )
+          : null,
         button('Fixture-OpenCall', () => {
           roomId.value = 'android-back-room';
           user.value = { id: 'android-back-peer', initials: 'Тест' } as any;
@@ -132,4 +207,5 @@ createApp({
   }
 })
   .use(createPinia())
+  .directive('emoji', emojiDirective)
   .mount('#app');

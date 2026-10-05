@@ -17,7 +17,9 @@
     </div>
 
     <div
-      v-if="!!isMobile || route.type === 'ai' || !!currentTopic"
+      v-if="
+        !!isMobile || route.type === 'ai' || isCallTopicRoute || !!currentTopic
+      "
       class="chat__header-main"
       @click="handleClickHeader"
     >
@@ -25,6 +27,7 @@
         v-if="isMobile"
         :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
+        class="chat__header-back"
         :data-testid="`${props.dataTestid}-Header-BackButton`"
         @click.stop="handleExit"
       >
@@ -65,44 +68,44 @@
         </Tooltip>
       </div>
 
+      <div
+        v-else-if="isCallTopicRoute"
+        class="user-profile chat__header-profile chat__header-call-topic"
+        :data-testid="`${props.dataTestid}-Header-CallTopicProfile`"
+        @click.stop
+      >
+        <BotAvatar
+          class="user-profile__avatar"
+          :size="40"
+          :is-online="false"
+          :data-testid="`${props.dataTestid}-Header-CallTopicAvatar`"
+        />
+        <h3
+          class="user-profile__title"
+          :data-testid="`${props.dataTestid}-Header-CallTopicTitle`"
+        >
+          Звонилка
+        </h3>
+        <TypingIndicator
+          v-if="callTopicTypingLabel"
+          class="user-profile__ex user-profile__ex--typing"
+          :label="callTopicTypingLabel"
+          :data-testid="`${props.dataTestid}-Header-CallTopicTyping`"
+        />
+        <span
+          v-else
+          class="user-profile__ex"
+          :data-testid="`${props.dataTestid}-Header-CallTopicEx`"
+        >
+          @zvonilka
+        </span>
+      </div>
       <template v-else-if="currentTopic">
         <FavoriteTopicProfile
           v-if="isFavoriteDialogTopic"
           class="chat__header-profile"
           :data-testid="`${props.dataTestid}-Header-FavoriteTopicProfile`"
         />
-        <div
-          v-else-if="isCallTopicRoute"
-          class="user-profile chat__header-profile chat__header-call-topic"
-          :data-testid="`${props.dataTestid}-Header-CallTopicProfile`"
-          @click.stop
-        >
-          <BotAvatar
-            class="user-profile__avatar"
-            :size="40"
-            :is-online="false"
-            :data-testid="`${props.dataTestid}-Header-CallTopicAvatar`"
-          />
-          <h3
-            class="user-profile__title"
-            :data-testid="`${props.dataTestid}-Header-CallTopicTitle`"
-          >
-            Звонилка
-          </h3>
-          <TypingIndicator
-            v-if="callTopicTypingLabel"
-            class="user-profile__ex user-profile__ex--typing"
-            :label="callTopicTypingLabel"
-            :data-testid="`${props.dataTestid}-Header-CallTopicTyping`"
-          />
-          <span
-            v-else
-            class="user-profile__ex"
-            :data-testid="`${props.dataTestid}-Header-CallTopicEx`"
-          >
-            @zvonilka
-          </span>
-        </div>
         <UserProfile
           v-else-if="clientInquiry"
           class="chat__header-profile user-profile--interactive"
@@ -496,9 +499,8 @@ import {
   type IMenuInfoInformation
 } from '../../composables/useMenuInfo';
 import {
-  navigateToAssistant,
+  navigateBackFromChat,
   navigateToAI,
-  navigateToDefault,
   navigateToDialogsList,
   navigateToGroupsList,
   useUrlWatcher
@@ -712,7 +714,9 @@ const headerDmUser = computed<IUser | undefined>(() => {
     )
   };
 });
-const isCallTopicRoute = computed(() => isCallTopic(currentTopic.value));
+const isCallTopicRoute = computed(
+  () => route.value.type === RouteTypes.CALL || isCallTopic(currentTopic.value)
+);
 const currentRouteGroup = computed(() => {
   if (currentTopic.value?.type !== TopicType.Group) {
     return null;
@@ -1542,17 +1546,7 @@ const handleExit = (): void => {
     return;
   }
 
-  if (route.value && route.value.type === RouteTypes.DIALOGS) {
-    navigateToDialogsList();
-  } else if (route.value && route.value.type === RouteTypes.GROUP) {
-    navigateToGroupsList();
-  } else if (route.value && route.value.type === RouteTypes.CALL) {
-    navigateToDefault();
-  } else if (route.value && route.value.type === RouteTypes.AI) {
-    navigateToAssistant();
-  } else {
-    navigateToDefault();
-  }
+  navigateBackFromChat(route.value);
 };
 
 watch(

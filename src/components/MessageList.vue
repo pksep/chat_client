@@ -907,7 +907,9 @@ const isMobileTopicSearchMode = computed(
 const activeTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : null
 );
-const isActiveCallTopic = computed(() => isCallTopic(activeTopic.value));
+const isActiveCallTopic = computed(
+  () => route.value.type === RouteTypes.CALL || isCallTopic(activeTopic.value)
+);
 const isCallTopicActionsOpen = ref(false);
 const shouldShowCallTopicActionsToggle = computed(
   () => isCompactMessageInput.value && isActiveCallTopic.value

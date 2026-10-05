@@ -6,6 +6,8 @@ export {
   navigateToGroup,
   navigateToGroupsList,
   navigateToCall,
+  navigateToCallsList,
+  navigateBackFromChat,
   navigateToFavorites,
   navigateToAssistant,
   navigateToAI,

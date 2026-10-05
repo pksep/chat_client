@@ -16,6 +16,19 @@
   position: relative;
 }
 
+button.chat__header-back,
+button.message-context-menu__mobile-back-button,
+button.calls-bot__back {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: 30px !important;
+  min-width: 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 !important;
+  justify-content: center;
+}
+
 .chat__header-buttons {
   display: flex;
   align-items: center;
