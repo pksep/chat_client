@@ -2,12 +2,10 @@
   position: relative;
   margin-block: 0;
   border-radius: 0;
-  transition: none;
 }
 
 .menu-list-row > .menu-list-item {
   border-radius: 0;
-  transition: none;
 }
 
 .menu-list-row:not(:has(~ .menu-list-row))::after {
@@ -21,7 +19,6 @@
   height: var(--menu-section-search-height, 42px);
   font-size: 14px;
   line-height: 16px;
-  transition: none;
 }
 
 .menu-section-search.search-yui-kit .search-icon {

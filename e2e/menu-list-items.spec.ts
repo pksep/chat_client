@@ -17,6 +17,28 @@ const dividerVisible = (row: Locator) =>
     );
   });
 
+const transitionDuration = (element: Locator, property: string) =>
+  element.evaluate((element, property) => {
+    const style = getComputedStyle(element);
+    const properties = style.transitionProperty
+      .split(',')
+      .map(value => value.trim());
+    const durations = style.transitionDuration.split(',').map(parseFloat);
+    const index = properties.findLastIndex(
+      value =>
+        value === 'all' ||
+        value === property ||
+        (value === 'border-color' && /^border-.*-color$/.test(property))
+    );
+    return index === -1 ? 0 : durations[index % durations.length];
+  }, property);
+
+const expectInstantColors = async (element: Locator) => {
+  for (const property of ['background-color', 'color', 'border-top-color']) {
+    expect(await transitionDuration(element, property)).toBe(0);
+  }
+};
+
 for (const section of [
   'chats',
   'calls',
@@ -43,15 +65,20 @@ for (const section of [
       for (const index of [0, 1])
         await expect.poll(() => dividerVisible(rows.nth(index))).toBe(true);
       await expect.poll(() => dividerVisible(rows.last())).toBe(false);
-      await expect(selected).toHaveCSS('transition-duration', '0s');
+      await expectInstantColors(selected);
+      if (['ai', 'tasks'].includes(section)) {
+        expect(await transitionDuration(selected, 'transform')).toBe(0.2);
+        await expect(
+          menu.locator('.ai-menu-panel__tabs button').first()
+        ).toHaveCSS('transition-duration', '0.2s');
+      }
       const item = selected.locator('.menu-list-item');
-      if (await item.count())
-        await expect(item).toHaveCSS('transition-duration', '0s');
+      if (await item.count()) await expectInstantColors(item);
       const search = menu.locator('.menu-section-search');
       const input = search.locator('.search-yui-kit__input');
       await expect(search).toHaveCSS('height', isMobile ? '40px' : '42px');
       await expect(input).toHaveCSS('height', isMobile ? '40px' : '42px');
-      await expect(input).toHaveCSS('transition-duration', '0s');
+      await expect(input).toHaveCSS('transition-duration', '0.3s');
       await expect(input).toHaveCSS('font-size', '14px');
       await expect(input).toHaveCSS('line-height', '16px');
       await expect(search.locator('.search-icon')).toHaveCSS(

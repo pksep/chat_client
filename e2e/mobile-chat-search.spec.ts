@@ -43,8 +43,6 @@ for (const kind of ['group', 'ai']) {
         const backBounds = await page
           .getByTestId('Fixture-Header-BackButton')
           .boundingBox();
-        await scroller.hover();
-        await page.mouse.wheel(0, -600);
         await scroller.evaluate(element => {
           element.scrollTop = 500;
         });
@@ -91,7 +89,7 @@ for (const kind of ['group', 'ai']) {
             element => getComputedStyle(element, '::placeholder').color
           )
         ).toBe(referenceColors.placeholder);
-        await expect(search).toHaveCSS('transition-duration', '0s');
+        await expect(search).toHaveCSS('transition-duration', '0.3s');
         await search.focus();
         await expectTitleTextUnchanged();
         expect((await header.locator('h3').boundingBox())!.y).toBeCloseTo(

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 for (const theme of ['light', 'dark']) {
   for (const area of ['rail', 'list']) {
-    test(`Перемещение папок без переходов и изменения цветов: ${area}, ${theme}`, async ({
+    test(`Плавное перемещение папок без изменения цветов: ${area}, ${theme}`, async ({
       page,
       isMobile
     }) => {
@@ -63,10 +63,20 @@ for (const theme of ['light', 'dark']) {
       );
       const preview = page.locator('.chat-folder-drag-preview');
       await expect(preview).toBeVisible();
-      expect(await page.evaluate(() => (window as any).folderMoves)).toEqual(
-        []
+      await expect
+        .poll(() => page.evaluate(() => (window as any).folderMoves.length))
+        .toBeGreaterThan(0);
+      const transitions = await page.evaluate(
+        () =>
+          (window as any).folderMoves as {
+            property: string;
+            duration: string;
+          }[]
       );
-      await expect(first).toHaveCSS('transition-duration', '0s');
+      expect(transitions.every(move => move.property === 'transform')).toBe(
+        true
+      );
+      expect(transitions.every(move => move.duration === '0.18s')).toBe(true);
       await expect(first.locator(avatarSelector)).toHaveCSS(
         'transition-duration',
         '0s'
