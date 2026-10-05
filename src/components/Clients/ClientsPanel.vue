@@ -8,6 +8,7 @@
       :folders="clientFolders"
       :loading="isFoldersLoading"
       :selected-folder-id="activeFolderId"
+      @close="closeFolderManager"
       @select-folder="selectFolder"
       @select-topic="openTopic"
     />
@@ -117,7 +118,8 @@ const {
   isManagingFolders,
   isLoading: isFoldersLoading,
   selectFolder,
-  openFolderManager
+  openFolderManager,
+  closeFolderManager
 } = useChatFolders('clients');
 const queue = ref('all');
 const source = ref('');

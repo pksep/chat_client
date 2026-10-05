@@ -205,7 +205,7 @@ import {
 import { getChatSDK } from '../services/useChat';
 import { getUsersList } from '../composables/useUsers';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
-import { Modal } from '@pksep/yui';
+import Modal from './UI/Modal.vue';
 import AndroidIcon from './UI/AndroidIcon.vue';
 import AppleIcon from './UI/AppleIcon.vue';
 import { useMobileApp } from '../composables/useMobileApp';
@@ -229,6 +229,11 @@ import {
   useChatAccessSubscription
 } from '../composables/useChatAccess';
 import { useChatMenu } from '../composables/useChatMenu';
+import {
+  BackButtonPriority,
+  useBackButtonHandler
+} from '../composables/useBackButton';
+import { useShareSelection } from '../composables/useShareSelection';
 import { getTopicList, setTopics } from '../composables/useTopics';
 import {
   isClientTopic,
@@ -267,6 +272,8 @@ const {
 const route = useUrlWatcher();
 const { access: chatAccess, ready: chatAccessReady } = useChatAccess();
 const { activeSection, setActiveSection } = useChatMenu();
+const { isShareSelectionActive, closeShareSelection } = useShareSelection();
+useBackButtonHandler(isShareSelectionActive, closeShareSelection);
 const { byTopic: clientInquiries } = useManagerInquiries();
 useChatAccessSubscription();
 const customerTopicIds = new Set<string>();
@@ -367,6 +374,18 @@ watch(
 );
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
+useBackButtonHandler(
+  () =>
+    isMobile.value &&
+    activeSection.value !== 'chats' &&
+    !route.value.id &&
+    route.value.type !== RouteTypes.AI,
+  () => {
+    setActiveSection('chats');
+    navigateToDefault();
+  },
+  BackButtonPriority.navigation
+);
 const {
   isVpnActive,
   ensureVpnStatusPolling,

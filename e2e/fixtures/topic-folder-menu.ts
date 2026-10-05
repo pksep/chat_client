@@ -51,6 +51,7 @@ await folderState.loadFolders();
 
 createApp({
   setup() {
+    const panelVisible = ref(showPanel);
     const selection = ref(false);
     const concurrencyResult = ref('');
     const topicOpens = ref(0);
@@ -156,13 +157,16 @@ createApp({
               )
             ]
           ),
-          showPanel
+          panelVisible.value
             ? h('div', { style: 'width:min(345px,100%);height:600px' }, [
                 h(ChatFoldersPanel, {
                   topics,
                   folders: folderState.folders.value,
                   mobile: matchMedia('(max-width: 768px)').matches,
-                  scope
+                  scope,
+                  onClose: () => {
+                    panelVisible.value = false;
+                  }
                 })
               ])
             : h(TopicList, {

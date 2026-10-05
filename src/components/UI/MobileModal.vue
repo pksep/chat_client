@@ -58,9 +58,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onUnmounted } from 'vue';
-import { useBackButton } from '../../composables/useBackButton';
-import { Modal } from '@pksep/yui';
+import { ref, watch } from 'vue';
+import Modal from './Modal.vue';
 import Line from './Line.vue';
 import type {
   IMobileModalProps,
@@ -153,24 +152,15 @@ const onTouchEndContent = (e: TouchEvent) => {
   e.stopPropagation();
 };
 
-const { addHandler, removeHandler } = useBackButton();
-
 watch(
   () => props.open,
   isOpen => {
     if (isOpen) {
       hasOpened.value = true;
-      addHandler(handleCloseModal);
-    } else {
-      removeHandler(handleCloseModal);
     }
   },
   { immediate: true }
 );
-
-onUnmounted(() => {
-  removeHandler(handleCloseModal);
-});
 
 watch(
   headerRef,

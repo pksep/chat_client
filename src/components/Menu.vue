@@ -41,6 +41,7 @@
           :folders="chatFolders"
           :loading="isChatFoldersLoading"
           :selected-folder-id="activeFolderId"
+          @close="closeFolderManager"
           @select-folder="handleSelectFolder"
           @select-topic="unmountTopicClick"
         />

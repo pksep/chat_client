@@ -358,6 +358,10 @@ import {
 } from '../../services/useChatSDK/chat-folder';
 import type { ChatsToolbarFilter } from '../../composables/useChatsToolbarState';
 import { useChatFolders } from '../../composables/useChatFolders';
+import {
+  BackButtonPriority,
+  useBackButtonHandler
+} from '../../composables/useBackButton';
 import { useChatFolderDrag } from '../../composables/useChatFolderDrag';
 import { getAuthUser } from '../../composables/useAuth';
 import { getTopicsByChatsToolbarFilter } from '../../utils/chats-toolbar-filter';
@@ -375,13 +379,13 @@ import ChatFolderGlyph from './ChatFolderIcon.vue';
 import SkeletonBlock from '../UI/SkeletonBlock.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import { showNotification } from '../../composables/useNotifications';
+import Modal from '../UI/Modal.vue';
 import {
   Button,
   ButtonTypeEnum,
   Icon,
   IconNameEnum,
   Input,
-  Modal,
   Search,
   SizesEnum
 } from '@pksep/yui';
@@ -431,6 +435,18 @@ const isIconPickerOpen = ref(false);
 const iconRowRef = ref<HTMLElement | null>(null);
 const deleteFolderTargetId = ref<string | null>(null);
 const isSaving = ref(false);
+
+useBackButtonHandler(
+  () => true,
+  () => emits('close')
+);
+useBackButtonHandler(
+  isIconPickerOpen,
+  () => {
+    isIconPickerOpen.value = false;
+  },
+  BackButtonPriority.overlay
+);
 
 onClickOutside(iconRowRef, () => {
   isIconPickerOpen.value = false;

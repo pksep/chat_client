@@ -583,6 +583,10 @@
 
 <script setup lang="ts">
 import {
+  BackButtonPriority,
+  useBackButtonHandler
+} from '../../composables/useBackButton';
+import {
   computed,
   nextTick,
   onBeforeUnmount,
@@ -901,6 +905,12 @@ const hideVoiceMode = (): void => {
   hideVoiceCall();
   focusComposer();
 };
+
+useBackButtonHandler(
+  () => isVoiceModeOpen.value && isVoiceModalVisible.value,
+  hideVoiceMode,
+  BackButtonPriority.overlay
+);
 
 /** Закрывает голосовой режим и освобождает микрофон и воспроизведение. */
 const closeVoiceMode = (): void => {

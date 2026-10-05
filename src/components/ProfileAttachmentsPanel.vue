@@ -251,7 +251,10 @@ import {
   watch
 } from 'vue';
 import { getAuthUser } from '../composables/useAuth';
-import { useBackButton } from '../composables/useBackButton';
+import {
+  BackButtonPriority,
+  useBackButton
+} from '../composables/useBackButton';
 import { openForwardDraft } from '../composables/useForwardMessages';
 import { openAiForwardDraft } from '../composables/useAiForwardDraft';
 import type { AiAssistantSession } from '../composables/useAiAssistant';
@@ -1142,7 +1145,7 @@ watch(
   () => sliderElements.value.length > 0,
   isOpen => {
     if (isOpen) {
-      addBackHandler(closeSlider);
+      addBackHandler(closeSlider, BackButtonPriority.overlay);
       return;
     }
 

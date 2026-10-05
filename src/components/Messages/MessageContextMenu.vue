@@ -395,6 +395,10 @@
 </template>
 
 <script setup lang="ts">
+import {
+  BackButtonPriority,
+  useBackButtonHandler
+} from '../../composables/useBackButton';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import {
   Button,
@@ -1276,6 +1280,17 @@ const handleBackToMenu = () => {
   showReadDetails.value = false;
   mobileReadDetailsOffsetTop.value = 0;
 };
+
+useBackButtonHandler(
+  () =>
+    !!props.isOpen[props.messageId] &&
+    (showEmojies.value || showReadDetails.value),
+  () => {
+    if (showEmojies.value) toggleShowEmojies();
+    else handleBackToMenu();
+  },
+  BackButtonPriority.overlay
+);
 
 const handleOpenReadDetailUser = (user?: any) => {
   if (!user) {
