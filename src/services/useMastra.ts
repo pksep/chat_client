@@ -1,4 +1,9 @@
-import { ref, type Ref } from 'vue';
+import {
+  fetchWithAiAccess,
+  requireAiAccess,
+  useChatAccess
+} from '../composables/useChatAccess';
+import { ref, watch, type Ref } from 'vue';
 import { observeAiSubmission, type AiSubmissionObserver } from './aiSubmission';
 import { MastraClient, RequestContext } from '@mastra/client-js';
 import {
@@ -196,12 +201,21 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
   /** Закрывает только клиентское чтение; уже принятые сервером действия не отменяет. */
   const dispose = () => {
+    stopAccessWatch();
     disposed = true;
     historyVersion += 1;
     clearTimeout(taskPollTimer);
     transcriptController?.abort();
     invalidateResponse();
   };
+
+  const stopAccessWatch = watch(
+    () => useChatAccess().access.value.ai,
+    allowed => {
+      if (!allowed) dispose();
+    },
+    { flush: 'sync' }
+  );
 
   const applyActionTask = async (
     task: AiActionTask,
@@ -438,7 +452,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
       : `${normalizedBaseUrl}/api`;
     const action =
       decision === 'approve' ? 'approve-tool-call' : 'decline-tool-call';
-    const response = await fetch(
+    const response = await fetchWithAiAccess(
       `${apiBaseUrl}/agents/${encodeURIComponent(agentId)}/${action}`,
       {
         method: 'POST',
@@ -734,6 +748,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
     preparedInput?: { requestId: string; generation: number },
     submission?: AiSubmissionObserver
   ) => {
+    await requireAiAccess();
     if (disposed || !input.trim()) return;
 
     lastError.value = null;

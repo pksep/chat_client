@@ -20,7 +20,7 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http: https: ws: wss: capacitor:; img-src 'self' data: blob: http: https: file: capacitor:; media-src 'self' data: blob: http: https: file: capacitor:; font-src 'self' data: http: https:; worker-src 'self' blob:; frame-src 'self' blob: http: https:; manifest-src 'self'"
     />
-    <script src="/theme-init.js?v=20260903"></script>
+    <script src="/theme-init.js?v=20261005"></script>
     <title>SEP:Chat</title>
     <script type="module" src="/src/startup.ts"></script>
     <style>
@@ -286,6 +286,7 @@
       .startup-shell__line,
       .startup-shell__subline,
       .startup-shell__nav-item,
+      .startup-shell__navigation::after,
       .startup-shell__header-avatar,
       .startup-shell__header-line,
       .startup-shell__header-subline,
@@ -330,13 +331,12 @@
 
       .startup-shell__navigation {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: 1fr;
         align-items: center;
         gap: 12px;
         height: 58px;
         margin: 0 -10px;
-        padding: 10px 28px;
-        border-top: 1px solid var(--border-table);
+        padding: 10px 18px;
         border-radius: 15px 15px 0 0;
         box-shadow: 0 0 22px rgb(0 0 0 / 7%);
         box-sizing: border-box;
@@ -344,10 +344,45 @@
       }
 
       .startup-shell__nav-item {
+        display: none;
         width: 38px;
         height: 38px;
         justify-self: center;
         border-radius: 50%;
+      }
+
+      .startup-shell__navigation::after {
+        content: '';
+        width: 100%;
+        height: 38px;
+        border-radius: 999px;
+      }
+
+      html[data-startup-menu-count] .startup-shell__navigation::after {
+        display: none;
+      }
+
+      html[data-startup-menu-count] .startup-shell__nav-item {
+        display: block;
+      }
+
+      html[data-startup-menu-count='3'] .startup-shell__navigation {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      html[data-startup-menu-count='4'] .startup-shell__navigation {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      html[data-startup-menu-count='5'] .startup-shell__navigation {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+
+      html[data-startup-menu-count='3']
+        .startup-shell__nav-item:nth-child(n + 4),
+      html[data-startup-menu-count='4']
+        .startup-shell__nav-item:nth-child(n + 5) {
+        display: none;
       }
 
       .startup-shell__main {
@@ -887,9 +922,22 @@
         }
 
         .startup-shell__navigation {
-          height: calc(58px + env(safe-area-inset-bottom, 0px));
+          position: fixed;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          left: 10px;
+          right: 10px;
+          bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+          height: 58px;
           margin: 0;
-          padding: 10px 18px calc(10px + env(safe-area-inset-bottom, 0px));
+          padding: 6px 20px;
+          border-radius: 999px;
+          background: var(--surface-overlay);
+          box-shadow:
+            0 12px 30px rgba(27, 39, 94, 0.08),
+            0 2px 10px rgba(27, 39, 94, 0.05);
+          backdrop-filter: blur(18px);
         }
       }
 
@@ -1005,6 +1053,7 @@
           </div>
         </div>
         <div class="startup-shell__navigation">
+          <div class="startup-shell__nav-item"></div>
           <div class="startup-shell__nav-item"></div>
           <div class="startup-shell__nav-item"></div>
           <div class="startup-shell__nav-item"></div>

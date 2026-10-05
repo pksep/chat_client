@@ -127,6 +127,7 @@ import { getFullMessagesByTopicId } from '../services/useMessages';
 import { resolveTopicLastMessage } from '../utils/topic-last-message';
 import { getTopicsByChatsToolbarFilter } from '../utils/chats-toolbar-filter';
 import type { ChatsToolbarFilter } from '../composables/useChatsToolbarState';
+import { useChatAccess } from '../composables/useChatAccess';
 import {
   type AiAssistantSession,
   useAiAssistant
@@ -149,6 +150,7 @@ const emits = defineEmits<{
 const topics = computed(() => getTopicList());
 const users = computed(() => getUsersList());
 const { sessions } = useAiAssistant();
+const { access: chatAccess } = useChatAccess();
 const { createTopic } = useTopics();
 const pendingRecipientKey = ref<string | null>(null);
 const authedUser = computed(() => getAuthUser());
@@ -163,15 +165,17 @@ const state = reactive<{
   filter: 'chats'
 });
 
-const filterOptions: Array<{
-  value: ForwardRecipientFilter;
-  label: string;
-}> = [
+const filterOptions = computed<
+  Array<{
+    value: ForwardRecipientFilter;
+    label: string;
+  }>
+>(() => [
   { value: 'chats', label: 'Чаты' },
   { value: 'groups', label: 'Группы' },
   { value: 'bots', label: 'Боты' },
-  { value: 'ai', label: 'СЭПи' }
-];
+  ...(chatAccess.value.ai ? [{ value: 'ai' as const, label: 'СЭПи' }] : [])
+]);
 
 const getClientLastMessage = (topic: ITopic) => {
   const messages = getFullMessagesByTopicId(topic.id);
@@ -264,6 +268,7 @@ const getUserRecipientsWithoutTopic = (query: string): ForwardRecipient[] => {
 };
 
 const getAiRecipients = (query: string): ForwardRecipient[] => {
+  if (!chatAccess.value.ai) return [];
   const normalizedQuery = normalizeSearchText(query);
 
   return sessions.value

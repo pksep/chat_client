@@ -6,6 +6,12 @@ const TASK_SESSION_ID = 'collapsed-menu-task-chat';
 const TASK_DRAFT_SESSION_ID = 'collapsed-menu-task-draft';
 
 test.beforeEach(async ({ page }, testInfo) => {
+  await page.route('**/automations', route =>
+    route.fulfill({
+      status: 503,
+      json: { message: 'Тест использует сохранённые локальные задачи' }
+    })
+  );
   await page.addInitScript(
     ({
       chatSessionId,
@@ -194,8 +200,10 @@ test('показывает задачи и AI-чаты единым списко
     .locator('xpath=..')
     .locator('.ai-menu-panel__collapsed-divider');
   await expect(separator).toBeVisible();
-  await expect(separator).toHaveCSS('border-top-color', 'rgb(231, 231, 231)');
-  await expect(separator).toHaveCSS('border-top-width', '1px');
+  await expect(separator).toHaveCSS('background-color', 'rgb(231, 231, 231)');
+  const separatorBox = (await separator.boundingBox())!;
+  expect(separatorBox.height).toBeGreaterThan(0);
+  expect(separatorBox.height).toBeLessThan(1);
 
   const [
     panelBox,
@@ -296,9 +304,12 @@ test('показывает задачи и AI-чаты единым списко
   const draftRow = expandedPanel.locator('.ai-menu-panel__row--task-session');
   const draftIcon = draftRow.locator('.ai-menu-panel__task-state svg');
   await expect(draftIcon).toHaveCSS('width', '16px');
-  await expect(draftIcon.locator('path')).toHaveCSS(
+  const taskStateColor = await draftRow
+    .locator('.ai-menu-panel__task-state')
+    .evaluate(element => getComputedStyle(element).color);
+  await expect(draftIcon.locator('path[fill="currentColor"]')).toHaveCSS(
     'fill',
-    'rgb(184, 184, 184)'
+    taskStateColor
   );
   await draftRow.click({ button: 'right' });
   const draftMenu = page.getByTestId(

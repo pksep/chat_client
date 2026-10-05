@@ -6,6 +6,22 @@ export * from '@playwright/test';
 export const test = base.extend<{ aiHistory: void }>({
   aiHistory: [
     async ({ page }, use) => {
+      await page.route('**/users/me/access', async route => {
+        const userId = await page.evaluate(
+          () =>
+            JSON.parse(localStorage.getItem('chat_auth_session') || '{}').user
+              ?.id
+        );
+        return route.fulfill({
+          json: {
+            userId,
+            erpUserId: null,
+            erpRoleId: null,
+            access: { client: true, ai: true },
+            effective: { client: true, ai: true }
+          }
+        });
+      });
       await page.route('**/automations', route =>
         route.fulfill({ json: { automations: [] } })
       );

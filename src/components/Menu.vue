@@ -115,7 +115,7 @@
       />
 
       <AIMenuPanel
-        v-else-if="activeSection === 'ai'"
+        v-else-if="activeSection === 'ai' && chatAccess.ai"
         :is-collapse="isCollapse"
         :data-testid="`${props.dataTestid}-Menu-AIPanel`"
       />
@@ -153,10 +153,7 @@
 </template>
 
 <script lang="ts" setup>
-import {
-  isClientTopic,
-  useManagerInquiries
-} from '../composables/useManagerInquiries';
+import { isClientTopic } from '../composables/useManagerInquiries';
 import ClientsPanel from './Clients/ClientsPanel.vue';
 import {
   computed,
@@ -183,7 +180,6 @@ import {
   navigateToFavorites,
   useUrlWatcher
 } from '../composables/navigation';
-import { RouteTypes } from '../composables/navigation/useUrlRouting';
 import { useTopics } from '../composables/useTopics';
 import TopicList from './ContactList/TopicList.vue';
 import ChatsToolbar from './Menu/ChatsToolbar.vue';
@@ -218,10 +214,12 @@ import {
 } from '../services/useChatNavigationTelemetry';
 import { useChatFolders } from '../composables/useChatFolders';
 import ChatFolderRail from './Menu/ChatFolderRail.vue';
+import { useChatAccess } from '../composables/useChatAccess';
 import ChatFoldersPanel from './Menu/ChatFoldersPanel.vue';
 
 const CallsPage = defineAsyncComponent(() => import('./Calls/CallsPage.vue'));
 const AIMenuPanel = defineAsyncComponent(() => import('./AI/AIMenuPanel.vue'));
+const { access: chatAccess } = useChatAccess();
 const MenuProfilePanel = defineAsyncComponent(
   () => import('./Menu/MenuProfilePanel.vue')
 );
@@ -236,7 +234,6 @@ const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 const selectedContactId = computed(() => route.value?.id);
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
-const { byTopic: clientInquiries } = useManagerInquiries();
 const {
   pendingShareBatches,
   isShareSelectionActive,
@@ -493,40 +490,6 @@ const handleNewContactModal = () => {
 const handleNewBotModal = () => {
   emits('unmount-new-bot', { isChapterOpen: true });
 };
-
-watch(
-  () => [
-    route.value?.type,
-    route.value?.id,
-    clientInquiries.value.has(route.value?.id || '')
-  ],
-  ([routeType]) => {
-    if (routeType === RouteTypes.CALL) {
-      setActiveSection('calls');
-      return;
-    }
-
-    if (routeType === RouteTypes.AI || routeType === RouteTypes.ASSISTANT) {
-      setActiveSection('ai');
-      return;
-    }
-
-    if (
-      routeType === RouteTypes.DIALOGS ||
-      routeType === RouteTypes.GROUP ||
-      routeType === RouteTypes.FAVORITES
-    ) {
-      const topicId = route.value?.id;
-      setActiveSection(
-        clientInquiries.value.has(topicId || '') ||
-          isClientTopic(getTopicList().find(topic => topic.id === topicId))
-          ? 'clients'
-          : 'chats'
-      );
-    }
-  },
-  { immediate: true }
-);
 
 watch(
   [isTopicsLoading, authUserId],

@@ -1,6 +1,8 @@
 export interface IUserExMeta {
   erpInitials?: string;
   erpRole?: string;
+  erpRoleId?: number | null;
+  isDeletedBot?: boolean;
 }
 
 export const parseUserEx = (ex: unknown): IUserExMeta => {

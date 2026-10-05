@@ -1,4 +1,5 @@
 import { ref } from 'vue';
+import { useChatAccess } from '../useChatAccess';
 
 const RouteTypes = {
   DIALOGS: 'dialogs',
@@ -157,10 +158,12 @@ const navigateToFavorites = (topicId: string): void => {
 };
 
 const navigateToAssistant = (): void => {
+  if (!useChatAccess().access.value.ai) return;
   updateUrl({ type: RouteTypes.ASSISTANT, id: null });
 };
 
 const navigateToAI = (sessionId: string | null = null): void => {
+  if (!useChatAccess().access.value.ai) return;
   updateUrl({ type: RouteTypes.AI, id: sessionId });
 };
 
