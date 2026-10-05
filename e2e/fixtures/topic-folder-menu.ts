@@ -1,4 +1,4 @@
-import { createApp, h, ref } from 'vue';
+import { createApp, h, ref, type VNode } from 'vue';
 import { createPinia } from 'pinia';
 import '@pksep/yui/styles';
 import '../../src/assets/globals.css';
@@ -22,6 +22,26 @@ const scope = new URLSearchParams(location.search).has('clients')
   ? 'clients'
   : 'chats';
 const showPanel = new URLSearchParams(location.search).has('panel');
+const showMobileShell = new URLSearchParams(location.search).has(
+  'mobile-shell'
+);
+const wrapTopicList = (list: VNode) =>
+  showMobileShell
+    ? h('div', { class: 'mobile-list-container' }, [
+        h('div', { class: 'mobile-list-container__content' }, [
+          h('div', { class: 'mobile-list-container__section-track' }, [
+            h(
+              'div',
+              {
+                class:
+                  'mobile-list-container__section mobile-list-container__section--chats'
+              },
+              [list]
+            )
+          ])
+        ])
+      ])
+    : list;
 const user = {
   id: 'folder-menu-user',
   name: 'Тест',
@@ -169,16 +189,18 @@ createApp({
                   }
                 })
               ])
-            : h(TopicList, {
-                topics,
-                folderScope: scope,
-                showCheckbox: selection.value,
-                onUnmountTopic: () => {
-                  topicOpens.value++;
-                },
-                dataTestid: 'Fixture-Topics',
-                style: 'width:min(345px,100%);margin:0;padding:10px 0'
-              }),
+            : wrapTopicList(
+                h(TopicList, {
+                  topics,
+                  folderScope: scope,
+                  showCheckbox: selection.value,
+                  onUnmountTopic: () => {
+                    topicOpens.value++;
+                  },
+                  dataTestid: 'Fixture-Topics',
+                  style: 'width:min(345px,100%);margin:0;padding:10px 0'
+                })
+              ),
           h(
             'output',
             { 'data-testid': 'Fixture-ConcurrentResult' },

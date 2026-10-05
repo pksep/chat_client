@@ -25,7 +25,12 @@ const makeFolders = (): ChatFolder[] => [
 
 async function fixture(
   page: Page,
-  options: { empty?: boolean; clients?: boolean; many?: boolean } = {}
+  options: {
+    empty?: boolean;
+    clients?: boolean;
+    many?: boolean;
+    mobileShell?: boolean;
+  } = {}
 ) {
   const state = {
     folders: options.empty ? [] : makeFolders(),
@@ -71,9 +76,10 @@ async function fixture(
       await route.fulfill({ json: [] });
     }
   });
-  await page.goto(
-    `/e2e/fixtures/topic-folder-menu.html${options.clients ? '?clients' : ''}`
-  );
+  const params = new URLSearchParams();
+  if (options.clients) params.set('clients', '');
+  if (options.mobileShell) params.set('mobile-shell', '');
+  await page.goto(`/e2e/fixtures/topic-folder-menu.html?${params}`);
   await expect(
     page.getByTestId('Fixture-Topics-ContactList-Item1')
   ).toBeVisible();
@@ -99,6 +105,79 @@ async function openFolders(page: Page, isMobile: boolean) {
   else await button.hover();
   await expect(foldersMenu(page)).toBeVisible();
 }
+
+test('Мобильное меню топика принимает нажатия поверх списка и добавляет в папку', async ({
+  page,
+  isMobile
+}) => {
+  test.skip(!isMobile, 'Проверяется мобильный слой меню');
+  const state = await fixture(page, { mobileShell: true });
+  const row = page
+    .getByTestId('Fixture-Topics-ContactList-Item1')
+    .locator('.contact-list__item');
+  const box = (await row.boundingBox())!;
+  const pointer = { x: box.x + 160, y: box.y + 20 };
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [pointer]
+  });
+  // В эмуляторе нет системного удержания: воспроизводим событие браузера.
+  await row.evaluate(
+    (element, pointer) =>
+      element.dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: pointer.x,
+          clientY: pointer.y
+        })
+      ),
+    pointer
+  );
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchCancel',
+    touchPoints: []
+  });
+  await expect(context(page)).toBeVisible();
+  const trigger = page.getByTestId(
+    'Fixture-Topics-ContactList-ContextMenu1-AddToFolder'
+  );
+  expect(
+    await trigger.evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      const target = document.elementFromPoint(
+        rect.x + rect.width / 2,
+        rect.y + rect.height / 2
+      );
+      return !!target && element.contains(target);
+    })
+  ).toBe(true);
+  await trigger.tap();
+  await expect(foldersMenu(page)).toBeVisible();
+  await page
+    .getByTestId('Fixture-Topics-ContactList-ContextMenu1-FoldersBack')
+    .tap();
+  await expect(foldersMenu(page)).toHaveCount(0);
+  await trigger.tap();
+  await page
+    .getByTestId('Fixture-Topics-ContactList-ContextMenu1-Folder-folder-1')
+    .tap();
+  await expect(context(page)).toHaveCount(0);
+  await expect(page.getByTestId('Fixture-State-folder-1')).toContainText(
+    'existing-topic,menu-topic-0'
+  );
+  expect(state.patches).toEqual([
+    { id: 'folder-1', topicIds: ['existing-topic', 'menu-topic-0'] }
+  ]);
+  await expect(page.getByTestId('Fixture-TopicOpens')).toHaveText('0');
+
+  await openContext(page);
+  await page.touchscreen.tap(10, 10);
+  await expect(context(page)).toHaveCount(0);
+  await expect(page.getByTestId('Fixture-TopicOpens')).toHaveText('0');
+  expect(state.errors).toEqual([]);
+});
 
 test('Добавляет и убирает топик повторным кликом без потери остальных чатов', async ({
   page,
