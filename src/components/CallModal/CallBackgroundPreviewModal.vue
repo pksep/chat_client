@@ -154,12 +154,12 @@ import {
   BackgroundProcessor as LiveKitBackgroundProcessor,
   supportsBackgroundProcessors
 } from '@livekit/track-processors';
+import Modal from '../UI/Modal.vue';
 import {
   Button,
   ButtonTypeEnum,
   Icon,
   IconNameEnum,
-  Modal,
   SizesEnum
 } from '@pksep/yui';
 import {

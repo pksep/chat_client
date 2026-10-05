@@ -132,7 +132,10 @@ import {
   getMessageReplyQuoteOccurrenceIndex,
   getMessageReplyQuoteText
 } from '../../utils/messageReplyQuote';
-import { useBackButton } from '../../composables/useBackButton';
+import {
+  BackButtonPriority,
+  useBackButton
+} from '../../composables/useBackButton';
 import { setReactionMessage } from '../../services/useChat';
 import { parseCallTopicDefaultMessageEx } from '../../utils/call-topic';
 import {
@@ -202,7 +205,7 @@ watch(
   () => sliderElements.value.length > 0,
   isOpen => {
     if (isOpen) {
-      addBackHandler(closeSlider);
+      addBackHandler(closeSlider, BackButtonPriority.overlay);
       return;
     }
 

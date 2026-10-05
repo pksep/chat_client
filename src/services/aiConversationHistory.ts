@@ -1,3 +1,4 @@
+import { fetchWithAiAccess } from '../composables/useChatAccess';
 import { z } from 'zod';
 import { getAuthToken } from '../composables/useLogin';
 import { getStoredChatAccessToken } from '../composables/useAuth';
@@ -39,7 +40,7 @@ const endpoint = (baseUrl: string, chatId: string) =>
 async function requestBody(url: string, input?: unknown): Promise<unknown> {
   const token = getAuthToken() || getStoredChatAccessToken();
   if (!token) throw new Error('Требуется авторизация.');
-  const response = await fetch(url, {
+  const response = await fetchWithAiAccess(url, {
     method: input ? 'POST' : 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -171,7 +172,7 @@ export async function fetchAiConversationTranscript(
       after: String(query.after ?? 0),
       limit: String(query.limit)
     });
-    const response = await fetch(
+    const response = await fetchWithAiAccess(
       `${endpoint(baseUrl, chatId)}/messages?${params}`,
       {
         headers: { Authorization: `Bearer ${token}` },

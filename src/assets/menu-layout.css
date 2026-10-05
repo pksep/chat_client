@@ -96,6 +96,12 @@
     justify-content: space-between;
   }
 
+  .mobile-list-container .menu-section-heading > button,
+  .mobile-list-container .menu-section-heading > button > svg {
+    width: 22px;
+    height: 22px;
+  }
+
   .mobile-list-container__toolbar {
     padding-top: var(--menu-section-safe-top);
   }

@@ -98,7 +98,7 @@
 
 <script lang="ts" setup>
 import { useTemplateRef, computed, ref, watch } from 'vue';
-import { ModalCroppedAvatar } from '@pksep/yui';
+import ModalCroppedAvatar from '../UI/ModalCroppedAvatar.vue';
 import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from '../MenuInfoButtons.vue';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';

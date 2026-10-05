@@ -26,6 +26,7 @@
     width="492px"
     height="178px"
     class="confirm__modal"
+    @close="handleCloseModal"
     @click.stop
   >
     <h2 class="confirm__modal__title">{{ props.title }}</h2>
@@ -51,7 +52,8 @@
   </Modal>
 </template>
 <script setup lang="ts">
-import { Button, ButtonTypeEnum, Modal, SizesEnum } from '@pksep/yui';
+import Modal from './Modal.vue';
+import { Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
 import { IConfirmModalProps } from './interfaces/confirm-modal';

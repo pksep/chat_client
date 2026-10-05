@@ -12,7 +12,7 @@
     @animationend="handleMobileRouteAnimationEnd"
   >
     <div
-      v-if="isAiRoute || isAiVoiceCallActive"
+      v-if="chatAccess.ai && (isAiRoute || isAiVoiceCallActive)"
       v-show="isAiRoute"
       style="display: contents"
     >
@@ -128,6 +128,7 @@ import type {
 import ShareSelectionOverlay from './ShareSelectionOverlay.vue';
 import { hasKnownTopicMessagesState } from '../services/useMessages';
 import { useAiAssistant } from '../composables/useAiAssistant';
+import { useChatAccess } from '../composables/useChatAccess';
 import UnselectedTopicIcon from './UI/Icons/UnselectedTopicIcon.vue';
 import { loadMessageList } from '../utils/load-message-list';
 
@@ -154,6 +155,7 @@ const aiAssistantRef = useTemplateRef<any>('aiAssistantRef');
 
 const route = useUrlWatcher();
 const { isVoiceModeOpen: isAiVoiceCallActive } = useAiAssistant();
+const { access: chatAccess } = useChatAccess();
 const activeChatRouteKey = computed(() =>
   route.value.type === RouteTypes.AI ? RouteTypes.AI : route.value.id
 );

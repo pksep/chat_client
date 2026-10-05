@@ -1,3 +1,4 @@
+import { refreshChatAccess } from '../../composables/useChatAccess';
 import { bindIncomingChatEvents } from './incoming-events';
 import {
   User,
@@ -711,7 +712,11 @@ export class ChatSDK {
 
         this.ws.setSocket(this.socket);
 
+        this.socket.on('userAccessUpdated', () => {
+          void refreshChatAccess();
+        });
         this.socket.on('connect', () => {
+          void refreshChatAccess();
           authReconnectAttempted = false;
           this.emitConnectionState(true);
           recordTelemetryEvent({

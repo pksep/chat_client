@@ -113,11 +113,11 @@
 </template>
 
 <script setup lang="ts">
+import ModalCroppedAvatar from '../UI/ModalCroppedAvatar.vue';
+import Modal from '../UI/Modal.vue';
 import {
-  ModalCroppedAvatar,
   Icon,
   IconNameEnum,
-  Modal,
   SizesEnum,
   ButtonTypeEnum,
   Button,

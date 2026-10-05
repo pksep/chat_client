@@ -10,6 +10,7 @@ import { getTopicList } from './useTopics';
 import { clearManagerRoutes } from './useManagerRoutes';
 import { showErrorNotification } from './useNotifications';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
+import { useChatAccess } from './useChatAccess';
 
 export interface ManagerInquiry {
   id: string;
@@ -49,6 +50,21 @@ export class ManagerRequestError extends Error {
 const inquiries = ref<ManagerInquiry[]>([]);
 const managers = ref<ManagerOption[]>([]);
 const allowed = ref(false);
+const { access: chatAccess } = useChatAccess();
+watch(
+  () => chatAccess.value.client,
+  granted => {
+    generation++;
+    if (granted) {
+      void refreshManagerInquiries();
+      return;
+    }
+    clearManagerRoutes();
+    allowed.value = false;
+    inquiries.value = [];
+    managers.value = [];
+  }
+);
 const loading = ref(false);
 let subscribers = 0;
 let refreshPromise: Promise<void> | null = null;
@@ -156,7 +172,7 @@ function mergeInquiry(item: ManagerInquiry) {
 }
 
 export async function refreshManagerInquiries(): Promise<void> {
-  if (!authedUser.value?.id) return;
+  if (!authedUser.value?.id || !chatAccess.value.client) return;
   if (refreshPromise) return refreshPromise;
   const currentGeneration = generation;
   loading.value = !inquiries.value.length;
@@ -284,7 +300,7 @@ export function useManagerInquiries() {
   return {
     inquiries,
     managers,
-    allowed,
+    allowed: computed(() => allowed.value && chatAccess.value.client),
     loading,
     byTopic: computed(
       () => new Map(inquiries.value.map(item => [item.topic_id, item]))

@@ -856,7 +856,12 @@
 </template>
 
 <script setup lang="ts">
+import {
+  BackButtonPriority,
+  useBackButtonHandler
+} from '../../composables/useBackButton';
 import { storeToRefs } from 'pinia';
+import Modal from '../UI/Modal.vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -865,7 +870,6 @@ import {
   EmojiPickerPanel,
   Icon,
   IconNameEnum,
-  Modal,
   SizesEnum,
   Toggle,
   autoUpdate,
@@ -965,6 +969,13 @@ const MAX_CUSTOM_WALLPAPER_SIZE_BYTES = 2 * 1024 * 1024;
 const isStatusMenuOpen = ref(false);
 const isCustomStatusOpen = ref(false);
 const isEmojiPickerOpen = ref(false);
+useBackButtonHandler(
+  isEmojiPickerOpen,
+  () => {
+    isEmojiPickerOpen.value = false;
+  },
+  BackButtonPriority.overlay
+);
 const statusEmojiButtonRef = useTemplateRef<HTMLButtonElement>(
   'statusEmojiButtonRef'
 );

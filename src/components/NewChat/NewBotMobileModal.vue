@@ -97,12 +97,12 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
+import ModalCroppedAvatar from '../UI/ModalCroppedAvatar.vue';
 import {
   Button,
   ButtonTypeEnum,
   Input,
   MessageTypeEnum,
-  ModalCroppedAvatar,
   SizesEnum
 } from '@pksep/yui';
 import { navigateToDialogs } from '../../composables/navigation';

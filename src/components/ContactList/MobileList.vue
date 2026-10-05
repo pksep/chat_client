@@ -139,7 +139,7 @@
           ]"
           :aria-hidden="activeSection !== 'ai'"
         >
-          <AIMenuPanel v-if="mountedSections.has('ai')" />
+          <AIMenuPanel v-if="chatAccess.ai && mountedSections.has('ai')" />
         </section>
 
         <section
@@ -161,11 +161,6 @@
     </div>
     <MenuBottomNav
       :is-collapse="false"
-      :class="{
-        'menu-bottom-nav--folders':
-          !isShareSelectionActive &&
-          (activeSection === 'chats' || activeSection === 'clients')
-      }"
       :data-testid="`${props.dataTestid}-MobileList-BottomNav`"
     />
   </div>
@@ -192,10 +187,8 @@ let savedChatsScrollTop = 0;
 </script>
 
 <script setup lang="ts">
-import {
-  isClientTopic,
-  useManagerInquiries
-} from '../../composables/useManagerInquiries';
+import { useChatAccess } from '../../composables/useChatAccess';
+import { isClientTopic } from '../../composables/useManagerInquiries';
 import ClientsPanel from '../Clients/ClientsPanel.vue';
 import {
   reactive,
@@ -253,6 +246,8 @@ import { useChatFolders } from '../../composables/useChatFolders';
 import ChatFoldersPanel from '../Menu/ChatFoldersPanel.vue';
 import ChatFolderRail from '../Menu/ChatFolderRail.vue';
 
+const { access: chatAccess } = useChatAccess();
+
 const NewChatMobileModal = defineAsyncComponent(
   () => import('../NewChat/NewChatMobileModal.vue')
 );
@@ -277,7 +272,6 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
 const { getTopicList, loading: isTopicsLoading } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
-const { byTopic: clientInquiries } = useManagerInquiries();
 const mountedSections = reactive(new Set<ChatMenuSection>(['chats']));
 const { isShareSelectionActive, selectedTopicIds, toggleShareTopic } =
   useShareSelection();
@@ -770,40 +764,6 @@ watch(
   [isTopicsLoading, authUserId],
   ([loading, userId]) => {
     if (!loading && userId) void loadFolders();
-  },
-  { immediate: true }
-);
-
-watch(
-  () => [
-    route.value?.type,
-    route.value?.id,
-    clientInquiries.value.has(route.value?.id || '')
-  ],
-  ([routeType]) => {
-    if (routeType === RouteTypes.CALL) {
-      setActiveSection('calls');
-      return;
-    }
-
-    if (routeType === RouteTypes.AI || routeType === RouteTypes.ASSISTANT) {
-      setActiveSection('ai');
-      return;
-    }
-
-    if (
-      routeType === RouteTypes.DIALOGS ||
-      routeType === RouteTypes.GROUP ||
-      routeType === RouteTypes.FAVORITES
-    ) {
-      const topicId = route.value?.id;
-      setActiveSection(
-        clientInquiries.value.has(topicId || '') ||
-          isClientTopic(getTopicList().find(topic => topic.id === topicId))
-          ? 'clients'
-          : 'chats'
-      );
-    }
   },
   { immediate: true }
 );

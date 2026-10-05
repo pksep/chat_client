@@ -213,13 +213,13 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
+import ModalCroppedAvatar from './UI/ModalCroppedAvatar.vue';
 import {
   Button,
   ButtonTypeEnum,
   Icon,
   IconNameEnum,
   Input,
-  ModalCroppedAvatar,
   SizesEnum
 } from '@pksep/yui';
 import BotAvatar from './UI/BotAvatar.vue';
