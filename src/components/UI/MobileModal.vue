@@ -1,7 +1,7 @@
 <template>
   <Modal
     v-if="hasOpened"
-    :open="props.open"
+    :open="isModalOpen"
     position="bottom"
     :class="['mobile__modal', props.class]"
     @close="handleCloseModal"
@@ -62,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 import Modal from './Modal.vue';
 import Line from './Line.vue';
 import MenuSectionHeading from './MenuSectionHeading.vue';
@@ -83,7 +83,8 @@ const props = withDefaults(defineProps<IMobileModalProps>(), {
 });
 
 // Сохраняем экземпляр после первого открытия, включая анимацию закрытия.
-const hasOpened = ref(props.open);
+const hasOpened = ref(false);
+const isModalOpen = ref(false);
 
 /* ------------------------
    CLOSE HANDLERS
@@ -159,10 +160,13 @@ const onTouchEndContent = (e: TouchEvent) => {
 
 watch(
   () => props.open,
-  isOpen => {
-    if (isOpen) {
+  async isOpen => {
+    if (isOpen && !hasOpened.value) {
       hasOpened.value = true;
+      // Сначала монтируем закрытую модалку, чтобы первое открытие тоже анимировалось.
+      await nextTick();
     }
+    isModalOpen.value = props.open;
   },
   { immediate: true }
 );

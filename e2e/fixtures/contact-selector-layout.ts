@@ -1,4 +1,4 @@
-import { createApp, h } from 'vue';
+import { createApp, defineAsyncComponent, h, reactive, ref } from 'vue';
 import { createPinia } from 'pinia';
 import '@pksep/yui/styles';
 import '../../src/assets/globals.css';
@@ -9,6 +9,7 @@ import NewContactModal from '../../src/components/NewChat/NewContactModal.vue';
 import NewChatMobileModal from '../../src/components/NewChat/NewChatMobileModal.vue';
 import TopicSelector from '../../src/components/TopicSelector.vue';
 import MobileModal from '../../src/components/UI/MobileModal.vue';
+import ChatsToolbar from '../../src/components/Menu/ChatsToolbar.vue';
 import { authedUser } from '../../src/composables/useAuth';
 import { upsertLocalUser } from '../../src/composables/useUsers';
 import { emojiDirective } from '../../src/directives/emoji';
@@ -34,7 +35,32 @@ for (let index = 0; index < count; index++) {
 
 createApp({
   setup() {
+    const creationModal = ref<'group' | 'bot' | null>(null);
+    const mountedCreationModals = reactive(new Set<'group' | 'bot'>());
+    const NewBotMobileModal = defineAsyncComponent(
+      () => import('../../src/components/NewChat/NewBotMobileModal.vue')
+    );
+    const openCreationModal = (kind: 'group' | 'bot') => {
+      mountedCreationModals.add(kind);
+      creationModal.value = kind;
+    };
     return () => {
+      if (mode === 'creation') {
+        return h('main', [
+          h(ChatsToolbar, {
+            onCreateGroup: () => openCreationModal('group'),
+            onCreateBot: () => openCreationModal('bot')
+          }),
+          ...(['group', 'bot'] as const).map(kind =>
+            mountedCreationModals.has(kind)
+              ? h(kind === 'group' ? NewChatMobileModal : NewBotMobileModal, {
+                  open: creationModal.value === kind,
+                  onUnmountClose: () => (creationModal.value = null)
+                })
+              : null
+          )
+        ]);
+      }
       if (mode === 'group') {
         return h(mobile ? NewChatMobileModal : NewGroupModal, { open: true });
       }
