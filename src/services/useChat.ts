@@ -421,13 +421,14 @@ const setupChatListeners = (): void => {
         incrementDisplayedUnreadCount(1);
       }
 
-      if (!opts?.silent) {
+      if (!message.isSystem && !opts?.silent) {
         playNotificationSound(message.topicId, {
           isMention: message.taggedUserIds?.includes(currentUserId.value || '')
         });
       }
 
       if (
+        !message.isSystem &&
         !opts?.silent &&
         (!isTopicMuted(message.topicId) ||
           message.taggedUserIds?.includes(currentUserId.value || '')) &&
