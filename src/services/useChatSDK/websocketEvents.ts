@@ -1,5 +1,11 @@
 import { Message, Topic, User, Group, Reaction } from '@pksep/zod-shared-chat';
 import { IMedia, ITopic } from 'src/components/interfaces/interfaces';
+import type {
+  ChatFolderChange,
+  ChatFolderScope,
+  CreateChatFolderPayload,
+  SaveChatFolderPayload
+} from './chat-folder';
 
 export interface PtsMeta {
   eventId: string;
@@ -17,6 +23,13 @@ export interface SyncReplayEvent {
 }
 
 export enum WebSocketEventType {
+  GET_CHAT_FOLDERS = 'getChatFolders',
+  CREATE_CHAT_FOLDER = 'createChatFolder',
+  UPDATE_CHAT_FOLDER = 'updateChatFolder',
+  DELETE_CHAT_FOLDER = 'deleteChatFolder',
+  SET_CHAT_FOLDER_TOPIC = 'setChatFolderTopic',
+  REORDER_CHAT_FOLDERS = 'reorderChatFolders',
+  CHAT_FOLDER_CHANGED = 'chatFolderChanged',
   SYNC_STATE = 'syncState',
   SYNC_REPLAY = 'syncReplay',
   JOIN_TOPIC = 'joinTopic',
@@ -76,6 +89,22 @@ export enum WebSocketEventType {
 }
 
 export interface WebSocketEventPayloads {
+  [WebSocketEventType.GET_CHAT_FOLDERS]: Record<string, never>;
+  [WebSocketEventType.CREATE_CHAT_FOLDER]: CreateChatFolderPayload;
+  [WebSocketEventType.UPDATE_CHAT_FOLDER]: SaveChatFolderPayload & {
+    folderId: string;
+  };
+  [WebSocketEventType.DELETE_CHAT_FOLDER]: { folderId: string };
+  [WebSocketEventType.SET_CHAT_FOLDER_TOPIC]: {
+    folderId: string;
+    topicId: string;
+    included: boolean;
+  };
+  [WebSocketEventType.REORDER_CHAT_FOLDERS]: {
+    scope: ChatFolderScope;
+    folderIds: string[];
+  };
+  [WebSocketEventType.CHAT_FOLDER_CHANGED]: ChatFolderChange;
   [WebSocketEventType.SYNC_STATE]: { pts?: string };
   [WebSocketEventType.SYNC_REPLAY]: {
     fromPts?: string | null;

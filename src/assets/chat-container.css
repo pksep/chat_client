@@ -90,6 +90,10 @@
   --basic-height: 100%;
 }
 
+.chat-container:has(.chat__unselected-topic) {
+  background-color: var(--surface-input-secondary);
+}
+
 .chat-container--wallpaper:has(.chat__message-wrapper) {
   background-color: var(--chat-wallpaper-background, var(--surface-main));
   background-image: linear-gradient(rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1))),

@@ -14,6 +14,7 @@ import { authedUser } from '../../src/composables/useAuth';
 import { upsertLocalUser } from '../../src/composables/useUsers';
 import { emojiDirective } from '../../src/directives/emoji';
 import type { IUser } from '../../src/components/interfaces/interfaces';
+import { initializeChat, waitForChatSDK } from '../../src/services/useChat';
 
 // Настоящие компоненты, тестовые контакты без запросов к локальной БД.
 const params = new URLSearchParams(location.search);
@@ -21,7 +22,12 @@ const mode = params.get('mode') || 'selector';
 const count = params.has('long') ? 40 : 2;
 const mobile = matchMedia('(max-width: 768px)').matches;
 document.documentElement.dataset.theme = params.get('theme') || 'light';
-authedUser.value = { id: 'selector-layout-auth' } as IUser;
+authedUser.value = {
+  id: 'selector-layout-auth',
+  initials: 'Фамилия И. О.',
+  nickname: 'author',
+  lastOnline: '2026-10-02T00:00:00.000Z'
+} as IUser;
 for (let index = 0; index < count; index++) {
   upsertLocalUser({
     id: `selector-layout-user-${index}`,
@@ -33,8 +39,51 @@ for (let index = 0; index < count; index++) {
   } as IUser);
 }
 
+if (params.has('bots')) {
+  for (const nickname of ['project_bot', 'zvonilka']) {
+    upsertLocalUser({
+      id: `selector-layout-${nickname}`,
+      initials: nickname === 'zvonilka' ? 'Звонилка' : 'Бот проекта',
+      nickname,
+      isBot: true,
+      lastOnline: '2026-10-02T00:00:00.000Z'
+    } as IUser);
+  }
+}
+
+const groupRequests = ref<unknown[]>([]);
+if (params.has('mock-group')) {
+  // Изолированный SDK: сеть и фоновая синхронизация не запускаются.
+  void initializeChat({
+    token: 'group-layout-fixture',
+    apiUrl: `${location.origin}/fixture-api`,
+    wsUrl: location.origin,
+    cacheReady: new Promise<void>(() => {})
+  });
+  const sdk = await waitForChatSDK();
+  let failNext = params.has('fail-once');
+  sdk.createGroup = async data => {
+    groupRequests.value.push(data);
+    await new Promise(resolve => setTimeout(resolve, 350));
+    if (failNext) {
+      failNext = false;
+      throw new Error('Тестовая ошибка создания группы');
+    }
+    return { id: 'fixture-group', topicId: 'fixture-topic' } as never;
+  };
+  sdk.uploadFile = async file => {
+    const objectName = await new Promise<string>(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.readAsDataURL(file);
+    });
+    return { objectName, thumbnailObjectName: null } as never;
+  };
+}
+
 createApp({
   setup() {
+    const groupOpen = ref(true);
     const creationModal = ref<'group' | 'bot' | null>(null);
     const mountedCreationModals = reactive(new Set<'group' | 'bot'>());
     const NewBotMobileModal = defineAsyncComponent(
@@ -62,7 +111,34 @@ createApp({
         ]);
       }
       if (mode === 'group') {
-        return h(mobile ? NewChatMobileModal : NewGroupModal, { open: true });
+        return h('main', [
+          h(
+            'button',
+            { onClick: () => (groupOpen.value = true) },
+            'Создать группу'
+          ),
+          h(
+            'button',
+            {
+              onClick: () => {
+                document.documentElement.dataset.theme =
+                  document.documentElement.dataset.theme === 'dark'
+                    ? 'light'
+                    : 'dark';
+              }
+            },
+            'Сменить тему'
+          ),
+          h(
+            'output',
+            { 'data-testid': 'GroupRequests' },
+            JSON.stringify(groupRequests.value)
+          ),
+          h(mobile ? NewChatMobileModal : NewGroupModal, {
+            open: groupOpen.value,
+            onUnmountClose: () => (groupOpen.value = false)
+          })
+        ]);
       }
       if (mode === 'contact') {
         return h(NewContactModal, { open: true });

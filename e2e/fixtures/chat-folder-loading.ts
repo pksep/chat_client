@@ -113,6 +113,48 @@ createApp({
                   h(
                     'button',
                     {
+                      'data-testid': 'Fixture-MuteAll',
+                      onClick: () => {
+                        topics.value.forEach(topic => {
+                          topic.info.isMute = true;
+                        });
+                      }
+                    },
+                    'Выключить уведомления'
+                  ),
+                  h(
+                    'button',
+                    {
+                      'data-testid': 'Fixture-UnmuteRead',
+                      onClick: () => {
+                        topics.value[5].info.isMute = false;
+                      }
+                    },
+                    'Включить уведомления прочитанного чата'
+                  ),
+                  h(
+                    'button',
+                    {
+                      'data-testid': 'Fixture-MentionFirst',
+                      onClick: () => {
+                        topics.value[0].taggedMe = true;
+                      }
+                    },
+                    'Упоминание в первом чате'
+                  ),
+                  h(
+                    'button',
+                    {
+                      'data-testid': 'Fixture-UnmuteFirst',
+                      onClick: () => {
+                        topics.value[0].info.isMute = false;
+                      }
+                    },
+                    'Включить уведомления первого чата'
+                  ),
+                  h(
+                    'button',
+                    {
                       'data-testid': 'Fixture-ManyUnread',
                       onClick: () => {
                         topics.value[0].unreadMessageCount = 100;

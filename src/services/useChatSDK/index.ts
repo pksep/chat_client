@@ -154,11 +154,11 @@ export class ChatSDK {
     this.auth = new ChatAuth(this.apiUrl, this.token);
     this.user = new ChatUser(this.reqi);
     this.topic = new ChatTopic(this.reqi);
-    this.chatFolder = new ChatFolderApi(this.reqi);
+    this.ws = new ChatWS(null);
+    this.chatFolder = new ChatFolderApi(this.reqi, this.ws);
     this.message = new ChatMessage(this.reqi);
     this.group = new ChatGroup(this.reqi);
     this.media = new ChatMedia(this.reqi);
-    this.ws = new ChatWS(null);
     this.utils = new ChatUtils(this.reqi);
   }
 
@@ -1041,6 +1041,18 @@ export class ChatSDK {
 
   async getChatFolders(): Promise<ChatFolder[]> {
     return this.chatFolder.getChatFolders();
+  }
+
+  async syncChatFolders(): Promise<ChatFolder[]> {
+    return this.chatFolder.syncChatFolders();
+  }
+
+  async setChatFolderTopic(
+    folderId: string,
+    topicId: string,
+    included: boolean
+  ): Promise<ChatFolder> {
+    return this.chatFolder.setChatFolderTopic(folderId, topicId, included);
   }
 
   async createChatFolder(

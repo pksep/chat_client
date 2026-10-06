@@ -7,18 +7,21 @@
     :data-testid="`${props.dataTestid}-NewGroupModal-Container`"
   >
     <header class="new-group__header">
-      {{ !isSelectedMembers ? 'Добавить участника' : 'Общий' }}
+      {{ !isSelectedMembers ? 'Добавить участников' : 'Общий' }}
       <Button
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.little"
         @click="closeModal"
         class="new-group__button-close"
+        aria-label="Закрыть"
       >
         <Icon :name="IconNameEnum.crossSmall" />
       </Button>
     </header>
     <ContactSelector
       v-if="!isSelectedMembers"
+      add-button-text="Далее"
+      users-filter-label="Чаты"
       @unmount-contact="handleOpenGroupInfo"
       :selected-contact-ids="
         new Set(
@@ -29,16 +32,22 @@
 
     <div v-else class="menu-info__modal-wrapper">
       <Tabs :tabCount="2" :defaultActiveTabId="2" class="new-group__tabs">
-        <template #header1>
-          <span class="menu-info__user-header">
+        <template #header1="{ active }">
+          <span class="menu-info__user-header" :class="{ active }">
             Участники
             <div class="menu-info__user-count">
               {{ selectedContacts.length }}
             </div>
           </span>
         </template>
+        <template #header2="{ active }">
+          <span class="new-group__info-header" :class="{ active }">
+            Информация
+          </span>
+        </template>
         <template #tab1>
           <ContactListInModal
+            creating
             :contacts="filteredSelectedContacts"
             :excluded-contact-ids="excludedContactIds"
             class="new-group__tab2-profile"
@@ -54,11 +63,11 @@
               type="button"
               class="new-group-info__avatar-button"
               aria-label="Изменить аватар группы"
-              @click="() => avatarInputRef.click()"
+              @click="avatarInputRef?.click()"
             >
-              <Avatar
+              <CachedAvatar
                 v-if="avatarPreview"
-                :url="`${config.CHAT_PATH_TO_FILE_CDN}/${avatarPreview}`"
+                :path="avatarPreview"
                 :alt="groupName"
                 class="user-profile__avatar"
                 :initials="groupName"
@@ -72,8 +81,10 @@
             </button>
 
             <div class="new-group-info__details">
-              <h4>Название:</h4>
+              <label for="new-group-name">Название:</label>
               <Input
+                input-id="new-group-name"
+                aria-label="Название группы"
                 @click.stop
                 placeholder="Название:"
                 class="minor"
@@ -98,12 +109,16 @@
         </template>
       </Tabs>
 
+      <p v-if="creationError" class="new-group__error" role="alert">
+        {{ creationError }}
+      </p>
+
       <Button
         :type="ButtonTypeEnum.primary"
         :size="SizesEnum.little"
-        :loading="isCreating"
+        :aria-busy="isCreating"
         class="contact-selector__add new-group__create-button"
-        :disabled="isCreating || !groupName"
+        :disabled="isCreating || !groupName.trim()"
         @click="handleCreateGroup"
       >
         Создать
@@ -122,7 +137,6 @@ import {
   ButtonTypeEnum,
   Button,
   Input,
-  Avatar,
   Tabs
 } from '@pksep/yui';
 import ContactSelector from './ContactSelector.vue';
@@ -131,7 +145,7 @@ import ContactListInModal from '../ContactList/ContactListInModal.vue';
 import { IUser } from '../interfaces/interfaces';
 import { useNewGroupModal } from './composables/useNewGroupModal';
 import { computed } from 'vue';
-import { getConfig } from '../../services/useConfig';
+import CachedAvatar from '../UI/CachedAvatar.vue';
 import { authedUser } from '../../composables/useAuth';
 
 const props = withDefaults(defineProps<INewContactProps & { user?: IUser }>(), {
@@ -143,8 +157,6 @@ const emits = defineEmits<{
   (e: 'unmount-close'): void;
 }>();
 
-const config = getConfig();
-
 const {
   avatarInputRef,
   groupName,
@@ -154,6 +166,7 @@ const {
   isEditAvatar,
   file,
   isCreating,
+  creationError,
   onAvatarSelected,
   onSaveAvatar,
   closeEditAvatar,

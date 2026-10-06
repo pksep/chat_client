@@ -4368,12 +4368,8 @@ watch(
 );
 
 watch(
-  [
-    () => route.value?.id,
-    () => route.value?.type,
-    () => scrollAnchor.viewportMode.value
-  ],
-  ([topicId, routeType, viewportMode], [previousTopicId]) => {
+  [() => route.value?.id, () => route.value?.type],
+  ([topicId, routeType], [previousTopicId]) => {
     if (previousTopicId && previousTopicId !== topicId) {
       setSuspendIncomingMergeForTopic(previousTopicId, false);
     }
@@ -4382,7 +4378,10 @@ watch(
       return;
     }
 
-    setSuspendIncomingMergeForTopic(topicId, viewportMode !== 'live');
+    // Appending uses the scroll anchor to keep a reader's current position.
+    // Do not hide new socket messages merely because the reader is viewing
+    // history: otherwise they only appear after a later scroll interaction.
+    setSuspendIncomingMergeForTopic(topicId, false);
   },
   { immediate: true }
 );

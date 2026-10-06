@@ -1,6 +1,7 @@
 import { Message, Topic, Media } from '@pksep/zod-shared-chat';
 import { Reqi } from '@pksep/reqi';
 import { readJson } from './read-json';
+import { CHAT_CONTENT_REQUEST_TIMEOUT_MS } from '../../utils/network-timeout';
 import {
   SearchParams,
   PaginatedResponse,
@@ -225,7 +226,8 @@ export class ChatMessage implements ChatMessageInterface {
 
     try {
       return await readJson<Message[]>(this.reqi, endpoint, {
-        reusePending: !opts?.fresh
+        reusePending: !opts?.fresh,
+        timeoutMs: CHAT_CONTENT_REQUEST_TIMEOUT_MS
       });
     } catch (error) {
       throw new Error(`Failed to fetch messages: ${(error as Error).message}`);

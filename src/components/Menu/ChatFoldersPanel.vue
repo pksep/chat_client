@@ -365,7 +365,7 @@
 <script setup lang="ts">
 import MenuSearch from '../UI/MenuSearch.vue';
 import { vMenuListPress } from '../../directives/menu-list-press';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import type { ITopic } from '../interfaces/interfaces';
 import {
@@ -671,6 +671,23 @@ const closeDetails = (): void => {
   detailsFolderId.value = null;
   isIconPickerOpen.value = false;
 };
+
+watch(detailsFolder, (folder, previous) => {
+  if (!folder) closeDetails();
+  else if (detailsName.value === previous?.name)
+    detailsName.value = folder.name;
+});
+
+watch(
+  () => props.folders,
+  folders => {
+    const exists = (id: string | null) =>
+      !id || folders.some(folder => folder.id === id);
+    if (!exists(editingFolderId.value)) closeEditor();
+    if (!exists(openMenuFolderId.value)) closeFolderMenu();
+    if (!exists(deleteFolderTargetId.value)) deleteFolderTargetId.value = null;
+  }
+);
 
 const handleDetailsTopicSelect = (topic: ITopic): void => {
   closeDetails();

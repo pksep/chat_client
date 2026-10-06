@@ -274,6 +274,10 @@
   padding-inline: 6px;
 }
 
+.chat-folder-rail__badge--muted {
+  background: var(--text-light-color);
+}
+
 .chat-folder-rail--mobile {
   position: static;
   inset: auto;

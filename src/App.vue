@@ -67,6 +67,7 @@ import {
   NOTIFICATION_TOPIC_SHELL_READY_EVENT
 } from './utils/nativeStartup';
 import { useThemeStore } from './stores/theme';
+import { withNetworkTimeout } from './utils/network-timeout';
 import {
   prepareMessageExperience,
   prepareMessageListAfterPaint
@@ -585,13 +586,17 @@ const loadRemoteConfig = async (options?: {
   isLoading.value = true;
 
   try {
-    const response = await fetch(getRuntimeConfigUrl(normalizedUrl));
+    const runtimeConfig = await withNetworkTimeout(async signal => {
+      const response = await fetch(getRuntimeConfigUrl(normalizedUrl), {
+        signal
+      });
 
-    if (!response.ok) {
-      throw new Error(`Failed to load runtime config: ${response.status}`);
-    }
+      if (!response.ok) {
+        throw new Error(`Failed to load runtime config: ${response.status}`);
+      }
 
-    const runtimeConfig = parseRuntimeConfig(await response.text());
+      return parseRuntimeConfig(await response.text());
+    });
     const resolvedConfig = runtimeConfig as IChatContainerConfig;
     serverUrl.value = normalizedUrl;
     setLastOrganization(normalizedUrl);

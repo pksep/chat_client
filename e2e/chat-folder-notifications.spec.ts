@@ -37,6 +37,13 @@ async function fixture(page: Page) {
         await route.fulfill({ status: 204 });
       } else {
         const payload = request.postDataJSON();
+        if ('included' in payload) {
+          payload.topicIds = payload.included
+            ? [...new Set([...state.folder.topicIds, payload.topicId])]
+            : state.folder.topicIds.filter(id => id !== payload.topicId);
+          delete payload.included;
+          delete payload.topicId;
+        }
         state.saves.push(payload);
         Object.assign(state.folder, payload);
         await route.fulfill({ json: state.folder });
@@ -82,6 +89,47 @@ async function expectTopNotification(page: Page, title: string, index = 0) {
     .all())
     await expect(content).not.toContainText(/Failed to fetch/i);
 }
+
+test('Удалённые изменения обновляют открытую папку, удаление закрывает редактор', async ({
+  page
+}) => {
+  const state = await fixture(page);
+  await page.getByTestId('ChatFolders-Folder-folder-0').click();
+  const name = page
+    .getByTestId('ChatFolders-DetailsNameInput')
+    .locator('input');
+  await expect(name).toHaveValue('Работа');
+  const renamed = {
+    ...state.folder,
+    name: 'Офис',
+    icon: 'star',
+    updatedAt: new Date().toISOString()
+  };
+  await page.evaluate(
+    folder => (window as any).folderFixtureEvent({ kind: 'upsert', folder }),
+    renamed
+  );
+  await expect(name).toHaveValue('Офис');
+  await name.fill('Мой ввод');
+  await page.evaluate(
+    folder => (window as any).folderFixtureEvent({ kind: 'upsert', folder }),
+    {
+      ...renamed,
+      name: 'Другое имя',
+      updatedAt: new Date(Date.now() + 1000).toISOString()
+    }
+  );
+  await expect(name).toHaveValue('Мой ввод');
+  await page.getByRole('button', { name: 'Добавить чат', exact: true }).click();
+  const editor = page.locator('dialog.chat-folder-editor-modal[open]');
+  await expect(editor).toBeVisible();
+  await page.evaluate(() =>
+    (window as any).folderFixtureEvent({ kind: 'delete', folderId: 'folder-0' })
+  );
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByTestId('ChatFolders-Folder-folder-0')).toHaveCount(0);
+  expect(state.errors).toEqual([]);
+});
 
 for (const theme of ['light', 'dark']) {
   for (const mode of ['create', 'edit'] as const) {

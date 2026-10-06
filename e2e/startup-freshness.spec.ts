@@ -175,15 +175,129 @@ test('сервер недоступен: кеш доступен, заголов
   ).toBe(false);
 });
 
-for (const scenario of ['fresh', 'failed', 'pending-text-without-snapshot']) {
+test('зависший сервер при наличии сети открывает кеш и обновляет чаты после восстановления связи', async ({
+  page
+}) => {
+  await prepare(page);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  let requestedAt = 0;
+  let stalled = true;
+  await page.route(`${fixture.origin}/config`, async route => {
+    await gate;
+    await route.abort().catch(() => undefined);
+  });
+  await page.route('**/api/topics?*', async route => {
+    if (!stalled) return route.continue();
+    requestedAt ||= Date.now();
+    await gate;
+    await route.abort().catch(() => undefined);
+  });
+  await page.routeWebSocket('**/socket.io/**', socket => socket.close());
+  try {
+    await page.goto('/');
+    await expect.poll(() => requestedAt).toBeGreaterThan(0);
+    expect(await page.evaluate(() => navigator.onLine)).toBe(true);
+    await expect(page.locator('#startup-shell')).toHaveCount(0, {
+      timeout: 8_000
+    });
+    expect(Date.now() - requestedAt).toBeLessThan(8_000);
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__firstTopicFrame))
+      .toContain('Сохранённое сообщение');
+    await expect(page.locator('.connection-status:visible')).toContainText(
+      'Не удалось обновить'
+    );
+
+    stalled = false;
+    release();
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    await expect(
+      page.locator(`[data-topic-id="${fixture.topics[1].id}"]`)
+    ).toContainText(fixture.topics[1].lastMessage.text, { timeout: 15_000 });
+    await expect(page.locator('.connection-status:visible')).not.toContainText(
+      'Не удалось обновить'
+    );
+    await expect(page.locator('#startup-shell')).toHaveCount(0);
+  } finally {
+    release();
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+  }
+});
+
+for (const failure of ['stalled', 'unavailable'] as const) {
+  test(`сервер авторизации ${failure}: сохранённая сессия открывает чаты`, async ({
+    page
+  }) => {
+    await prepare(page);
+    await page.addInitScript(() =>
+      localStorage.setItem('erp_bootstrap_token', 'fixture-erp-token')
+    );
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    await page.route('**/chat/token', async route => {
+      if (failure === 'stalled') await gate;
+      await route
+        .fulfill({ status: 503, json: { error: 'Тестовая недоступность' } })
+        .catch(() => undefined);
+    });
+    try {
+      await page.goto('/');
+      await expect(page.locator('#startup-shell')).toHaveCount(0, {
+        timeout: 12_000
+      });
+      await expect(
+        page.locator(`[data-topic-id="${fixture.topics[1].id}"]`)
+      ).toBeVisible();
+      const session = await page.evaluate(() =>
+        JSON.parse(localStorage.getItem('chat_auth_session') || 'null')
+      );
+      expect(session).toMatchObject({
+        token: 'chat-294-local-fixture',
+        user: { id: fixture.user.id }
+      });
+      expect(
+        await page.evaluate(() => localStorage.getItem('erp_bootstrap_token'))
+      ).toBe('fixture-erp-token');
+    } finally {
+      release();
+      await page.unrouteAll({ behavior: 'ignoreErrors' });
+    }
+  });
+}
+
+for (const scenario of [
+  'fresh',
+  'failed',
+  'stalled',
+  'stalled-in-list',
+  'offline',
+  'pending-text-without-snapshot'
+]) {
   const failNetwork = scenario === 'failed';
+  const openFromList = scenario === 'stalled-in-list';
+  const stallNetwork = scenario === 'stalled' || openFromList;
+  const offline = scenario === 'offline';
   const missingPendingSnapshot = scenario === 'pending-text-without-snapshot';
-  const description = failNetwork
-    ? 'ошибка HTTP возвращает сохранённую историю'
-    : missingPendingSnapshot
-      ? 'неотправленный текст без отдельного снимка сохраняется'
-      : 'свежий ответ сохраняет неотправленное сообщение';
-  test(`первый экран чата: ${description}`, async ({ page, isMobile }) => {
+  const description = openFromList
+    ? 'сохранённый чат открывается из списка при зависшем HTTP'
+    : stallNetwork
+      ? 'зависший HTTP не блокирует сохранённую историю'
+      : offline
+        ? 'без сети доступна сохранённая история'
+        : failNetwork
+          ? 'ошибка HTTP возвращает сохранённую историю'
+          : missingPendingSnapshot
+            ? 'неотправленный текст без отдельного снимка сохраняется'
+            : 'свежий ответ сохраняет неотправленное сообщение';
+  test(`первый экран чата: ${description}`, async ({
+    page,
+    isMobile
+  }, testInfo) => {
     test.skip(!isMobile, 'Оптимизация мобильного холодного запуска');
     await prepare(page);
     await page.goto('/');
@@ -240,30 +354,101 @@ for (const scenario of ['fresh', 'failed', 'pending-text-without-snapshot']) {
         route.fulfill({ status: 503, json: {} })
       );
     }
-    await page.goto(`/dialogs/${topic.id}`);
-    await expect(page.locator('#startup-shell')).toHaveCount(0, {
-      timeout: 30_000
+    if (offline) {
+      await page.addInitScript(() =>
+        Object.defineProperty(navigator, 'onLine', {
+          configurable: true,
+          get: () => false
+        })
+      );
+      await page.route(`${fixture.origin}/**`, route => route.abort());
+      await page.routeWebSocket('**/socket.io/**', socket => socket.close());
+    }
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
     });
-    await expect(
-      page.locator(`[data-message-id="${pending.id}"]`)
-    ).toBeVisible();
-    if (failNetwork) {
+    if (stallNetwork) {
+      await page.route('**/api/messages/topic/*?*', async route => {
+        await gate;
+        await route.abort().catch(() => undefined);
+      });
+    }
+    try {
+      if (openFromList) {
+        const browserButton = page.getByRole('button', {
+          name: 'Остаться в браузере'
+        });
+        await browserButton.click();
+        await page.locator(`[data-topic-id="${topic.id}"]:visible`).click();
+      } else {
+        await page.goto(`/dialogs/${topic.id}`);
+      }
+      await expect(page.locator('#startup-shell')).toHaveCount(0, {
+        timeout: 30_000
+      });
       await expect(
-        page.locator(`[data-message-id="${cached.id}"]`)
+        page.locator(`[data-message-id="${pending.id}"]`)
       ).toBeVisible();
-      await expect(
-        page.getByText(
-          'Не удалось обновить сообщения. Показана сохранённая переписка.',
-          { exact: true }
-        )
-      ).toBeVisible();
-    } else {
-      await expect(
-        page.locator(`[data-message-id="${topic.lastMessage.id}"]`)
-      ).toBeVisible();
-      await expect(
-        page.locator(`[data-message-id="${cached.id}"]`)
-      ).toHaveCount(0);
+      if (failNetwork || stallNetwork || offline) {
+        await expect(
+          page.locator(`[data-message-id="${cached.id}"]`)
+        ).toBeVisible({ timeout: stallNetwork ? 8_000 : 5_000 });
+        if (offline) {
+          await expect(
+            page.locator('.connection-status:visible')
+          ).toContainText('Нет сети');
+        } else if (!openFromList) {
+          await expect(
+            page.getByText(
+              'Не удалось обновить сообщения. Показана сохранённая переписка.',
+              { exact: true }
+            )
+          ).toBeVisible();
+        }
+      } else {
+        await expect(
+          page.locator(`[data-message-id="${topic.lastMessage.id}"]`)
+        ).toBeVisible();
+        await expect(
+          page.locator(`[data-message-id="${cached.id}"]`)
+        ).toHaveCount(0);
+      }
+      if (stallNetwork) {
+        const browserButton = page.getByRole('button', {
+          name: 'Остаться в браузере'
+        });
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        // На снимках проверяем переписку после закрытия предложения установки.
+        if (!openFromList) await browserButton.click();
+        for (const dark of [true, false]) {
+          await page.evaluate(async dark => {
+            const { useThemeStore } = await import('/src/stores/theme.ts');
+            useThemeStore().setTheme(dark);
+          }, dark);
+          await expect(page.locator('html')).toHaveClass(
+            new RegExp(dark ? 'theme-dark' : 'theme-light')
+          );
+          await page.screenshot({
+            path: testInfo.outputPath(
+              `cached-chat-${dark ? 'dark' : 'light'}.png`
+            ),
+            fullPage: true
+          });
+        }
+        await page.unrouteAll({ behavior: 'ignoreErrors' });
+        release();
+        await page.evaluate(() => window.dispatchEvent(new Event('online')));
+        await expect(
+          page.locator(`[data-message-id="${topic.lastMessage.id}"]`)
+        ).toBeVisible({ timeout: 15_000 });
+        await expect(
+          page.locator(`[data-message-id="${pending.id}"]`)
+        ).toBeVisible();
+      }
+    } finally {
+      release();
+      await page.unrouteAll({ behavior: 'ignoreErrors' });
     }
   });
 }

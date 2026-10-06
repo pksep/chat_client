@@ -58,6 +58,14 @@ async function fixture(
     ) {
       const id = url.pathname.split('/').at(-1)!;
       const payload = route.request().postDataJSON();
+      if ('included' in payload) {
+        const folder = state.folders.find(item => item.id === id)!;
+        payload.topicIds = payload.included
+          ? [...new Set([...folder.topicIds, payload.topicId])]
+          : folder.topicIds.filter(topicId => topicId !== payload.topicId);
+        delete payload.included;
+        delete payload.topicId;
+      }
       state.patches.push({ id, topicIds: payload.topicIds });
       if (state.delay)
         await new Promise(resolve => setTimeout(resolve, state.delay));
