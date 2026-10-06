@@ -88,7 +88,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
   clientName,
   clientPlatform,
@@ -119,8 +119,21 @@ const {
   isLoading: isFoldersLoading,
   selectFolder,
   openFolderManager,
-  closeFolderManager
+  closeFolderManager,
+  loadFolders
 } = useChatFolders('clients');
+
+// Состав системной поддержки обновляется после появления нового клиентского чата.
+watch(
+  () =>
+    inquiries.value
+      .map(item => item.topic_id)
+      .sort()
+      .join(','),
+  (): void => {
+    if (allowed.value) void loadFolders(true);
+  }
+);
 const queue = ref('all');
 const source = ref('');
 const search = ref('');

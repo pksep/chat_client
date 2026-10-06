@@ -20,10 +20,13 @@ export const useChatFolderDrag = (options: FolderDragOptions) => {
     const folders = options.folders();
     if (!draftIds.value) return folders;
     const byId = new Map(folders.map(folder => [folder.id, folder]));
-    return draftIds.value.flatMap(id => {
-      const folder = byId.get(id);
-      return folder ? [folder] : [];
-    });
+    return [
+      ...folders.filter(folder => folder.isSystem),
+      ...draftIds.value.flatMap(id => {
+        const folder = byId.get(id);
+        return folder ? [folder] : [];
+      })
+    ];
   });
   let candidate: {
     id: string;
@@ -89,6 +92,8 @@ export const useChatFolderDrag = (options: FolderDragOptions) => {
     )) {
       const id = element.dataset.folderId!;
       const index = draftIds.value.indexOf(id);
+      if (index < 0) continue;
+
       const middle = getLayoutMiddle(
         element,
         container,
@@ -269,17 +274,21 @@ export const useChatFolderDrag = (options: FolderDragOptions) => {
       finish();
   }
 
-  const begin = (event: Event, x: number, y: number) => {
-    if (candidate || options.disabled() || options.folders().length < 2)
-      return false;
+  const begin = (event: Event, x: number, y: number): boolean => {
+    const movable = options.folders().filter(folder => !folder.isSystem);
+
+    if (candidate || options.disabled() || movable.length < 2) return false;
     const element = (event.target as Element).closest<HTMLElement>(
       '[data-folder-id]'
     );
     if (!element || !containerRef.value?.contains(element)) return false;
+    if (!movable.some(folder => folder.id === element.dataset.folderId))
+      return false;
+
     candidate = {
       id: element.dataset.folderId!,
       element,
-      ids: options.folders().map(folder => folder.id),
+      ids: movable.map(folder => folder.id),
       x,
       y
     };
@@ -321,7 +330,7 @@ export const useChatFolderDrag = (options: FolderDragOptions) => {
     }
   };
 
-  const onKeydown = (event: KeyboardEvent) => {
+  const onKeydown = (event: KeyboardEvent): void => {
     if (!event.altKey || options.disabled()) return;
     const horizontal = options.horizontal?.() ?? false;
     const direction =
@@ -334,7 +343,10 @@ export const useChatFolderDrag = (options: FolderDragOptions) => {
     const element = (event.target as Element).closest<HTMLElement>(
       '[data-folder-id]'
     );
-    const ids = options.folders().map(folder => folder.id);
+    const ids = options
+      .folders()
+      .filter(folder => !folder.isSystem)
+      .map(folder => folder.id);
     const index = ids.indexOf(element?.dataset.folderId || '');
     const targetId = ids[index + direction];
     if (index < 0 || !targetId) return;

@@ -34,6 +34,7 @@ let changeRevision = 0;
 const folderChanges = new Map<string, number>();
 const deletedFolderIds = new Set<string>();
 let unbindFolderSync: (() => void) | undefined;
+let refreshPending = false;
 const topicUpdateQueue = new Map<string, Promise<ChatFolder>>();
 
 const sortFolders = sortChatFolders;
@@ -95,6 +96,10 @@ const applyMutation = (
 };
 
 const applySnapshot = (snapshot: ChatFolder[], startedAt: number): void => {
+  // Системная папка снова доступна после возвращения права на раздел клиентов.
+  for (const folder of snapshot)
+    if (folder.isSystem) deletedFolderIds.delete(folder.id);
+
   const next = new Map(
     snapshot
       .filter(folder => !deletedFolderIds.has(folder.id))
@@ -130,6 +135,7 @@ export const configureChatFolderSync = (sdk: ChatSDK, userId: string): void => {
   ++loadRevision;
   isLoading.value = false;
   loadedUserId = '';
+  refreshPending = false;
   topicUpdateQueue.clear();
   for (const selection of Object.values(selections))
     selection.isReordering.value = false;
@@ -176,7 +182,14 @@ export const refreshChatFoldersFromSocket = async (): Promise<void> => {
     if (session === sessionRevision && revision === loadRevision)
       console.warn('Не удалось синхронизировать папки:', error);
   } finally {
-    if (revision === loadRevision) isLoading.value = false;
+    if (revision === loadRevision) {
+      isLoading.value = false;
+
+      if (refreshPending) {
+        refreshPending = false;
+        await loadFolders(true);
+      }
+    }
   }
 };
 
@@ -184,7 +197,12 @@ const loadFolders = async (force = false): Promise<void> => {
   const userId = getAuthUser()?.id || '';
   const sdk = getChatSDK();
 
-  if (!userId || !sdk || isLoading.value) return;
+  if (!userId || !sdk) return;
+
+  if (isLoading.value) {
+    if (force) refreshPending = true;
+    return;
+  }
   if (!force && loadedUserId === userId) return;
 
   isLoading.value = true;
@@ -211,7 +229,14 @@ const loadFolders = async (force = false): Promise<void> => {
       description: error
     });
   } finally {
-    if (revision === loadRevision) isLoading.value = false;
+    if (revision === loadRevision) {
+      isLoading.value = false;
+
+      if (refreshPending) {
+        refreshPending = false;
+        await loadFolders(true);
+      }
+    }
   }
 };
 
@@ -239,6 +264,9 @@ const updateFolder = async (
   folderId: string,
   payload: SaveChatFolderPayload
 ): Promise<ChatFolder> => {
+  if (folders.value.find(folder => folder.id === folderId)?.isSystem)
+    throw new Error('Системную папку нельзя изменять');
+
   const normalizedPayload: SaveChatFolderPayload = {
     ...(payload.name === undefined ? {} : { name: payload.name.trim() }),
     ...(payload.icon === undefined ? {} : { icon: payload.icon }),
@@ -257,6 +285,9 @@ const updateFolder = async (
 };
 
 const deleteFolder = async (folderId: string): Promise<void> => {
+  if (folders.value.find(folder => folder.id === folderId)?.isSystem)
+    throw new Error('Системную папку нельзя удалить');
+
   const context = mutationContext();
   await context.sdk.deleteChatFolder(folderId);
   if (!context.isCurrent()) throw new Error('Сессия пользователя изменилась');
@@ -285,6 +316,9 @@ const setTopicInFolder = (
       const folder = folders.value.find(item => item.id === folderId);
       if (!folder || (folder.scope || 'chats') !== scope)
         throw new Error('Папка больше недоступна');
+      if (folder.isSystem)
+        throw new Error('Состав системной папки определяется автоматически');
+
       if (folder.topicIds.includes(topicId) === included) return folder;
       const context = mutationContext();
       const savedFolder = await context.sdk.setChatFolderTopic(
@@ -311,7 +345,7 @@ const reorderFolders = async (
   const selection = selections[scope];
   if (selection.isReordering.value) return;
   const scopedFolders = folders.value.filter(
-    folder => (folder.scope || 'chats') === scope
+    folder => (folder.scope || 'chats') === scope && !folder.isSystem
   );
   const positions = new Map(
     scopedFolders.map(folder => [folder.id, folder.position])
@@ -325,7 +359,9 @@ const reorderFolders = async (
     return;
   const context = mutationContext();
   const startedAt = changeRevision;
-  const applyPositions = (nextPositions: Map<string, number | undefined>) => {
+  const applyPositions = (
+    nextPositions: Map<string, number | undefined>
+  ): void => {
     folders.value = sortFolders(
       folders.value.map(folder =>
         nextPositions.has(folder.id)
@@ -388,6 +424,7 @@ watch(
     folderChanges.clear();
     deletedFolderIds.clear();
     loadedUserId = '';
+    refreshPending = false;
     folders.value = [];
     topicUpdateQueue.clear();
     isLoading.value = false;
