@@ -12,6 +12,7 @@ import {
   type StoredChatAuthSession
 } from '../utils/stored-chat-session';
 import { buildGroupCallInviteAuthorizationUrl } from '../utils/groupCallInviteUrl';
+import { withNetworkTimeout } from '../utils/network-timeout';
 export {
   CHAT_AUTH_SESSION_KEY,
   getChatAuthSession
@@ -119,20 +120,29 @@ const getCredentialsLoginUrl = (config: IChatContainerConfig): string => {
 
 export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
   const config = getConfig();
-  const response = await fetch(`${config.CHAT_AUTH_API}/chat/token`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ erpToken })
+  return withNetworkTimeout(async signal => {
+    const response = await fetch(`${config.CHAT_AUTH_API}/chat/token`, {
+      method: 'POST',
+      signal,
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ erpToken })
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw Object.assign(new Error(data?.error || 'ERP token login failed'), {
+        status: response.status
+      });
+    }
+
+    // Ответ, пришедший после таймаута, не должен менять выбранную сессию.
+    if (signal.aborted) {
+      throw new DOMException('Сервер не ответил вовремя', 'TimeoutError');
+    }
+    return normalizeAuthResponse(data);
   });
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data?.error || 'ERP token login failed');
-  }
-
-  return normalizeAuthResponse(data);
 };
 
 export const loginWithCredentials = async (
