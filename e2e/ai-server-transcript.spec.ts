@@ -89,6 +89,17 @@ test('ошибки трёх запросов остаются после сво�
   const stored: ReturnType<typeof message>[] = [];
   let runs = 0;
 
+  await page.route('**/users/me/access', route =>
+    route.fulfill({
+      json: {
+        userId: 'local-ui-test-user',
+        erpUserId: null,
+        erpRoleId: null,
+        access: { client: false, ai: true },
+        effective: { client: false, ai: true }
+      }
+    })
+  );
   await page.route('**/conversations/**', async route => {
     const path = new URL(route.request().url()).pathname;
 
