@@ -274,6 +274,7 @@ const onAddClick = (): void => {
   border-bottom-width: 0;
   border-radius: 0;
   box-shadow: none;
+  transition: none;
 }
 
 .contact-selector__item:has(+ .contact-selector__item)::after {
