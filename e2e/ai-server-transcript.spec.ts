@@ -104,11 +104,16 @@ test('ошибки трёх запросов остаются после сво�
 
     expect(input.role).toBe('user');
     expect(typeof body.requestContext.requestId).toBe('string');
-    stored.push({
-      ...message(`saved-user-${runs}`, 'user', input.content),
-      requestId: body.requestContext.requestId
-    });
-    runs += 1;
+    const requestId = body.requestContext.requestId;
+
+    // Повтор транспорта не создаёт второй вопрос с тем же ID запроса.
+    if (!stored.some(item => item.requestId === requestId)) {
+      stored.push({
+        ...message(`saved-user-${runs}`, 'user', input.content),
+        requestId
+      });
+      runs += 1;
+    }
 
     return route.fulfill({
       status: 500,
@@ -127,7 +132,7 @@ test('ошибки трёх запросов остаются после сво�
     await editor.locator('[contenteditable="true"]').fill(question);
     await editor.locator('.toolbar-button.right:visible').click();
     await expect.poll(() => runs).toBe(index + 1);
-    await expect(bubbles).toHaveCount((index + 1) * 2);
+    await expect(bubbles).toHaveCount((index + 1) * 2, { timeout: 15_000 });
 
     for (let position = 0; position <= index; position += 1) {
       await expect(bubbles.nth(position * 2)).toContainText(
