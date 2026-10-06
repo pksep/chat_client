@@ -4442,7 +4442,15 @@ const connectToRoom = async (options: { inviteToken?: string } = {}) => {
     const previousRoom = room;
     if (previousRoom) {
       ignoredDisconnectedRoom = previousRoom;
-      previousRoom.disconnect();
+      await previousRoom.disconnect();
+
+      if (ignoredDisconnectedRoom === previousRoom) {
+        ignoredDisconnectedRoom = null;
+      }
+
+      if (currentAttemptId !== connectAttemptId) {
+        return;
+      }
     }
 
     suppressParticipantPresenceNotifications = true;

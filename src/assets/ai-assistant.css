@@ -259,7 +259,7 @@
 }
 
 .ai-menu-panel__row-copy small {
-  color: #7f8b9e;
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 18px;
 }

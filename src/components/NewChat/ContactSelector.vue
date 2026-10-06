@@ -322,6 +322,7 @@ const onAddClick = (): void => {
 .contact-selector__filters {
   display: flex;
   gap: 8px;
+  padding-inline: 10px;
 }
 
 .contact-selector__filter {

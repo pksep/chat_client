@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        margin: 100px 24px;
+        color: var(--text-primary);
+        --text-primary: #181818;
+      }
+      body.dark {
+        --text-primary: #ffffff;
+        background: #262a38;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h, ref } from 'vue';
+      import { ContentEditor } from '@pksep/yui';
+      import '@pksep/yui/styles';
+      import { sanitizeMessageHtml } from '/src/utils/sanitizeMessageHtml.ts';
+      import { copyMessageSelection } from '/src/utils/copyMessageSelection.ts';
+
+      createApp({
+        setup() {
+          const editorRef = ref(null);
+          const draft = ref('');
+          const sent = ref('');
+          window.colorHarness = {
+            get editor() {
+              return editorRef.value?.editor;
+            },
+            get sent() {
+              return sent.value;
+            }
+          };
+
+          return () =>
+            h('section', [
+              h(ContentEditor, {
+                ref: editorRef,
+                modelValue: draft.value,
+                'onUpdate:modelValue': value => (draft.value = value),
+                onUnmountSend: payload => {
+                  sent.value = payload.content;
+                  draft.value = '';
+                }
+              }),
+              h('pre', { id: 'draft' }, draft.value),
+              h('div', {
+                id: 'message',
+                innerHTML: sanitizeMessageHtml(sent.value),
+                onCopy: copyMessageSelection
+              })
+            ]);
+        }
+      }).mount('#app');
+    </script>
+  </body>
+</html>
