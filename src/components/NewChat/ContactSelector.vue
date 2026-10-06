@@ -47,10 +47,11 @@
       <li
         v-for="(contact, index) in contacts"
         :key="contact.id"
-        class="contact-selector__item"
+        class="contact-selector__item menu-list-row"
         :class="{
           'contact-selector__item--excluded': isContactExcluded(contact.id),
-          'contact-selector__item--selected': state.selectedIds.has(contact.id)
+          'contact-selector__item--selected': state.selectedIds.has(contact.id),
+          'menu-list-row--active': state.selectedIds.has(contact.id)
         }"
         @click="!isContactExcluded(contact.id) && handleNewContact(contact)"
         :data-testid="`${props.dataTestid}-ContactSelector-Item${index + 1}`"
@@ -261,6 +262,43 @@ const onAddClick = (): void => {
 </script>
 
 <style scoped>
+.contact-selector__list {
+  gap: 0;
+}
+
+.contact-selector__item {
+  box-sizing: border-box;
+  min-height: 58px;
+  margin: 0;
+  padding: 4px 10px;
+  border-bottom-width: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.contact-selector__item:has(+ .contact-selector__item)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 0.35px;
+  background: var(--border-table);
+  pointer-events: none;
+}
+
+@media screen and (width <= 768px) {
+  .contact-selector__item {
+    min-height: 80px;
+    padding: 10px 16px;
+  }
+
+  .contact-selector__item:has(+ .contact-selector__item)::after {
+    right: 16px;
+    left: 16px;
+  }
+}
+
 .contact-selector__item--excluded {
   opacity: 0.6;
   background-color: #f5f5f5;
