@@ -34,7 +34,10 @@
           <span
             v-if="allUnreadCount"
             class="chat-folder-rail__badge"
-            :class="{ 'chat-folder-rail__badge--wide': allUnreadCount > 9 }"
+            :class="{
+              'chat-folder-rail__badge--wide': allUnreadCount > 9,
+              'chat-folder-rail__badge--muted': allUnreadBadge.isMuted
+            }"
             :aria-label="`Непрочитанных сообщений: ${allUnreadCount}`"
             data-testid="ChatFolders-Rail-All-UnreadCount"
           >
@@ -99,7 +102,10 @@
               v-if="!props.mobile && getUnreadCount(folder)"
               class="chat-folder-rail__badge"
               :class="{
-                'chat-folder-rail__badge--wide': getUnreadCount(folder) > 9
+                'chat-folder-rail__badge--wide': getUnreadCount(folder) > 9,
+                'chat-folder-rail__badge--muted': folderUnreadBadges.get(
+                  folder.id
+                )?.isMuted
               }"
             >
               {{ getUnreadCount(folder) > 99 ? '99+' : getUnreadCount(folder) }}
@@ -158,7 +164,7 @@
 import { computed } from 'vue';
 import type { ITopic } from '../interfaces/interfaces';
 import type { ChatFolder } from '../../services/useChatSDK/chat-folder';
-import { getTopicUnreadBadgeCount } from '../../utils/topicUnreadBadge';
+import { getTopicsUnreadBadgeState } from '../../utils/chats-toolbar-filter-badge';
 import MessageIcon from '../UI/MessageIcon.vue';
 import ChatFolderIcon from './ChatFolderIcon.vue';
 import SkeletonBlock from '../UI/SkeletonBlock.vue';
@@ -215,22 +221,27 @@ const {
   onReorder: folderIds => useChatFolders(props.scope).reorderFolders(folderIds)
 });
 
-const getUnreadCount = (folder: ChatFolder): number => {
-  const topicIds = new Set(folder.topicIds);
-  return props.topics.reduce(
-    (count, topic) =>
-      count +
-      (topicIds.has(topic.id)
-        ? getTopicUnreadBadgeCount(topic, props.authUserId)
-        : 0),
-    0
-  );
-};
-
-const allUnreadCount = computed(() =>
-  props.topics.reduce(
-    (count, topic) => count + getTopicUnreadBadgeCount(topic, props.authUserId),
-    0
-  )
+const folderUnreadBadges = computed(
+  () =>
+    new Map(
+      props.folders.map(folder => {
+        const topicIds = new Set(folder.topicIds);
+        return [
+          folder.id,
+          getTopicsUnreadBadgeState(
+            props.topics.filter(topic => topicIds.has(topic.id)),
+            props.authUserId
+          )
+        ] as const;
+      })
+    )
 );
+
+const getUnreadCount = (folder: ChatFolder): number =>
+  folderUnreadBadges.value.get(folder.id)?.count || 0;
+
+const allUnreadBadge = computed(() =>
+  getTopicsUnreadBadgeState(props.topics, props.authUserId)
+);
+const allUnreadCount = computed(() => allUnreadBadge.value.count);
 </script>

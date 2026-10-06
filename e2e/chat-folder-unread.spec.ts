@@ -2,6 +2,57 @@ import { expect, test } from '@playwright/test';
 
 for (const scope of ['chats', 'clients']) {
   for (const theme of ['light', 'dark']) {
+    test(`Счётчики папок учитывают заглушённые чаты и упоминания: ${scope}, ${theme}`, async ({
+      page,
+      isMobile
+    }) => {
+      await page.goto(
+        `/e2e/fixtures/chat-folder-loading.html?unread${scope === 'clients' ? '&clients' : ''}`
+      );
+      if (theme === 'dark') await page.getByTestId('Fixture-Theme').click();
+      const all = page.getByTestId('ChatFolders-Rail-All-UnreadCount');
+      const folder = page
+        .getByTestId('ChatFolders-Rail-Folder-folder-0')
+        .locator('.chat-folder-rail__badge');
+      const mutedFolder = page
+        .getByTestId('ChatFolders-Rail-Folder-folder-1')
+        .locator('.chat-folder-rail__badge');
+      const gray = await all.evaluate(el =>
+        getComputedStyle(el).getPropertyValue('--text-light-color').trim()
+      );
+      const blue = await all.evaluate(
+        el => getComputedStyle(el).backgroundColor
+      );
+      const rgb = (hex: string) =>
+        `rgb(${[1, 3, 5].map(start => parseInt(hex.slice(start, start + 2), 16)).join(', ')})`;
+      await page.getByTestId('Fixture-MuteAll').click();
+      await expect(all).toHaveText('9');
+      await expect(all).toHaveCSS('background-color', rgb(gray));
+      if (!isMobile) {
+        await expect(folder).toHaveCSS('background-color', rgb(gray));
+        await expect(mutedFolder).toHaveCSS('background-color', rgb(gray));
+      }
+      await page.getByTestId('Fixture-UnmuteRead').click();
+      await expect(all).toHaveCSS('background-color', rgb(gray));
+      await page.getByTestId('Fixture-UnmuteFirst').click();
+      await expect(all).toHaveCSS('background-color', blue);
+      if (!isMobile) {
+        await expect(folder).toHaveCSS('background-color', blue);
+        await expect(mutedFolder).toHaveCSS('background-color', rgb(gray));
+      }
+      await page.getByTestId('Fixture-MuteAll').click();
+      await expect(all).toHaveCSS('background-color', rgb(gray));
+      await page.getByTestId('Fixture-MentionFirst').click();
+      await expect(all).toHaveCSS('background-color', blue);
+      if (!isMobile) {
+        await expect(folder).toHaveCSS('background-color', blue);
+        await expect(mutedFolder).toHaveCSS('background-color', rgb(gray));
+      }
+      await page.getByTestId('Fixture-ReadFirst').click();
+      await expect(all).toHaveText('6');
+      await expect(all).toHaveCSS('background-color', rgb(gray));
+    });
+
     test(`«Все чаты» считает непрочитанные в разделе, обновляется без сдвигов: ${scope}, ${theme}`, async ({
       page,
       isMobile
