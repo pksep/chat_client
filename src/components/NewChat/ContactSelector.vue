@@ -49,7 +49,8 @@
         :key="contact.id"
         class="contact-selector__item"
         :class="{
-          'contact-selector__item--excluded': isContactExcluded(contact.id)
+          'contact-selector__item--excluded': isContactExcluded(contact.id),
+          'contact-selector__item--selected': state.selectedIds.has(contact.id)
         }"
         @click="!isContactExcluded(contact.id) && handleNewContact(contact)"
         :data-testid="`${props.dataTestid}-ContactSelector-Item${index + 1}`"
@@ -98,13 +99,13 @@
       @click="onAddClick"
       :data-testid="`${props.dataTestid}-ContactSelector-AddButton`"
     >
-      Добавить
+      {{ props.addButtonText }}
     </Button>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from 'vue';
+import { computed, reactive, watch } from 'vue';
 import {
   Checkbox,
   ButtonTypeEnum,
@@ -133,20 +134,29 @@ import { isBotUser, isCallBotUser } from '../../utils/bot';
 type ContactSelectorFilter = IContactSelectorState['filter'];
 
 const props = withDefaults(defineProps<IContactSelectorProps>(), {
-  dataTestid: () => 'ContactSelector'
+  dataTestid: () => 'ContactSelector',
+  addButtonText: 'Добавить',
+  usersFilterLabel: 'Пользователи'
 });
 const emits = defineEmits<IContactSelectorEmits>();
 
 const state = reactive<IContactSelectorState>({
   q: '',
   filter: 'users',
-  selectedIds: props.selectedContactIds ?? new Set()
+  selectedIds: new Set(props.selectedContactIds)
 });
+
+watch(
+  () => props.selectedContactIds,
+  ids => {
+    state.selectedIds = new Set(ids);
+  }
+);
 const contactFilters: Array<{
   label: string;
   value: ContactSelectorFilter;
 }> = [
-  { label: 'Пользователи', value: 'users' },
+  { label: props.usersFilterLabel, value: 'users' },
   { label: 'Боты', value: 'bots' }
 ];
 

@@ -88,8 +88,9 @@ for (const theme of ['light', 'dark']) {
       await expect(selector.locator('.contact-selector__add')).toHaveCount(0);
       const next = page.getByRole('button', { name: 'Далее', exact: true });
       await expect(next).toBeEnabled();
-      expect((await next.boundingBox())!.y).toBeLessThan(
-        (await selector.boundingBox())!.y
+      const selectorBounds = (await selector.boundingBox())!;
+      expect((await next.boundingBox())!.y).toBeGreaterThanOrEqual(
+        selectorBounds.y + selectorBounds.height
       );
     } else {
       await expect
@@ -99,7 +100,7 @@ for (const theme of ['light', 'dark']) {
           contentOverlapsButton: false
         });
       await selector
-        .getByRole('button', { name: 'Добавить', exact: true })
+        .getByRole('button', { name: 'Далее', exact: true })
         .click();
       await expect(page.locator('.new-group__create-button')).toBeVisible();
     }

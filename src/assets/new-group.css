@@ -58,7 +58,7 @@ dialog.new-group .menu-info__group-info {
   gap: 10px;
 }
 
-dialog.new-group .menu-info__group-info h4 {
+dialog.new-group .menu-info__group-info label {
   margin-bottom: 5px;
 }
 
@@ -96,18 +96,289 @@ dialog.new-group .menu-info__group-info h4 {
 }
 
 .menu-info__modal-wrapper {
+  position: relative;
   display: grid;
+}
+
+.new-group__error {
+  position: absolute;
+  bottom: 0;
+  left: 10px;
+  width: calc(100% - 110px);
+  margin: 0;
+  color: var(--error-color);
+  font-size: 12px;
+  line-height: 15px;
+}
+
+.new-group__mobile-error {
+  margin: 0;
+  padding: 10px;
+  color: var(--error-color);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+@media screen and (width <= 768px) {
+  dialog.modal__new-group.modal-yui-kit,
+  dialog.modal__new-group > .modal-yui-kit__modal-content {
+    border-radius: 18px 18px 0 0 !important;
+  }
+
+  dialog.modal__new-group:not(.new-group-mobile-info)
+    > .modal-yui-kit__modal-content {
+    box-sizing: border-box;
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    padding: 20px 0;
+    gap: 5px;
+  }
+
+  .modal__new-group:not(.new-group-mobile-info) .mobile__modal-content {
+    min-height: 0;
+    overflow: hidden;
+    padding: 0 10px;
+  }
+
+  .modal__new-group .new-group-mobile__title {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+    width: auto;
+    max-width: none;
+  }
+
+  .modal__new-group:has(.new-group-mobile__title) .mobile__modal-header {
+    display: grid;
+    grid-template-columns: 50px minmax(0, 1fr) 50px;
+    padding-inline: 10px;
+  }
+
+  .modal__new-group:has(.new-group-mobile__title)
+    .mobile__modal-header--button {
+    width: auto;
+  }
+
+  .new-group-mobile__count {
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    border-radius: 8px;
+    background: var(--action-secondary-bg);
+    color: var(--text-blue);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .modal__new-group .contact-selector__badges {
+    padding-inline: 0;
+  }
+
+  .modal__new-group .contact-selector__search {
+    padding: 0;
+  }
+
+  .modal__new-group .mobile__list-modal__contact-selector {
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .modal__new-group .contact-selector:has(> .contact-selector__badges) {
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+  }
+
+  .modal__new-group .contact-selector__badges {
+    max-height: 75px;
+    overflow-y: auto;
+    padding-bottom: 0;
+  }
+
+  .modal__new-group .contact-selector__list {
+    max-height: none;
+    margin-bottom: 0;
+  }
+
+  .modal__new-group .contact-selector__empty {
+    min-height: 0;
+    margin-bottom: 0;
+  }
+
+  dialog.new-group-mobile-info > .modal-yui-kit__modal-content {
+    box-sizing: border-box;
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    gap: 5px;
+    padding: 20px 0;
+  }
+
+  .new-group-mobile-info .mobile__modal-content {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 10px;
+  }
+
+  .new-group-mobile-info .modal-info-mobile__start--creating {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+  }
+
+  .new-group-mobile-info .modal-info-mobile__avatar-button {
+    --size-avatar: 42.5px;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    width: 86px;
+    height: 85px;
+    padding: 0;
+    border: 1.28px solid var(--action-primary-bg);
+    border-radius: 50%;
+    background: var(--action-disabled-bg);
+    color: var(--text-secondary);
+    overflow: hidden;
+  }
+
+  .new-group-mobile-info .modal-info-mobile__avatar {
+    --size-avatar: 42.5px;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+  }
+
+  .new-group-mobile-info .menu__info-form {
+    gap: 5px;
+  }
+
+  .new-group-mobile-info__name-label {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 17px;
+  }
+
+  .new-group-mobile-info .menu__info-form fieldset.input-yui-kit {
+    width: 100%;
+    height: 44px;
+    margin: 0;
+    padding: 0;
+    background: var(--surface-input-secondary);
+  }
+
+  .new-group-mobile-info .input-yui-kit__input {
+    box-sizing: border-box;
+    width: 100%;
+    height: 44px;
+    padding: 0 15px;
+  }
+
+  .new-group-mobile-info .user-profile {
+    min-width: 0;
+    grid-template-columns: 50px minmax(0, 1fr);
+  }
+
+  .new-group-mobile-info .menu__info-user-list--item {
+    margin-top: 0;
+    padding: 10px 0;
+    border-bottom: 0.5px solid var(--border-table);
+  }
+
+  .new-group-mobile-info
+    .modal-info-mobile__contact-list
+    .menu__info-users-list {
+    margin-top: 0;
+  }
+
+  .new-group-mobile-info__footer {
+    box-sizing: border-box;
+    padding: 30px 15px 10px;
+    border: 0.5px solid var(--border-table);
+    border-bottom: 0;
+    border-radius: 15px 15px 0 0;
+    padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+  }
+
+  button.button-yui-kit.new-group-mobile-info__create-button {
+    justify-content: center;
+    width: 100%;
+    height: 50px;
+    font-size: 16px;
+  }
+
+  dialog.group-avatar-cropper-modal--mobile.modal-cropped-avatar {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    top: auto;
+    bottom: 0;
+  }
+
+  .group-avatar-cropper-modal--mobile .modal-cropped-avatar__content {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 22px 16px;
+    border-radius: 20px 20px 0 0;
+    gap: 20px;
+  }
+
+  .group-avatar-cropper-modal--mobile .modal-cropped-avatar__title {
+    font-size: 16px;
+  }
+
+  .group-avatar-cropper-modal--mobile .modal-cropped-avatar__cropper {
+    width: min(250px, calc(100vw - 64px));
+    height: min(250px, calc(100vw - 64px));
+  }
+
+  .group-avatar-cropper-modal--mobile .modal-cropped-avatar__buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .group-avatar-cropper-modal--mobile
+    .modal-cropped-avatar__button.button-yui-kit {
+    justify-content: center;
+    height: 44px;
+    padding: 0 12px;
+  }
+}
+
+:is(.new-group, .modal__new-group) .contact-selector__item--selected {
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--surface-input-secondary);
 }
 
 dialog.new-group.modal-yui-kit {
   background-color: var(--surface-overlay);
 }
 @media screen and (min-width: 641px) {
-  dialog.new-group {
+  dialog.new-group.modal-yui-kit {
     width: 370px;
     height: 488px;
-    border-left: 0.5px solid var(--border-table);
+    box-sizing: border-box;
     overflow: hidden;
+  }
+
+  :is([data-theme='dark'], .theme-dark, [data-theme='light'], .theme-light)
+    dialog.new-group.modal-yui-kit {
+    border: 0;
+    border-left: 0.5px solid var(--border-table);
+  }
+
+  dialog.new-group:has(> .modal-yui-kit__modal-content > .contact-selector) {
+    height: 532px;
   }
 
   dialog.new-group > .modal-yui-kit__modal-content {
@@ -125,6 +396,10 @@ dialog.new-group.modal-yui-kit {
     grid-template-rows: 34px minmax(0, 404px);
   }
 
+  dialog.new-group > .modal-yui-kit__modal-content:has(> .contact-selector) {
+    grid-template-rows: 34px minmax(0, 1fr);
+  }
+
   dialog.new-group .new-group__header {
     box-sizing: border-box;
     width: 100%;
@@ -135,19 +410,21 @@ dialog.new-group.modal-yui-kit {
   }
 
   dialog.new-group .menu-info__modal-wrapper {
-    grid-template-rows: minmax(0, 364px) 30px;
+    grid-template-rows: minmax(0, 1fr) 30px;
     box-sizing: border-box;
     width: 100%;
-    height: 404px;
+    height: 100%;
+    min-height: 0;
     padding: 0;
     gap: 10px;
   }
 
   dialog.new-group .new-group__tabs {
     display: grid;
-    grid-template-rows: 28px minmax(0, 326px);
+    grid-template-rows: 28px minmax(0, 1fr);
     width: 100%;
-    height: 364px;
+    height: 100%;
+    min-height: 0;
     gap: 10px;
   }
 
@@ -178,12 +455,109 @@ dialog.new-group.modal-yui-kit {
     position: relative;
     z-index: 1;
     height: 28px;
+    flex: 0 0 auto;
+    align-items: center;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  dialog.new-group .new-group__tabs > .tabs__navigation > button.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--action-primary-bg);
+  }
+
+  dialog.new-group .menu-info__user-header {
+    height: 100%;
+    padding: 0;
+  }
+
+  dialog.new-group .menu-info__user-header::after {
+    display: none;
+  }
+
+  dialog.new-group .menu-info__user-count {
+    flex: 0 0 auto;
+    min-width: 20px;
+    width: auto;
+    padding: 0 5px;
+    box-sizing: border-box;
+    border-radius: 10px;
+    background: var(--action-primary-bg);
+    color: var(--text-on-brand);
+  }
+
+  dialog.new-group .new-group__tab2-profile {
+    min-height: 0;
+    height: 100%;
+    grid-template-rows: auto minmax(0, 1fr);
+    align-content: start;
+  }
+
+  dialog.new-group .new-group__tab2-profile .menu__info-users-list {
+    min-height: 0;
+    align-self: stretch;
+  }
+
+  dialog.new-group .new-group__tab2-profile .menu__info-add-user {
+    min-height: 0;
+    height: 65px;
+    margin-top: 0;
+  }
+
+  dialog.new-group .user-profile {
+    min-width: 0;
+    grid-template-columns: 50px minmax(0, 1fr);
+  }
+
+  dialog.new-group .user-profile__ex {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  dialog.new-group > .modal-yui-kit__modal-content > .contact-selector {
+    height: 100%;
+    padding: 0;
+  }
+
+  dialog.new-group .contact-selector__badges {
+    max-height: 75px;
+    overflow-y: auto;
+    padding-bottom: 0;
+  }
+
+  dialog.new-group .contact-selector__badges > .base-yui-kit {
+    max-width: 100%;
+    min-width: 0;
+    flex-shrink: 0;
+  }
+
+  dialog.new-group .contact-selector__badges .badges-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  dialog.new-group .contact-selector__badges .close-icon {
+    flex-shrink: 0;
+  }
+
+  dialog.new-group .contact-selector__list {
+    max-height: none;
+    margin-bottom: 0;
+  }
+
+  dialog.new-group .contact-selector__empty {
+    min-height: 0;
+    margin-bottom: 0;
   }
 
   dialog.new-group .new-group__tabs > .tabs__navigation-content {
     box-sizing: border-box;
     width: 100%;
-    height: 326px;
+    height: 100%;
+    min-height: 0;
     padding: 0 10px;
     overflow: hidden;
   }
@@ -200,14 +574,14 @@ dialog.new-group.modal-yui-kit {
   dialog.new-group .new-group-info__avatar-button {
     display: grid;
     place-items: center;
-    flex: 0 0 86px;
+    flex: 0 0 85px;
     box-sizing: border-box;
     width: 86px;
-    height: 86px;
+    height: 85px;
     padding: 0;
-    border: 1px solid var(--action-primary-bg);
+    border: 1.28px solid var(--action-primary-bg);
     border-radius: 50%;
-    background: transparent;
+    background: var(--action-disabled-bg);
     color: var(--text-secondary);
     cursor: pointer;
     overflow: hidden;
@@ -225,7 +599,7 @@ dialog.new-group.modal-yui-kit {
     gap: 5px;
   }
 
-  dialog.new-group .new-group-info__details h4 {
+  dialog.new-group .new-group-info__details label {
     width: 100%;
     height: 17px;
     margin: 0;

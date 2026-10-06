@@ -1,16 +1,13 @@
 import { reactive, watch } from 'vue';
 
-const form = reactive({
-  name: '',
-  avatarUrl: ''
-});
-
 export const useNewInformationModal = (model: {
   name?: string;
   avatarUrl?: string;
 }) => {
-  form.name = model.name;
-  form.avatarUrl = model.avatarUrl;
+  const form = reactive({
+    name: model.name || '',
+    avatarUrl: model.avatarUrl || ''
+  });
 
   const handleUpdateInformation = (information: {
     name?: string;
