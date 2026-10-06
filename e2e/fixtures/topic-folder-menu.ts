@@ -11,13 +11,17 @@ import { authedUser } from '../../src/composables/useAuth';
 import { useChatFolders } from '../../src/composables/useChatFolders';
 import { useNotifications } from '../../src/composables/useNotifications';
 import { setConfig } from '../../src/services/useConfig';
-import { initializeChat } from '../../src/services/useChat';
+import { getChatSDK, initializeChat } from '../../src/services/useChat';
+import { installFolderFixtureSocket } from './folder-fixture-socket';
 import { ChatSDK } from '../../src/services/useChatSDK';
+import { WebSocketEventType } from '../../src/services/useChatSDK/websocketEvents';
+import type { ChatFolderChange } from '../../src/services/useChatSDK/chat-folder';
+import type { ChatWS } from '../../src/services/useChatSDK/ws';
 import { setTopics } from '../../src/composables/useTopics';
 import { emojiDirective } from '../../src/directives/emoji';
 import type { ITopic, IUser } from '../../src/components/interfaces/interfaces';
 
-// Настоящие компоненты и HTTP SDK; сервер и авторизация изолированы от локальной БД.
+// Настоящие компоненты и SDK; сервер и авторизация изолированы от локальной БД.
 const scope = new URLSearchParams(location.search).has('clients')
   ? 'clients'
   : 'chats';
@@ -56,6 +60,12 @@ await initializeChat({
   apiUrl: `${location.origin}/folder-menu-api`,
   wsUrl: 'ws://127.0.0.1:65530'
 });
+installFolderFixtureSocket(getChatSDK()!);
+(window as any).folderFixtureEvent = (change: ChatFolderChange) =>
+  (getChatSDK() as unknown as { ws: ChatWS }).ws.handleWebSocketEvent({
+    type: WebSocketEventType.CHAT_FOLDER_CHANGED,
+    payload: change
+  });
 const topics = ['Офис', 'Второй топик'].map((name, index) => ({
   id: `menu-topic-${index}`,
   type: 'GROUP',

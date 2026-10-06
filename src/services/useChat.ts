@@ -13,6 +13,10 @@ import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { authedUser } from '../composables/useAuth';
 import {
+  configureChatFolderSync,
+  refreshChatFoldersFromSocket
+} from '../composables/useChatFolders';
+import {
   changeUnreadMessageCount,
   useTopics,
   deleteTopicFromList,
@@ -1973,6 +1977,10 @@ export const initializeChat = async (options: {
     token: options.token
   });
   notifyChatSDKReady(chatSDK);
+  configureChatFolderSync(
+    chatSDK,
+    options.userId || authedUser.value?.id || ''
+  );
   const initializedSDK = chatSDK;
   performance.mark('chat-startup:sdk-ready');
   // HTTP выбранного чата уже может работать; фоновые обновления ждут кеш.
@@ -2000,6 +2008,8 @@ export const initializeChat = async (options: {
       if (wasConnected) reconnectRefresh.invalidate();
       return;
     }
+
+    void refreshChatFoldersFromSocket();
 
     if (Capacitor.isNativePlatform()) {
       void loadCallKitApi()

@@ -1,5 +1,10 @@
 import { Reqi } from '@pksep/reqi';
 import { readJson } from './read-json';
+import type { ChatWSInterface } from './ws';
+import {
+  WebSocketEventType,
+  type WebSocketEventPayloads
+} from './websocketEvents';
 
 export interface ChatFolder {
   id: string;
@@ -50,8 +55,30 @@ export type CreateChatFolderPayload = SaveChatFolderPayload & {
   scope?: ChatFolderScope;
 };
 
+export type ChatFolderChange =
+  | { kind: 'upsert'; folder: ChatFolder }
+  | { kind: 'delete'; folderId: string }
+  | { kind: 'reorder'; scope: ChatFolderScope; folders: ChatFolder[] };
+
+type FolderAck<R> =
+  | { success: true; data: R }
+  | { success: false; error: string };
+type FolderCommand =
+  | WebSocketEventType.GET_CHAT_FOLDERS
+  | WebSocketEventType.CREATE_CHAT_FOLDER
+  | WebSocketEventType.UPDATE_CHAT_FOLDER
+  | WebSocketEventType.DELETE_CHAT_FOLDER
+  | WebSocketEventType.SET_CHAT_FOLDER_TOPIC
+  | WebSocketEventType.REORDER_CHAT_FOLDERS;
+
 export interface ChatFolderInterface {
   getChatFolders(): Promise<ChatFolder[]>;
+  syncChatFolders(): Promise<ChatFolder[]>;
+  setChatFolderTopic(
+    folderId: string,
+    topicId: string,
+    included: boolean
+  ): Promise<ChatFolder>;
   createChatFolder(payload: CreateChatFolderPayload): Promise<ChatFolder>;
   updateChatFolder(
     folderId: string,
@@ -65,50 +92,76 @@ export interface ChatFolderInterface {
 }
 
 export class ChatFolderApi implements ChatFolderInterface {
-  constructor(private readonly reqi: Reqi) {}
+  constructor(
+    private readonly reqi: Reqi,
+    private readonly ws: Pick<ChatWSInterface, 'sendWebSocketEventWithAck'>
+  ) {}
+
+  private async command<R, T extends FolderCommand = FolderCommand>(
+    type: T,
+    payload: WebSocketEventPayloads[T]
+  ): Promise<R> {
+    const response = await this.ws.sendWebSocketEventWithAck<T, FolderAck<R>>(
+      type,
+      payload
+    );
+    if (!response || response.success !== true) {
+      throw new Error(
+        response?.success === false
+          ? response.error
+          : 'Не удалось изменить папки'
+      );
+    }
+    return response.data;
+  }
 
   getChatFolders(): Promise<ChatFolder[]> {
     return readJson<ChatFolder[]>(this.reqi, '/chat-folders');
   }
 
+  syncChatFolders(): Promise<ChatFolder[]> {
+    return this.command(WebSocketEventType.GET_CHAT_FOLDERS, {});
+  }
+
+  setChatFolderTopic(
+    folderId: string,
+    topicId: string,
+    included: boolean
+  ): Promise<ChatFolder> {
+    return this.command(WebSocketEventType.SET_CHAT_FOLDER_TOPIC, {
+      folderId,
+      topicId,
+      included
+    });
+  }
+
   async createChatFolder(
     payload: CreateChatFolderPayload
   ): Promise<ChatFolder> {
-    const response = (await this.reqi.post<ChatFolder>(
-      '/chat-folders',
-      payload,
-      { parsed: false }
-    )) as Response;
-
-    return response.json();
+    return this.command(WebSocketEventType.CREATE_CHAT_FOLDER, payload);
   }
 
   async updateChatFolder(
     folderId: string,
     payload: SaveChatFolderPayload
   ): Promise<ChatFolder> {
-    const response = (await this.reqi.patch<ChatFolder>(
-      `/chat-folders/${folderId}`,
-      payload,
-      { parsed: false }
-    )) as Response;
-
-    return response.json();
+    return this.command(WebSocketEventType.UPDATE_CHAT_FOLDER, {
+      ...payload,
+      folderId
+    });
   }
 
   async deleteChatFolder(folderId: string): Promise<void> {
-    await this.reqi.delete(`/chat-folders/${folderId}`, { parsed: false });
+    await this.command(WebSocketEventType.DELETE_CHAT_FOLDER, { folderId });
   }
 
   async reorderChatFolders(
     scope: ChatFolderScope,
     folderIds: string[]
   ): Promise<ChatFolder[]> {
-    const response = (await this.reqi.patch<ChatFolder[]>(
-      '/chat-folders/reorder',
-      { scope, folderIds },
-      { parsed: false }
-    )) as Response;
-    return response.json();
+    return this.command(WebSocketEventType.REORDER_CHAT_FOLDERS, {
+      scope,
+      folderIds
+    });
   }
 }
