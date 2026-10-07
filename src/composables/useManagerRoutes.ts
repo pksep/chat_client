@@ -1,4 +1,4 @@
-import { reactive } from 'vue';
+import { onScopeDispose, reactive, watch, type Ref } from 'vue';
 import { managerRequest, useManagerInquiries } from './useManagerInquiries';
 import { getAuthToken } from './useLogin';
 import {
@@ -7,6 +7,9 @@ import {
   fetchWithAuthRedirect
 } from './useAuth';
 import { getConfig } from '../services/useConfig';
+import { getFullMessagesByTopicId } from '../services/useMessages';
+import { latestManagerReplyContext } from '../utils/managerMessageChannel';
+import { showErrorNotification } from './useNotifications';
 
 export interface ManagerRoute {
   id: string;
@@ -24,19 +27,7 @@ export interface ManagerRoute {
   };
 }
 
-export interface ChannelDelivery {
-  id: string;
-  route_id: string;
-  channel: 'vk' | 'avito';
-  state: 'pending' | 'working' | 'delivered' | 'failed' | 'uncertain';
-  last_error?: string | null;
-  sending_part?: number | null;
-  confirmed_by_manager?: boolean;
-}
-
 export const managerRoutes = reactive<Record<string, ManagerRoute[]>>({});
-export const managerRouteSelection = reactive<Record<string, string>>({});
-export const managerDeliveries = reactive<Record<string, ChannelDelivery>>({});
 let generation = 0;
 
 export const channelLabel = (channel: string): string =>
@@ -45,36 +36,37 @@ export const channelLabel = (channel: string): string =>
 /** Сбрасывает приватные маршруты при смене сотрудника или отзыве права. */
 export function clearManagerRoutes(): void {
   generation++;
-  for (const storage of [
-    managerRoutes,
-    managerRouteSelection,
-    managerDeliveries
-  ])
-    for (const key of Object.keys(storage)) delete storage[key];
+  for (const key of Object.keys(managerRoutes)) delete managerRoutes[key];
 }
 
-/** Источник ответа выбирается один раз и не переключается новым входящим сообщением. */
+/** Ответ всегда направляется в конкретный маршрут последнего сообщения клиента. */
 export function selectedManagerRoute(
   topicId: string
 ): ManagerRoute | undefined {
-  return managerRoutes[topicId]?.find(
-    route => route.id === managerRouteSelection[topicId]
+  const inquiry = useManagerInquiries().byTopic.value.get(topicId);
+  const routes = managerRoutes[topicId] || [];
+  const replyContext = latestManagerReplyContext(
+    getFullMessagesByTopicId(topicId),
+    inquiry?.guest_user_id
   );
+
+  if (replyContext?.routeId) {
+    return routes.find(route => route.id === replyContext.routeId);
+  }
+
+  return routes[0];
 }
 
-/** Обновляет возможности канала и фактическое состояние доставки. */
+/** Обновляет возможности маршрутов без ручного выбора канала. */
 export async function refreshManagerRoutes(
   topicId: string,
   inquiryId: string
 ): Promise<void> {
   const actor = authedUser.value?.id;
   const started = generation;
-  const [routes, deliveries] = await Promise.all([
-    managerRequest<ManagerRoute[]>(`inquiries/${inquiryId}/routes`),
-    managerRequest<ChannelDelivery[]>(
-      `inquiries/${inquiryId}/channel-deliveries`
-    )
-  ]);
+  const routes = await managerRequest<ManagerRoute[]>(
+    `inquiries/${inquiryId}/routes`
+  );
   if (
     started !== generation ||
     actor !== authedUser.value?.id ||
@@ -82,10 +74,78 @@ export async function refreshManagerRoutes(
   )
     return;
   managerRoutes[topicId] = routes;
-  if (!managerRouteSelection[topicId])
-    managerRouteSelection[topicId] =
-      (routes.find(route => route.canReply) || routes[0])?.id || '';
-  for (const delivery of deliveries) managerDeliveries[delivery.id] = delivery;
+}
+
+/** Поддерживает возможности текущего автоматического маршрута актуальными. */
+export function useManagerRouteSubscription(
+  topicId: Readonly<Ref<string | undefined>>
+): void {
+  const { byTopic } = useManagerInquiries();
+  let timer: ReturnType<typeof setInterval> | undefined;
+  let subscriptionGeneration = 0;
+  let busy = false;
+  let lastError = '';
+
+  const stop = watch(
+    () => {
+      const currentTopicId = topicId.value;
+      const inquiryId = currentTopicId
+        ? byTopic.value.get(currentTopicId)?.id
+        : undefined;
+
+      return currentTopicId && inquiryId
+        ? { topicId: currentTopicId, inquiryId }
+        : undefined;
+    },
+    target => {
+      clearInterval(timer);
+      subscriptionGeneration++;
+      lastError = '';
+
+      if (!target) {
+        return;
+      }
+
+      const expectedGeneration = subscriptionGeneration;
+      const refresh = async (): Promise<void> => {
+        if (busy || expectedGeneration !== subscriptionGeneration) {
+          return;
+        }
+
+        busy = true;
+
+        try {
+          await refreshManagerRoutes(target.topicId, target.inquiryId);
+
+          if (expectedGeneration === subscriptionGeneration) {
+            lastError = '';
+          }
+        } catch {
+          const message = 'Не удалось обновить канал ответа';
+
+          if (
+            expectedGeneration === subscriptionGeneration &&
+            lastError !== message
+          ) {
+            lastError = message;
+            showErrorNotification(message);
+          }
+        } finally {
+          busy = false;
+        }
+      };
+
+      void refresh();
+      timer = setInterval(() => void refresh(), 4000);
+    },
+    { immediate: true }
+  );
+
+  onScopeDispose(() => {
+    subscriptionGeneration++;
+    clearInterval(timer);
+    stop();
+  });
 }
 
 /** Ограничения проверяются до очистки черновика и начала загрузки. */
@@ -96,9 +156,9 @@ export function managerSendError(
   const inquiry = useManagerInquiries().byTopic.value.get(topicId);
   if (!inquiry) return null;
   const route = selectedManagerRoute(topicId);
-  if (!route) return 'Дождитесь загрузки и выберите канал ответа';
+  if (!route) return 'Не удалось определить канал последнего сообщения клиента';
   if (!route.canReply)
-    return 'Этот канал сейчас недоступен. Выберите другой канал ответа';
+    return 'Канал последнего сообщения клиента сейчас недоступен';
   if (files.length > route.capabilities.fileCount)
     return `Можно отправить не больше ${route.capabilities.fileCount} вложений`;
   for (const file of files) {
@@ -137,8 +197,7 @@ export async function uploadManagerFile(
       signal: AbortSignal.timeout(60000)
     }
   );
-  if (!response.ok)
-    throw new Error('Не удалось загрузить файл для выбранного канала');
+  if (!response.ok) throw new Error('Не удалось загрузить файл в канал ответа');
   const result = (await response.json()) as { id: string };
   if (!/^[0-9a-f-]{36}$/i.test(result.id))
     throw new Error('Сервис не подтвердил загрузку');
