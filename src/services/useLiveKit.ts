@@ -55,6 +55,7 @@ import { prewarmCallBackgroundAssets } from './callBackgroundWarmup';
 import { createMediapipeMulticlassBackgroundTrackProcessor } from './mediapipeMulticlassBackgroundTrackProcessor';
 import { copyTextToClipboard } from '../utils/copyTextToClipboard';
 import { parseGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
+import { mergeRemoteParticipantsDuringReconnect } from './call-reconnect-participants';
 import {
   playNativeCallRingtone,
   stopNativeCallRingtone
@@ -188,6 +189,7 @@ const CALL_REACTION_DURATION_MS = 4000;
 
 let room: Room | null = null;
 let ignoredDisconnectedRoom: Room | null = null;
+let isRoomReconnectInProgress = false;
 let isNativeAppInBackground = false;
 let directCallRecoveryWaitForRemote = false;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
@@ -3241,6 +3243,7 @@ const markRemoteParticipantExplicitlyLeft = (identity: string) => {
 };
 
 const shouldKeepRemoteParticipantForReconnect = (): boolean =>
+  isRoomReconnectInProgress ||
   isRecoverableDirectCallSession(roomId.value, topicId.value);
 
 const setRemoteReconnectingParticipant = (
@@ -3259,7 +3262,10 @@ const setRemoteReconnectingParticipant = (
 };
 
 const buildRemoteReconnectingParticipantState = (
-  participant: Participant | RemoteParticipant
+  participant:
+    | Participant
+    | RemoteParticipant
+    | Pick<ParticipantMediaState, 'identity' | 'name'>
 ): ParticipantMediaState => {
   const previousParticipant =
     remoteParticipants.value.find(
@@ -3287,6 +3293,16 @@ const buildRemoteReconnectingParticipantState = (
     isMicActive: false,
     connectionQuality: ConnectionQuality.Poor
   };
+};
+
+const preserveRemoteParticipantsForReconnect = () => {
+  remoteParticipants.value.forEach(participant => {
+    if (!remoteExplicitlyLeftParticipants.has(participant.identity)) {
+      setRemoteReconnectingParticipant(
+        buildRemoteReconnectingParticipantState(participant)
+      );
+    }
+  });
 };
 
 const markRemoteParticipantReconnecting = (
@@ -3350,15 +3366,13 @@ const syncRemoteParticipantState = () => {
     clearRemoteReconnectingParticipant(identity);
   });
 
-  const reconnectingParticipants = shouldShowReconnectingParticipants
-    ? Array.from(remoteReconnectingParticipants.values())
-        .map(entry => entry.participant)
-        .filter(participant => !activeParticipantIds.has(participant.identity))
-    : [];
-  const displayedRemoteParticipants = [
-    ...nextRemoteParticipants,
-    ...reconnectingParticipants
-  ];
+  const displayedRemoteParticipants = mergeRemoteParticipantsDuringReconnect(
+    nextRemoteParticipants,
+    Array.from(remoteReconnectingParticipants.values()).map(
+      entry => entry.participant
+    ),
+    shouldShowReconnectingParticipants
+  );
 
   pruneRemoteTrackStreamCache(
     nextRemoteParticipants.map(participant => participant.identity)
@@ -4201,6 +4215,8 @@ const setupRoomListeners = (activeRoom: Room) => {
         return;
       }
 
+      isRoomReconnectInProgress = true;
+      preserveRemoteParticipantsForReconnect();
       markCallIssueSignal('call.livekit.reconnecting', 'soft');
       recordCallTelemetryEvent(
         'call.livekit.reconnecting',
@@ -4221,6 +4237,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       scheduleCallAudioRecovery(activeRoom);
     })
     .on(RoomEvent.Reconnected, () => {
+      isRoomReconnectInProgress = false;
       if (callStatusNoticeKind.value === 'reconnecting') {
         clearCallStatusNotice();
       }
@@ -4243,6 +4260,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       clearCallIssueSignal('soft');
     })
     .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
+      isRoomReconnectInProgress = false;
       if (ignoredDisconnectedRoom === activeRoom) {
         if (room === activeRoom) {
           room = null;
@@ -4441,6 +4459,7 @@ const connectToRoom = async (options: { inviteToken?: string } = {}) => {
 
     const previousRoom = room;
     if (previousRoom) {
+      isRoomReconnectInProgress = false;
       ignoredDisconnectedRoom = previousRoom;
       await previousRoom.disconnect();
 
@@ -4933,6 +4952,7 @@ export const recoverActiveCallAfterNetworkChange = async (
 };
 
 const resetMediaState = () => {
+  isRoomReconnectInProgress = false;
   suppressParticipantPresenceNotifications = true;
   clearLocalVideoQualityRecovery();
   localVideoPublishingQuality = VideoQuality.HIGH;
