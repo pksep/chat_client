@@ -1,3 +1,4 @@
+import { fetchWithAiAccess } from '../composables/useChatAccess';
 import { getAuthToken } from '../composables/useLogin';
 import { getConfig } from './useConfig';
 
@@ -220,7 +221,7 @@ const speechFetch = async (
     ? configuredBaseUrl.slice(0, -4)
     : configuredBaseUrl;
 
-  const response = await fetch(`${baseUrl}${path}`, {
+  const response = await fetchWithAiAccess(`${baseUrl}${path}`, {
     ...init,
     headers: {
       ...init.headers,

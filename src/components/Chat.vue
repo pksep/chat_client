@@ -12,8 +12,8 @@
     @animationend="handleMobileRouteAnimationEnd"
   >
     <div
-      v-if="(isAiRoute && aiAllowed) || isAiVoiceCallActive"
-      v-show="isAiRoute && aiAllowed"
+      v-if="chatAccess.ai && (isAiRoute || isAiVoiceCallActive)"
+      v-show="isAiRoute"
       style="display: contents"
     >
       <AIAssistant ref="aiAssistantRef" />
@@ -128,14 +128,11 @@ import type {
 import ShareSelectionOverlay from './ShareSelectionOverlay.vue';
 import { hasKnownTopicMessagesState } from '../services/useMessages';
 import { useAiAssistant } from '../composables/useAiAssistant';
+import { useChatAccess } from '../composables/useChatAccess';
 import UnselectedTopicIcon from './UI/Icons/UnselectedTopicIcon.vue';
 import { loadMessageList } from '../utils/load-message-list';
 import { navigateToDefault } from '../composables/navigation';
 import { useChatMenu } from '../composables/useChatMenu';
-import {
-  useAiAccess,
-  useAiAccessSubscription
-} from '../composables/useAiAccess';
 
 const MessageList = defineAsyncComponent(loadMessageList);
 const AIAssistant = defineAsyncComponent(() => import('./AI/AIAssistant.vue'));
@@ -160,9 +157,8 @@ const aiAssistantRef = useTemplateRef<any>('aiAssistantRef');
 
 const route = useUrlWatcher();
 const { setActiveSection } = useChatMenu();
-useAiAccessSubscription();
-const { allowed: aiAllowed, resolved: isAiAccessResolved } = useAiAccess();
 const { isVoiceModeOpen: isAiVoiceCallActive } = useAiAssistant();
+const { access: chatAccess, ready: isChatAccessReady } = useChatAccess();
 const activeChatRouteKey = computed(() =>
   route.value.type === RouteTypes.AI ? RouteTypes.AI : route.value.id
 );
@@ -179,7 +175,7 @@ const guardAiRoute = (): void => {
     route.value.type === RouteTypes.AI ||
     route.value.type === RouteTypes.ASSISTANT;
 
-  if (!isRestrictedRoute || !isAiAccessResolved.value || aiAllowed.value) {
+  if (!isRestrictedRoute || !isChatAccessReady.value || chatAccess.value.ai) {
     return;
   }
 
@@ -188,7 +184,12 @@ const guardAiRoute = (): void => {
 };
 
 watch(
-  [() => route.value.type, () => route.value.id, isAiAccessResolved, aiAllowed],
+  [
+    () => route.value.type,
+    () => route.value.id,
+    isChatAccessReady,
+    () => chatAccess.value.ai
+  ],
   guardAiRoute,
   { immediate: true }
 );

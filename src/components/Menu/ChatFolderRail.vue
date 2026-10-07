@@ -3,7 +3,16 @@
     :class="['chat-folder-rail', { 'chat-folder-rail--mobile': props.mobile }]"
     aria-label="Папки чатов"
   >
-    <div class="chat-folder-rail__items">
+    <div
+      ref="containerRef"
+      class="chat-folder-rail__items"
+      :aria-busy="props.loading || isReordering"
+      @pointerdown="onPointerDown"
+      @touchstart.passive="onTouchStart"
+      @click.capture="onClickCapture"
+      @contextmenu.capture="onClickCapture"
+      @keydown="onKeydown"
+    >
       <button
         type="button"
         :class="[
@@ -22,53 +31,103 @@
       >
         <span class="chat-folder-rail__avatar">
           <MessageIcon />
+          <span
+            v-if="allUnreadCount"
+            class="chat-folder-rail__badge"
+            :class="{
+              'chat-folder-rail__badge--wide': allUnreadCount > 9,
+              'chat-folder-rail__badge--muted': allUnreadBadge.isMuted
+            }"
+            :aria-label="`Непрочитанных сообщений: ${allUnreadCount}`"
+            data-testid="ChatFolders-Rail-All-UnreadCount"
+          >
+            {{ allUnreadCount > 99 ? '99+' : allUnreadCount }}
+          </span>
         </span>
         <span>Все чаты</span>
       </button>
 
-      <button
-        v-for="folder in props.folders"
-        :key="folder.id"
-        type="button"
-        :class="[
-          'chat-folder-rail__item',
-          {
-            'chat-folder-rail__item--active':
-              props.isActive &&
-              !props.isManaging &&
-              props.selectedFolderId === folder.id
-          }
-        ]"
-        :title="folder.name"
-        :aria-pressed="
-          props.isActive &&
-          !props.isManaging &&
-          props.selectedFolderId === folder.id
-        "
-        :data-testid="`ChatFolders-Rail-Folder-${folder.id}`"
-        @click="emits('select', folder.id)"
-      >
-        <span class="chat-folder-rail__avatar chat-folder-rail__avatar--folder">
-          <ChatFolderIcon :name="folder.icon || 'folder'" />
-          <span
-            v-if="!props.mobile && getUnreadCount(folder)"
-            class="chat-folder-rail__badge"
-            :class="{
-              'chat-folder-rail__badge--wide': getUnreadCount(folder) > 9
-            }"
-          >
-            {{ getUnreadCount(folder) > 99 ? '99+' : getUnreadCount(folder) }}
-          </span>
+      <template v-if="props.loading && !props.folders.length">
+        <span
+          v-for="index in 3"
+          :key="`folder-skeleton-${index}`"
+          class="chat-folder-rail__item chat-folder-rail__item--skeleton"
+          aria-hidden="true"
+          :data-testid="`ChatFolders-Rail-Skeleton-${index}`"
+        >
+          <SkeletonBlock class="chat-folder-rail__avatar" />
+          <SkeletonBlock class="chat-folder-rail__skeleton-name" />
         </span>
-        <span>{{ folder.name }}</span>
-      </button>
+      </template>
+      <TransitionGroup v-else name="chat-folder-sort">
+        <button
+          v-for="folder in orderedFolders"
+          :key="folder.id"
+          type="button"
+          :class="[
+            'chat-folder-rail__item',
+            {
+              'chat-folder-drag-source': draggedFolderId === folder.id,
+              'chat-folder-rail__item--active':
+                props.isActive &&
+                !props.isManaging &&
+                props.selectedFolderId === folder.id
+            }
+          ]"
+          :title="folder.name"
+          :aria-pressed="
+            props.isActive &&
+            !props.isManaging &&
+            props.selectedFolderId === folder.id
+          "
+          :data-testid="`ChatFolders-Rail-Folder-${folder.id}`"
+          :data-folder-id="folder.id"
+          :aria-keyshortcuts="
+            props.mobile
+              ? 'Alt+ArrowLeft Alt+ArrowRight'
+              : 'Alt+ArrowUp Alt+ArrowDown'
+          "
+          :aria-description="
+            props.mobile
+              ? 'Удерживайте и перетащите, чтобы изменить порядок'
+              : 'Перетащите, чтобы изменить порядок'
+          "
+          @click="handleFolderSelect(folder.id)"
+        >
+          <span
+            class="chat-folder-rail__avatar chat-folder-rail__avatar--folder"
+          >
+            <ChatFolderIcon :name="folder.icon || 'folder'" />
+            <span
+              v-if="!props.mobile && getUnreadCount(folder)"
+              class="chat-folder-rail__badge"
+              :class="{
+                'chat-folder-rail__badge--wide': getUnreadCount(folder) > 9,
+                'chat-folder-rail__badge--muted': folderUnreadBadges.get(
+                  folder.id
+                )?.isMuted
+              }"
+            >
+              {{ getUnreadCount(folder) > 99 ? '99+' : getUnreadCount(folder) }}
+            </span>
+          </span>
+          <span>{{ folder.name }}</span>
+        </button>
+      </TransitionGroup>
 
       <button
         v-if="props.mobile"
         type="button"
-        class="chat-folder-rail__item chat-folder-rail__item--manage"
+        :class="[
+          'chat-folder-rail__item',
+          'chat-folder-rail__item--manage',
+          {
+            'chat-folder-rail__item--active': props.isActive && props.isManaging
+          }
+        ]"
         title="Настройки"
         aria-label="Открыть папки"
+        :aria-pressed="props.isActive && props.isManaging"
         data-testid="ChatFolders-Rail-Manage"
         @click="emits('manage')"
       >
@@ -102,11 +161,16 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { ITopic } from '../interfaces/interfaces';
 import type { ChatFolder } from '../../services/useChatSDK/chat-folder';
-import { getTopicUnreadBadgeCount } from '../../utils/topicUnreadBadge';
+import { getTopicsUnreadBadgeState } from '../../utils/chats-toolbar-filter-badge';
 import MessageIcon from '../UI/MessageIcon.vue';
 import ChatFolderIcon from './ChatFolderIcon.vue';
+import SkeletonBlock from '../UI/SkeletonBlock.vue';
+import { useChatFolders } from '../../composables/useChatFolders';
+import { useChatFolderDrag } from '../../composables/useChatFolderDrag';
+import type { ChatFolderScope } from '../../services/useChatSDK/chat-folder';
 
 const props = withDefaults(
   defineProps<{
@@ -117,10 +181,14 @@ const props = withDefaults(
     isActive: boolean;
     mobile?: boolean;
     authUserId?: string;
+    scope?: ChatFolderScope;
+    loading?: boolean;
   }>(),
   {
     mobile: false,
-    authUserId: ''
+    authUserId: '',
+    scope: 'chats',
+    loading: false
   }
 );
 
@@ -129,15 +197,51 @@ const emits = defineEmits<{
   (e: 'manage'): void;
 }>();
 
-const getUnreadCount = (folder: ChatFolder): number => {
-  const topicIds = new Set(folder.topicIds);
-  return props.topics.reduce(
-    (count, topic) =>
-      count +
-      (topicIds.has(topic.id)
-        ? getTopicUnreadBadgeCount(topic, props.authUserId)
-        : 0),
-    0
-  );
+const handleFolderSelect = (folderId: string): void => {
+  const isSelected =
+    props.isActive && !props.isManaging && props.selectedFolderId === folderId;
+  emits('select', isSelected ? null : folderId);
 };
+
+const isReordering = computed(
+  () => useChatFolders(props.scope).isReordering.value
+);
+const {
+  containerRef,
+  orderedFolders,
+  draggedFolderId,
+  onPointerDown,
+  onTouchStart,
+  onClickCapture,
+  onKeydown
+} = useChatFolderDrag({
+  folders: () => props.folders,
+  disabled: () => props.loading || isReordering.value,
+  horizontal: () => props.mobile,
+  onReorder: folderIds => useChatFolders(props.scope).reorderFolders(folderIds)
+});
+
+const folderUnreadBadges = computed(
+  () =>
+    new Map(
+      props.folders.map(folder => {
+        const topicIds = new Set(folder.topicIds);
+        return [
+          folder.id,
+          getTopicsUnreadBadgeState(
+            props.topics.filter(topic => topicIds.has(topic.id)),
+            props.authUserId
+          )
+        ] as const;
+      })
+    )
+);
+
+const getUnreadCount = (folder: ChatFolder): number =>
+  folderUnreadBadges.value.get(folder.id)?.count || 0;
+
+const allUnreadBadge = computed(() =>
+  getTopicsUnreadBadgeState(props.topics, props.authUserId)
+);
+const allUnreadCount = computed(() => allUnreadBadge.value.count);
 </script>

@@ -1,3 +1,4 @@
+import { fetchWithAiAccess } from '../composables/useChatAccess';
 import { z } from 'zod';
 import { getAuthToken } from '../composables/useLogin';
 import { getConfig } from './useConfig';
@@ -42,7 +43,7 @@ export const fetchAiAutomations = async (): Promise<
   const serverBaseUrl = baseUrl.endsWith('/api')
     ? baseUrl.slice(0, -4)
     : baseUrl;
-  const response = await fetch(`${serverBaseUrl}/automations`, {
+  const response = await fetchWithAiAccess(`${serverBaseUrl}/automations`, {
     headers: { Authorization: `Bearer ${token}` }
   });
   if (!response.ok) {

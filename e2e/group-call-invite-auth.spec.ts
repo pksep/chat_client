@@ -94,7 +94,7 @@ test('обрабатывает приглашение сразу для авто
   }
 });
 
-test('запрашивает invite LiveKit-токен после ANSWER_CALL', async ({
+test('не сбрасывает авторизацию при просроченной ссылке на звонок', async ({
   page
 }, testInfo) => {
   test.setTimeout(60_000);
@@ -104,18 +104,7 @@ test('запрашивает invite LiveKit-токен после ANSWER_CALL', 
     messagesPerTopic: 2,
     userCount: 2
   });
-  fixture.state.callInviteActive = true;
-
-  const roomId = 'invite-token-room';
-  const inviteToken = 'invite-token-that-must-be-preserved';
-  const inviteTokenRequest = () =>
-    fixture.requests.filter(request =>
-      request.path.startsWith('/api/calls/invite-livekit-token?')
-    );
-  const regularTokenRequest = () =>
-    fixture.requests.filter(request =>
-      request.path.startsWith('/api/calls/livekit-token?')
-    );
+  fixture.state.invitePreviewStatus = 401;
 
   try {
     await page.addInitScript(
@@ -137,26 +126,13 @@ test('запрашивает invite LiveKit-токен после ANSWER_CALL', 
       }
     );
 
-    await page.goto(`/?callRoom=${roomId}&callInvite=${inviteToken}`);
+    await page.goto('/?callRoom=expired-room&callInvite=expired-signed-invite');
 
-    await expect(page.getByTestId('AuthorizationScreen')).toBeHidden();
     await expect
-      .poll(() => inviteTokenRequest().length, { timeout: 30_000 })
+      .poll(() => countInvitePreviewRequests(fixture), { timeout: 30_000 })
       .toBeGreaterThan(0);
-
-    expect(regularTokenRequest()).toHaveLength(0);
-    expect(inviteTokenRequest()[0]?.path).toContain(
-      `roomId=${roomId}&invite=${inviteToken}`
-    );
-    expect(
-      fixture.connections.find(event => event.event === 'answerCall')
-    ).toMatchObject({
-      payload: {
-        userId: fixture.user.id,
-        roomId,
-        inviteToken
-      }
-    });
+    await expect(page).not.toHaveURL(/callInvite=/);
+    await expect(page.getByTestId('AuthorizationScreen')).toBeHidden();
   } finally {
     await fixture.close();
   }

@@ -1,5 +1,51 @@
 import { expect, test } from '@playwright/test';
 
+for (const scenario of ['prepared', 'stalled'] as const) {
+  test(`Android не ждёт зависший запрос стартовой истории: ${scenario}`, async ({
+    page
+  }) => {
+    await page.route('**/__native-history', route =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: '<!doctype html><div id="app"></div>'
+      })
+    );
+    await page.goto('/__native-history');
+    const result = await page.evaluate(async scenario => {
+      (window as any).androidBridge = {};
+      (window as any).Capacitor = {
+        isNativePlatform: () => true,
+        getPlatform: () => 'android'
+      };
+      const { setConfig, setAuthUser, takeNativeStartupHistory } = await import(
+        '/e2e/fixtures/native-startup-history-harness.ts'
+      );
+      setConfig({ CHAT_API_DOMAIN: 'http://localhost:5194/api' });
+      setAuthUser({ id: 'cached-user' });
+      const data = [{ id: 'cached-topic' }];
+      window.__chatNativePreparedHistory =
+        scenario === 'stalled'
+          ? new Promise(() => {})
+          : Promise.resolve({
+              available: true,
+              userId: 'cached-user',
+              apiUrl: 'http://localhost:5194/api',
+              topicId: '',
+              startedAt: Date.now(),
+              data
+            });
+      const startedAt = performance.now();
+      const history = await takeNativeStartupHistory();
+      return { history, elapsed: performance.now() - startedAt };
+    }, scenario);
+    expect(result.history).toEqual(
+      scenario === 'stalled' ? null : [{ id: 'cached-topic' }]
+    );
+    expect(result.elapsed).toBeLessThan(2500);
+    if (scenario === 'stalled') expect(result.elapsed).toBeGreaterThan(900);
+  });
+}
+
 for (const scenario of ['empty', 'notification', 'unavailable'] as const) {
   test(`ранний Android-запуск передаёт результат проверки уведомления: ${scenario}`, async ({
     page

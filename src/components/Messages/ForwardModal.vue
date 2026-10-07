@@ -43,10 +43,10 @@
 </template>
 
 <script setup lang="ts">
+import Modal from '../UI/Modal.vue';
 import {
   Icon,
   IconNameEnum,
-  Modal,
   SizesEnum,
   ButtonTypeEnum,
   Button

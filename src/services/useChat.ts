@@ -2,6 +2,7 @@ import { ref, shallowRef } from 'vue';
 import { MessageTypeEnum } from '@pksep/yui';
 import { ChatSDK } from './useChatSDK';
 import { createReconnectRefreshCoordinator } from './reconnect-refresh';
+import { getIsTopicNearBottom } from './useTopicViewportState';
 import {
   configureCustomBackgroundSync,
   refreshCustomBackgrounds
@@ -13,11 +14,16 @@ import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { authedUser } from '../composables/useAuth';
 import {
+  configureChatFolderSync,
+  refreshChatFoldersFromSocket
+} from '../composables/useChatFolders';
+import {
   changeUnreadMessageCount,
   useTopics,
   deleteTopicFromList,
   fetchAllTopics,
   getTopicList,
+  getTopicsRefreshFailed,
   incrementDisplayedUnreadCount,
   isTopicMuted,
   updateLocalTopicDetails,
@@ -1443,7 +1449,7 @@ const refreshTopicMessagesAfterReconnect = async (
   ) {
     mergeMessagesForTopic(topicId, latestMessages, 'replace', {
       syncLastMessage: true,
-      updateVisible: false
+      updateVisible: route.value.id === topicId && getIsTopicNearBottom(topicId)
     });
   }
 };
@@ -1973,6 +1979,10 @@ export const initializeChat = async (options: {
     token: options.token
   });
   notifyChatSDKReady(chatSDK);
+  configureChatFolderSync(
+    chatSDK,
+    options.userId || authedUser.value?.id || ''
+  );
   const initializedSDK = chatSDK;
   performance.mark('chat-startup:sdk-ready');
   // HTTP выбранного чата уже может работать; фоновые обновления ждут кеш.
@@ -2001,6 +2011,8 @@ export const initializeChat = async (options: {
       return;
     }
 
+    void refreshChatFoldersFromSocket();
+
     if (Capacitor.isNativePlatform()) {
       void loadCallKitApi()
         .then(({ flushPendingGroupCallInviteUrl }) =>
@@ -2017,6 +2029,9 @@ export const initializeChat = async (options: {
 
     if (!hasCompletedInitialConnection) {
       hasCompletedInitialConnection = true;
+      if (getTopicsRefreshFailed()) {
+        requestFreshDataRefresh('websocket-reconnect', { force: true });
+      }
       return;
     }
 

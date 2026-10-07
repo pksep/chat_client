@@ -33,6 +33,7 @@
     position="center"
     width="492px"
     class="confirm__modal confirm__modal--pin"
+    @close="handleCloseModal"
     @click.stop
   >
     <h2 class="confirm__modal__title">{{ props.title }}</h2>
@@ -67,12 +68,12 @@
 </template>
 
 <script setup lang="ts">
+import Modal from './Modal.vue';
 import {
   Button,
   ButtonTypeEnum,
   Checkbox,
   CheckboxCircularEnum,
-  Modal,
   SizesEnum
 } from '@pksep/yui';
 import { useResizeState } from '../../composables/useResizeState';

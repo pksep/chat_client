@@ -30,6 +30,7 @@
     :open="props.open"
     position="center"
     width="456px"
+    @close="handleClose"
     @click.stop
   >
     <div class="vpn-confirm-modal__title">
@@ -60,7 +61,8 @@
 </template>
 
 <script setup lang="ts">
-import { Button, ButtonTypeEnum, Modal, SizesEnum } from '@pksep/yui';
+import Modal from './Modal.vue';
+import { Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
 import { useResizeState } from '../../composables/useResizeState';
 import VpnWarningIcon from '../../components/UI/VpnWarningIcon.vue';
 import { MAX_W_MD } from '../../utils/constants';

@@ -26,6 +26,8 @@ const MESSAGE_ALLOWED_ATTRIBUTES = [
   'style',
   'data-span',
   'data-user-id',
+  'data-yui-color',
+  'data-yui-background-color',
   'start'
 ];
 const UUID_PATTERN =
@@ -41,10 +43,16 @@ const MESSAGE_ALLOWED_COLORS = new Set([
   '#ff6868'
 ]);
 
-const normalizeMessageColor = (value: string): string | null => {
+const normalizeMessageColor = (
+  value: string,
+  allowDefault = false
+): string | null => {
   const normalizedValue = value.trim().toLowerCase();
 
-  if (MESSAGE_ALLOWED_COLORS.has(normalizedValue)) {
+  if (
+    MESSAGE_ALLOWED_COLORS.has(normalizedValue) ||
+    (allowDefault && normalizedValue === 'var(--text-primary)')
+  ) {
     return normalizedValue;
   }
 
@@ -103,15 +111,37 @@ const normalizeClasses = (element: Element): void => {
 const normalizeStyles = (element: HTMLElement): void => {
   if (element.tagName !== 'SPAN') {
     element.removeAttribute('style');
+    element.removeAttribute('data-yui-color');
+    element.removeAttribute('data-yui-background-color');
     return;
   }
 
-  const color = normalizeMessageColor(element.style.getPropertyValue('color'));
-  const backgroundColor = normalizeMessageColor(
-    element.style.getPropertyValue('background-color')
+  const markedColor = normalizeMessageColor(
+    element.getAttribute('data-yui-color') || '',
+    true
   );
+  const markedBackgroundColor = normalizeMessageColor(
+    element.getAttribute('data-yui-background-color') || ''
+  );
+  // Старые сообщения сохраняют оформление, но не получают метки редактора.
+  const color =
+    markedColor ||
+    normalizeMessageColor(element.style.getPropertyValue('color'));
+  const backgroundColor =
+    markedBackgroundColor ||
+    normalizeMessageColor(element.style.getPropertyValue('background-color'));
 
   element.removeAttribute('style');
+  element.removeAttribute('data-yui-color');
+  element.removeAttribute('data-yui-background-color');
+
+  if (markedColor) {
+    element.setAttribute('data-yui-color', markedColor);
+  }
+
+  if (markedBackgroundColor) {
+    element.setAttribute('data-yui-background-color', markedBackgroundColor);
+  }
 
   if (color) {
     element.style.setProperty('color', color);
@@ -129,7 +159,9 @@ const normalizeStyles = (element: HTMLElement): void => {
 const normalizeSafeAttributes = (template: HTMLTemplateElement): void => {
   template.content.querySelectorAll('[class]').forEach(normalizeClasses);
   template.content
-    .querySelectorAll<HTMLElement>('[style]')
+    .querySelectorAll<HTMLElement>(
+      '[style], [data-yui-color], [data-yui-background-color]'
+    )
     .forEach(normalizeStyles);
 
   template.content.querySelectorAll<HTMLAnchorElement>('a').forEach(anchor => {

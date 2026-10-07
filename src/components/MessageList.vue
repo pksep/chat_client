@@ -448,7 +448,6 @@
     v-if="
       !shouldRenderUserMessageSkeleton &&
       !isSelectionMode &&
-      !isMobileTopicSearchMode &&
       activeTopic &&
       shouldShowDockedCallTopicActions
     "
@@ -595,8 +594,7 @@ import {
 import { isUnreadTrackableMessage } from '../utils/messageTracking';
 import {
   consumePendingSearchNavigation,
-  getPendingSearchNavigation,
-  isMobileTopicSearchActive
+  getPendingSearchNavigation
 } from '../composables/useMessageSearch';
 import {
   normalizeReplyQuoteOccurrenceIndex,
@@ -901,13 +899,12 @@ const authUserId = computed(() =>
 const isSelectionMode = computed(() =>
   isMessageSelectionModeForTopic(route.value.id)
 );
-const isMobileTopicSearchMode = computed(
-  () => isMobile.value && isMobileTopicSearchActive.value
-);
 const activeTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : null
 );
-const isActiveCallTopic = computed(() => isCallTopic(activeTopic.value));
+const isActiveCallTopic = computed(
+  () => route.value.type === RouteTypes.CALL || isCallTopic(activeTopic.value)
+);
 const isCallTopicActionsOpen = ref(false);
 const shouldShowCallTopicActionsToggle = computed(
   () => isCompactMessageInput.value && isActiveCallTopic.value
@@ -988,7 +985,6 @@ const shouldRenderMessageComposer = computed(
   () =>
     !isDefaultRoute.value &&
     !isSelectionMode.value &&
-    !isMobileTopicSearchMode.value &&
     !isDeletedAccountTopic.value
 );
 const topicUnreadCount = computed(() =>
@@ -4372,12 +4368,8 @@ watch(
 );
 
 watch(
-  [
-    () => route.value?.id,
-    () => route.value?.type,
-    () => scrollAnchor.viewportMode.value
-  ],
-  ([topicId, routeType, viewportMode], [previousTopicId]) => {
+  [() => route.value?.id, () => route.value?.type],
+  ([topicId, routeType], [previousTopicId]) => {
     if (previousTopicId && previousTopicId !== topicId) {
       setSuspendIncomingMergeForTopic(previousTopicId, false);
     }
@@ -4386,7 +4378,10 @@ watch(
       return;
     }
 
-    setSuspendIncomingMergeForTopic(topicId, viewportMode !== 'live');
+    // Appending uses the scroll anchor to keep a reader's current position.
+    // Do not hide new socket messages merely because the reader is viewing
+    // history: otherwise they only appear after a later scroll interaction.
+    setSuspendIncomingMergeForTopic(topicId, false);
   },
   { immediate: true }
 );

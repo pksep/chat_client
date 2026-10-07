@@ -6,7 +6,7 @@
     ]"
     :data-testid="`${props.dataTestid}-ChatsToolbar`"
   >
-    <div class="chats-toolbar__headline menu-section-heading">
+    <MenuSectionHeading as="div" class="chats-toolbar__headline">
       <h4
         v-if="!props.isCollapse"
         class="chats-toolbar__title"
@@ -69,7 +69,7 @@
           <BotIcon /> Создать бота
         </Button>
       </ContextMenu>
-    </div>
+    </MenuSectionHeading>
 
     <Line :data-testid="`${props.dataTestid}-ChatsToolbar-Line`" />
 
@@ -78,10 +78,9 @@
     </div>
 
     <div class="chats-toolbar__controls">
-      <Search
+      <MenuSearch
         v-if="!props.isCollapse"
         class="chats-toolbar__search"
-        height="var(--chats-toolbar-search-height, 42px)"
         :model-value="props.modelValue"
         @update:model-value="value => emits('update:modelValue', value)"
         :data-testid="`${props.dataTestid}-ChatsToolbar-Search`"
@@ -110,10 +109,11 @@ import {
   ButtonTypeEnum,
   Icon,
   IconNameEnum,
-  Search,
   SizesEnum
 } from '@pksep/yui';
 import Line from '../UI/Line.vue';
+import MenuSectionHeading from '../UI/MenuSectionHeading.vue';
+import MenuSearch from '../UI/MenuSearch.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import BotIcon from '../UI/BotIcon.vue';

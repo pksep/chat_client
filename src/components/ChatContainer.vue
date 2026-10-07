@@ -205,7 +205,7 @@ import {
 import { getChatSDK } from '../services/useChat';
 import { getUsersList } from '../composables/useUsers';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
-import { Modal } from '@pksep/yui';
+import Modal from './UI/Modal.vue';
 import AndroidIcon from './UI/AndroidIcon.vue';
 import AppleIcon from './UI/AppleIcon.vue';
 import { useMobileApp } from '../composables/useMobileApp';
@@ -224,6 +224,21 @@ import { isBotTopic, isBotUser } from '../utils/bot';
 import { clearMessagesForTopic } from '../services/useMessages';
 import { getSelectedTopic } from '../composables/useTopics';
 import { isFavoriteTopic } from '../utils/favorite-topic';
+import {
+  useChatAccess,
+  useChatAccessSubscription
+} from '../composables/useChatAccess';
+import { useChatMenu } from '../composables/useChatMenu';
+import {
+  BackButtonPriority,
+  useBackButtonHandler
+} from '../composables/useBackButton';
+import { useShareSelection } from '../composables/useShareSelection';
+import { getTopicList, setTopics } from '../composables/useTopics';
+import {
+  isClientTopic,
+  useManagerInquiries
+} from '../composables/useManagerInquiries';
 
 const Menu = defineAsyncComponent(() => import('./Menu.vue'));
 const MenuInfo = defineAsyncComponent(() => import('./MenuInfo.vue'));
@@ -255,8 +270,122 @@ const {
 } = useMobileApp();
 
 const route = useUrlWatcher();
+const { access: chatAccess, ready: chatAccessReady } = useChatAccess();
+const { activeSection, setActiveSection } = useChatMenu();
+const { isShareSelectionActive, closeShareSelection } = useShareSelection();
+useBackButtonHandler(isShareSelectionActive, closeShareSelection);
+const { byTopic: clientInquiries } = useManagerInquiries();
+useChatAccessSubscription();
+const customerTopicIds = new Set<string>();
+
+watch(
+  [
+    () => route.value.type,
+    () => route.value.id,
+    () => clientInquiries.value.has(route.value.id || '')
+  ],
+  ([routeType, topicId], [previousRouteType, previousTopicId]) => {
+    const routeChanged =
+      routeType !== previousRouteType || topicId !== previousTopicId;
+    // Фоновое уточнение типа переписки не меняет выбранный раздел меню.
+    if (
+      !routeChanged &&
+      activeSection.value !== 'chats' &&
+      activeSection.value !== 'clients'
+    )
+      return;
+
+    if (routeType === RouteTypes.CALL) {
+      setActiveSection('calls');
+    } else if (
+      routeType === RouteTypes.AI ||
+      routeType === RouteTypes.ASSISTANT
+    ) {
+      setActiveSection('ai');
+    } else if (
+      routeType === RouteTypes.DIALOGS ||
+      routeType === RouteTypes.GROUP ||
+      routeType === RouteTypes.FAVORITES
+    ) {
+      setActiveSection(
+        clientInquiries.value.has(topicId || '') ||
+          isClientTopic(getTopicList().find(topic => topic.id === topicId))
+          ? 'clients'
+          : 'chats'
+      );
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  [
+    () => chatAccess.value.ai,
+    () => chatAccess.value.client,
+    () => chatAccessReady.value,
+    () => route.value.type,
+    () => route.value.id,
+    () => getTopicList()
+  ],
+  () => {
+    const topics = getTopicList();
+    for (const topic of topics)
+      if (isClientTopic(topic)) customerTopicIds.add(topic.id);
+    if (
+      route.value.type === RouteTypes.AI ||
+      route.value.type === RouteTypes.ASSISTANT
+    ) {
+      if (chatAccess.value.ai) setActiveSection('ai');
+      else if (chatAccessReady.value) navigateToDefault();
+    }
+    if (!chatAccess.value.client) {
+      if (route.value.id && customerTopicIds.has(route.value.id))
+        navigateToDefault();
+      const visible = topics.filter(topic => !customerTopicIds.has(topic.id));
+      if (visible.length !== topics.length) setTopics(visible);
+    }
+    if (
+      (activeSection.value === 'ai' && !chatAccess.value.ai) ||
+      (activeSection.value === 'clients' && !chatAccess.value.client)
+    )
+      setActiveSection('chats');
+  },
+  { immediate: true }
+);
+watch(
+  () => chatAccess.value.client,
+  async (allowed, previous) => {
+    if (!allowed || previous) return;
+    const sdk = getChatSDK();
+    if (!sdk) return;
+    const userId = getAuthUser()?.id;
+    try {
+      const response = await sdk.getTopics();
+      if (chatAccess.value.client && getAuthUser()?.id === userId)
+        setTopics(response.data || []);
+    } catch (error) {
+      console.warn('Не удалось обновить список чатов:', error);
+    }
+  }
+);
+watch(
+  () => getAuthUser()?.id,
+  () => customerTopicIds.clear()
+);
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
+useBackButtonHandler(
+  () =>
+    isMobile.value &&
+    activeSection.value !== 'chats' &&
+    !route.value.id &&
+    route.value.type !== RouteTypes.AI,
+  () => {
+    setActiveSection('chats');
+    navigateToDefault();
+  },
+  BackButtonPriority.navigation
+);
 const {
   isVpnActive,
   ensureVpnStatusPolling,

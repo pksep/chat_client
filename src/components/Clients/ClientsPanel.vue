@@ -8,6 +8,7 @@
       :folders="clientFolders"
       :loading="isFoldersLoading"
       :selected-folder-id="activeFolderId"
+      @close="closeFolderManager"
       @select-folder="selectFolder"
       @select-topic="openTopic"
     />
@@ -22,6 +23,8 @@
       <template v-if="isMobile" #folders>
         <ChatFolderRail
           mobile
+          scope="clients"
+          :loading="isFoldersLoading"
           :folders="clientFolders"
           :topics="folderTopics"
           :selected-folder-id="activeFolderId"
@@ -61,6 +64,7 @@
     </template>
     <TopicList
       v-if="!isManagingFolders && allowed && (loading || topics.length)"
+      folder-scope="clients"
       :class="isMobile ? '' : 'menu__contact-list'"
       :topics="topics"
       :is-loading="loading"
@@ -114,7 +118,8 @@ const {
   isManagingFolders,
   isLoading: isFoldersLoading,
   selectFolder,
-  openFolderManager
+  openFolderManager,
+  closeFolderManager
 } = useChatFolders('clients');
 const queue = ref('all');
 const source = ref('');

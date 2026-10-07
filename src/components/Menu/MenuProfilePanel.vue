@@ -37,13 +37,14 @@
       </div>
     </div>
 
-    <h4
+    <MenuSectionHeading
       v-if="!props.isCollapse"
-      class="menu-profile__title menu-section-heading"
+      as="h4"
+      class="menu-profile__title"
       :data-testid="`${props.dataTestid}-MenuProfilePanel-Title`"
     >
       Профиль
-    </h4>
+    </MenuSectionHeading>
     <div v-if="authUser && !props.isCollapse" class="menu-profile__body">
       <header class="menu-profile__header">
         <CachedAvatar
@@ -856,7 +857,13 @@
 </template>
 
 <script setup lang="ts">
+import {
+  BackButtonPriority,
+  useBackButtonHandler
+} from '../../composables/useBackButton';
 import { storeToRefs } from 'pinia';
+import Modal from '../UI/Modal.vue';
+import MenuSectionHeading from '../UI/MenuSectionHeading.vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -865,7 +872,6 @@ import {
   EmojiPickerPanel,
   Icon,
   IconNameEnum,
-  Modal,
   SizesEnum,
   Toggle,
   autoUpdate,
@@ -965,6 +971,13 @@ const MAX_CUSTOM_WALLPAPER_SIZE_BYTES = 2 * 1024 * 1024;
 const isStatusMenuOpen = ref(false);
 const isCustomStatusOpen = ref(false);
 const isEmojiPickerOpen = ref(false);
+useBackButtonHandler(
+  isEmojiPickerOpen,
+  () => {
+    isEmojiPickerOpen.value = false;
+  },
+  BackButtonPriority.overlay
+);
 const statusEmojiButtonRef = useTemplateRef<HTMLButtonElement>(
   'statusEmojiButtonRef'
 );

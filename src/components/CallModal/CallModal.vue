@@ -784,6 +784,10 @@
 
 <script setup lang="ts">
 import {
+  BackButtonPriority,
+  useBackButtonHandler
+} from '../../composables/useBackButton';
+import {
   type Component,
   type CSSProperties,
   computed,
@@ -2807,6 +2811,12 @@ const hideModal = () => {
   }
 };
 
+useBackButtonHandler(
+  () => isCallOpen.value && isCallModalVisible.value,
+  hideModal,
+  BackButtonPriority.overlay
+);
+
 const getElementBehindCallModal = (event: MouseEvent): Element | null => {
   const modalElement = event.currentTarget as HTMLElement | null;
 
@@ -2942,9 +2952,27 @@ const closeMobileCallActionsMenu = () => {
   state.value.mobileCallActionsOpen = false;
 };
 
+useBackButtonHandler(
+  () =>
+    isCallOpen.value &&
+    isCallModalVisible.value &&
+    state.value.mobileCallActionsOpen,
+  closeMobileCallActionsMenu,
+  BackButtonPriority.overlay
+);
+
 const closeAudioOutputMenu = () => {
   activeAudioOutputMenu.value = null;
 };
+
+useBackButtonHandler(
+  () =>
+    isCallOpen.value &&
+    isCallModalVisible.value &&
+    activeAudioOutputMenu.value !== null,
+  closeAudioOutputMenu,
+  BackButtonPriority.overlay
+);
 
 const toggleMobileCallActionsMenu = () => {
   if (isBusyNoticeVisible.value) {
@@ -3098,6 +3126,15 @@ const closeReactionPopover = () => {
   clearReactionLongPressTimeout();
   activeReactionPopover.value = null;
 };
+
+useBackButtonHandler(
+  () =>
+    isCallOpen.value &&
+    isCallModalVisible.value &&
+    activeReactionPopover.value !== null,
+  closeReactionPopover,
+  BackButtonPriority.overlay
+);
 
 const handleReactionButtonFocus = (target: 'main' | 'overlay') => {
   if (isMobile.value) {

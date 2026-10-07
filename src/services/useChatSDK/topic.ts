@@ -1,6 +1,7 @@
 import { Topic, TopicSetting, User } from '@pksep/zod-shared-chat';
 import { Reqi } from '@pksep/reqi';
 import { readJson } from './read-json';
+import { CHAT_CONTENT_REQUEST_TIMEOUT_MS } from '../../utils/network-timeout';
 import { PaginatedResponse } from './types';
 import { ITopic } from '../../components/interfaces/interfaces';
 
@@ -50,7 +51,9 @@ export class ChatTopic implements ChatTopicInterface {
     const endpoint = `/topics${queryString ? `?${queryString}` : ''}`;
 
     try {
-      return await readJson<PaginatedResponse<ITopic>>(this.reqi, endpoint);
+      return await readJson<PaginatedResponse<ITopic>>(this.reqi, endpoint, {
+        timeoutMs: CHAT_CONTENT_REQUEST_TIMEOUT_MS
+      });
     } catch (error) {
       throw new Error(`Failed to fetch topics: ${(error as Error).message}`);
     }

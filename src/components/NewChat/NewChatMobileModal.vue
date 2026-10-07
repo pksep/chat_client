@@ -1,50 +1,98 @@
 <template>
   <MobileModal
     :class="props.isAddOne ? 'modal__new-contact' : 'modal__new-group'"
-    :open="props.open"
+    :open="props.open && !isSelectedMembers"
     @unmount-close="handleCloseModal"
     @unmount-next="handleNext(state.checkMembers)"
     :title="props.isAddOne ? 'Написать сообщение' : 'Добавить участников'"
-    :start-button-text="props.isAddOne ? null : 'Далее'"
+    :start-button-text="null"
     :close-button-text="'Назад'"
     :is-disabled-start-button="state.checkMembers.length === 0"
     :data-testid="`${props.dataTestid}-NewChatMobileModal-Container`"
   >
+    <template v-if="!props.isAddOne" #header>
+      <button
+        class="mobile__modal-header--button"
+        :data-testid="`${props.dataTestid}-MobileModal-CloseButton`"
+        @click="handleCloseModal"
+      >
+        Назад
+      </button>
+      <h3 class="mobile__modal-header--title new-group-mobile__title">
+        Добавить участников
+        <span v-if="state.checkMembers.length" class="new-group-mobile__count">
+          {{ state.checkMembers.length }}
+        </span>
+      </h3>
+      <span aria-hidden="true" />
+    </template>
     <template #default>
       <ContactSelector
         class="mobile__list-modal__contact-selector"
         :is-add-one="props.isAddOne"
         is-button-disabled
-        :selected-contact-ids="props.selectedContactIds"
+        :selected-contact-ids="selectedContactIds"
         :excluded-contact-ids="props.excludedContactIds"
         @unmount-contact="handleCheckUsers"
         @unmount-close="handleCloseModal"
       />
     </template>
+    <template v-if="!props.isAddOne" #footer>
+      <div class="new-group-mobile-info__footer">
+        <Button
+          :type="ButtonTypeEnum.primary"
+          :size="SizesEnum.medium"
+          class="new-group-mobile-info__create-button"
+          :disabled="state.checkMembers.length === 0"
+          @click="handleNext(state.checkMembers)"
+        >
+          Далее
+        </Button>
+      </div>
+    </template>
   </MobileModal>
   <MobileModal
-    :open="isSelectedMembers"
+    :open="props.open && isSelectedMembers"
     @unmount-close="handleCloseGroupInfo"
-    title="Добавить участников"
-    class="modal__new-group"
+    title="Группа"
+    class="modal__new-group new-group-mobile-info"
     @unmount-next="handleCreateMobileGroup"
-    start-button-text="Создать"
-    :is-disabled-start-button="state.disableCreateButton"
+    :start-button-text="null"
+    :is-disabled-start-button="isCreating || !form.name?.trim()"
     close-button-text="Назад"
     :data-testid="`${props.dataTestid}-NewChatMobileModal-GroupModal`"
   >
     <MobileChatInfo
-      :is-button-for-save="false"
+      creating
+      :show-add-button="false"
       :model-value="form"
       :members="filteredSelectedContacts"
       :data-testid="`${props.dataTestid}-NewChatMobileModal-MobileChatInfo`"
       @unmount-added-users="handleAddUsers"
     />
+    <template #footer>
+      <div class="new-group-mobile-info__footer">
+        <p v-if="creationError" class="new-group__mobile-error" role="alert">
+          {{ creationError }}
+        </p>
+        <Button
+          :type="ButtonTypeEnum.primary"
+          :size="SizesEnum.medium"
+          class="new-group-mobile-info__create-button"
+          :disabled="isCreating || !form.name?.trim()"
+          :aria-busy="isCreating"
+          @click="handleCreateMobileGroup"
+        >
+          Создать
+        </Button>
+      </div>
+    </template>
   </MobileModal>
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue';
+import { reactive, computed, watch } from 'vue';
+import { Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
 import MobileModal from '../UI/MobileModal.vue';
 import ContactSelector from './ContactSelector.vue';
 import MobileChatInfo from '../Header/MobileChatInfo.vue';
@@ -70,6 +118,8 @@ const {
   selectedContacts,
   isSelectedMembers,
   avatarPreview,
+  isCreating,
+  creationError,
   handleCreateGroup,
   createNiceName,
   closeModal,
@@ -89,9 +139,12 @@ const filteredSelectedContacts = computed<IUser[]>(() => {
 });
 
 const state = reactive({
-  checkMembers: [],
-  disableCreateButton: false
+  checkMembers: [] as IUser[]
 });
+
+const selectedContactIds = computed(
+  () => new Set(state.checkMembers.map(user => user.id))
+);
 
 const { form, handleUpdateInformation } = useNewInformationModal({
   name: '',
@@ -101,7 +154,6 @@ const { form, handleUpdateInformation } = useNewInformationModal({
 const handleCloseModal = () => {
   state.checkMembers = [];
   closeModal();
-  emits('unmount-close');
 };
 
 const handleCheckUsers = async (contacts: IUser[] | IUser): Promise<void> => {
@@ -111,7 +163,7 @@ const handleCheckUsers = async (contacts: IUser[] | IUser): Promise<void> => {
     navigateToDialogs(topic.id as string);
     return;
   } else {
-    if (Array.isArray(contacts) && contacts.length > 0) {
+    if (Array.isArray(contacts)) {
       state.checkMembers = contacts;
     }
   }
@@ -119,7 +171,7 @@ const handleCheckUsers = async (contacts: IUser[] | IUser): Promise<void> => {
 
 const handleNext = (contacts: IUser[]): void => {
   if (props.isAddOne) return;
-  const name = createNiceName(contacts);
+  const name = form.name || createNiceName(contacts);
   handleUpdateInformation({ avatarUrl: form.avatarUrl, name });
   handleOpenGroupInfo(contacts);
 };
@@ -130,16 +182,25 @@ const handleCreateInformation = ({ avatarUrl, name }) => {
 };
 
 const handleCreateMobileGroup = async () => {
-  state.disableCreateButton = true;
   handleCreateInformation(form);
   await handleCreateGroup();
-  state.disableCreateButton = false;
 };
 
 const handleAddUsers = (addedUsers: IUser[]) => {
-  handleOpenGroupInfo([
+  state.checkMembers = [
     ...filteredSelectedContacts.value.slice(1),
     ...addedUsers
-  ]);
+  ];
+  handleOpenGroupInfo(state.checkMembers);
 };
+
+watch(
+  () => props.open,
+  open => {
+    if (!open) {
+      state.checkMembers = [];
+      handleUpdateInformation({ name: '', avatarUrl: '' });
+    }
+  }
+);
 </script>

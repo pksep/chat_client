@@ -120,6 +120,8 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
+import ModalCroppedAvatar from '../UI/ModalCroppedAvatar.vue';
+import Modal from '../UI/Modal.vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -127,8 +129,6 @@ import {
   IconNameEnum,
   Input,
   MessageTypeEnum,
-  ModalCroppedAvatar,
-  Modal,
   SizesEnum
 } from '@pksep/yui';
 import { navigateToDialogs } from '../../composables/navigation';

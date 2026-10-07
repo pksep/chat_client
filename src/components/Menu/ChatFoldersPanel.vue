@@ -7,56 +7,103 @@
     data-testid="ChatFolders-Panel"
     @click="closeFolderMenu"
   >
-    <header class="chat-folders-panel__header menu-section-heading">
+    <MenuSectionHeading class="chat-folders-panel__header">
       <h4>Папки</h4>
       <Button
-        :type="ButtonTypeEnum.ghost"
+        :type="ButtonTypeEnum.secondary"
         :size="SizesEnum.little"
         class="chat-folders-panel__add"
         aria-label="Создать папку"
         data-testid="ChatFolders-CreateButton"
         @click="openCreateEditor"
       >
-        <Icon :name="IconNameEnum.plus" />
+        <Icon :name="IconNameEnum.plus" viewBox="0 0 24 24" />
       </Button>
-    </header>
+    </MenuSectionHeading>
 
-    <Search
+    <MenuSearch
       v-model="folderSearch"
       class="chat-folders-panel__search"
-      height="40px"
       placeholder="Поиск"
       data-testid="ChatFolders-Search"
     />
 
-    <div v-if="props.loading" class="chat-folders-panel__state">
-      Загрузка папок…
-    </div>
-    <div v-else-if="folderState.error" class="chat-folders-panel__state">
-      {{ folderState.error }}
-    </div>
+    <ul
+      v-if="props.loading && !props.folders.length"
+      class="chat-folders-panel__list"
+      aria-busy="true"
+      aria-label="Загрузка папок"
+      data-testid="ChatFolders-List-Skeleton"
+    >
+      <li
+        v-for="index in 3"
+        :key="index"
+        aria-hidden="true"
+        :data-testid="`ChatFolders-List-Skeleton-${index}`"
+      >
+        <div
+          class="chat-folders-panel__folder chat-folders-panel__folder--skeleton"
+        >
+          <SkeletonBlock class="chat-folders-panel__folder-icon" />
+          <SkeletonBlock class="chat-folders-panel__skeleton-name" />
+          <SkeletonBlock class="chat-folders-panel__skeleton-count" />
+        </div>
+      </li>
+    </ul>
     <div v-else-if="!filteredFolders.length" class="chat-folders-panel__state">
       {{ folderSearch ? 'Папки не найдены' : 'Здесь будут папки' }}
     </div>
 
-    <ul v-else class="chat-folders-panel__list">
-      <li v-for="folder in filteredFolders" :key="folder.id">
-        <button
-          type="button"
-          class="chat-folders-panel__folder"
-          :data-testid="`ChatFolders-Folder-${folder.id}`"
-          @click="openDetails(folder.id)"
-          @contextmenu.prevent="openFolderMenu(folder.id, $event)"
+    <ul
+      v-else
+      v-menu-list-press
+      ref="containerRef"
+      class="chat-folders-panel__list"
+      :aria-busy="props.loading || isReordering"
+      @pointerdown="onPointerDown"
+      @touchstart.passive="onTouchStart"
+      @click.capture="onClickCapture"
+      @contextmenu.capture="onClickCapture"
+      @keydown="onKeydown"
+    >
+      <TransitionGroup name="chat-folder-sort">
+        <li
+          v-for="folder in orderedFolders"
+          :key="folder.id"
+          :class="[
+            'menu-list-row',
+            { 'menu-list-row--active': props.selectedFolderId === folder.id }
+          ]"
         >
-          <span class="chat-folders-panel__folder-icon">
-            <ChatFolderGlyph :name="folder.icon || 'folder'" />
-          </span>
-          <span class="chat-folders-panel__folder-name">{{ folder.name }}</span>
-          <span class="chat-folders-panel__folder-count">
-            {{ folder.topicIds.length }}
-          </span>
-        </button>
-      </li>
+          <button
+            type="button"
+            :class="[
+              'chat-folders-panel__folder menu-list-item',
+              { 'chat-folder-drag-source': draggedFolderId === folder.id }
+            ]"
+            :data-testid="`ChatFolders-Folder-${folder.id}`"
+            :data-folder-id="folder.id"
+            aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+            :aria-description="
+              props.mobile
+                ? 'Удерживайте и перетащите, чтобы изменить порядок'
+                : 'Перетащите, чтобы изменить порядок'
+            "
+            @click="openDetails(folder.id)"
+            @contextmenu.prevent="openFolderMenu(folder.id, $event)"
+          >
+            <span class="chat-folders-panel__folder-icon">
+              <ChatFolderGlyph :name="folder.icon || 'folder'" />
+            </span>
+            <span class="chat-folders-panel__folder-name">{{
+              folder.name
+            }}</span>
+            <span class="chat-folders-panel__folder-count">
+              {{ folder.topicIds.length }}
+            </span>
+          </button>
+        </li>
+      </TransitionGroup>
     </ul>
 
     <ContextMenu
@@ -117,7 +164,6 @@
       :selected-topic-ids="draftTopicIds"
       :can-submit="canSubmit"
       :is-saving="isSaving"
-      :error="operationError"
       :submit-label="editorSubmitLabel"
       @update:name="updateDraftName"
       @update:search="topicSearch = $event"
@@ -134,6 +180,7 @@
     close-button-text="Назад"
     :title="editorTitle"
     :show-divider="false"
+    menu-heading
     data-testid="ChatFolders-Editor"
     @unmount-close="closeEditor"
     @unmount-next="saveEditor"
@@ -148,7 +195,6 @@
       :selected-topic-ids="draftTopicIds"
       :can-submit="canSubmit"
       :is-saving="isSaving"
-      :error="operationError"
       :submit-label="editorSubmitLabel"
       :show-footer="false"
       @update:name="updateDraftName"
@@ -184,7 +230,11 @@
   >
     <aside v-if="detailsFolder" class="chat-folder-details">
       <div class="chat-folder-details__info">
-        <header class="chat-folder-details__header">
+        <MenuSectionHeading
+          :shared="props.mobile"
+          :centered="props.mobile"
+          class="chat-folder-details__header"
+        >
           <Button
             v-if="props.mobile"
             :type="ButtonTypeEnum.ghost"
@@ -196,7 +246,7 @@
           </Button>
           <div class="chat-folder-details__header-title">
             <strong>Информация о папке</strong>
-            <span>{{ detailsChatsLabel }}</span>
+            <span v-if="!props.mobile">{{ detailsChatsLabel }}</span>
           </div>
           <Button
             v-if="!props.mobile"
@@ -208,7 +258,11 @@
           >
             <Icon :name="IconNameEnum.crossLarge" />
           </Button>
-        </header>
+        </MenuSectionHeading>
+
+        <span v-if="props.mobile" class="chat-folder-details__subtitle">
+          {{ detailsChatsLabel }}
+        </span>
 
         <div ref="iconRowRef" class="chat-folder-details__icon-row">
           <button
@@ -261,10 +315,6 @@
               @focusout="saveDetailsName"
               @keydown.enter="saveDetailsName"
             />
-
-            <p v-if="operationError" class="chat-folder-details__error">
-              {{ operationError }}
-            </p>
           </div>
 
           <div class="chat-folder-details__actions">
@@ -292,6 +342,7 @@
 
       <TopicList
         class="chat-folder-details__topics"
+        :folder-scope="props.scope"
         :topics="detailsTopics"
         show-last-online
         data-testid="ChatFolders-DetailsTopics"
@@ -312,7 +363,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import MenuSearch from '../UI/MenuSearch.vue';
+import { vMenuListPress } from '../../directives/menu-list-press';
+import { computed, ref, watch } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import type { ITopic } from '../interfaces/interfaces';
 import {
@@ -323,6 +376,11 @@ import {
 } from '../../services/useChatSDK/chat-folder';
 import type { ChatsToolbarFilter } from '../../composables/useChatsToolbarState';
 import { useChatFolders } from '../../composables/useChatFolders';
+import {
+  BackButtonPriority,
+  useBackButtonHandler
+} from '../../composables/useBackButton';
+import { useChatFolderDrag } from '../../composables/useChatFolderDrag';
 import { getAuthUser } from '../../composables/useAuth';
 import { getTopicsByChatsToolbarFilter } from '../../utils/chats-toolbar-filter';
 import {
@@ -333,18 +391,20 @@ import TopicList from '../ContactList/TopicList.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import MobileModal from '../UI/MobileModal.vue';
+import MenuSectionHeading from '../UI/MenuSectionHeading.vue';
 import MessageIcon from '../UI/MessageIcon.vue';
 import ChatFolderEditorForm from './ChatFolderEditorForm.vue';
 import ChatFolderGlyph from './ChatFolderIcon.vue';
+import SkeletonBlock from '../UI/SkeletonBlock.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
+import { showNotification } from '../../composables/useNotifications';
+import Modal from '../UI/Modal.vue';
 import {
   Button,
   ButtonTypeEnum,
   Icon,
   IconNameEnum,
   Input,
-  Modal,
-  Search,
   SizesEnum
 } from '@pksep/yui';
 
@@ -367,10 +427,11 @@ const emits = defineEmits<{
 }>();
 
 const {
-  state: folderState,
   createFolder,
   updateFolder,
-  deleteFolder
+  deleteFolder,
+  isReordering,
+  reorderFolders
 } = useChatFolders(props.scope);
 const folderSearch = ref('');
 const openMenuFolderId = ref<string | null>(null);
@@ -391,8 +452,19 @@ const detailsName = ref('');
 const isIconPickerOpen = ref(false);
 const iconRowRef = ref<HTMLElement | null>(null);
 const deleteFolderTargetId = ref<string | null>(null);
-const operationError = ref('');
 const isSaving = ref(false);
+
+useBackButtonHandler(
+  () => true,
+  () => emits('close')
+);
+useBackButtonHandler(
+  isIconPickerOpen,
+  () => {
+    isIconPickerOpen.value = false;
+  },
+  BackButtonPriority.overlay
+);
 
 onClickOutside(iconRowRef, () => {
   isIconPickerOpen.value = false;
@@ -415,6 +487,21 @@ const filteredFolders = computed(() => {
         folder.name.toLocaleLowerCase().includes(query)
       )
     : props.folders;
+});
+
+const {
+  containerRef,
+  orderedFolders,
+  draggedFolderId,
+  onPointerDown,
+  onTouchStart,
+  onClickCapture,
+  onKeydown
+} = useChatFolderDrag({
+  folders: () => filteredFolders.value,
+  disabled: () =>
+    props.loading || isReordering.value || !!folderSearch.value.trim(),
+  onReorder: reorderFolders
 });
 
 const filteredTopics = computed(() => {
@@ -460,12 +547,10 @@ const deleteFolderTarget = computed(
     null
 );
 
-const deleteFolderDescription = computed(
-  () =>
-    operationError.value ||
-    (deleteFolderTarget.value
-      ? `Вы уверены, что хотите удалить папку «${deleteFolderTarget.value.name}»?`
-      : '')
+const deleteFolderDescription = computed(() =>
+  deleteFolderTarget.value
+    ? `Вы уверены, что хотите удалить папку «${deleteFolderTarget.value.name}»?`
+    : ''
 );
 
 const canSubmit = computed(() => {
@@ -516,7 +601,6 @@ const requestDeleteSelectedFolder = (): void => {
 const resetEditor = (): void => {
   topicSearch.value = '';
   topicFilter.value = 'all';
-  operationError.value = '';
 };
 
 const openCreateEditor = (): void => {
@@ -541,7 +625,6 @@ const openEditEditor = (folder: ChatFolder): void => {
 const closeEditor = (): void => {
   editorMode.value = null;
   editingFolderId.value = null;
-  operationError.value = '';
 };
 
 const toggleTopic = (topic: ITopic): void => {
@@ -554,7 +637,6 @@ const toggleTopic = (topic: ITopic): void => {
 const saveEditor = async (): Promise<void> => {
   if (!canSubmit.value || isSaving.value) return;
   isSaving.value = true;
-  operationError.value = '';
 
   try {
     if (editorMode.value === 'create') {
@@ -567,8 +649,10 @@ const saveEditor = async (): Promise<void> => {
     }
     closeEditor();
   } catch (error) {
-    operationError.value =
-      error instanceof Error ? error.message : 'Не удалось сохранить папку';
+    showNotification({
+      title: 'Не удалось сохранить папку',
+      description: error
+    });
   } finally {
     isSaving.value = false;
   }
@@ -578,7 +662,6 @@ const openDetails = (folderId: string): void => {
   const folder = props.folders.find(item => item.id === folderId);
   if (!folder) return;
   closeFolderMenu();
-  operationError.value = '';
   isIconPickerOpen.value = false;
   detailsFolderId.value = folderId;
   detailsName.value = folder.name;
@@ -587,8 +670,24 @@ const openDetails = (folderId: string): void => {
 const closeDetails = (): void => {
   detailsFolderId.value = null;
   isIconPickerOpen.value = false;
-  operationError.value = '';
 };
+
+watch(detailsFolder, (folder, previous) => {
+  if (!folder) closeDetails();
+  else if (detailsName.value === previous?.name)
+    detailsName.value = folder.name;
+});
+
+watch(
+  () => props.folders,
+  folders => {
+    const exists = (id: string | null) =>
+      !id || folders.some(folder => folder.id === id);
+    if (!exists(editingFolderId.value)) closeEditor();
+    if (!exists(openMenuFolderId.value)) closeFolderMenu();
+    if (!exists(deleteFolderTargetId.value)) deleteFolderTargetId.value = null;
+  }
+);
 
 const handleDetailsTopicSelect = (topic: ITopic): void => {
   closeDetails();
@@ -612,12 +711,13 @@ const saveDetailsName = async (): Promise<void> => {
     return;
 
   isSaving.value = true;
-  operationError.value = '';
   try {
     await updateFolder(folder.id, { name });
   } catch (error) {
-    operationError.value =
-      error instanceof Error ? error.message : 'Не удалось переименовать папку';
+    showNotification({
+      title: 'Не удалось переименовать папку',
+      description: error
+    });
     detailsName.value = folder.name;
   } finally {
     isSaving.value = false;
@@ -633,13 +733,14 @@ const saveDetailsIcon = async (icon: ChatFolderIcon): Promise<void> => {
   }
 
   isSaving.value = true;
-  operationError.value = '';
   try {
     await updateFolder(folder.id, { icon });
     isIconPickerOpen.value = false;
   } catch (error) {
-    operationError.value =
-      error instanceof Error ? error.message : 'Не удалось изменить иконку';
+    showNotification({
+      title: 'Не удалось изменить иконку',
+      description: error
+    });
   } finally {
     isSaving.value = false;
   }
@@ -647,28 +748,24 @@ const saveDetailsIcon = async (icon: ChatFolderIcon): Promise<void> => {
 
 const requestDelete = (folderId: string): void => {
   closeFolderMenu();
-  operationError.value = '';
   deleteFolderTargetId.value = folderId;
 };
 
 const cancelDelete = (): void => {
   if (isSaving.value) return;
   deleteFolderTargetId.value = null;
-  operationError.value = '';
 };
 
 const confirmDelete = async (): Promise<void> => {
   const folderId = deleteFolderTargetId.value;
   if (!folderId || isSaving.value) return;
   isSaving.value = true;
-  operationError.value = '';
   try {
     await deleteFolder(folderId);
     deleteFolderTargetId.value = null;
     if (detailsFolderId.value === folderId) closeDetails();
   } catch (error) {
-    operationError.value =
-      error instanceof Error ? error.message : 'Не удалось удалить папку';
+    showNotification({ title: 'Не удалось удалить папку', description: error });
   } finally {
     isSaving.value = false;
   }

@@ -2,6 +2,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import { getAuthUser } from '../composables/useAuth';
 import { getConfig } from './useConfig';
 import { matchesPreparedStartupHistory } from '../utils/startup-history';
+import { withNetworkTimeout } from '../utils/network-timeout';
 
 const nativeHistory = registerPlugin<{
   takeStartupHistory(options: {
@@ -23,19 +24,14 @@ export const takeNativeStartupHistory = async <T extends unknown[]>(
     performance.mark('chat-startup:native-history-requested');
     const prepared = window.__chatNativePreparedHistory;
     window.__chatNativePreparedHistory = undefined;
-    const earlyResult = prepared ? await prepared : null;
-    const result = matchesPreparedStartupHistory(
-      earlyResult,
-      userId,
-      apiUrl,
-      topicId
-    )
-      ? earlyResult!
-      : await nativeHistory.takeStartupHistory({
-          userId,
-          apiUrl,
-          topicId
-        });
+    const result = await withNetworkTimeout(async signal => {
+      const earlyResult = prepared ? await prepared : null;
+      if (signal.aborted)
+        throw new DOMException('Сервер не ответил вовремя', 'TimeoutError');
+      return matchesPreparedStartupHistory(earlyResult, userId, apiUrl, topicId)
+        ? earlyResult!
+        : nativeHistory.takeStartupHistory({ userId, apiUrl, topicId });
+    }, 1000);
     if (getAuthUser()?.id !== userId || getConfig().CHAT_API_DOMAIN !== apiUrl)
       return null;
     if (!result.available || !Array.isArray(result.data)) return null;

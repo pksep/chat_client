@@ -3,8 +3,7 @@
     :class="[
       'chat-folder-editor',
       {
-        'chat-folder-editor--mobile': props.mobile,
-        'chat-folder-editor--has-error': !!props.error
+        'chat-folder-editor--mobile': props.mobile
       }
     ]"
   >
@@ -20,7 +19,7 @@
     </label>
 
     <div class="chat-folder-editor__label">Добавить чаты:</div>
-    <Search
+    <MenuSearch
       :model-value="props.search"
       class="chat-folder-editor__search"
       placeholder="Поиск"
@@ -47,10 +46,6 @@
       @unmount-topic="emits('toggle-topic', $event)"
     />
 
-    <p v-if="props.error" class="chat-folder-editor__error">
-      {{ props.error }}
-    </p>
-
     <footer v-if="props.showFooter" class="chat-folder-editor__footer">
       <Button
         :type="ButtonTypeEnum.primary"
@@ -71,7 +66,8 @@ import type { ITopic } from '../interfaces/interfaces';
 import type { ChatsToolbarFilter } from '../../composables/useChatsToolbarState';
 import TopicList from '../ContactList/TopicList.vue';
 import ChatsToolbarFilters from './ChatsToolbarFilters.vue';
-import { Button, ButtonTypeEnum, Input, Search, SizesEnum } from '@pksep/yui';
+import { Button, ButtonTypeEnum, Input, SizesEnum } from '@pksep/yui';
+import MenuSearch from '../UI/MenuSearch.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -83,12 +79,11 @@ const props = withDefaults(
     selectedTopicIds: Set<string>;
     canSubmit: boolean;
     isSaving: boolean;
-    error?: string;
     submitLabel: string;
     showFooter?: boolean;
     mobile?: boolean;
   }>(),
-  { error: '', showFooter: true, mobile: false }
+  { showFooter: true, mobile: false }
 );
 
 const emits = defineEmits<{

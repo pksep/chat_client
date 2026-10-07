@@ -1,5 +1,6 @@
 <template>
   <ul
+    v-menu-list-press
     ref="listRootRef"
     :class="['contact-list', props.class]"
     role="list"
@@ -24,12 +25,12 @@
         :data-testid="`${props.dataTestid}-ContactList-Skeleton${index}`"
       >
         <div class="contact-list__item contact-list__skeleton-item">
-          <span class="contact-list__skeleton-avatar"></span>
+          <SkeletonBlock class="contact-list__skeleton-avatar" />
           <div class="contact-list__skeleton-content">
-            <span class="contact-list__skeleton-line"></span>
-            <span
+            <SkeletonBlock class="contact-list__skeleton-line" />
+            <SkeletonBlock
               class="contact-list__skeleton-line contact-list__skeleton-line--short"
-            ></span>
+            />
           </div>
         </div>
       </li>
@@ -37,7 +38,10 @@
     <li
       v-for="(topic, index) in displayTopics"
       :key="topic.id"
-      class="contact-list__li"
+      :class="[
+        'contact-list__li menu-list-row',
+        { 'menu-list-row--active': isTopicActive(topic) }
+      ]"
       :data-topic-id="topic.id"
       role="listitem"
       tabindex="0"
@@ -46,7 +50,7 @@
     >
       <div
         :class="[
-          'contact-list__item',
+          'contact-list__item menu-list-item',
           {
             'contact-list__item--active': isTopicActive(topic),
             'contact-list__item--selection': props.showCheckbox
@@ -131,62 +135,71 @@
           :data-testid="`${props.dataTestid}-ContactList-Checkbox${index + 1}`"
         />
       </div>
-      <ContextMenu
-        v-if="!props.showCheckbox"
-        :visible="!!isOpen[topic.id]"
+      <TopicFolderContextMenu
+        v-if="!props.showCheckbox && isOpen[topic.id]"
+        :topic-id="topic.id"
+        :scope="
+          props.folderScope || (isClientTopic(topic) ? 'clients' : 'chats')
+        "
         :position="position"
         :data-testid="`${props.dataTestid}-ContactList-ContextMenu${index + 1}`"
-        @unmount-close="() => closeActivePopover(topic.id)"
+        @close="() => closeActivePopover(topic.id)"
       >
-        <Button
-          :type="ButtonTypeEnum.popover"
-          :size="SizesEnum.small"
-          @click.stop="() => handlePin(topic)"
-          :data-testid="`${props.dataTestid}-ContactList-PinButton${index + 1}`"
-          :aria-label="
-            topic.info.isPin ? `Unpin ${topic.name}` : `Pin ${topic.name}`
-          "
-        >
-          <template v-if="!topic.info.isPin"> <PinIcon /> Закрепить </template>
-          <template v-else> <UnpinIcon /> Открепить </template>
-        </Button>
-        <Button
-          :type="ButtonTypeEnum.popover"
-          :size="SizesEnum.small"
-          @click.stop="() => handleReadState(topic)"
-          :data-testid="`${props.dataTestid}-ContactList-ReadStateButton${index + 1}`"
-          :aria-label="
-            hasTopicUnreadIndicator(topic, authedUser?.id)
-              ? `Mark ${topic.name} as read`
-              : `Mark ${topic.name} as new`
-          "
-        >
-          <template v-if="hasTopicUnreadIndicator(topic, authedUser?.id)">
-            <ReadIcon style="padding: 2px" /> Отметить прочитанным
-          </template>
-          <template v-else
-            ><Icon :name="IconNameEnum.chat" style="padding: 2px" /> Пометить
-            как новое</template
+        <template #before>
+          <Button
+            :type="ButtonTypeEnum.popover"
+            :size="SizesEnum.small"
+            @click.stop="() => handlePin(topic)"
+            :data-testid="`${props.dataTestid}-ContactList-PinButton${index + 1}`"
+            :aria-label="
+              topic.info.isPin ? `Unpin ${topic.name}` : `Pin ${topic.name}`
+            "
           >
-        </Button>
-        <Button
-          :type="ButtonTypeEnum.popover"
-          :size="SizesEnum.small"
-          @click="() => handleMute(topic)"
-          :data-testid="`${props.dataTestid}-ContactList-NotificationButton${index + 1}`"
-          :aria-label="
-            topic.info.isMute
-              ? `Disable notifications for ${topic.name}`
-              : `Enable notifications for ${topic.name}`
-          "
-          :class="{ 'red-context-button': !topic.info.isMute }"
-        >
-          <template v-if="topic.info.isMute">
-            <UnmuteIcon /> Вкл. уведомление
-          </template>
-          <template v-else><MuteIcon /> Выкл. уведомление </template>
-        </Button>
-      </ContextMenu>
+            <template v-if="!topic.info.isPin">
+              <PinIcon /> Закрепить
+            </template>
+            <template v-else> <UnpinIcon /> Открепить </template>
+          </Button>
+          <Button
+            :type="ButtonTypeEnum.popover"
+            :size="SizesEnum.small"
+            @click.stop="() => handleReadState(topic)"
+            :data-testid="`${props.dataTestid}-ContactList-ReadStateButton${index + 1}`"
+            :aria-label="
+              hasTopicUnreadIndicator(topic, authedUser?.id)
+                ? `Mark ${topic.name} as read`
+                : `Mark ${topic.name} as new`
+            "
+          >
+            <template v-if="hasTopicUnreadIndicator(topic, authedUser?.id)">
+              <ReadIcon style="padding: 2px" /> Отметить прочитанным
+            </template>
+            <template v-else
+              ><Icon :name="IconNameEnum.chat" style="padding: 2px" /> Пометить
+              как новое</template
+            >
+          </Button>
+        </template>
+        <template #after>
+          <Button
+            :type="ButtonTypeEnum.popover"
+            :size="SizesEnum.small"
+            @click="() => handleMute(topic)"
+            :data-testid="`${props.dataTestid}-ContactList-NotificationButton${index + 1}`"
+            :aria-label="
+              topic.info.isMute
+                ? `Disable notifications for ${topic.name}`
+                : `Enable notifications for ${topic.name}`
+            "
+            :class="{ 'red-context-button': !topic.info.isMute }"
+          >
+            <template v-if="topic.info.isMute">
+              <UnmuteIcon /> Вкл. уведомления
+            </template>
+            <template v-else><MuteIcon /> Выкл. уведомления </template>
+          </Button>
+        </template>
+      </TopicFolderContextMenu>
     </li>
     <li
       v-if="showMessageSectionTitle"
@@ -205,7 +218,7 @@
     <li
       v-for="(result, index) in props.messageResults"
       :key="`message-${result.id}`"
-      class="contact-list__li"
+      class="contact-list__li menu-list-row"
       role="listitem"
       tabindex="0"
       :data-testid="`${props.dataTestid}-ContactList-MessageResult${index + 1}`"
@@ -213,7 +226,7 @@
       @keydown.space="handleMessageResultClick(result)"
     >
       <div
-        class="contact-list__item contact-list__item--message-result"
+        class="contact-list__item contact-list__item--message-result menu-list-item"
         role="button"
         tabindex="0"
         @click="handleMessageResultClick(result)"
@@ -367,6 +380,8 @@
 </template>
 
 <script setup lang="ts">
+import { vMenuListPress } from '../../directives/menu-list-press';
+import SkeletonBlock from '../UI/SkeletonBlock.vue';
 import {
   computed,
   nextTick,
@@ -385,7 +400,9 @@ import {
   IconNameEnum,
   SizesEnum
 } from '@pksep/yui';
-import ContextMenu from './ContextMenu.vue';
+import TopicFolderContextMenu from './TopicFolderContextMenu.vue';
+import { isClientTopic } from '../../composables/useManagerInquiries';
+import type { ChatFolderScope } from '../../services/useChatSDK/chat-folder';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import BotAvatar from '../UI/BotAvatar.vue';
 import type { IContactListProps } from './interfaces/contact-list';
@@ -449,6 +466,7 @@ interface IExtendedContactListProps extends IContactListProps {
   isMessageSearchLoading?: boolean;
   isLoading?: boolean;
   isCollapse?: boolean;
+  folderScope?: ChatFolderScope;
 }
 
 const {
@@ -1521,13 +1539,6 @@ const getTopicActiveCall = (topic: ITopic) => {
   color: var(--border-table);
 }
 
-.contact-list__skeleton-avatar,
-.contact-list__skeleton-line {
-  display: block;
-  background-size: 180% 100%;
-  animation: skeleton-animation 1.2s ease-in-out infinite;
-}
-
 .contact-list__skeleton-avatar {
   width: 50px;
   height: 50px;
@@ -1554,19 +1565,5 @@ const getTopicActiveCall = (topic: ITopic) => {
 .contact-list__skeleton-line--short {
   width: 54%;
   height: 12px;
-}
-
-@keyframes skeleton-animation {
-  0% {
-    background-color: var(--border-table);
-  }
-
-  50% {
-    background-color: var(--action-disabled-bg);
-  }
-
-  100% {
-    background-color: var(--border-table);
-  }
 }
 </style>

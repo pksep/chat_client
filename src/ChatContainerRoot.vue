@@ -599,14 +599,30 @@ const runAppInitialization = async () => {
   }
 
   try {
+    const storedAuthData = hasStoredChatSession
+      ? {
+          token: directAuthSession?.token || storedChatToken || '',
+          user: directAuthSession?.user
+        }
+      : null;
+    let usedBootstrapToken = false;
     const authData = shouldUseBootstrapToken
       ? await useAuth(bootstrapErpToken)
-      : directAuthSession?.token || storedChatToken
-        ? {
-            token: directAuthSession?.token || storedChatToken || '',
-            user: directAuthSession?.user
-          }
-        : await tryRefreshErpSession();
+          .then(data => {
+            usedBootstrapToken = true;
+            return data;
+          })
+          .catch(error => {
+            if (!tokenUrl && storedAuthData && !isAuthError(error)) {
+              console.warn(
+                'Сервер авторизации недоступен, открываем сохранённую сессию:',
+                error
+              );
+              return storedAuthData;
+            }
+            throw error;
+          })
+      : storedAuthData || (await tryRefreshErpSession());
     if (!authData?.token) {
       throw new Error('Chat token is missing from auth response');
     }
@@ -637,7 +653,7 @@ const runAppInitialization = async () => {
       },
       persistSession
     );
-    if (shouldUseBootstrapToken) {
+    if (usedBootstrapToken) {
       clearBootstrapErpSession();
     }
 

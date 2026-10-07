@@ -20,6 +20,13 @@
   pointer-events: none;
 }
 
+.chat-folder-details
+  .contact-list__li:has(+ .contact-list__li):not(
+    .contact-list__skeleton-row
+  )::after {
+  left: 60px;
+}
+
 .contact-list__li:has(
     > .contact-list__item:is(
         .contact-list__item--active,
@@ -82,7 +89,6 @@
   gap: 10px;
   padding-inline: 10px;
   min-height: 58px;
-  border-radius: 5px;
   cursor: pointer;
 
   &:active,
@@ -110,28 +116,17 @@
 
   .contact-list__li:has(> .contact-list__item:hover)::before,
   .contact-list__li:has(> .contact-list__item:hover)::after {
-    content: '';
-    position: absolute;
-    z-index: 1;
-    right: 0;
-    left: 0;
-    height: 0.35px;
-    background: var(--border-table);
-    pointer-events: none;
-  }
-
-  .contact-list__li:has(> .contact-list__item:hover)::before {
-    top: 0;
-  }
-
-  .contact-list__li:has(> .contact-list__item:hover)::after {
-    bottom: 0;
+    content: none;
   }
 
   .contact-list__li:has(
       + .contact-list__li > .contact-list__item:hover
     )::after {
     content: none;
+  }
+
+  .contact-selector__item:hover {
+    border-bottom-color: transparent;
   }
 }
 
@@ -162,7 +157,6 @@
   height: 36px;
   padding: 0 5px 2px;
   row-gap: 2px;
-  border-radius: 5px;
   background: transparent;
   grid-template-rows: 17px 15px;
   box-sizing: border-box;
@@ -295,7 +289,7 @@
   min-width: 0;
 }
 
-.contact-list__preview>.contact-list__description {
+.contact-list__preview > .contact-list__description {
   flex: 1;
 }
 
@@ -324,12 +318,16 @@
 }
 
 .contact-list__description--overflow {
-  -webkit-mask-image: linear-gradient(to right,
-      #000 max(0px, calc(100% - var(--description-fade-width, 40px))),
-      transparent calc(100% - 6px));
-  mask-image: linear-gradient(to right,
-      #000 max(0px, calc(100% - var(--description-fade-width, 40px))),
-      transparent calc(100% - 6px));
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 max(0px, calc(100% - var(--description-fade-width, 40px))),
+    transparent calc(100% - 6px)
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 max(0px, calc(100% - var(--description-fade-width, 40px))),
+    transparent calc(100% - 6px)
+  );
 }
 
 .contact-list__search-state {
@@ -515,7 +513,6 @@ svg.icon-yui-kit.contact-list__read-icon {
   &:hover {
     cursor: pointer;
   }
-
 }
 
 .contact-selector__item:hover .user-profile > * {
@@ -534,8 +531,10 @@ svg.icon-yui-kit.contact-list__read-icon {
 }
 
 .contact-selector__list {
+  min-height: 0;
   max-height: 300px;
   overflow-y: auto;
+  align-content: flex-start;
   gap: 20px;
   margin-bottom: 16px;
 }

@@ -632,6 +632,34 @@ export function useMessageScroll(
     }, UNREAD_REACTION_CHECK_INTERVAL_MS);
   };
 
+  watch(
+    [
+      () => route.value.id,
+      () => getTopicUnreadReactionMessageId(route.value.id)
+    ],
+    ([topicId, messageId]) => {
+      if (!topicId || !messageId) {
+        return;
+      }
+
+      void nextTick(() => {
+        if (
+          route.value.id !== topicId ||
+          getTopicUnreadReactionMessageId(topicId) !== messageId ||
+          unreadReactionCheckRafId
+        ) {
+          return;
+        }
+
+        unreadReactionCheckRafId = requestAnimationFrame(() => {
+          unreadReactionCheckRafId = 0;
+          clearVisibleUnreadReaction();
+        });
+      });
+    },
+    { flush: 'post' }
+  );
+
   const getHistoryTriggerIndex = (
     maxIndex: number,
     windowFraction: number

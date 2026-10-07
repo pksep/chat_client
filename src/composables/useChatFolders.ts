@@ -1,6 +1,10 @@
 import { computed, reactive, readonly, ref, watch } from 'vue';
 import { authedUser, getAuthUser } from './useAuth';
 import { getChatSDK } from '../services/useChat';
+import { sortChatFolders } from '../utils/chat-folder-order';
+import { showNotification } from './useNotifications';
+import type { ChatSDK } from '../services/useChatSDK';
+import { WebSocketEventType } from '../services/useChatSDK/websocketEvents';
 import type {
   ChatFolder,
   ChatFolderIcon,
@@ -12,23 +16,38 @@ const folders = ref<ChatFolder[]>([]);
 const selections = {
   chats: {
     activeFolderId: ref<string | null>(null),
-    isManagingFolders: ref(false)
+    isManagingFolders: ref(false),
+    isReordering: ref(false)
   },
   clients: {
     activeFolderId: ref<string | null>(null),
-    isManagingFolders: ref(false)
+    isManagingFolders: ref(false),
+    isReordering: ref(false)
   }
 };
 const isLoading = ref(false);
 const state = reactive({ error: '' });
 let loadedUserId = '';
 let loadRevision = 0;
+let sessionRevision = 0;
+let changeRevision = 0;
+const folderChanges = new Map<string, number>();
+const deletedFolderIds = new Set<string>();
+let unbindFolderSync: (() => void) | undefined;
+const topicUpdateQueue = new Map<string, Promise<ChatFolder>>();
 
-const sortFolders = (items: ChatFolder[]): ChatFolder[] =>
-  [...items].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+const sortFolders = sortChatFolders;
 
 const upsertFolder = (folder: ChatFolder): void => {
+  if (deletedFolderIds.has(folder.id)) return;
   const index = folders.value.findIndex(item => item.id === folder.id);
+  if (
+    index !== -1 &&
+    new Date(folders.value[index].updatedAt).getTime() >
+      new Date(folder.updatedAt).getTime()
+  )
+    return;
+  folderChanges.set(folder.id, ++changeRevision);
 
   if (index === -1) {
     folders.value = sortFolders([...folders.value, folder]);
@@ -36,6 +55,129 @@ const upsertFolder = (folder: ChatFolder): void => {
   }
 
   folders.value.splice(index, 1, folder);
+  folders.value = sortFolders(folders.value);
+};
+
+const removeFolder = (folderId: string): void => {
+  deletedFolderIds.add(folderId);
+  folderChanges.set(folderId, ++changeRevision);
+  folders.value = folders.value.filter(folder => folder.id !== folderId);
+  for (const selection of Object.values(selections)) {
+    if (selection.activeFolderId.value === folderId)
+      selection.activeFolderId.value = null;
+  }
+};
+
+const mutationContext = () => {
+  const sdk = getChatSDK();
+  const userId = getAuthUser()?.id;
+  if (!sdk || !userId) throw new Error('Чат ещё не подключён');
+  const revision = sessionRevision;
+  return {
+    sdk,
+    userId,
+    change: changeRevision,
+    isCurrent: () =>
+      revision === sessionRevision &&
+      getChatSDK() === sdk &&
+      getAuthUser()?.id === userId
+  };
+};
+
+const applyMutation = (
+  folder: ChatFolder,
+  context: ReturnType<typeof mutationContext>
+): void => {
+  if (!context.isCurrent()) throw new Error('Сессия пользователя изменилась');
+  // Событие может прийти раньше подтверждения операции; поздний ack не откатывает новые данные.
+  if ((folderChanges.get(folder.id) || 0) <= context.change)
+    upsertFolder(folder);
+};
+
+const applySnapshot = (snapshot: ChatFolder[], startedAt: number): void => {
+  const next = new Map(
+    snapshot
+      .filter(folder => !deletedFolderIds.has(folder.id))
+      .map(folder => [folder.id, folder])
+  );
+  for (const folder of folders.value) {
+    if (
+      (folderChanges.get(folder.id) || 0) > startedAt ||
+      (next.has(folder.id) &&
+        new Date(folder.updatedAt).getTime() >
+          new Date(next.get(folder.id)!.updatedAt).getTime())
+    ) {
+      next.set(folder.id, folder);
+    } else if (!next.has(folder.id)) {
+      removeFolder(folder.id);
+    }
+  }
+  folders.value = sortFolders([...next.values()]);
+  for (const folder of folders.value)
+    folderChanges.set(folder.id, ++changeRevision);
+  for (const selection of Object.values(selections)) {
+    if (
+      selection.activeFolderId.value &&
+      !next.has(selection.activeFolderId.value)
+    )
+      selection.activeFolderId.value = null;
+  }
+};
+
+export const configureChatFolderSync = (sdk: ChatSDK, userId: string): void => {
+  unbindFolderSync?.();
+  ++sessionRevision;
+  ++loadRevision;
+  isLoading.value = false;
+  loadedUserId = '';
+  topicUpdateQueue.clear();
+  for (const selection of Object.values(selections))
+    selection.isReordering.value = false;
+  const revision = sessionRevision;
+  const handler: Parameters<
+    typeof sdk.subscribeToEvent<WebSocketEventType.CHAT_FOLDER_CHANGED>
+  >[1] = event => {
+    if (
+      revision !== sessionRevision ||
+      getChatSDK() !== sdk ||
+      getAuthUser()?.id !== userId
+    )
+      return;
+    const change = event.payload;
+    if (change.kind === 'delete') removeFolder(change.folderId);
+    else if (change.kind === 'upsert') upsertFolder(change.folder);
+    else for (const folder of change.folders) upsertFolder(folder);
+  };
+  sdk.subscribeToEvent(WebSocketEventType.CHAT_FOLDER_CHANGED, handler);
+  unbindFolderSync = () =>
+    sdk.unsubscribeFromEvent(WebSocketEventType.CHAT_FOLDER_CHANGED, handler);
+};
+
+export const refreshChatFoldersFromSocket = async (): Promise<void> => {
+  const sdk = getChatSDK();
+  const userId = getAuthUser()?.id;
+  if (!sdk || !userId) return;
+  const session = sessionRevision;
+  const revision = ++loadRevision;
+  const startedAt = changeRevision;
+  try {
+    const snapshot = await sdk.syncChatFolders();
+    if (
+      session !== sessionRevision ||
+      revision !== loadRevision ||
+      getChatSDK() !== sdk ||
+      getAuthUser()?.id !== userId
+    )
+      return;
+    applySnapshot(snapshot, startedAt);
+    loadedUserId = userId;
+    state.error = '';
+  } catch (error) {
+    if (session === sessionRevision && revision === loadRevision)
+      console.warn('Не удалось синхронизировать папки:', error);
+  } finally {
+    if (revision === loadRevision) isLoading.value = false;
+  }
 };
 
 const loadFolders = async (force = false): Promise<void> => {
@@ -48,16 +190,26 @@ const loadFolders = async (force = false): Promise<void> => {
   isLoading.value = true;
   state.error = '';
   const revision = ++loadRevision;
+  const startedAt = changeRevision;
 
   try {
     const loadedFolders = await sdk.getChatFolders();
-    if (revision !== loadRevision || getAuthUser()?.id !== userId) return;
-    folders.value = sortFolders(loadedFolders);
+    if (
+      revision !== loadRevision ||
+      getAuthUser()?.id !== userId ||
+      getChatSDK() !== sdk
+    )
+      return;
+    applySnapshot(loadedFolders, startedAt);
     loadedUserId = userId;
   } catch (error) {
     if (revision !== loadRevision) return;
     state.error =
       error instanceof Error ? error.message : 'Не удалось загрузить папки';
+    showNotification({
+      title: 'Не удалось загрузить папки',
+      description: error
+    });
   } finally {
     if (revision === loadRevision) isLoading.value = false;
   }
@@ -72,16 +224,14 @@ const createFolder = async (
   const normalizedName = name.trim();
   const uniqueTopicIds = [...new Set(topicIds)];
 
-  const sdk = getChatSDK();
-  if (!sdk) throw new Error('Чат ещё не подключён');
-
-  const folder = await sdk.createChatFolder({
+  const context = mutationContext();
+  const folder = await context.sdk.createChatFolder({
     name: normalizedName,
     icon,
     scope,
     topicIds: uniqueTopicIds
   });
-  upsertFolder(folder);
+  applyMutation(folder, context);
   return folder;
 };
 
@@ -97,23 +247,114 @@ const updateFolder = async (
       : { topicIds: [...new Set(payload.topicIds)] })
   };
 
-  const sdk = getChatSDK();
-  if (!sdk) throw new Error('Чат ещё не подключён');
-
-  const folder = await sdk.updateChatFolder(folderId, normalizedPayload);
-  upsertFolder(folder);
+  const context = mutationContext();
+  const folder = await context.sdk.updateChatFolder(
+    folderId,
+    normalizedPayload
+  );
+  applyMutation(folder, context);
   return folder;
 };
 
 const deleteFolder = async (folderId: string): Promise<void> => {
-  const sdk = getChatSDK();
-  if (!sdk) throw new Error('Чат ещё не подключён');
-  await sdk.deleteChatFolder(folderId);
+  const context = mutationContext();
+  await context.sdk.deleteChatFolder(folderId);
+  if (!context.isCurrent()) throw new Error('Сессия пользователя изменилась');
+  removeFolder(folderId);
+};
 
-  folders.value = folders.value.filter(folder => folder.id !== folderId);
-  for (const selection of Object.values(selections)) {
-    if (selection.activeFolderId.value === folderId)
-      selection.activeFolderId.value = null;
+const setTopicInFolder = (
+  folderId: string,
+  topicId: string,
+  scope: ChatFolderScope,
+  included: boolean
+): Promise<ChatFolder> => {
+  const revision = sessionRevision;
+  const userId = getAuthUser()?.id;
+  // Сохраняем порядок действий этого устройства; состав папки меняется атомарно на сервере.
+  const previous = topicUpdateQueue.get(folderId);
+  const update = (previous || Promise.resolve())
+    .catch(() => {})
+    .then(async () => {
+      if (
+        !userId ||
+        revision !== sessionRevision ||
+        getAuthUser()?.id !== userId
+      )
+        throw new Error('Сессия пользователя изменилась');
+      const folder = folders.value.find(item => item.id === folderId);
+      if (!folder || (folder.scope || 'chats') !== scope)
+        throw new Error('Папка больше недоступна');
+      if (folder.topicIds.includes(topicId) === included) return folder;
+      const context = mutationContext();
+      const savedFolder = await context.sdk.setChatFolderTopic(
+        folderId,
+        topicId,
+        included
+      );
+      applyMutation(savedFolder, context);
+      return savedFolder;
+    });
+  topicUpdateQueue.set(folderId, update);
+  const clearUpdate = () => {
+    if (topicUpdateQueue.get(folderId) === update)
+      topicUpdateQueue.delete(folderId);
+  };
+  void update.then(clearUpdate, clearUpdate);
+  return update;
+};
+
+const reorderFolders = async (
+  scope: ChatFolderScope,
+  folderIds: string[]
+): Promise<void> => {
+  const selection = selections[scope];
+  if (selection.isReordering.value) return;
+  const scopedFolders = folders.value.filter(
+    folder => (folder.scope || 'chats') === scope
+  );
+  const positions = new Map(
+    scopedFolders.map(folder => [folder.id, folder.position])
+  );
+  if (
+    new Set(folderIds).size !== folderIds.length ||
+    folderIds.length !== scopedFolders.length ||
+    folderIds.some(id => !positions.has(id)) ||
+    scopedFolders.every((folder, index) => folder.id === folderIds[index])
+  )
+    return;
+  const context = mutationContext();
+  const startedAt = changeRevision;
+  const applyPositions = (nextPositions: Map<string, number | undefined>) => {
+    folders.value = sortFolders(
+      folders.value.map(folder =>
+        nextPositions.has(folder.id)
+          ? { ...folder, position: nextPositions.get(folder.id) }
+          : folder
+      )
+    );
+  };
+  selection.isReordering.value = true;
+  applyPositions(new Map(folderIds.map((id, position) => [id, position])));
+  try {
+    const savedFolders = await context.sdk.reorderChatFolders(scope, folderIds);
+    if (!context.isCurrent()) return;
+    for (const folder of savedFolders) applyMutation(folder, context);
+  } catch (error) {
+    if (!context.isCurrent()) return;
+    applyPositions(
+      new Map(
+        [...positions].filter(
+          ([id]) => (folderChanges.get(id) || 0) <= startedAt
+        )
+      )
+    );
+    showNotification({
+      title: 'Не удалось изменить порядок папок',
+      description: error
+    });
+  } finally {
+    if (context.isCurrent()) selection.isReordering.value = false;
   }
 };
 
@@ -140,13 +381,21 @@ watch(
   () => authedUser.value?.id,
   () => {
     ++loadRevision;
+    ++sessionRevision;
+    unbindFolderSync?.();
+    unbindFolderSync = undefined;
+    changeRevision = 0;
+    folderChanges.clear();
+    deletedFolderIds.clear();
     loadedUserId = '';
     folders.value = [];
+    topicUpdateQueue.clear();
     isLoading.value = false;
     state.error = '';
     closeFolderManager();
     for (const selection of Object.values(selections)) {
       selection.activeFolderId.value = null;
+      selection.isReordering.value = false;
     }
   },
   { flush: 'sync' }
@@ -166,6 +415,7 @@ export const useChatFolders = (scope: ChatFolderScope = 'chats') => ({
       ) || null
   ),
   isManagingFolders: readonly(selections[scope].isManagingFolders),
+  isReordering: readonly(selections[scope].isReordering),
   isLoading: readonly(isLoading),
   state,
   loadFolders,
@@ -175,7 +425,12 @@ export const useChatFolders = (scope: ChatFolderScope = 'chats') => ({
     icon: ChatFolderIcon = 'folder'
   ) => createFolder(name, topicIds, icon, scope),
   updateFolder,
+  addTopicToFolder: (folderId: string, topicId: string) =>
+    setTopicInFolder(folderId, topicId, scope, true),
+  removeTopicFromFolder: (folderId: string, topicId: string) =>
+    setTopicInFolder(folderId, topicId, scope, false),
   deleteFolder,
+  reorderFolders: (folderIds: string[]) => reorderFolders(scope, folderIds),
   selectFolder: (folderId: string | null) => selectFolder(folderId, scope),
   openFolderManager: () => openFolderManager(scope),
   closeFolderManager

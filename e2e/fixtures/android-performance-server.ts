@@ -105,7 +105,7 @@ export async function createAndroidPerformanceServer({
     failMessages: false,
     missingFavorite: false,
     favoriteCreatedAt: null as number | null,
-    callInviteActive: false
+    invitePreviewStatus: 404 as 401 | 404
   };
   const server = createServer(async (request, response) => {
     const url = new URL(request.url!, origin);
@@ -241,22 +241,7 @@ export async function createAndroidPerformanceServer({
       return;
     }
     if (pathname === '/calls/invite-preview') {
-      if (state.callInviteActive) {
-        json({
-          preview: {
-            roomId: url.searchParams.get('roomId'),
-            topicId: topics[0].id,
-            title: 'Test group call',
-            avatarUrl: null,
-            startTime: Date.now(),
-            elapsedDurationMs: 0,
-            participantCount: 2,
-            members: [user]
-          }
-        });
-        return;
-      }
-      response.statusCode = 404;
+      response.statusCode = state.invitePreviewStatus;
       json({ message: 'Test call invite is unavailable' });
       return;
     }

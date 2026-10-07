@@ -16,6 +16,19 @@
   position: relative;
 }
 
+button.chat__header-back,
+button.message-context-menu__mobile-back-button,
+button.calls-bot__back {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: 30px !important;
+  min-width: 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 !important;
+  justify-content: center;
+}
+
 .chat__header-buttons {
   display: flex;
   align-items: center;
@@ -287,14 +300,6 @@ button.button-yui-kit {
     gap: 10px;
   }
 
-  .chat__header-wrapper:has(.search-yui-kit__input) {
-    .chat__header-profile {
-      & h3 {
-        display: block;
-      }
-    }
-  }
-
   .chat__header-buttons {
     margin-left: auto;
     margin-right: 0;
@@ -326,6 +331,7 @@ button.button-yui-kit {
   }
 
   .chat__header-mobile-search-controls {
+    box-sizing: border-box;
     position: fixed;
     left: 0;
     right: 0;
@@ -333,9 +339,7 @@ button.button-yui-kit {
     z-index: 40;
     display: flex;
     align-items: center;
-    height: 62px;
     width: 100%;
-    padding: 5px 10px 20px;
   }
 
   .chat__header-mobile-search-controls-content {
@@ -343,16 +347,19 @@ button.button-yui-kit {
     display: grid;
     grid-template-columns: minmax(64px, 1fr) 34px;
     align-items: center;
-    height: 50px;
-    padding: 0 10px 0 14px;
-    border: 0.5px solid var(--neutral-border);
-    border-radius: 30px;
-    background-color: var(--white);
+    box-sizing: border-box;
+    height: 105px;
+    padding: 10px 20px;
+    border: 0.5px solid var(--border-table);
+    border-radius: 20px;
+    background-color: var(--surface-overlay);
+    box-shadow: 0 0 22px rgb(0 0 0 / 7%);
   }
 
   .chat__header-mobile-search-controls .chat__header-search-count {
     justify-self: start;
     min-width: 64px;
+    color: var(--text-secondary);
     text-align: left;
   }
 
@@ -375,7 +382,6 @@ button.button-yui-kit {
     justify-content: center;
     padding: 0 !important;
     border: none !important;
-    color: var(--chat-secondary);
   }
 
   .chat__header-mobile-search-controls .chat__header-search-nav.button-yui-kit>svg {
@@ -385,11 +391,11 @@ button.button-yui-kit {
 
   .chat__header-mobile-search-controls-content>.chat__header-search-nav.button-yui-kit {
     justify-self: end;
-    color: var(--chat-secondary);
+    color: var(--text-secondary) !important;
   }
 
   .chat__header-mobile-search-controls .chat__header-search-nav.button-yui-kit:disabled {
-    color: var(--text-light-color) !important;
+    color: var(--text-disabled) !important;
     background-color: transparent !important;
   }
 
@@ -399,5 +405,12 @@ button.button-yui-kit {
 
   .chat__header-ai-assistant>.menu__user-assistant-icon>svg.ai-icon {
     font-size: 20px;
+  }
+}
+
+@media screen and (width <=480px) {
+  .chat__header-mobile-search-controls-content {
+    height: 50px;
+    border-radius: 30px;
   }
 }
