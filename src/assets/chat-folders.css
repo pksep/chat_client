@@ -298,7 +298,7 @@
   box-sizing: border-box;
   height: auto;
   min-height: 33px;
-  padding: 0;
+  padding: 0 0 10px;
   flex: 1;
   flex-direction: row;
   flex-wrap: wrap;
@@ -348,7 +348,9 @@
 }
 
 .chat-folder-rail--mobile .chat-folder-rail__avatar,
-.chat-folder-rail--mobile .chat-folder-rail__item:hover .chat-folder-rail__avatar {
+.chat-folder-rail--mobile
+  .chat-folder-rail__item:hover
+  .chat-folder-rail__avatar {
   display: flex;
   flex: 0 0 14px;
   width: 14px;
@@ -378,7 +380,9 @@
   white-space: nowrap;
 }
 
-.chat-folder-rail--mobile .chat-folder-rail__item > .chat-folder-rail__badge--inline {
+.chat-folder-rail--mobile
+  .chat-folder-rail__item
+  > .chat-folder-rail__badge--inline {
   position: static;
   box-sizing: border-box;
   width: auto;
@@ -421,7 +425,10 @@
 .chat-folders-panel {
   position: relative;
   display: grid;
-  grid-template-rows: 35px calc(var(--menu-section-search-height, 42px) + 20px) minmax(0, 1fr);
+  grid-template-rows: 35px calc(var(--menu-section-search-height, 42px) + 20px) minmax(
+      0,
+      1fr
+    );
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -1099,7 +1106,11 @@ dialog.chat-folder-delete-modal .confirm__modal__title {
   }
 
   .chat-folders-panel--mobile {
-    grid-template-rows: var(--menu-section-heading-height) calc(var(--menu-section-search-height) + 20px) minmax(0, 1fr);
+    grid-template-rows:
+      var(--menu-section-heading-height) calc(
+        var(--menu-section-search-height) + 20px
+      )
+      minmax(0, 1fr);
     box-sizing: border-box;
     min-height: 100%;
     padding-top: var(--menu-section-safe-top);
