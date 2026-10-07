@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="367995">
+<fb version="0.19.6" size="368025">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <inserted t="I">8</inserted>
-    <seconds t="F">343.613540742</seconds>
+    <seconds t="F">281.628084389</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-10-06T21:59:58Z</when>
+    <when t="T">2026-10-07T01:53:28Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -24950,6 +24950,7 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.41).</text>
     <is_human t="I">1</is_human>
     <issue t="I">430</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -24976,6 +24977,7 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.41).</text>
     <is_human t="I">1</is_human>
     <issue t="I">431</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -25002,6 +25004,7 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.41).</text>
     <is_human t="I">1</is_human>
     <issue t="I">432</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -25028,6 +25031,7 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.41).</text>
     <is_human t="I">1</is_human>
     <issue t="I">433</issue>
     <repository t="I">1053332035</repository>
+    <review_comments t="I">0</review_comments>
     <succeeded_builds t="I">0</succeeded_builds>
     <suggestions t="I">0</suggestions>
     <what t="S">pull-was-merged</what>
@@ -25063,11 +25067,11 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.41).</text>
   </f>
   <f>
     <_id t="I">1305</_id>
-    <_job t="I">37536895599</_job>
-    <_time t="T">2026-10-06T21:55:12Z</_time>
+    <_job t="I">37558800727</_job>
+    <_time t="T">2026-10-07T01:48:55Z</_time>
     <_version t="S">0.19.6/0.60.0/0.17.11</_version>
     <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">20939045862</events_were_scanned>
+    <events_were_scanned t="I">20947169259</events_were_scanned>
     <latest_issue_was_found t="I">72</latest_issue_was_found>
     <min_pull_was_found t="I">436</min_pull_was_found>
     <repository t="I">1053332035</repository>
