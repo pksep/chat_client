@@ -9,6 +9,7 @@ interface FolderDragOptions {
   folders: () => readonly ChatFolder[];
   disabled: () => boolean;
   horizontal?: () => boolean;
+  wrapped?: () => boolean;
   onReorder: (folderIds: string[]) => void | Promise<void>;
 }
 
@@ -47,8 +48,17 @@ export const useChatFolderDrag = (options: FolderDragOptions) => {
   let clientX = 0;
   let clientY = 0;
   let previousCoordinate = NaN;
+  let previousCrossCoordinate = NaN;
   let previousScroll = NaN;
   let blockClickUntil = 0;
+  let lastWrappedSwap: {
+    id: string;
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+    scroll: number;
+  } | null = null;
 
   const getLayoutMiddle = (
     element: HTMLElement,
@@ -78,14 +88,81 @@ export const useChatFolderDrag = (options: FolderDragOptions) => {
   const updateOrder = () => {
     if (!candidate || !draftIds.value || !containerRef.value) return;
     const horizontal = options.horizontal?.() ?? false;
+    const wrapped = options.wrapped?.() ?? false;
     const container = containerRef.value;
     const currentIndex = draftIds.value.indexOf(candidate.id);
     const coordinate = horizontal ? clientX : clientY;
-    const scroll = horizontal ? container.scrollLeft : container.scrollTop;
-    if (coordinate === previousCoordinate && scroll === previousScroll) return;
+    const scroll = wrapped
+      ? container.closest<HTMLElement>('.mobile-list-container__section')
+          ?.scrollTop || 0
+      : horizontal
+        ? container.scrollLeft
+        : container.scrollTop;
+    if (
+      coordinate === previousCoordinate &&
+      (!wrapped || clientY === previousCrossCoordinate) &&
+      scroll === previousScroll
+    )
+      return;
     previousCoordinate = coordinate;
+    previousCrossCoordinate = clientY;
     previousScroll = scroll;
     const containerRect = container.getBoundingClientRect();
+    if (wrapped) {
+      const items = Array.from(
+        container.querySelectorAll<HTMLElement>('[data-folder-id]')
+      ).map(element => ({
+        id: element.dataset.folderId!,
+        x: getLayoutMiddle(element, container, true, containerRect.left),
+        y: getLayoutMiddle(element, container, false, containerRect.top),
+        width: element.offsetWidth,
+        height: element.offsetHeight
+      }));
+      const nearest = items.reduce((best, item) =>
+        Math.abs(item.y - clientY) < Math.abs(best.y - clientY) ? item : best
+      );
+      const row = items.filter(item => Math.abs(item.y - nearest.y) < 1);
+      let targetId = candidate.id;
+      const current = items.find(item => item.id === candidate!.id)!;
+      if (Math.abs(current.y - nearest.y) >= 1) {
+        targetId = row.reduce((best, item) =>
+          Math.abs(item.x - clientX) < Math.abs(best.x - clientX) ? item : best
+        ).id;
+      } else {
+        for (const item of row) {
+          const index = draftIds.value.indexOf(item.id);
+          if (index < currentIndex && clientX < item.x) {
+            targetId = item.id;
+            break;
+          }
+          if (index > currentIndex && clientX > item.x) targetId = item.id;
+        }
+      }
+      if (targetId !== candidate.id) {
+        // Перенос длинной папки меняет строки; не меняем порядок обратно под тем же пальцем.
+        const anchoredY =
+          clientY + scroll - (lastWrappedSwap?.scroll ?? scroll);
+        if (
+          lastWrappedSwap?.id === targetId &&
+          clientX >= lastWrappedSwap.left - MOVE_THRESHOLD &&
+          clientX <= lastWrappedSwap.right + MOVE_THRESHOLD &&
+          anchoredY >= lastWrappedSwap.top - MOVE_THRESHOLD &&
+          anchoredY <= lastWrappedSwap.bottom + MOVE_THRESHOLD
+        )
+          return;
+        const target = items.find(item => item.id === targetId)!;
+        lastWrappedSwap = {
+          id: targetId,
+          left: target.x - target.width / 2,
+          right: target.x + target.width / 2,
+          top: target.y - target.height / 2,
+          bottom: target.y + target.height / 2,
+          scroll
+        };
+        draftIds.value = moveChatFolder(draftIds.value, candidate.id, targetId);
+      }
+      return;
+    }
     let targetId = candidate.id;
     for (const element of container.querySelectorAll<HTMLElement>(
       '[data-folder-id]'
@@ -113,15 +190,27 @@ export const useChatFolderDrag = (options: FolderDragOptions) => {
   const animate = () => {
     if (!preview || !containerRef.value) return;
     const horizontal = options.horizontal?.() ?? false;
+    const wrapped = options.wrapped?.() ?? false;
     const x = horizontal ? clientX - offsetX : previewLeft;
-    const y = horizontal ? previewTop : clientY - offsetY;
+    const y = horizontal && !wrapped ? previewTop : clientY - offsetY;
     preview.style.transform = `translate3d(${x}px, ${y}px, 0)`;
     const rect = containerRef.value.getBoundingClientRect();
-    const coordinate = horizontal ? clientX : clientY;
-    const start = horizontal ? rect.left : rect.top;
-    const end = horizontal ? rect.right : rect.bottom;
-    const crossCoordinate = horizontal ? candidate!.y : candidate!.x;
-    const inside = horizontal
+    const scrollContainer = wrapped
+      ? containerRef.value.closest<HTMLElement>(
+          '.mobile-list-container__section'
+        )
+      : containerRef.value;
+    const scrollRect = scrollContainer?.getBoundingClientRect() || rect;
+    const scrollHorizontal = horizontal && !wrapped;
+    const coordinate = scrollHorizontal ? clientX : clientY;
+    const start = scrollHorizontal ? scrollRect.left : scrollRect.top;
+    const end = scrollHorizontal ? scrollRect.right : scrollRect.bottom;
+    const crossCoordinate = wrapped
+      ? clientX
+      : horizontal
+        ? candidate!.y
+        : candidate!.x;
+    const inside = scrollHorizontal
       ? crossCoordinate >= rect.top - 24 && crossCoordinate <= rect.bottom + 24
       : crossCoordinate >= rect.left - 24 && crossCoordinate <= rect.right + 24;
     const delta =
@@ -130,9 +219,9 @@ export const useChatFolderDrag = (options: FolderDragOptions) => {
         : coordinate > end - 32
           ? Math.min(12, (coordinate - end + 32) / 3)
           : 0;
-    if (delta && inside) {
-      if (horizontal) containerRef.value.scrollLeft += delta;
-      else containerRef.value.scrollTop += delta;
+    if (delta && inside && scrollContainer) {
+      if (scrollHorizontal) scrollContainer.scrollLeft += delta;
+      else scrollContainer.scrollTop += delta;
     }
     updateOrder();
     animationFrame = requestAnimationFrame(animate);
@@ -176,9 +265,9 @@ export const useChatFolderDrag = (options: FolderDragOptions) => {
       pointerEvents: 'none',
       transition: 'none',
       animation: 'none',
-      backgroundColor: getComputedStyle(element).getPropertyValue(
-        '--surface-input-primary'
-      )
+      backgroundColor: options.wrapped?.()
+        ? getComputedStyle(element).backgroundColor
+        : getComputedStyle(element).getPropertyValue('--surface-input-primary')
     });
     document.body.appendChild(preview);
     draggedFolderId.value = candidate.id;
@@ -192,7 +281,9 @@ export const useChatFolderDrag = (options: FolderDragOptions) => {
     preview = null;
     candidate = null;
     previousCoordinate = NaN;
+    previousCrossCoordinate = NaN;
     previousScroll = NaN;
+    lastWrappedSwap = null;
     draftIds.value = null;
     draggedFolderId.value = null;
     window.removeEventListener('pointermove', onPointerMove);
@@ -229,9 +320,13 @@ export const useChatFolderDrag = (options: FolderDragOptions) => {
     clientY = event.clientY;
     if (
       !draggedFolderId.value &&
-      Math.abs(
-        options.horizontal?.() ? clientX - candidate.x : clientY - candidate.y
-      ) >= MOVE_THRESHOLD
+      (options.wrapped?.()
+        ? Math.hypot(clientX - candidate.x, clientY - candidate.y)
+        : Math.abs(
+            options.horizontal?.()
+              ? clientX - candidate.x
+              : clientY - candidate.y
+          )) >= MOVE_THRESHOLD
     )
       activate();
     if (draggedFolderId.value) {
@@ -282,9 +377,10 @@ export const useChatFolderDrag = (options: FolderDragOptions) => {
       '[data-folder-id]'
     );
     if (!element || !containerRef.value?.contains(element)) return false;
-    if (!movable.some(folder => folder.id === element.dataset.folderId))
+    if (
+      !options.folders().some(folder => folder.id === element.dataset.folderId)
+    )
       return false;
-
     candidate = {
       id: element.dataset.folderId!,
       element,

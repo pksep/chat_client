@@ -9,7 +9,7 @@ import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
-import basicSsl from '@vitejs/plugin-basic-ssl';
+// import basicSsl from '@vitejs/plugin-basic-ssl';
 import { version } from './package.json';
 import { externalizeUiKitPdfWorker } from './scripts/externalize-ui-kit-pdf-worker';
 import { preloadStartupModules } from './scripts/preload-startup-modules';
@@ -378,6 +378,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
       }
     },
     resolve: {
+      dedupe: ['vue'],
       alias: {
         '@pksep/yui/styles': resolve(
           process.cwd(),
@@ -398,6 +399,8 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
       }
     },
     optimizeDeps: {
+      // Словарь орфографии загружается worker по пути относительно модуля UI.
+      exclude: ['@pksep/yui'],
       entries: ['index.html']
     },
     plugins

@@ -214,11 +214,13 @@
                   :emoji="customStatusIcon"
                 />
               </button>
-              <input
+              <Input
                 v-model="customStatusText"
                 class="menu-profile__status-input"
-                type="text"
-                maxlength="40"
+                :maxlength="40"
+                :hide-clear-button="true"
+                aria-label="Текст статуса"
+                :data-testid="`${props.dataTestid}-MenuProfilePanel-StatusInput`"
                 placeholder="Выберите эмодзи и введите текст"
               />
             </div>
@@ -872,6 +874,7 @@ import {
   EmojiPickerPanel,
   Icon,
   IconNameEnum,
+  Input,
   SizesEnum,
   Toggle,
   autoUpdate,

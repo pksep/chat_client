@@ -57,6 +57,68 @@ const refreshInquiries = (page: Page) =>
     await refreshManagerInquiries();
   });
 
+test('Мобильные папки заменяют фильтры и не наследуют скрытый фильтр desktop', async ({
+  page,
+  isMobile
+}) => {
+  test.skip(!isMobile, 'Новая навигация только на мобильных экранах');
+  await page.goto('/');
+  const chats = page.locator('.mobile-list-container__section--chats');
+  await expect(chats.locator('.chat-folder-rail--mobile')).toBeVisible({
+    timeout: 30000
+  });
+  await page.evaluate(async () => {
+    const moduleUrl = (path: string) => {
+      const url = performance
+        .getEntriesByType('resource')
+        .map(entry => entry.name)
+        .find(url => new URL(url).pathname === path);
+      if (!url) throw new Error(`Модуль ${path} ещё не загружен`);
+      return url;
+    };
+    const { useChatsToolbarState } = await import(
+      moduleUrl('/src/composables/useChatsToolbarState.ts')
+    );
+    useChatsToolbarState().setFilter('groups');
+    const { setTopics } = await import(
+      moduleUrl('/src/composables/useTopics.ts')
+    );
+    setTopics([
+      {
+        id: 'mobile-dm',
+        type: 'DM',
+        name: 'Личный тест',
+        user: { id: 'peer-user', initials: 'Личный тест' },
+        info: {},
+        unreadMessageCount: 0
+      },
+      {
+        id: 'mobile-group',
+        type: 'GROUP',
+        name: 'Групповой тест',
+        group: { id: 'mobile-group', name: 'Групповой тест' },
+        info: {},
+        unreadMessageCount: 0
+      }
+    ]);
+  });
+  await expect(chats.locator('.chats-toolbar__filters')).toHaveCount(0);
+  await expect(
+    chats.getByRole('heading', { name: 'Личный тест', exact: true })
+  ).toBeVisible();
+  await expect(
+    chats.getByRole('heading', { name: 'Групповой тест', exact: true })
+  ).toBeVisible();
+  await expect(
+    chats.locator('.chat-folder-rail__items > button').first()
+  ).toHaveAttribute('data-testid', 'ChatFolders-Rail-Manage');
+  const search = (await chats.locator('.chats-toolbar__search').boundingBox())!;
+  const folders = (await chats.locator('.chat-folder-rail').boundingBox())!;
+  expect(folders.y - search.y - search.height).toBe(10);
+  await chats.getByTestId('ChatFolders-Rail-Manage').tap();
+  await expect(chats.getByTestId('ChatFolders-Panel')).toBeVisible();
+});
+
 for (const section of ['Calls', 'Profile']) {
   test(`Обновление обращений сохраняет выбранный раздел ${section}`, async ({
     page,

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h, ref } from 'vue';
+      import { Input, Search, Textarea } from '@pksep/yui';
+      import '@pksep/yui/styles';
+
+      createApp({
+        setup() {
+          const name = ref(''),
+            description = ref(''),
+            query = ref('');
+          return () =>
+            h('main', [
+              h(Input, {
+                modelValue: name.value,
+                'onUpdate:modelValue': value => (name.value = value),
+                dataTestid: 'Name',
+                ariaLabel: 'Название'
+              }),
+              h(Textarea, {
+                modelValue: description.value,
+                'onUpdate:modelValue': value => (description.value = value),
+                dataTestid: 'Description'
+              }),
+              h(Search, {
+                modelValue: query.value,
+                'onUpdate:modelValue': value => (query.value = value),
+                dataTestid: 'Query'
+              }),
+              h(Input, {
+                modelValue: 'https://example.com',
+                spellcheck: false,
+                dataTestid: 'Address'
+              }),
+              h(Input, {
+                modelValue: 'secret',
+                type: 'password',
+                dataTestid: 'Password'
+              }),
+              h(Input, {
+                modelValue: 'Mixed русский',
+                lang: 'en',
+                dataTestid: 'ExplicitLanguage'
+              })
+            ]);
+        }
+      }).mount('#app');
+    </script>
+  </body>
+</html>

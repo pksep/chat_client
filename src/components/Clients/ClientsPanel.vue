@@ -29,11 +29,37 @@
           :topics="folderTopics"
           :selected-folder-id="activeFolderId"
           :is-managing="false"
+          :system-active="!!mobileSystemFolder"
           is-active
           :auth-user-id="getAuthUser()?.id"
-          @select="selectFolder"
+          @select="selectMobileFolder"
           @manage="openFolderManager"
-        />
+        >
+          <template #system-folders>
+            <button
+              v-for="folder in mobileSystemFolders"
+              :key="folder.id"
+              type="button"
+              class="chat-folder-rail__item"
+              :class="{
+                'chat-folder-rail__item--active':
+                  mobileSystemFolder === folder.id
+              }"
+              :aria-pressed="mobileSystemFolder === folder.id"
+              :data-testid="`Clients-SystemFolder-${folder.id}`"
+              @click="selectMobileSystemFolder(folder.id)"
+            >
+              <span class="chat-folder-rail__avatar">
+                <ClientPlatformIcon
+                  v-if="folder.platform && !folder.icon"
+                  :platform="folder.platform"
+                />
+                <Icon v-else-if="folder.icon" :name="folder.icon" />
+              </span>
+              <span class="chat-folder-rail__label">{{ folder.label }}</span>
+            </button>
+          </template>
+        </ChatFolderRail>
       </template>
       <template #filters>
         <div class="clients-panel__filter-rows">
@@ -88,11 +114,13 @@
   </section>
 </template>
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
+import { Icon, IconNameEnum } from '@pksep/yui';
 import {
   clientName,
   clientPlatform,
-  useManagerInquiries
+  useManagerInquiries,
+  type ManagerInquiry
 } from '../../composables/useManagerInquiries';
 import { getTopicList } from '../../composables/useTopics';
 import { getAuthUser } from '../../composables/useAuth';
@@ -107,7 +135,7 @@ import type { ITopic } from '../interfaces/interfaces';
 import { useChatFolders } from '../../composables/useChatFolders';
 import ChatFolderRail from '../Menu/ChatFolderRail.vue';
 import ChatFoldersPanel from '../Menu/ChatFoldersPanel.vue';
-defineProps<{ isCollapse?: boolean; isMobile?: boolean }>();
+const props = defineProps<{ isCollapse?: boolean; isMobile?: boolean }>();
 const { inquiries, allowed, loading } = useManagerInquiries();
 const route = useUrlWatcher();
 const { setActiveSection } = useChatMenu();
@@ -146,6 +174,43 @@ const platforms = ['Сайт', 'Авито', 'ВКонтакте'].map(platform 
   value: platform,
   label: platform
 }));
+const mobileSystemFolders = [
+  { id: 'site', label: 'Сайт', platform: 'Сайт', icon: IconNameEnum.settings },
+  { id: 'avito', label: 'Авито', platform: 'Авито', icon: null },
+  { id: 'vk', label: 'ВК', platform: 'ВКонтакте', icon: null },
+  { id: 'new', label: 'Новые заявки', platform: '', icon: IconNameEnum.info },
+  {
+    id: 'support',
+    label: 'Поддержка',
+    platform: '',
+    icon: IconNameEnum.headset
+  }
+];
+const mobileSystemFolder = computed(() =>
+  source.value
+    ? mobileSystemFolders.find(folder => folder.platform === source.value)
+        ?.id || ''
+    : queue.value === 'all'
+      ? ''
+      : queue.value
+);
+const selectMobileFolder = (folderId: string | null) => {
+  queue.value = 'all';
+  source.value = '';
+  selectFolder(folderId);
+};
+const selectMobileSystemFolder = (folderId: string) => {
+  const wasSelected = mobileSystemFolder.value === folderId;
+  selectMobileFolder(null);
+  if (wasSelected) return;
+  const folder = mobileSystemFolders.find(item => item.id === folderId)!;
+  if (folder.platform) source.value = folder.platform;
+  else queue.value = folder.id;
+};
+const isSupportInquiry = (item: ManagerInquiry) =>
+  (item.channels || [item.source?.channel || 'widget']).some(
+    channel => channel.toLowerCase() === 'support'
+  ) || item.source?.name?.trim().toLocaleLowerCase('ru') === 'поддержка';
 const folderTopics = computed(() => {
   const byId = new Map(getTopicList().map(topic => [topic.id, topic]));
   return inquiries.value.flatMap(item => {
@@ -166,11 +231,16 @@ const topics = computed(() => {
         (queue.value !== 'new' || !item.manager_ids.length) &&
         (queue.value !== 'mine' ||
           item.manager_ids.includes(getAuthUser()?.id || '')) &&
+        (!props.isMobile ||
+          queue.value !== 'support' ||
+          isSupportInquiry(item)) &&
         (!source.value ||
-          (item.channels || [item.source?.channel || 'widget']).some(
-            channel =>
-              clientPlatform({ ...item, source: { channel } }) === source.value
-          )) &&
+          ((!props.isMobile || !isSupportInquiry(item)) &&
+            (item.channels || [item.source?.channel || 'widget']).some(
+              channel =>
+                clientPlatform({ ...item, source: { channel } }) ===
+                source.value
+            ))) &&
         (!query ||
           `${clientName(item)} ${item.contacts?.email || ''}`
             .toLocaleLowerCase('ru')

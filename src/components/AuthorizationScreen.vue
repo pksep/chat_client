@@ -42,6 +42,7 @@
                 id="chat-server-url"
                 class="initial"
                 placeholder="Введите ссылку"
+                :spellcheck="false"
                 :model-value="props.url"
                 @update:model-value="handleInput"
               />
@@ -82,6 +83,7 @@
                   id="chat-server-url"
                   class="initial"
                   placeholder="Введите ссылку"
+                  :spellcheck="false"
                   :model-value="props.url"
                   @update:model-value="handleInput"
                 />
@@ -158,6 +160,7 @@
             id="chat-password"
             class="authorization-screen__credentials-input initial"
             placeholder="Введите пароль"
+            :spellcheck="false"
             :type="showPassword ? TextFieldEnum.text : TextFieldEnum.password"
             :model-value="props.password"
             @update:model-value="value => emits('update:password', value)"

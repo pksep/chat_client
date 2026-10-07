@@ -596,9 +596,9 @@
 
         .startup-shell__content {
           display: grid;
-          grid-template-rows: auto auto 82px auto auto minmax(0, 1fr) auto;
+          grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
           min-height: 100dvh;
-          padding: calc(20px + env(safe-area-inset-top, 0px)) 0 0;
+          padding: calc(10px + env(safe-area-inset-top, 0px)) 0 0;
           border-right: 0;
           background: var(--surface-input-primary);
           transition: all 0.2s ease;
@@ -606,10 +606,11 @@
 
         .startup-shell__folders {
           position: static;
+          grid-row: 4;
           width: 100%;
-          height: 72px;
-          min-height: 72px;
-          padding: 0;
+          height: auto;
+          min-height: 33px;
+          padding: 0 16px 10px;
           flex-direction: row;
         }
 
@@ -621,23 +622,38 @@
 
         .startup-shell__folder-items {
           width: 100%;
-          height: 72px;
-          padding: 0 10px 0 16px;
+          height: auto;
+          padding: 0;
           flex-direction: row;
-          gap: 20px;
+          flex-wrap: wrap;
+          gap: 5px;
         }
 
         .startup-shell__folder-item {
-          height: 72px;
-          min-height: 72px;
-          padding: 10px 5px;
-          align-content: center;
-          flex: 0 0 70px;
+          display: flex;
+          width: auto;
+          height: 33px;
+          min-height: 33px;
+          padding: 0 10px;
+          align-items: center;
+          flex: 0 0 auto;
+          gap: 3px;
+          border: 1px solid var(--border-table);
+          border-radius: 15px;
         }
 
         .startup-shell__folder-item:first-child {
-          min-height: 72px;
-          padding-block: 10px;
+          min-height: 33px;
+          padding-block: 0;
+        }
+
+        .startup-shell__folder-avatar {
+          width: 14px;
+          height: 14px;
+        }
+
+        .startup-shell__folder-item:first-child .startup-shell__folder-name {
+          width: 59px;
         }
 
         .startup-shell__folder-item:first-child + .startup-shell__folder-item {
@@ -645,24 +661,29 @@
         }
 
         .startup-shell__folder-item::after {
-          content: '';
-          position: absolute;
-          top: 1px;
-          right: -10px;
-          width: 0.5px;
-          height: 70px;
-          transform: translateX(50%);
-          background: var(--border-table);
+          content: none;
         }
 
         .startup-shell__folder-item--manage {
           display: grid;
+          order: -1;
+          width: 33px;
+          padding: 0;
+          place-items: center;
+          border-radius: 50%;
+        }
+
+        .startup-shell__folder-item--manage .startup-shell__folder-name {
+          display: none;
         }
 
         .startup-shell__toolbar {
           display: flex;
-          min-height: 24px;
-          padding: 0 16px 10px;
+          box-sizing: border-box;
+          height: 40px;
+          min-height: 40px;
+          padding: 10px 16px 5px;
+          border-bottom: 1px solid var(--border-table);
         }
 
         .startup-shell__title {
@@ -856,20 +877,22 @@
         }
 
         .startup-shell__divider {
-          margin: 0 0 10px;
+          display: none;
         }
 
         .startup-shell__search {
+          grid-row: 3;
           height: 40px;
-          margin: 0 16px 10px;
+          margin: 10px 16px 10px;
           border-radius: 8px;
         }
 
         .startup-shell__filters {
-          gap: 5px;
-          min-height: 43px;
-          margin: 0;
-          padding: 0 16px 10px;
+          display: none;
+        }
+
+        .startup-shell__list {
+          grid-row: 5;
         }
 
         .startup-shell__chip {
