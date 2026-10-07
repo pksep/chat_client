@@ -2,6 +2,7 @@
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   height: calc(var(--default-height) - var(--mobile-list-height, 53px));
+  background-color: var(--surface-input-primary);
   overflow: hidden;
   overflow-x: hidden;
   position: relative;
@@ -107,7 +108,7 @@
 
 @media screen and (width <=768px) {
   .mobile-list-container {
-    --mobile-list-height: 0;
+    --mobile-list-height: 0px;
 
     &::-webkit-scrollbar {
       width: 0;

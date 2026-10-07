@@ -5,218 +5,236 @@
     :class="[
       'menu-bottom-nav',
       {
-        'menu-bottom-nav--clients': managerAllowed,
         'menu-bottom-nav--collapse': props.isCollapse
       },
       $attrs.class
     ]"
+    :style="{ '--menu-section-count': menuSectionCount }"
+    :aria-busy="!accessSettled"
+    :aria-label="accessSettled ? undefined : 'Загрузка меню'"
     :data-testid="`${props.dataTestid}-MenuBottomNav-Container`"
   >
-    <button
-      v-if="props.isCollapse && previousSection"
-      type="button"
-      class="menu-bottom-nav__switch menu-bottom-nav__switch--previous"
-      :aria-label="`Перейти в раздел «${sectionLabels[previousSection]}»`"
-      :title="sectionLabels[previousSection]"
-      @click="handleSection(previousSection)"
-    >
-      <Icon :name="IconNameEnum.chevronLeft" />
-    </button>
-
-    <button
-      v-if="isSectionVisible('chats')"
-      type="button"
-      :class="getButtonClass('chats')"
-      :data-testid="`${props.dataTestid}-MenuBottomNav-Chats`"
-      :aria-label="getSectionAriaLabel('chats')"
-      @click="handleSection('chats')"
-    >
-      <span class="menu-bottom-nav__icon-shell" aria-hidden="true">
-        <Icon :name="IconNameEnum.chat" class="menu-bottom-nav__icon" />
-        <span
-          v-if="sectionBadgeState.chats.count"
-          :class="[
-            'menu-bottom-nav__unread-count',
-            {
-              'menu-bottom-nav__unread-count--muted':
-                sectionBadgeState.chats.isMuted
-            }
-          ]"
-        >
-          {{ sectionBadgeState.chats.count }}
-        </span>
-      </span>
-    </button>
-
-    <button
-      v-if="isSectionVisible('calls')"
-      type="button"
-      :class="getButtonClass('calls')"
-      :data-testid="`${props.dataTestid}-MenuBottomNav-Calls`"
-      :aria-label="getSectionAriaLabel('calls')"
-      @click="handleSection('calls')"
-    >
-      <span class="menu-bottom-nav__icon-shell" aria-hidden="true">
-        <Icon :name="IconNameEnum.calls" class="menu-bottom-nav__icon" />
-        <span
-          v-if="sectionBadgeState.calls.count"
-          :class="[
-            'menu-bottom-nav__unread-count',
-            {
-              'menu-bottom-nav__unread-count--muted':
-                sectionBadgeState.calls.isMuted
-            }
-          ]"
-        >
-          {{ sectionBadgeState.calls.count }}
-        </span>
-      </span>
-    </button>
-
-    <button
-      v-if="managerAllowed && isSectionVisible('clients')"
-      type="button"
-      :class="getButtonClass('clients')"
-      :data-testid="`${props.dataTestid}-MenuBottomNav-Clients`"
-      :aria-label="getSectionAriaLabel('clients')"
-      title="Клиенты"
-      @click="handleSection('clients')"
-    >
-      <span class="menu-bottom-nav__icon-shell" aria-hidden="true">
-        <Icon :name="IconNameEnum.headset" class="menu-bottom-nav__icon" />
-        <span
-          v-if="sectionBadgeState.clients.count"
-          :class="[
-            'menu-bottom-nav__unread-count',
-            {
-              'menu-bottom-nav__unread-count--muted':
-                sectionBadgeState.clients.isMuted
-            }
-          ]"
-        >
-          {{ sectionBadgeState.clients.count }}
-        </span>
-      </span>
-    </button>
-
-    <div
-      v-if="isSectionVisible('ai')"
-      ref="aiControlRef"
-      class="menu-bottom-nav__ai-control"
-    >
+    <template v-if="!accessSettled">
+      <SkeletonBlock
+        v-for="index in menuSectionCount"
+        :key="index"
+        class="menu-bottom-nav__skeleton"
+        :class="{
+          'menu-bottom-nav__skeleton--neutral':
+            !props.isCollapse && !cachedMenuCount
+        }"
+      />
+    </template>
+    <template v-else>
       <button
+        v-if="props.isCollapse && previousSection"
         type="button"
-        :class="getButtonClass('ai')"
-        :data-testid="`${props.dataTestid}-MenuBottomNav-AI`"
-        :disabled="!isAiMenuEnabled"
-        :aria-label="getSectionAriaLabel('ai')"
-        @click="handleSection('ai')"
+        class="menu-bottom-nav__switch menu-bottom-nav__switch--previous"
+        :aria-label="`Перейти в раздел «${sectionLabels[previousSection]}»`"
+        :title="sectionLabels[previousSection]"
+        @click="handleSection(previousSection)"
       >
-        <span
-          class="menu-bottom-nav__icon-shell menu-bottom-nav__ai-shell"
-          aria-hidden="true"
-        >
-          <AiAvatar />
+        <Icon :name="IconNameEnum.chevronLeft" />
+      </button>
+
+      <button
+        v-if="isSectionVisible('chats')"
+        type="button"
+        :class="getButtonClass('chats')"
+        :data-testid="`${props.dataTestid}-MenuBottomNav-Chats`"
+        :aria-label="getSectionAriaLabel('chats')"
+        @click="handleSection('chats')"
+      >
+        <span class="menu-bottom-nav__icon-shell" aria-hidden="true">
+          <Icon :name="IconNameEnum.chat" class="menu-bottom-nav__icon" />
           <span
-            v-if="sectionBadgeState.ai.count"
-            class="menu-bottom-nav__unread-count"
-          >
-            {{ sectionBadgeState.ai.count }}
-          </span>
-          <span
-            v-if="backgroundActivityStatus"
+            v-if="sectionBadgeState.chats.count"
             :class="[
-              'menu-bottom-nav__ai-status',
-              `menu-bottom-nav__ai-status--${backgroundActivityStatus}`,
+              'menu-bottom-nav__unread-count',
               {
-                'menu-bottom-nav__ai-status--with-count':
-                  sectionBadgeState.ai.count > 0
+                'menu-bottom-nav__unread-count--muted':
+                  sectionBadgeState.chats.isMuted
               }
             ]"
-            role="status"
-            :aria-label="
-              getBackgroundActivityStatusLabel(backgroundActivityStatus)
-            "
-            :title="getBackgroundActivityStatusLabel(backgroundActivityStatus)"
-          ></span>
+          >
+            {{ sectionBadgeState.chats.count }}
+          </span>
         </span>
       </button>
 
-      <Icon
-        v-if="hasBackgroundActivities"
-        :key="isActivityPanelOpen ? 'activity-open' : 'activity-closed'"
-        :name="
-          isActivityPanelOpen
-            ? IconNameEnum.chevronDown
-            : IconNameEnum.chevronUp
-        "
-        class="menu-bottom-nav__ai-toggle"
-        role="button"
-        tabindex="0"
-        :aria-label="
-          isActivityPanelOpen
-            ? 'Скрыть фоновые задачи ИИ'
-            : 'Показать фоновые задачи ИИ'
-        "
-        :aria-expanded="isActivityPanelOpen"
-        @mousedown.stop
-        @touchstart.stop
-        @click.stop="toggleActivityPanel"
-        @keydown.enter.stop="toggleActivityPanel"
-        @keydown.space.prevent.stop="toggleActivityPanel"
-      />
-    </div>
-
-    <button
-      v-if="isSectionVisible('profile')"
-      type="button"
-      :class="getButtonClass('profile')"
-      :data-testid="`${props.dataTestid}-MenuBottomNav-Profile`"
-      @click="handleSection('profile')"
-    >
-      <span class="menu-bottom-nav__avatar-shell" aria-hidden="true">
-        <CachedAvatar
-          class="menu-bottom-nav__avatar"
-          :path="authUser?.avatarUrl"
-          :initials="authUser?.initials || authUser?.nickname || 'P'"
-          is-icon
-        />
-      </span>
-    </button>
-
-    <button
-      v-if="props.isCollapse && nextSection"
-      type="button"
-      class="menu-bottom-nav__switch menu-bottom-nav__switch--next"
-      :aria-label="`Перейти в раздел «${sectionLabels[nextSection]}»`"
-      :title="sectionLabels[nextSection]"
-      @click="handleSection(nextSection)"
-    >
-      <Icon :name="IconNameEnum.chevronRight" />
-    </button>
-
-    <Teleport to="body">
-      <ContextMenu
-        :visible="isActivityPanelOpen && hasBackgroundActivities"
-        :position="activityPopoverPosition"
-        :style="activityPopoverStyle"
-        force-flip-y
-        class="ai-activity-popover"
-        data-testid="AI-ActivityPopover"
-        @unmount-close="closeActivityPanel"
+      <button
+        v-if="isSectionVisible('calls')"
+        type="button"
+        :class="getButtonClass('calls')"
+        :data-testid="`${props.dataTestid}-MenuBottomNav-Calls`"
+        :aria-label="getSectionAriaLabel('calls')"
+        @click="handleSection('calls')"
       >
-        <AIActivityPanel
-          :activities="backgroundActivities"
-          @select="handleActivitySelect"
+        <span class="menu-bottom-nav__icon-shell" aria-hidden="true">
+          <Icon :name="IconNameEnum.calls" class="menu-bottom-nav__icon" />
+          <span
+            v-if="sectionBadgeState.calls.count"
+            :class="[
+              'menu-bottom-nav__unread-count',
+              {
+                'menu-bottom-nav__unread-count--muted':
+                  sectionBadgeState.calls.isMuted
+              }
+            ]"
+          >
+            {{ sectionBadgeState.calls.count }}
+          </span>
+        </span>
+      </button>
+
+      <button
+        v-if="chatAccess.client && isSectionVisible('clients')"
+        type="button"
+        :class="getButtonClass('clients')"
+        :data-testid="`${props.dataTestid}-MenuBottomNav-Clients`"
+        :aria-label="getSectionAriaLabel('clients')"
+        title="Клиенты"
+        @click="handleSection('clients')"
+      >
+        <span class="menu-bottom-nav__icon-shell" aria-hidden="true">
+          <Icon :name="IconNameEnum.headset" class="menu-bottom-nav__icon" />
+          <span
+            v-if="sectionBadgeState.clients.count"
+            :class="[
+              'menu-bottom-nav__unread-count',
+              {
+                'menu-bottom-nav__unread-count--muted':
+                  sectionBadgeState.clients.isMuted
+              }
+            ]"
+          >
+            {{ sectionBadgeState.clients.count }}
+          </span>
+        </span>
+      </button>
+
+      <div
+        v-if="chatAccess.ai && isSectionVisible('ai')"
+        ref="aiControlRef"
+        class="menu-bottom-nav__ai-control"
+      >
+        <button
+          type="button"
+          :class="getButtonClass('ai')"
+          :data-testid="`${props.dataTestid}-MenuBottomNav-AI`"
+          :disabled="!isAiMenuEnabled"
+          :aria-label="getSectionAriaLabel('ai')"
+          @click="handleSection('ai')"
+        >
+          <span
+            class="menu-bottom-nav__icon-shell menu-bottom-nav__ai-shell"
+            aria-hidden="true"
+          >
+            <AiAvatar />
+            <span
+              v-if="sectionBadgeState.ai.count"
+              class="menu-bottom-nav__unread-count"
+            >
+              {{ sectionBadgeState.ai.count }}
+            </span>
+            <span
+              v-if="backgroundActivityStatus"
+              :class="[
+                'menu-bottom-nav__ai-status',
+                `menu-bottom-nav__ai-status--${backgroundActivityStatus}`,
+                {
+                  'menu-bottom-nav__ai-status--with-count':
+                    sectionBadgeState.ai.count > 0
+                }
+              ]"
+              role="status"
+              :aria-label="
+                getBackgroundActivityStatusLabel(backgroundActivityStatus)
+              "
+              :title="
+                getBackgroundActivityStatusLabel(backgroundActivityStatus)
+              "
+            ></span>
+          </span>
+        </button>
+
+        <Icon
+          v-if="hasBackgroundActivities"
+          :key="isActivityPanelOpen ? 'activity-open' : 'activity-closed'"
+          :name="
+            isActivityPanelOpen
+              ? IconNameEnum.chevronDown
+              : IconNameEnum.chevronUp
+          "
+          class="menu-bottom-nav__ai-toggle"
+          role="button"
+          tabindex="0"
+          :aria-label="
+            isActivityPanelOpen
+              ? 'Скрыть фоновые задачи ИИ'
+              : 'Показать фоновые задачи ИИ'
+          "
+          :aria-expanded="isActivityPanelOpen"
+          @mousedown.stop
+          @touchstart.stop
+          @click.stop="toggleActivityPanel"
+          @keydown.enter.stop="toggleActivityPanel"
+          @keydown.space.prevent.stop="toggleActivityPanel"
         />
-      </ContextMenu>
-    </Teleport>
+      </div>
+
+      <button
+        v-if="isSectionVisible('profile')"
+        type="button"
+        :class="getButtonClass('profile')"
+        :data-testid="`${props.dataTestid}-MenuBottomNav-Profile`"
+        @click="handleSection('profile')"
+      >
+        <span class="menu-bottom-nav__avatar-shell" aria-hidden="true">
+          <CachedAvatar
+            class="menu-bottom-nav__avatar"
+            :path="authUser?.avatarUrl"
+            :initials="authUser?.initials || authUser?.nickname || 'P'"
+            is-icon
+          />
+        </span>
+      </button>
+
+      <button
+        v-if="props.isCollapse && nextSection"
+        type="button"
+        class="menu-bottom-nav__switch menu-bottom-nav__switch--next"
+        :aria-label="`Перейти в раздел «${sectionLabels[nextSection]}»`"
+        :title="sectionLabels[nextSection]"
+        @click="handleSection(nextSection)"
+      >
+        <Icon :name="IconNameEnum.chevronRight" />
+      </button>
+
+      <Teleport to="body">
+        <ContextMenu
+          :visible="isActivityPanelOpen && hasBackgroundActivities"
+          :position="activityPopoverPosition"
+          :style="activityPopoverStyle"
+          force-flip-y
+          class="ai-activity-popover"
+          data-testid="AI-ActivityPopover"
+          @unmount-close="closeActivityPanel"
+        >
+          <AIActivityPanel
+            :activities="backgroundActivities"
+            @select="handleActivitySelect"
+          />
+        </ContextMenu>
+      </Teleport>
+    </template>
   </nav>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
+import SkeletonBlock from '../UI/SkeletonBlock.vue';
 import {
   type ChatMenuSection,
   useChatMenu
@@ -248,6 +266,8 @@ import { getTopicsUnreadBadgeState } from '../../utils/chats-toolbar-filter-badg
 import { useCallHistoryStore } from '../../services/useCallHistory';
 import { parseCallMessage } from '../../utils/parseCallMessage';
 import { useCallUnreadState } from '../../services/useCallUnreadState';
+import { useChatFolders } from '../../composables/useChatFolders';
+import { useChatAccess } from '../../composables/useChatAccess';
 
 const props = withDefaults(
   defineProps<{
@@ -265,7 +285,18 @@ defineOptions({
 });
 
 const { activeSection, setActiveSection } = useChatMenu();
-const { allowed: managerAllowed } = useManagerInquiries();
+const {
+  access: chatAccess,
+  ready: isChatAccessReady,
+  settled: accessSettled,
+  cachedMenuCount
+} = useChatAccess();
+const { allowed: managerAllowed, resolved: managerAccessResolved } =
+  useManagerInquiries();
+const { closeFolderManager, isManagingFolders: isManagingChatFolders } =
+  useChatFolders();
+const { isManagingFolders: isManagingClientFolders } =
+  useChatFolders('clients');
 useManagerInboxSubscription();
 const { backgroundActivities, selectSession } = useAiAssistant();
 const { rawCallHistory } = useCallHistoryStore();
@@ -410,10 +441,16 @@ const isSectionVisible = (section: ChatMenuSection): boolean =>
 const availableSections = computed<ChatMenuSection[]>(() => [
   'chats',
   'calls',
-  ...(managerAllowed.value ? (['clients'] as ChatMenuSection[]) : []),
-  'ai',
+  ...(chatAccess.value.client ? (['clients'] as ChatMenuSection[]) : []),
+  ...(chatAccess.value.ai ? (['ai'] as ChatMenuSection[]) : []),
   'profile'
 ]);
+const menuSectionCount = computed(() => {
+  if (props.isCollapse) return 1;
+  return accessSettled.value
+    ? availableSections.value.length
+    : cachedMenuCount.value || 1;
+});
 const activeSectionIndex = computed(() =>
   availableSections.value.findIndex(section => isSectionActive(section))
 );
@@ -455,6 +492,8 @@ const closeActivityPanel = (event?: Event): void => {
 };
 
 const handleActivitySelect = (sessionId: string): void => {
+  if (!chatAccess.value.ai) return;
+
   closeActivityPanel();
   setActiveSection('ai');
   selectSession(sessionId);
@@ -462,8 +501,16 @@ const handleActivitySelect = (sessionId: string): void => {
 };
 
 const handleSection = (section: ChatMenuSection): void => {
+  if (section === 'ai' && !chatAccess.value.ai) return;
+  if (section === 'clients' && !chatAccess.value.client) return;
+
+  const animate =
+    !isManagingChatFolders.value &&
+    !isManagingClientFolders.value &&
+    !route.value.id;
+  closeFolderManager();
   if (section === 'calls') markCallsSeen(Date.now(), authUser.value?.id);
-  setActiveSection(section);
+  setActiveSection(section, { animate });
 
   const selectedTopic = getTopicList().find(
     topic => topic.id === route.value.id
@@ -504,6 +551,25 @@ watch(
   [() => activeSection.value, () => rawCallHistory.value[0]?.id],
   ([section]) => {
     if (section === 'calls') markCallsSeen(Date.now(), authUser.value?.id);
+  },
+  { immediate: true }
+);
+
+/** Молча закрывает раздел клиентов после подтверждённого отзыва права. */
+watch(
+  [
+    isChatAccessReady,
+    () => chatAccess.value.client,
+    managerAccessResolved,
+    managerAllowed,
+    () => activeSection.value
+  ],
+  ([ready, clientAccess, resolved, allowed, section]): void => {
+    if (!ready || section !== 'clients') return;
+    if (clientAccess && (!resolved || allowed)) return;
+
+    setActiveSection('chats');
+    navigateToDefault();
   },
   { immediate: true }
 );

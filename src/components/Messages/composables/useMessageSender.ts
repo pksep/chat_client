@@ -1207,7 +1207,9 @@ export function useMessageSender(
           if (inquiry) {
             const target = parseMessageEx(message?.ex)?.managerReplyRouteId;
             if (typeof target !== 'string')
-              throw new Error('Выберите канал ответа и повторите отправку');
+              throw new Error(
+                'Не удалось определить канал последнего сообщения клиента'
+              );
             const path = await uploadManagerFile(
               topicId,
               target,

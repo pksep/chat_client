@@ -142,12 +142,32 @@
   border-top-right-radius: 4px;
 }
 
-.highlighted.message__bubble {
-  background-color: #767F9DE5;
+.chat__message-wrapper,
+.ai-assistant__scroll {
+  isolation: isolate;
 }
 
-:is([data-theme='light'], .theme-light) .highlighted.message__bubble {
-  background-color: var(--surface-authorization);
+.message.highlighted {
+  --message-highlight-background: #767f9de5;
+  border-radius: 0;
+  background-color: transparent;
+  transition: none;
+}
+
+.message.highlighted::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 0;
+  background-color: var(--message-highlight-background);
+  box-shadow: 0 0 0 100vw var(--message-highlight-background);
+  clip-path: inset(0 -100vw);
+  pointer-events: none;
+}
+
+:is([data-theme='light'], .theme-light) .message.highlighted {
+  --message-highlight-background: var(--surface-authorization);
 }
 
 .message-quote-highlight {
@@ -229,6 +249,11 @@
   gap: 8px;
 }
 
+.message__article--emoji-referenced .message-footer-row {
+  justify-self: stretch;
+  width: 100%;
+}
+
 .message__article__text--emoji {
   background-color: transparent;
   border-radius: 0;
@@ -284,6 +309,16 @@
   margin-right: 0;
   background-color: var(--blue12);
   color: var(--text-secondary) !important;
+}
+
+:where([data-theme='dark'], .theme-dark) .message-time--emoji {
+  background-color: var(--surface-overlay);
+  color: var(--chat-secondary, var(--text-secondary)) !important;
+}
+
+:where([data-theme='dark'], .theme-dark) .message__other .message-time--emoji {
+  background-color: var(--table-surface-pressed);
+  color: var(--chat-secondary, var(--text-secondary)) !important;
 }
 
 .message-time--emoji-inline {
@@ -1392,6 +1427,22 @@ div.message-content__file {
   margin-top: 4px;
 }
 
+.message__article--emoji .message-footer-row {
+  align-items: center;
+}
+
+.message__content__articles__my .message__article--emoji .message-footer-row {
+  justify-content: flex-end;
+}
+
+.message__article--emoji .message-footer-row .message-time {
+  align-self: center;
+}
+
+.message__content__articles__my .message__article--emoji .message-footer-row .message-time {
+  margin-inline: 0;
+}
+
 .message__content__articles .message-footer-row,
 .message-footer-row .message-reactions-row {
   margin-top: 0;
@@ -1507,7 +1558,8 @@ div.message-content__file {
   --blockquote-bg-color: var(--surface-overlay);
 }
 
-.chat__input {
+.chat__input,
+.chat__header-mobile-search-controls {
   align-self: end;
   padding: 0 10px 15px 15px;
   position: relative;
@@ -1681,7 +1733,8 @@ div.message-content__file {
 }
 
 @media screen and (width <=480px) {
-  .chat__input {
+  .chat__input,
+  .chat__header-mobile-search-controls {
     box-sizing: border-box;
     padding: 5px 10px calc(20px + env(safe-area-inset-bottom, 0px));
     position: fixed;

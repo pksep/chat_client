@@ -167,9 +167,32 @@
 }
 
 .call-modal__control-button--recording {
-  color: #fff !important;
-  background-color: var(--error-color) !important;
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--error-color) 18%, transparent);
+  color: var(--status-error, var(--error-color)) !important;
+  background-color: var(--action-secondary-pressed-bg) !important;
+}
+
+.call-modal__control-button--recording svg,
+.call-modal__mobile-actions-item--recording svg {
+  animation: call-recording-pulse 2s ease-in-out infinite;
+}
+
+@keyframes call-recording-pulse {
+  0%,
+  100% {
+    color: var(--action-primary-bg);
+  }
+
+  50% {
+    color: var(--status-error, var(--error-color));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .call-modal__control-button--recording svg,
+  .call-modal__mobile-actions-item--recording svg {
+    animation: none;
+    color: var(--status-error, var(--error-color));
+  }
 }
 
 body .tooltip-yui-kit__hint[data-testid^='CallModal-'][data-testid$='Tooltip'] {

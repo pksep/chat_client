@@ -34,17 +34,7 @@
     @close="closeIosInstallHelp"
   />
 
-  <PushNotification
-    v-for="(notification, index) in notificationState.items"
-    :key="notification.key"
-    class="app-notification-stack__item"
-    :style="getNotificationStyle(index)"
-    :title="notification.title"
-    :push-key="notification.key"
-    :description="notification.description"
-    :type="notification.type"
-    @close="closeNotification(notification.key)"
-  />
+  <NotificationStack />
 </template>
 <script lang="ts" setup>
 import {
@@ -56,7 +46,7 @@ import {
   ref
 } from 'vue';
 import { Capacitor } from '@capacitor/core';
-import { PushNotification } from '@pksep/yui';
+import NotificationStack from './components/UI/NotificationStack.vue';
 import { IChatContainerConfig } from './components/interfaces/interfaces';
 import ChatContainerRoot from './ChatContainerRoot.vue';
 import { useIosInstallPrompt } from './composables/useIosInstallPrompt';
@@ -71,13 +61,13 @@ import {
   saveChatAuthSession
 } from './composables/useAuth';
 import { fetchUsersForAuth } from './composables/useUsers';
-import { useNotifications } from './composables/useNotifications';
 import { initShareIntentHandling } from './services/useShareIntent';
 import {
   dispatchNativeStartupReady,
   NOTIFICATION_TOPIC_SHELL_READY_EVENT
 } from './utils/nativeStartup';
 import { useThemeStore } from './stores/theme';
+import { withNetworkTimeout } from './utils/network-timeout';
 import {
   prepareMessageExperience,
   prepareMessageListAfterPaint
@@ -147,21 +137,10 @@ const selectedOrganization = ref(
 const isAddingNewOrganization = ref(!organizations.value.length);
 const serverUrl = ref(selectedOrganization.value);
 const isCredentialsStep = ref(false);
-const { state: notificationState, closeNotification } = useNotifications();
 const {
   isOpen: isIosInstallPromptOpen,
   closeInstallHelp: closeIosInstallHelp
 } = useIosInstallPrompt();
-
-const getNotificationStyle = (index: number) => ({
-  position: 'fixed',
-  top: `${16 + index * 88}px`,
-  right: '16px',
-  left: 'auto',
-  bottom: 'auto',
-  margin: '0',
-  zIndex: `${3000 - index}`
-});
 
 const waitForAnimationFrame = () =>
   new Promise<void>(resolve => {
@@ -327,7 +306,8 @@ const parseRuntimeConfig = (
     CHAT_LIVEKIT_URL: envMap.VITE_LIVEKIT_URL,
     CHAT_BOT_GATEWAY: envMap.VITE_BOT_GATEWAY_URL,
     CHAT_CALL_TOPIC_AUTO_PROMPT_ENABLED:
-      envMap.VITE_CALL_TOPIC_AUTO_PROMPT_ENABLED
+      envMap.VITE_CALL_TOPIC_AUTO_PROMPT_ENABLED,
+    CHAT_MULTIPART_UPLOAD_CONCURRENCY: envMap.VITE_MULTIPART_UPLOAD_CONCURRENCY
   };
 };
 
@@ -606,13 +586,17 @@ const loadRemoteConfig = async (options?: {
   isLoading.value = true;
 
   try {
-    const response = await fetch(getRuntimeConfigUrl(normalizedUrl));
+    const runtimeConfig = await withNetworkTimeout(async signal => {
+      const response = await fetch(getRuntimeConfigUrl(normalizedUrl), {
+        signal
+      });
 
-    if (!response.ok) {
-      throw new Error(`Failed to load runtime config: ${response.status}`);
-    }
+      if (!response.ok) {
+        throw new Error(`Failed to load runtime config: ${response.status}`);
+      }
 
-    const runtimeConfig = parseRuntimeConfig(await response.text());
+      return parseRuntimeConfig(await response.text());
+    });
     const resolvedConfig = runtimeConfig as IChatContainerConfig;
     serverUrl.value = normalizedUrl;
     setLastOrganization(normalizedUrl);
@@ -1237,21 +1221,5 @@ onBeforeUnmount(() => {
   100% {
     background-position: -80% 0;
   }
-}
-
-.app-notification-stack__item {
-  width: min(305px, calc(100vw - 32px));
-  min-height: 77px;
-  box-sizing: border-box;
-  box-shadow: 0 4px 9.8px rgb(0 0 0 / 5%);
-  pointer-events: auto;
-}
-
-.app-notification-stack__item.push-notification-yui-kit_info {
-  --text-brand: var(--action-primary-bg);
-}
-
-.app-notification-stack__item :deep(.notification-yui-kit) {
-  box-shadow: none;
 }
 </style>

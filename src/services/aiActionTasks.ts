@@ -1,3 +1,4 @@
+import { fetchWithAiAccess } from '../composables/useChatAccess';
 import { z } from 'zod';
 import { getAuthToken } from '../composables/useLogin';
 import { getStoredChatAccessToken } from '../composables/useAuth';
@@ -16,7 +17,7 @@ export async function fetchAiActionTasks(
 ): Promise<AiActionTask[] | null> {
   const token = getAuthToken() || getStoredChatAccessToken();
   if (!token || !baseUrl) return null;
-  const response = await fetch(endpoint(baseUrl, threadId), {
+  const response = await fetchWithAiAccess(endpoint(baseUrl, threadId), {
     headers: { Authorization: `Bearer ${token}` }
   });
   if (response.status === 404) return null; // Поэтапное обновление сервера и клиента.
@@ -39,7 +40,7 @@ export async function controlAiActionTask(
 ): Promise<AiActionTask> {
   const token = getAuthToken() || getStoredChatAccessToken();
   if (!token) throw new Error('Для продолжения поручения войдите в систему.');
-  const response = await fetch(
+  const response = await fetchWithAiAccess(
     `${endpoint(baseUrl, threadId)}/${encodeURIComponent(task.id)}/${action}`,
     {
       method: 'POST',

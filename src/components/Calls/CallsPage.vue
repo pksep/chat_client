@@ -11,7 +11,7 @@
 
     <div class="calls-page__content">
       <div class="calls-page__search-shell">
-        <Search
+        <MenuSearch
           class="calls-page__search"
           :model-value="searchValue"
           :data-testid="`${props.dataTestid}-Search`"
@@ -29,6 +29,7 @@
 
       <div
         v-else-if="filteredCalls.length"
+        v-menu-list-press
         ref="callListRef"
         class="calls-page__list"
         @scroll="handleListScroll"
@@ -36,9 +37,10 @@
         <template v-for="call in filteredCalls" :key="call.messageId">
           <div
             :class="[
-              'calls-page__item',
+              'calls-page__item menu-list-row',
               {
-                'calls-page__item--active': isActiveRouteCall(call)
+                'calls-page__item--active': isActiveRouteCall(call),
+                'menu-list-row--active': isActiveRouteCall(call)
               }
             ]"
             role="button"
@@ -92,7 +94,7 @@
             </span>
           </div>
 
-          <div class="calls-page__delimetr"></div>
+          <div class="calls-page__delimetr menu-list-divider"></div>
         </template>
 
         <div v-if="state.isLoadingMore" class="calls-page__loading-more">
@@ -194,6 +196,8 @@ let savedCallsScrollTop = 0;
 </script>
 
 <script setup lang="ts">
+import MenuSearch from '../UI/MenuSearch.vue';
+import { vMenuListPress } from '../../directives/menu-list-press';
 import {
   computed,
   nextTick,
@@ -202,7 +206,6 @@ import {
   ref,
   watch
 } from 'vue';
-import { Search } from '@pksep/yui';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import MessageCallInfoIcon from '../Messages/MessageCallInfoIcon.vue';
 import MessageCallTypeIcon from '../Messages/MessageCallTypeIcon.vue';

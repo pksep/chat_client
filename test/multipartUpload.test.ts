@@ -4,12 +4,14 @@ import {
   MAX_UPLOAD_FILE_SIZE_ERROR,
   getUploadFileSizeError,
   getMultipartFileFingerprint,
+  getMultipartUploadSettings,
   getMultipartUploadPersistenceKey,
   MultipartUploadSession,
   MultipartUploadTransport,
   removePersistedMultipartUpload,
   uploadMultipartFile
 } from '../src/services/useChatSDK/multipart-upload';
+import { setConfig } from '../src/services/useConfig';
 
 const STORAGE_KEY = 'sep-chat:multipart-uploads:v1';
 const originalWindow = globalThis.window;
@@ -55,6 +57,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  setConfig({});
+
   if (originalWindow === undefined) {
     Reflect.deleteProperty(globalThis, 'window');
   } else {
@@ -69,6 +73,12 @@ afterEach(() => {
 });
 
 describe('multipart browser upload', () => {
+  test('uses multipart concurrency from server runtime config', () => {
+    setConfig({ CHAT_MULTIPART_UPLOAD_CONCURRENCY: '2' });
+
+    expect(getMultipartUploadSettings().concurrency).toBe(2);
+  });
+
   test('reports the configured error only above the 600 MiB limit', () => {
     expect(getUploadFileSizeError({ size: MAX_UPLOAD_FILE_SIZE })).toBeNull();
     expect(getUploadFileSizeError({ size: MAX_UPLOAD_FILE_SIZE + 1 })).toBe(
@@ -105,7 +115,7 @@ describe('multipart browser upload', () => {
     expect(initCalled).toBe(false);
   });
 
-  test('slices parts, limits concurrency and retries only the failed part', async () => {
+  test('slices parts sequentially and retries only the failed part', async () => {
     const file = createFile();
     const session = createSession();
     const attempts = new Map<number, number>();
@@ -147,13 +157,14 @@ describe('multipart browser upload', () => {
 
     await expect(
       uploadMultipartFile(file, transport, {
+        // Callers cannot override the single writer required by MinIO.
         concurrency: 2,
         retryCount: 1,
         onProgress: value => progress.push(value)
       })
     ).resolves.toMatchObject({ completed: { hash: 'hash' } });
 
-    expect(peakActive).toBeLessThanOrEqual(2);
+    expect(peakActive).toBe(1);
     expect(attempts).toEqual(
       new Map([
         [1, 1],
@@ -176,6 +187,95 @@ describe('multipart browser upload', () => {
         (value, index) => index === 0 || value >= progress[index - 1]
       )
     ).toBe(true);
+    removePersistedMultipartUpload(file);
+  });
+
+  test('closes a storage-lock session and starts one fresh session once', async () => {
+    const file = createFile('storage-lock.bin');
+    const sessions = [
+      {
+        ...createSession(),
+        uploadId: 'locked-upload',
+        objectName: 'locked.bin'
+      },
+      { ...createSession(), uploadId: 'fresh-upload', objectName: 'fresh.bin' }
+    ];
+    const attempts = new Map<string, number>();
+    const aborted: string[] = [];
+    let initCalls = 0;
+    const transport: MultipartUploadTransport = {
+      init: async () => sessions[initCalls++],
+      status: async uploadId =>
+        sessions.find(session => session.uploadId === uploadId) || sessions[0],
+      uploadPart: async (session, partNumber, part, onProgress) => {
+        const key = `${session.uploadId}:${partNumber}`;
+        attempts.set(key, (attempts.get(key) || 0) + 1);
+
+        if (session.uploadId === 'locked-upload') {
+          throw Object.assign(new Error('storage lock timeout'), {
+            status: 503,
+            code: 'MULTIPART_STORAGE_LOCK_TIMEOUT'
+          });
+        }
+
+        onProgress(part.size);
+      },
+      complete: async uploadId => ({
+        objectName: `${uploadId}.bin`,
+        hash: 'hash',
+        etag: 'etag'
+      }),
+      abort: async uploadId => {
+        aborted.push(uploadId);
+      }
+    };
+
+    await expect(uploadMultipartFile(file, transport)).resolves.toMatchObject({
+      session: { uploadId: 'fresh-upload' },
+      completed: { hash: 'hash' }
+    });
+
+    expect(attempts.get('locked-upload:1')).toBe(2);
+    expect(aborted).toEqual(['locked-upload']);
+    expect(initCalls).toBe(2);
+    removePersistedMultipartUpload(file);
+  });
+
+  test('stops after a fresh storage-lock session fails too', async () => {
+    const file = createFile('persistent-storage-lock.bin');
+    const sessions = [
+      { ...createSession(), uploadId: 'locked-upload-1' },
+      { ...createSession(), uploadId: 'locked-upload-2' }
+    ];
+    const aborted: string[] = [];
+    let initCalls = 0;
+    const storageLockError = () =>
+      Object.assign(new Error('storage lock timeout'), {
+        status: 503,
+        code: 'MULTIPART_STORAGE_LOCK_TIMEOUT'
+      });
+    const transport: MultipartUploadTransport = {
+      init: async () => sessions[initCalls++],
+      status: async uploadId =>
+        sessions.find(session => session.uploadId === uploadId) || sessions[0],
+      uploadPart: async () => {
+        throw storageLockError();
+      },
+      complete: async () => {
+        throw new Error('complete must not be called');
+      },
+      abort: async uploadId => {
+        aborted.push(uploadId);
+      }
+    };
+
+    await expect(uploadMultipartFile(file, transport)).rejects.toMatchObject({
+      status: 503,
+      code: 'MULTIPART_STORAGE_LOCK_TIMEOUT'
+    });
+
+    expect(aborted).toEqual(['locked-upload-1', 'locked-upload-2']);
+    expect(initCalls).toBe(2);
     removePersistedMultipartUpload(file);
   });
 

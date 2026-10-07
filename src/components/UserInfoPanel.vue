@@ -418,6 +418,8 @@ const handleOpenChat = async () => {
   border-radius: 8px;
   font-size: 10px;
   line-height: 12px;
+  width: max-content;
+  max-width: 120px;
 }
 
 .user-info-panel__identity {

@@ -6,6 +6,12 @@ const TASK_SESSION_ID = 'collapsed-menu-task-chat';
 const TASK_DRAFT_SESSION_ID = 'collapsed-menu-task-draft';
 
 test.beforeEach(async ({ page }, testInfo) => {
+  await page.route('**/automations', route =>
+    route.fulfill({
+      status: 503,
+      json: { message: 'Тест использует сохранённые локальные задачи' }
+    })
+  );
   await page.addInitScript(
     ({
       chatSessionId,
@@ -194,8 +200,10 @@ test('показывает задачи и AI-чаты единым списко
     .locator('xpath=..')
     .locator('.ai-menu-panel__collapsed-divider');
   await expect(separator).toBeVisible();
-  await expect(separator).toHaveCSS('border-top-color', 'rgb(231, 231, 231)');
-  await expect(separator).toHaveCSS('border-top-width', '1px');
+  await expect(separator).toHaveCSS('background-color', 'rgb(231, 231, 231)');
+  const separatorBox = (await separator.boundingBox())!;
+  expect(separatorBox.height).toBeGreaterThan(0);
+  expect(separatorBox.height).toBeLessThan(1);
 
   const [
     panelBox,
@@ -296,9 +304,12 @@ test('показывает задачи и AI-чаты единым списко
   const draftRow = expandedPanel.locator('.ai-menu-panel__row--task-session');
   const draftIcon = draftRow.locator('.ai-menu-panel__task-state svg');
   await expect(draftIcon).toHaveCSS('width', '16px');
-  await expect(draftIcon.locator('path')).toHaveCSS(
+  const taskStateColor = await draftRow
+    .locator('.ai-menu-panel__task-state')
+    .evaluate(element => getComputedStyle(element).color);
+  await expect(draftIcon.locator('path[fill="currentColor"]')).toHaveCSS(
     'fill',
-    'rgb(184, 184, 184)'
+    taskStateColor
   );
   await draftRow.click({ button: 'right' });
   const draftMenu = page.getByTestId(
@@ -369,8 +380,8 @@ test('показывает задачи и AI-чаты единым списко
         (firstChatBox!.x + firstChatBox!.width)
     )
   ).toBeLessThanOrEqual(0.5);
-  expect(delimiterBox!.y - (firstChatBox!.y + firstChatBox!.height)).toBe(2);
-  expect(secondChatBox!.y - (delimiterBox!.y + delimiterBox!.height)).toBe(2);
+  expect(delimiterBox!.y - (firstChatBox!.y + firstChatBox!.height)).toBe(0);
+  expect(secondChatBox!.y - (delimiterBox!.y + delimiterBox!.height)).toBe(0);
 
   await regularChat.click();
   await expect(
@@ -426,7 +437,7 @@ for (const entry of ['раздел задач', 'новая задача', 'со
     if (entry === 'новая задача') {
       await panel.getByRole('button', { name: 'Создать', exact: true }).click();
       await page
-        .getByRole('button', { name: 'Новая задача', exact: true })
+        .getByRole('button', { name: 'Создать задачу', exact: true })
         .click();
     } else {
       await tasksTab.click();
@@ -693,13 +704,13 @@ test('троеточие доступно на стартовом экране �
   await expect(headerTrigger).toBeVisible({ timeout: 60_000 });
   await headerTrigger.click();
   const menu = page.locator('.chat__header-context-menu:visible');
-  await menu.getByRole('button', { name: 'Новая задача', exact: true }).click();
+  await menu.getByRole('button', { name: 'Создать задачу', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Автоматизированные задачи' })
   ).toBeVisible();
   await expect(headerTrigger).toBeVisible();
   await headerTrigger.click();
-  await menu.getByRole('button', { name: 'Новый чат', exact: true }).click();
+  await menu.getByRole('button', { name: 'Создать чат', exact: true }).click();
   await expect(page.locator('.ai-assistant__suggestions')).toBeVisible();
   await expect(headerTrigger).toBeVisible();
 });

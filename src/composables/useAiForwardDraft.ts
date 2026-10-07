@@ -1,3 +1,4 @@
+import { useChatAccess } from './useChatAccess';
 import { ref } from 'vue';
 import type { IMessage, IMedia } from '../components/interfaces/interfaces';
 import type { AiAssistantMessage, AiAssistantSession } from './useAiAssistant';
@@ -93,6 +94,7 @@ export const openAiForwardDraft = (
   session: AiAssistantSession,
   messages: ForwardSourceMessage[] | ForwardSourceMessage
 ): void => {
+  if (!useChatAccess().access.value.ai) return;
   const draft = createAiForwardDraft(
     session.id,
     Array.isArray(messages) ? messages : [messages]

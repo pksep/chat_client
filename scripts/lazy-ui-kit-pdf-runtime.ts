@@ -1,4 +1,5 @@
 import type { Plugin } from 'vite';
+import type { Node, Program } from 'estree';
 
 // UI-kit 0.1.319 поставляется одним модулем. PDF нужен только при открытии файла,
 // но Rollup не может выделить часть уже собранного модуля в отложенный chunk.
@@ -51,26 +52,28 @@ export const lazyUiKitPdfRuntime = (): Plugin => {
         .match(
           /([A-Za-z_$][\w$]*)\s*=\s*import\.meta\.ROLLUP_FILE_URL_[A-Za-z0-9_$]+\s*$/
         )?.[1];
-      const helperSource = code.slice(0, 2_000);
+      const helperSource = code.slice(0, code.indexOf('\nimport '));
+      const helperAst = this.parse(helperSource) as unknown as Program;
+      const helperDeclarations = helperAst.body.flatMap(statement =>
+        statement.type === 'VariableDeclaration' ? statement.declarations : []
+      );
+      const findHelper = (pattern: RegExp): string | undefined => {
+        const declaration = helperDeclarations.find(node => {
+          if (node.id.type !== 'Identifier') return false;
+          const source = node as Node & { start: number; end: number };
+          return pattern.test(helperSource.slice(source.start, source.end));
+        });
+        return declaration?.id.type === 'Identifier'
+          ? declaration.id.name
+          : undefined;
+      };
       const helpers = [
-        helperSource.match(
-          /\bvar\s+([A-Za-z_$][\w$]*)\s*=\s*\(C,\s*g,\s*I\)\s*=>\s*[A-Za-z_$][\w$]*\(C,\s*typeof g/
-        )?.[1],
-        helperSource.match(
-          /\b([A-Za-z_$][\w$]*)\s*=\s*\(C,\s*g,\s*I\)\s*=>\s*\([A-Za-z_$][\w$]*\(C,\s*g,\s*"read from private field"/
-        )?.[1],
-        helperSource.match(
-          /\b([A-Za-z_$][\w$]*)\s*=\s*\(C,\s*g,\s*I\)\s*=>\s*g\.has\(C\)\s*\?\s*[A-Za-z_$][\w$]*\("Cannot add the same private member more than once"/
-        )?.[1],
-        helperSource.match(
-          /\b([A-Za-z_$][\w$]*)\s*=\s*\(C,\s*g,\s*I,\s*e\)\s*=>\s*\([A-Za-z_$][\w$]*\(C,\s*g,\s*"write to private field"/
-        )?.[1],
-        helperSource.match(
-          /\b([A-Za-z_$][\w$]*)\s*=\s*\(C,\s*g,\s*I\)\s*=>\s*\([A-Za-z_$][\w$]*\(C,\s*g,\s*"access private method"/
-        )?.[1],
-        helperSource.match(
-          /\bvar\s+([A-Za-z_$][\w$]*)\s*=\s*\(C,\s*g,\s*I,\s*e\)\s*=>\s*\(\{\s*set _/
-        )?.[1]
+        findHelper(/typeof [A-Za-z_$][\w$]* != "symbol"/),
+        findHelper(/"read from private field"/),
+        findHelper(/"Cannot add the same private member more than once"/),
+        findHelper(/"write to private field"/),
+        findHelper(/"access private method"/),
+        findHelper(/=>\s*\(\{\s*set _/)
       ];
       if (
         start < 0 ||

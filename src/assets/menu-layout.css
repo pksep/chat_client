@@ -1,3 +1,8 @@
+:root {
+  --menu-section-search-height: 42px;
+  --menu-section-search-icon-top: 11px;
+}
+
 /* Общая сетка разделов. Свёрнутая desktop-панель сохраняет свою разметку. */
 .menu__start:has(> .clients-panel) {
   grid-template-rows: minmax(0, 1fr);
@@ -44,15 +49,20 @@
 }
 
 :is(.menu:not(.menu--collapse), .mobile-list-container) .ai-menu-panel {
-  grid-template-rows: var(--menu-section-heading-height) 52px 53px minmax(
-      0,
-      1fr
-    );
+  grid-template-rows:
+    var(--menu-section-heading-height) calc(
+      var(--menu-section-search-height) + 10px
+    )
+    53px minmax(0, 1fr);
 }
 
 :is(.menu:not(.menu--collapse), .mobile-list-container)
   .ai-menu-panel--searching {
-  grid-template-rows: var(--menu-section-heading-height) 52px minmax(0, 1fr);
+  grid-template-rows:
+    var(--menu-section-heading-height) calc(
+      var(--menu-section-search-height) + 10px
+    )
+    minmax(0, 1fr);
 }
 
 :is(.menu:not(.menu--collapse), .mobile-list-container) .ai-menu-panel__new {
@@ -84,16 +94,74 @@
 }
 
 @media screen and (width <= 768px) {
+  :root,
   .mobile-list-container {
     --menu-section-heading-height: 40px;
+    --menu-section-search-height: 40px;
+    --menu-section-search-icon-top: 8px;
     --menu-section-heading-inset: 16px;
     --menu-section-content-inset: 0px;
     --menu-section-safe-top: calc(10px + env(safe-area-inset-top, 0px));
   }
 
-  .mobile-list-container .menu-section-heading {
-    padding-block: 10px 5px;
+  .mobile-list-container .menu-section-heading,
+  .menu-section-heading.menu-section-heading--centered {
+    position: relative;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    height: var(--menu-section-heading-height);
+    margin: 0;
+    padding: 10px var(--menu-section-heading-inset) 5px;
+    border-bottom: 1px solid var(--border-table);
     justify-content: space-between;
+  }
+
+  .mobile-list-container
+    .menu-section-heading:not(.menu-section-heading--centered)
+    > button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    min-width: 22px;
+    height: 22px;
+    min-height: 22px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .mobile-list-container
+    .menu-section-heading:not(.menu-section-heading--centered)
+    > button
+    > svg {
+    display: block;
+    width: 22px;
+    height: 22px;
+  }
+
+  .menu-section-heading.menu-section-heading--centered {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    width: calc(100% + 20px);
+    margin-inline: -10px;
+    gap: 0;
+  }
+
+  .menu-section-heading--centered > :nth-child(2) {
+    grid-column: 2;
+    width: auto;
+    max-width: 100%;
+  }
+
+  .menu-section-heading.menu-section-heading--centered > button {
+    box-sizing: border-box;
+    width: auto;
+    min-width: 0;
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
+    justify-self: start;
   }
 
   .mobile-list-container__toolbar {
@@ -142,7 +210,9 @@
   }
 
   .mobile-list-container
-    .contact-list__li:not(.contact-list__skeleton-row)::after {
+    .contact-list__li:has(+ .contact-list__li):not(
+      .contact-list__skeleton-row
+    )::after {
     content: '';
     position: absolute;
     right: 16px;

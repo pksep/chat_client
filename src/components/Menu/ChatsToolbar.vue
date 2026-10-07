@@ -1,6 +1,12 @@
 <template>
-  <div class="chats-toolbar" :data-testid="`${props.dataTestid}-ChatsToolbar`">
-    <div class="chats-toolbar__headline menu-section-heading">
+  <div
+    :class="[
+      'chats-toolbar',
+      { 'chats-toolbar--with-folders': !!$slots.folders }
+    ]"
+    :data-testid="`${props.dataTestid}-ChatsToolbar`"
+  >
+    <MenuSectionHeading as="div" class="chats-toolbar__headline">
       <h4
         v-if="!props.isCollapse"
         class="chats-toolbar__title"
@@ -63,12 +69,12 @@
           <BotIcon /> Создать бота
         </Button>
       </ContextMenu>
-    </div>
+    </MenuSectionHeading>
 
     <Line :data-testid="`${props.dataTestid}-ChatsToolbar-Line`" />
 
     <div class="chats-toolbar__controls">
-      <Search
+      <MenuSearch
         v-if="!props.isCollapse"
         class="chats-toolbar__search"
         :model-value="props.modelValue"
@@ -76,7 +82,11 @@
         :data-testid="`${props.dataTestid}-ChatsToolbar-Search`"
       />
 
-      <template v-if="!props.isCollapse">
+      <div v-if="$slots.folders" class="chats-toolbar__folders">
+        <slot name="folders" />
+      </div>
+
+      <template v-else-if="!props.isCollapse">
         <slot name="filters">
           <ChatsToolbarFilters
             :model-value="props.filter"
@@ -99,10 +109,11 @@ import {
   ButtonTypeEnum,
   Icon,
   IconNameEnum,
-  Search,
   SizesEnum
 } from '@pksep/yui';
 import Line from '../UI/Line.vue';
+import MenuSectionHeading from '../UI/MenuSectionHeading.vue';
+import MenuSearch from '../UI/MenuSearch.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import BotIcon from '../UI/BotIcon.vue';

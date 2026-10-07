@@ -1,4 +1,5 @@
 import type { Reqi } from '@pksep/reqi';
+import { withNetworkTimeout } from '../../utils/network-timeout';
 
 interface PendingReads {
   requests: Map<string, Promise<unknown>>;
@@ -30,7 +31,7 @@ export const configureJsonReads = (
 export const readJson = <T>(
   reqi: Reqi,
   endpoint: string,
-  options?: { reusePending?: boolean }
+  options?: { reusePending?: boolean; timeoutMs?: number }
 ): Promise<T> => {
   configureJsonReads(reqi);
   const state = pendingReads.get(reqi)!;
@@ -42,10 +43,13 @@ export const readJson = <T>(
   const pending = state.requests.get(endpoint);
   if (pending && options?.reusePending !== false) return pending as Promise<T>;
 
-  const request = (async () => {
-    const response = await reqi.get(endpoint, { parsed: false });
+  const request = withNetworkTimeout(async signal => {
+    const response = await reqi.get(endpoint, {
+      parsed: false,
+      request: { signal }
+    });
     return (await response.json()) as T;
-  })().finally(() => {
+  }, options?.timeoutMs ?? 10_000).finally(() => {
     if (state.requests.get(endpoint) === request) {
       state.requests.delete(endpoint);
     }

@@ -37,7 +37,7 @@
 <script lang="ts" setup>
 import { useTemplateRef } from 'vue';
 import { useInformationMenu } from '../composables/useInformationMenu';
-import { ModalCroppedAvatar } from '@pksep/yui';
+import ModalCroppedAvatar from './UI/ModalCroppedAvatar.vue';
 import NewChatInformationForm from './NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from './MenuInfoButtons.vue';
 import type { IMenuInfoInformation } from '../composables/useMenuInfo';

@@ -158,6 +158,7 @@ export interface IChatContainerConfig {
   CHAT_URL?: string;
   CHAT_BOT_GATEWAY?: string;
   CHAT_CALL_TOPIC_AUTO_PROMPT_ENABLED?: string;
+  CHAT_MULTIPART_UPLOAD_CONCURRENCY?: string;
 }
 
 export interface IChatContainerProps {

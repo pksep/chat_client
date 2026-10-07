@@ -103,7 +103,7 @@ const options = computed(() => {
     key: person.id,
     value: person.initials || person.nickname || person.id,
     fullName: `${person.initials || ''} ${person.nickname || ''}`,
-    hint: person.nickname || '',
+    hint: person.initials || person.nickname || person.id,
     serviceNumber: '',
     image: person.avatarUrl
       ? /^(https?:|data:|blob:)/.test(person.avatarUrl)
@@ -117,7 +117,7 @@ const options = computed(() => {
         key: id,
         value: 'Менеджер без доступа',
         fullName: id,
-        hint: id,
+        hint: 'Менеджер без доступа',
         serviceNumber: '',
         image: null
       });

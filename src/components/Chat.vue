@@ -12,7 +12,7 @@
     @animationend="handleMobileRouteAnimationEnd"
   >
     <div
-      v-if="isAiRoute || isAiVoiceCallActive"
+      v-if="chatAccess.ai && (isAiRoute || isAiVoiceCallActive)"
       v-show="isAiRoute"
       style="display: contents"
     >
@@ -128,8 +128,11 @@ import type {
 import ShareSelectionOverlay from './ShareSelectionOverlay.vue';
 import { hasKnownTopicMessagesState } from '../services/useMessages';
 import { useAiAssistant } from '../composables/useAiAssistant';
+import { useChatAccess } from '../composables/useChatAccess';
 import UnselectedTopicIcon from './UI/Icons/UnselectedTopicIcon.vue';
 import { loadMessageList } from '../utils/load-message-list';
+import { navigateToDefault } from '../composables/navigation';
+import { useChatMenu } from '../composables/useChatMenu';
 
 const MessageList = defineAsyncComponent(loadMessageList);
 const AIAssistant = defineAsyncComponent(() => import('./AI/AIAssistant.vue'));
@@ -153,7 +156,9 @@ const messageListRef = useTemplateRef<any>('messageListRef');
 const aiAssistantRef = useTemplateRef<any>('aiAssistantRef');
 
 const route = useUrlWatcher();
+const { setActiveSection } = useChatMenu();
 const { isVoiceModeOpen: isAiVoiceCallActive } = useAiAssistant();
+const { access: chatAccess, ready: isChatAccessReady } = useChatAccess();
 const activeChatRouteKey = computed(() =>
   route.value.type === RouteTypes.AI ? RouteTypes.AI : route.value.id
 );
@@ -163,6 +168,31 @@ watch(hasActiveChatRoute, active => {
   if (!active) hasMountedMobileList.value = true;
 });
 const isAiRoute = computed(() => route.value.type === RouteTypes.AI);
+
+/** Молча закрывает недоступный прямой AI-маршрут. */
+const guardAiRoute = (): void => {
+  const isRestrictedRoute =
+    route.value.type === RouteTypes.AI ||
+    route.value.type === RouteTypes.ASSISTANT;
+
+  if (!isRestrictedRoute || !isChatAccessReady.value || chatAccess.value.ai) {
+    return;
+  }
+
+  setActiveSection('chats');
+  navigateToDefault();
+};
+
+watch(
+  [
+    () => route.value.type,
+    () => route.value.id,
+    isChatAccessReady,
+    () => chatAccess.value.ai
+  ],
+  guardAiRoute,
+  { immediate: true }
+);
 const mobileTransitionName = ref('');
 const isMobileMessageListMounted = ref(!isMobile.value);
 const isMobileMessageContentReady = ref(!isMobile.value);

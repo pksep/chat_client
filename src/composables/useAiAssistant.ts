@@ -1,3 +1,4 @@
+import { requireAiAccess, useChatAccess } from './useChatAccess';
 import {
   computed,
   reactive,
@@ -210,6 +211,7 @@ const persist = (): void => {
 
 /** Начинает голосовой разговор или возвращает уже активный разговор на экран. */
 const startVoiceCall = (): void => {
+  if (!useChatAccess().access.value.ai) return;
   if (!isVoiceModeOpen.value) {
     voiceCallStartedAt.value = Date.now();
   }
@@ -233,6 +235,23 @@ const stopVoiceCall = (): void => {
   isVoiceModalVisible.value = false;
   voiceCallStartedAt.value = null;
 };
+
+watch(
+  () => useChatAccess().access.value.ai,
+  allowed => {
+    if (allowed) {
+      void refreshAutomations();
+      return;
+    }
+    stopVoiceCall();
+    for (const runtime of runtimes.values()) runtime.dispose();
+    for (const stop of runtimeWatchers.values()) stop();
+    runtimes.clear();
+    runtimeWatchers.clear();
+    runtimePromises.clear();
+  },
+  { flush: 'sync' }
+);
 
 watch(
   () => [
@@ -444,6 +463,7 @@ const loadMastra = (): Promise<typeof import('../services/useMastra')> => {
 };
 
 const ensureRuntime = async (sessionId: string): Promise<MastraRuntime> => {
+  await requireAiAccess();
   const existing = runtimes.get(sessionId);
   if (existing) return existing;
 
@@ -452,6 +472,8 @@ const ensureRuntime = async (sessionId: string): Promise<MastraRuntime> => {
 
   const runtimePromise = loadMastra()
     .then(({ useMastra }) => {
+      if (!useChatAccess().access.value.ai)
+        throw new Error('Нет доступа к ИИ-ассистенту');
       const loadedRuntime = runtimes.get(sessionId);
       if (loadedRuntime) return loadedRuntime;
 
@@ -883,6 +905,7 @@ const deleteTask = async (taskId: string): Promise<void> => {
 
 /** Синхронизирует серверные расписания и доставляет последний фоновый результат в их чат. */
 const refreshAutomations = (): Promise<void> => {
+  if (!useChatAccess().access.value.ai) return Promise.resolve();
   if (automationRefreshPromise) return automationRefreshPromise;
   automationRefreshPromise = fetchAiAutomations()
     .then(async automations => {

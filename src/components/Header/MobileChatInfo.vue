@@ -2,7 +2,10 @@
   <div
     :class="[
       'modal-info-mobile__start',
-      { 'modal-info-mobile__start--disabled': props.isMenuInfo }
+      {
+        'modal-info-mobile__start--disabled': props.isMenuInfo,
+        'modal-info-mobile__start--creating': props.creating
+      }
     ]"
     :data-testid="`${props.dataTestid}-Header-ModalStartContainer`"
   >
@@ -10,7 +13,14 @@
       class="modal-info-mobile__avatar-button"
       @click="handleEditProfileIcon"
     >
+      <Icon
+        v-if="props.creating && !information?.avatarUrl"
+        :name="IconNameEnum.profile"
+        :width="48"
+        :height="48"
+      />
       <CachedAvatar
+        v-else
         is-icon
         :path="information?.avatarUrl"
         :initials="information?.name"
@@ -37,10 +47,20 @@
     />
     <NewChatInformationForm
       :name="information?.name"
+      :creating="props.creating"
       @unmount-save="handleSaveFromForm"
       @unmount-change="handleChangeFromForm"
       :data-testid="`${props.dataTestid}-Header-InformationForm`"
-    />
+    >
+      <label
+        v-if="props.creating"
+        class="new-group-mobile-info__name-label"
+        for="name"
+      >
+        Название:
+      </label>
+      <template v-if="props.creating" #button />
+    </NewChatInformationForm>
   </div>
   <div
     class="modal-info-mobile__end"
@@ -77,6 +97,7 @@
     </div>
     <ContactListInModal
       v-if="!props.isMenuInfo || activeTab === 'participants'"
+      :creating="props.creating"
       :show-add-button="props.showAddButton"
       :contacts="visibleMembers"
       :excluded-contact-ids="excludedContactIds"
@@ -98,7 +119,8 @@
 
 <script lang="ts" setup>
 import { useTemplateRef, computed, ref, watch } from 'vue';
-import { ModalCroppedAvatar } from '@pksep/yui';
+import { Icon, IconNameEnum } from '@pksep/yui';
+import ModalCroppedAvatar from '../UI/ModalCroppedAvatar.vue';
 import NewChatInformationForm from '../NewChat/NewChatInformationForm.vue';
 import MenuInfoButtons from '../MenuInfoButtons.vue';
 import ContactListInModal from '../ContactList/ContactListInModal.vue';
@@ -112,6 +134,7 @@ import CachedAvatar from '../UI/CachedAvatar.vue';
 import { isDeletedBotUser } from '../../utils/bot';
 
 interface IMobileChatInfoProps {
+  creating?: boolean;
   members: IUser[];
   dataTestid?: string;
   isMenuInfo?: boolean;
@@ -203,7 +226,7 @@ const handleImageCropSave = async (croppedFile: File) => {
 
   if (!file) return;
 
-  if (currentGroup.value) {
+  if (!props.creating && currentGroup.value) {
     await setGroupInfo(currentGroup.value.group.id, {
       avatarUrl: file.path
     });

@@ -26,6 +26,9 @@ import { RuStorePush, type NativePushNotificationPayload } from './nativePush';
 const FIREBASE_PUSH_TOKEN_STORAGE_KEY = 'chat_native_push_token';
 const RUSTORE_PUSH_TOKEN_STORAGE_KEY = 'chat_rustore_push_token';
 const WEB_PUSH_ENDPOINT_STORAGE_KEY = 'chat_web_push_endpoint';
+const WEB_PUSH_SUBSCRIPTION_MIGRATION_STORAGE_KEY =
+  'chat_web_push_subscription_migration';
+const WEB_PUSH_SUBSCRIPTION_MIGRATION_VERSION = 'v1';
 
 type WebPushBrowser = 'chrome' | 'mozilla' | 'yandex' | 'unknown';
 
@@ -827,6 +830,55 @@ export const initPushNotifications = async () => {
   const applicationServerKey = urlBase64ToArrayBuffer(publicKey);
 
   let subscription = await registration.pushManager.getSubscription();
+  const subscriptionKeyMatches = subscription
+    ? doesWebPushSubscriptionUseKey(subscription, applicationServerKey)
+    : true;
+  const needsSubscriptionMigration =
+    Boolean(subscription) &&
+    (subscriptionKeyMatches === false ||
+      localStorage.getItem(WEB_PUSH_SUBSCRIPTION_MIGRATION_STORAGE_KEY) !==
+        WEB_PUSH_SUBSCRIPTION_MIGRATION_VERSION);
+
+  if (subscription && needsSubscriptionMigration) {
+    const previousEndpoint = subscription.endpoint;
+    const migrationReason =
+      subscriptionKeyMatches === false
+        ? 'vapid_key_changed'
+        : 'one_time_refresh';
+
+    try {
+      await api.post('/push/unsubscribe', { endpoint: previousEndpoint });
+    } catch (error) {
+      console.warn(
+        'Failed to remove the previous web push subscription:',
+        error
+      );
+    }
+
+    try {
+      const didUnsubscribe = await subscription.unsubscribe();
+      if (!didUnsubscribe) {
+        throw new Error(
+          'Browser did not remove the previous web push subscription'
+        );
+      }
+
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey
+      });
+      recordTelemetryEvent({
+        category: 'notification',
+        name: 'notification.web.subscription_recreated',
+        entityType: 'notification',
+        payload: { reason: migrationReason }
+      });
+    } catch (error) {
+      console.warn('Failed to recreate web push subscription:', error);
+      subscription = await registration.pushManager.getSubscription();
+    }
+  }
+
   if (!subscription) {
     subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
@@ -848,10 +900,13 @@ export const initPushNotifications = async () => {
   };
 
   await api.post('/push/subscribe', {
-    userId,
     subscription: subscriptionPayload,
     browser
   });
+  localStorage.setItem(
+    WEB_PUSH_SUBSCRIPTION_MIGRATION_STORAGE_KEY,
+    WEB_PUSH_SUBSCRIPTION_MIGRATION_VERSION
+  );
   recordTelemetryEvent({
     category: 'notification',
     name: 'notification.web.subscribe.success',
@@ -1094,4 +1149,31 @@ const urlBase64ToArrayBuffer = (base64String: string) => {
   const output = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i);
   return output.buffer;
+};
+
+const doesWebPushSubscriptionUseKey = (
+  subscription: PushSubscription,
+  expectedKey: ArrayBuffer
+): boolean | null => {
+  const applicationServerKey = subscription.options?.applicationServerKey;
+  if (!applicationServerKey) {
+    return null;
+  }
+
+  const actualBytes = toUint8Array(applicationServerKey);
+  const expectedBytes = new Uint8Array(expectedKey);
+
+  if (actualBytes.length !== expectedBytes.length) {
+    return false;
+  }
+
+  return actualBytes.every((value, index) => value === expectedBytes[index]);
+};
+
+const toUint8Array = (value: BufferSource): Uint8Array => {
+  if (value instanceof ArrayBuffer) {
+    return new Uint8Array(value);
+  }
+
+  return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
 };

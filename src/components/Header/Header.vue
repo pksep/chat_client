@@ -1,5 +1,6 @@
 <template>
   <header
+    ref="headerRef"
     :class="['chat__header-wrapper', $attrs.class]"
     :data-testid="`${props.dataTestid}-Header-Container`"
   >
@@ -17,7 +18,9 @@
     </div>
 
     <div
-      v-if="!!isMobile || route.type === 'ai' || !!currentTopic"
+      v-if="
+        !!isMobile || route.type === 'ai' || isCallTopicRoute || !!currentTopic
+      "
       class="chat__header-main"
       @click="handleClickHeader"
     >
@@ -25,6 +28,7 @@
         v-if="isMobile"
         :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
+        class="chat__header-back"
         :data-testid="`${props.dataTestid}-Header-BackButton`"
         @click.stop="handleExit"
       >
@@ -65,44 +69,44 @@
         </Tooltip>
       </div>
 
+      <div
+        v-else-if="isCallTopicRoute"
+        class="user-profile chat__header-profile chat__header-call-topic"
+        :data-testid="`${props.dataTestid}-Header-CallTopicProfile`"
+        @click.stop
+      >
+        <BotAvatar
+          class="user-profile__avatar"
+          :size="40"
+          :is-online="false"
+          :data-testid="`${props.dataTestid}-Header-CallTopicAvatar`"
+        />
+        <h3
+          class="user-profile__title"
+          :data-testid="`${props.dataTestid}-Header-CallTopicTitle`"
+        >
+          Звонилка
+        </h3>
+        <TypingIndicator
+          v-if="callTopicTypingLabel"
+          class="user-profile__ex user-profile__ex--typing"
+          :label="callTopicTypingLabel"
+          :data-testid="`${props.dataTestid}-Header-CallTopicTyping`"
+        />
+        <span
+          v-else
+          class="user-profile__ex"
+          :data-testid="`${props.dataTestid}-Header-CallTopicEx`"
+        >
+          @zvonilka
+        </span>
+      </div>
       <template v-else-if="currentTopic">
         <FavoriteTopicProfile
           v-if="isFavoriteDialogTopic"
           class="chat__header-profile"
           :data-testid="`${props.dataTestid}-Header-FavoriteTopicProfile`"
         />
-        <div
-          v-else-if="isCallTopicRoute"
-          class="user-profile chat__header-profile chat__header-call-topic"
-          :data-testid="`${props.dataTestid}-Header-CallTopicProfile`"
-          @click.stop
-        >
-          <BotAvatar
-            class="user-profile__avatar"
-            :size="40"
-            :is-online="false"
-            :data-testid="`${props.dataTestid}-Header-CallTopicAvatar`"
-          />
-          <h3
-            class="user-profile__title"
-            :data-testid="`${props.dataTestid}-Header-CallTopicTitle`"
-          >
-            Звонилка
-          </h3>
-          <TypingIndicator
-            v-if="callTopicTypingLabel"
-            class="user-profile__ex user-profile__ex--typing"
-            :label="callTopicTypingLabel"
-            :data-testid="`${props.dataTestid}-Header-CallTopicTyping`"
-          />
-          <span
-            v-else
-            class="user-profile__ex"
-            :data-testid="`${props.dataTestid}-Header-CallTopicEx`"
-          >
-            @zvonilka
-          </span>
-        </div>
         <UserProfile
           v-else-if="clientInquiry"
           class="chat__header-profile user-profile--interactive"
@@ -207,6 +211,23 @@
               v-if="option.customIcon === 'search'"
               class="chat__header-context-menu-icon"
             />
+            <UnmuteIcon
+              v-else-if="option.customIcon === 'notificationOn'"
+              class="chat__header-context-menu-icon"
+            />
+            <MuteIcon
+              v-else-if="option.customIcon === 'notificationOff'"
+              class="chat__header-context-menu-icon"
+            />
+            <MessageIcon
+              v-else-if="option.customIcon === 'createChat'"
+              class="chat__header-context-menu-icon"
+              aria-hidden="true"
+            />
+            <CreateTaskIcon
+              v-else-if="option.customIcon === 'createTask'"
+              class="chat__header-context-menu-icon"
+            />
             <Icon
               v-else-if="option.iconName"
               :name="option.iconName"
@@ -226,7 +247,7 @@
       @click.stop
       @keydown.capture="handleTopicSearchKeydown"
     >
-      <Search
+      <MenuSearch
         ref="desktopTopicSearchRef"
         class="chat__header-search"
         :model-value="topicSearchQuery"
@@ -295,7 +316,7 @@
       @click.stop
       @keydown.capture="handleTopicSearchKeydown"
     >
-      <Search
+      <MenuSearch
         ref="mobileTopicSearchRef"
         class="chat__header-search"
         :model-value="topicSearchQuery"
@@ -309,7 +330,7 @@
         :data-testid="`${props.dataTestid}-Header-MobileSearchClose`"
         @click.stop="hideSearch"
       >
-        <Icon :name="IconNameEnum.crossLarge" color="var(--chat-secondary)" />
+        <Icon :name="IconNameEnum.crossLarge" color="var(--text-secondary)" />
       </Button>
     </div>
   </header>
@@ -370,7 +391,7 @@
         :data-testid="`${props.dataTestid}-Header-MobileSearchBottomClose`"
         @click.stop="hideSearch"
       >
-        <Icon :name="IconNameEnum.crossLarge" color="var(--chat-secondary)" />
+        <Icon :name="IconNameEnum.crossLarge" color="var(--text-secondary)" />
       </Button>
     </div>
   </div>
@@ -472,7 +493,6 @@ import {
   IconNameEnum,
   ButtonTypeEnum,
   SizesEnum,
-  Search,
   Tooltip
 } from '@pksep/yui';
 
@@ -482,15 +502,16 @@ import type {
   IUser
 } from '../interfaces/interfaces';
 import AiAvatar from '../AI/AiAvatar.vue';
+import CreateTaskIcon from '../AI/CreateTaskIcon.vue';
+import MenuSearch from '../UI/MenuSearch.vue';
 import { useAiAssistant } from '../../composables/useAiAssistant';
 import {
   useMenuInfo,
   type IMenuInfoInformation
 } from '../../composables/useMenuInfo';
 import {
-  navigateToAssistant,
+  navigateBackFromChat,
   navigateToAI,
-  navigateToDefault,
   navigateToDialogsList,
   navigateToGroupsList,
   useUrlWatcher
@@ -517,6 +538,9 @@ import { TopicType } from '../../services/useChatSDK/types';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
 import HeaderContextSearchIcon from '../UI/HeaderContextSearchIcon.vue';
+import MessageIcon from '../UI/MessageIcon.vue';
+import MuteIcon from '../UI/MuteIcon.vue';
+import UnmuteIcon from '../UI/UnmuteIcon.vue';
 import LoadingIcon from '../UI/LoadingIcon.vue';
 import TypingIndicator from '../UI/TypingIndicator.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
@@ -702,7 +726,9 @@ const headerDmUser = computed<IUser | undefined>(() => {
     )
   };
 });
-const isCallTopicRoute = computed(() => isCallTopic(currentTopic.value));
+const isCallTopicRoute = computed(
+  () => route.value.type === RouteTypes.CALL || isCallTopic(currentTopic.value)
+);
 const currentRouteGroup = computed(() => {
   if (currentTopic.value?.type !== TopicType.Group) {
     return null;
@@ -868,6 +894,7 @@ const topicSearchTotal = ref(0);
 const topicSearchActiveIndex = ref(0);
 const desktopTopicSearchRef = ref<SearchComponentRef>(null);
 const mobileTopicSearchRef = ref<SearchComponentRef>(null);
+const headerRef = ref<HTMLElement | null>(null);
 
 const isTopicSearchLoading = ref(false);
 const hasTopicSearchQuery = computed(
@@ -1029,12 +1056,36 @@ const focusTopicSearchInput = (): void => {
     searchRef instanceof Element ? searchRef : searchRef?.$el;
   const input = searchElement?.querySelector?.('input');
 
-  input?.focus?.();
+  input?.focus?.({ preventScroll: true });
+};
+
+const preserveMobileMessagePosition = (update: () => void): void => {
+  const container = headerRef.value?.closest('.chat-container');
+  const messageList = isMobile.value
+    ? Array.from(
+        container?.querySelectorAll<HTMLElement>(
+          '.chat__message-wrapper, .ai-assistant__scroll'
+        ) || []
+      ).find(element => element.getClientRects().length > 0)
+    : null;
+  const scrollTop = messageList?.scrollTop ?? 0;
+  const top = messageList?.getBoundingClientRect().top ?? 0;
+
+  update();
+
+  if (messageList) {
+    void nextTick().then(() => {
+      messageList.scrollTop =
+        scrollTop + messageList.getBoundingClientRect().top - top;
+    });
+  }
 };
 
 const showSearch = (): void => {
-  state.isSearchInputEnable = true;
-  setMobileTopicSearchActive(isMobile.value && isChatSearchAvailable.value);
+  preserveMobileMessagePosition(() => {
+    state.isSearchInputEnable = true;
+    setMobileTopicSearchActive(isMobile.value && isChatSearchAvailable.value);
+  });
   void nextTick().then(focusTopicSearchInput);
 };
 
@@ -1062,9 +1113,11 @@ const resetTopicSearch = (): void => {
 };
 
 const hideSearch = (): void => {
-  state.isSearchInputEnable = false;
-  setMobileTopicSearchActive(false);
-  resetTopicSearch();
+  preserveMobileMessagePosition(() => {
+    state.isSearchInputEnable = false;
+    setMobileTopicSearchActive(false);
+    resetTopicSearch();
+  });
 };
 
 const navigateTopicSearchResult = (index: number): void => {
@@ -1322,7 +1375,12 @@ const getHeaderContextMenuOptions = computed(() => {
     style?: string;
     iconName?: IconNameEnum;
     iconSize?: number;
-    customIcon?: 'search';
+    customIcon?:
+      | 'search'
+      | 'notificationOn'
+      | 'notificationOff'
+      | 'createChat'
+      | 'createTask';
   }> = [];
 
   if (isFavoriteDialogTopic.value) {
@@ -1383,9 +1441,9 @@ const getHeaderContextMenuOptions = computed(() => {
         function: () => {
           toggleMuteTopic(currentTopic.value);
         },
-        iconName: currentTopic.value?.info?.isMute
-          ? IconNameEnum.distrub
-          : IconNameEnum.noDistrub
+        customIcon: currentTopic.value?.info?.isMute
+          ? 'notificationOn'
+          : 'notificationOff'
       });
     }
 
@@ -1414,16 +1472,16 @@ const getHeaderContextMenuOptions = computed(() => {
     if (!aiAssistantSessionId.value) {
       options.push(
         {
-          value: 'Новый чат',
-          iconName: IconNameEnum.chat,
+          value: 'Создать чат',
+          customIcon: 'createChat',
           function: () => {
             startNewAiSession();
             navigateToAI();
           }
         },
         {
-          value: 'Новая задача',
-          iconName: IconNameEnum.calendar,
+          value: 'Создать задачу',
+          customIcon: 'createTask',
           function: () => {
             startNewAiTask();
             navigateToAI();
@@ -1532,17 +1590,7 @@ const handleExit = (): void => {
     return;
   }
 
-  if (route.value && route.value.type === RouteTypes.DIALOGS) {
-    navigateToDialogsList();
-  } else if (route.value && route.value.type === RouteTypes.GROUP) {
-    navigateToGroupsList();
-  } else if (route.value && route.value.type === RouteTypes.CALL) {
-    navigateToDefault();
-  } else if (route.value && route.value.type === RouteTypes.AI) {
-    navigateToAssistant();
-  } else {
-    navigateToDefault();
-  }
+  navigateBackFromChat(route.value);
 };
 
 watch(
