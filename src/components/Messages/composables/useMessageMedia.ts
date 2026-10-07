@@ -5,6 +5,7 @@ import {
 } from '../../../services/useMediaBlobCache';
 import type { IMedia } from '../../interfaces/interfaces';
 import { buildBrowserCompatibleImageUrl } from '../../../utils/media-format';
+import { buildMediaObjectUrl } from '../../../utils/media-url';
 
 export function useMessageMedia() {
   const config = getConfig();
@@ -81,12 +82,27 @@ export function useMessageMedia() {
       return EMPTY_MEDIA_SRC;
     }
 
-    const sourceUrl = `${config.CHAT_PATH_TO_FILE_CDN}/${mediaPath}`;
+    const sourceUrl = buildMediaObjectUrl(
+      config.CHAT_PATH_TO_FILE_CDN,
+      mediaPath
+    );
     return isThumb ? buildBrowserCompatibleImageUrl(sourceUrl) : sourceUrl;
   };
 
-  const getSliderMediaPath = (media: IMedia) =>
-    buildBrowserCompatibleImageUrl(getFullMediaPath(media, false));
+  const getSliderMediaPath = (media: IMedia) => {
+    const sliderPath = buildBrowserCompatibleImageUrl(
+      getFullMediaPath(media, false)
+    );
+    const pdfDetectionValue = media.originName || media.path || '';
+
+    if (!/\.pdf(?:[?#]|$)/i.test(pdfDetectionValue)) {
+      return sliderPath;
+    }
+
+    // YUI currently detects PDF URLs only when the full value ends in `.pdf`.
+    // Keep cache-busting query parameters and add a request-safe fragment.
+    return `${sliderPath.split('#')[0]}#document.pdf`;
+  };
 
   const isSliderContentUrl = (
     fileUrl: string,
@@ -115,7 +131,7 @@ export function useMessageMedia() {
     }
 
     return buildBrowserCompatibleImageUrl(
-      `${config.CHAT_PATH_TO_FILE_CDN}/${media.thumbnailPath}`
+      buildMediaObjectUrl(config.CHAT_PATH_TO_FILE_CDN, media.thumbnailPath)
     );
   };
 
@@ -132,7 +148,7 @@ export function useMessageMedia() {
 
     const originalUrl = getOriginalMediaUrl(media);
     const fallbackUrl = media.path
-      ? `${config.CHAT_PATH_TO_FILE_CDN}/${media.path}`
+      ? buildMediaObjectUrl(config.CHAT_PATH_TO_FILE_CDN, media.path)
       : originalUrl;
 
     event.dataTransfer.effectAllowed = 'copy';

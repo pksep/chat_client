@@ -33,3 +33,51 @@ export const triggerBrowserDownload = (url: string, fileName: string): void => {
   link.click();
   link.remove();
 };
+
+interface BrowserDownload {
+  url: string;
+  fileName: string;
+}
+
+const OBJECT_URL_CLEANUP_DELAY = 60_000;
+
+export const triggerBrowserDownloads = (
+  downloads: BrowserDownload[]
+): Promise<void> => {
+  if (downloads.length === 1 && downloads[0]) {
+    triggerBrowserDownload(downloads[0].url, downloads[0].fileName);
+    return Promise.resolve();
+  }
+
+  return Promise.all(
+    downloads.map(async ({ url, fileName }) => {
+      const downloadUrl = buildMediaDownloadUrl(url, fileName);
+
+      try {
+        const response = await fetch(downloadUrl, { credentials: 'include' });
+
+        if (!response.ok) {
+          throw new Error(`Failed to download file: ${response.status}`);
+        }
+
+        return {
+          fileName,
+          objectUrl: URL.createObjectURL(await response.blob())
+        };
+      } catch {
+        return { fileName, objectUrl: downloadUrl };
+      }
+    })
+  ).then(preparedDownloads => {
+    preparedDownloads.forEach(({ objectUrl, fileName }) => {
+      triggerBrowserDownload(objectUrl, fileName);
+
+      if (objectUrl.startsWith('blob:')) {
+        window.setTimeout(
+          () => URL.revokeObjectURL(objectUrl),
+          OBJECT_URL_CLEANUP_DELAY
+        );
+      }
+    });
+  });
+};

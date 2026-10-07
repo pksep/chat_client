@@ -61,6 +61,17 @@ export class ChatUser implements ChatUserInterface {
     return response.json();
   }
 
+  async deleteCustomBackground(
+    kind: CustomBackgroundKind,
+    id: string
+  ): Promise<void> {
+    const response = await this.reqi.sendRequest(
+      `/users/backgrounds/${kind}/${encodeURIComponent(id)}`,
+      { request: { method: 'DELETE' }, parsed: false }
+    );
+    if (!response.ok) throw new Error('Не удалось удалить фон');
+  }
+
   async getUsers(params?: SearchParams): Promise<PaginatedResponse<User>> {
     const queryParams = new URLSearchParams();
 

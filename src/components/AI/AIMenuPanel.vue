@@ -9,9 +9,9 @@
     ]"
     data-testid="AI-MenuPanel"
   >
-    <header
+    <MenuSectionHeading
       :class="[
-        'ai-menu-panel__header menu-section-heading',
+        'ai-menu-panel__header',
         {
           'ai-menu-panel__header--collapse': props.isCollapse,
           'chats-toolbar__headline': props.isCollapse
@@ -58,21 +58,21 @@
             :size="SizesEnum.small"
             @click="handleNewSession"
           >
-            <MessageIcon /> Новый чат
+            <MessageIcon aria-hidden="true" /> Создать чат
           </Button>
           <Button
             :type="ButtonTypeEnum.popover"
             :size="SizesEnum.small"
             @click="handleNewTask"
           >
-            <TasksSuggestionIcon /> Новая задача
+            <CreateTaskIcon /> Создать задачу
           </Button>
         </ContextMenu>
       </Teleport>
-    </header>
+    </MenuSectionHeading>
 
     <div v-if="!props.isCollapse" class="ai-menu-panel__search-shell">
-      <Search
+      <MenuSearch
         class="ai-menu-panel__search"
         :model-value="query"
         @update:model-value="value => (query = value)"
@@ -105,7 +105,7 @@
       </button>
     </div>
 
-    <div class="ai-menu-panel__list">
+    <div v-menu-list-press class="ai-menu-panel__list">
       <template v-if="props.isCollapse">
         <nav
           v-if="collapsedItems.length"
@@ -115,13 +115,16 @@
           <div
             v-for="(item, index) in collapsedItems"
             :key="`${item.kind}:${item.id}`"
-            class="ai-menu-panel__collapsed-entry"
+            :class="[
+              'ai-menu-panel__collapsed-entry menu-list-row',
+              { 'menu-list-row--active': isCollapsedItemActive(item) }
+            ]"
           >
             <button
               type="button"
               :class="[
                 'ai-menu-panel__collapsed-item',
-                'contact-list__item',
+                'contact-list__item menu-list-item',
                 {
                   'ai-menu-panel__collapsed-item--active':
                     isCollapsedItemActive(item),
@@ -153,7 +156,7 @@
             </button>
             <span
               v-if="index < collapsedItems.length - 1"
-              class="ai-menu-panel__collapsed-divider"
+              class="ai-menu-panel__collapsed-divider menu-list-divider"
               aria-hidden="true"
             />
           </div>
@@ -164,14 +167,17 @@
         <template v-for="session in filteredSessions" :key="session.id">
           <article
             :class="[
-              'ai-menu-panel__row',
-              { 'ai-menu-panel__row--active': isSessionActive(session.id) }
+              'ai-menu-panel__row menu-list-row',
+              {
+                'ai-menu-panel__row--active': isSessionActive(session.id),
+                'menu-list-row--active': isSessionActive(session.id)
+              }
             ]"
             @contextmenu="openActivePopover(sessionMenuId(session.id), $event)"
           >
             <button
               type="button"
-              class="ai-menu-panel__row-main"
+              class="ai-menu-panel__row-main menu-list-item"
               :aria-current="isSessionActive(session.id) ? 'true' : undefined"
               :aria-expanded="!!isOpen[sessionMenuId(session.id)]"
               aria-haspopup="menu"
@@ -256,7 +262,7 @@
             </Teleport>
           </article>
 
-          <div class="ai-menu-panel__delimetr"></div>
+          <div class="ai-menu-panel__delimetr menu-list-divider"></div>
         </template>
       </template>
 
@@ -269,15 +275,18 @@
         <template v-for="task in filteredTasks" :key="task.id">
           <article
             :class="[
-              'ai-menu-panel__row',
+              'ai-menu-panel__row menu-list-row',
               'ai-menu-panel__row--task',
-              { 'ai-menu-panel__row--active': isTaskActive(task.sessionId) }
+              {
+                'ai-menu-panel__row--active': isTaskActive(task.sessionId),
+                'menu-list-row--active': isTaskActive(task.sessionId)
+              }
             ]"
             @contextmenu="openActivePopover(taskMenuId(task.id), $event)"
           >
             <button
               type="button"
-              class="ai-menu-panel__row-main"
+              class="ai-menu-panel__row-main menu-list-item"
               :aria-current="isTaskActive(task.sessionId) ? 'true' : undefined"
               :aria-expanded="!!isOpen[taskMenuId(task.id)]"
               aria-haspopup="menu"
@@ -291,11 +300,7 @@
                 aria-hidden="true"
               >
                 <Icon
-                  :name="
-                    task.enabled
-                      ? IconNameEnum.planeRightFill
-                      : IconNameEnum.minus
-                  "
+                  :name="task.enabled ? IconNameEnum.play : IconNameEnum.pause"
                   :width="16"
                   :height="16"
                 />
@@ -316,52 +321,71 @@
               </span>
             </button>
           </article>
+          <div class="ai-menu-panel__delimetr menu-list-divider"></div>
         </template>
 
-        <article
-          v-for="session in filteredTaskSessions"
-          :key="session.id"
-          :class="[
-            'ai-menu-panel__row',
-            'ai-menu-panel__row--task',
-            'ai-menu-panel__row--task-session',
-            { 'ai-menu-panel__row--active': isTaskActive(session.id) }
-          ]"
-          @contextmenu="openActivePopover(sessionMenuId(session.id), $event)"
-        >
-          <button
-            type="button"
-            class="ai-menu-panel__row-main"
-            :aria-current="isTaskActive(session.id) ? 'true' : undefined"
-            :aria-expanded="!!isOpen[sessionMenuId(session.id)]"
-            aria-haspopup="menu"
-            @click="handleSelectTaskSession(session.id)"
+        <template v-for="session in filteredTaskSessions" :key="session.id">
+          <article
+            :class="[
+              'ai-menu-panel__row menu-list-row',
+              'ai-menu-panel__row--task',
+              'ai-menu-panel__row--task-session',
+              {
+                'ai-menu-panel__row--active': isTaskActive(session.id),
+                'menu-list-row--active': isTaskActive(session.id)
+              }
+            ]"
+            @contextmenu="openActivePopover(sessionMenuId(session.id), $event)"
           >
-            <span
-              class="ai-menu-panel__task-state ai-menu-panel__task-state--draft"
-              aria-hidden="true"
+            <button
+              type="button"
+              class="ai-menu-panel__row-main menu-list-item"
+              :aria-current="isTaskActive(session.id) ? 'true' : undefined"
+              :aria-expanded="!!isOpen[sessionMenuId(session.id)]"
+              aria-haspopup="menu"
+              @click="handleSelectTaskSession(session.id)"
             >
-              <Icon :name="IconNameEnum.taskStatus" :width="16" :height="16" />
-            </span>
-            <span class="ai-menu-panel__row-copy">
-              <strong>{{ session.title }}</strong>
-              <small>{{ session.description }}</small>
-            </span>
-            <span class="ai-menu-panel__row-meta">
-              <time>{{ session.time }}</time>
-              <div
-                v-if="session.pinned"
-                class="contact-list__pin"
-                aria-label="Закреплено"
+              <span
+                class="ai-menu-panel__task-state ai-menu-panel__task-state--draft"
+                aria-hidden="true"
               >
-                <PinIcon />
-              </div>
-            </span>
-          </button>
-        </article>
+                <Icon
+                  :name="IconNameEnum.taskStatus"
+                  :width="16"
+                  :height="16"
+                />
+              </span>
+              <span class="ai-menu-panel__row-copy">
+                <strong>{{ session.title }}</strong>
+                <small>{{ session.description }}</small>
+              </span>
+              <span class="ai-menu-panel__row-meta">
+                <time>{{ session.time }}</time>
+                <div
+                  v-if="session.pinned"
+                  class="contact-list__pin"
+                  aria-label="Закреплено"
+                >
+                  <PinIcon />
+                </div>
+              </span>
+            </button>
+          </article>
+          <div class="ai-menu-panel__delimetr menu-list-divider"></div>
+        </template>
       </template>
 
-      <MenuEmptyState v-else />
+      <MenuEmptyState
+        v-else
+        :text="
+          query.trim()
+            ? 'Ничего не найдено'
+            : activeTab === 'chats'
+              ? 'Здесь будут чаты'
+              : 'Здесь будут задачи'
+        "
+        :hide-icon="!query.trim()"
+      />
     </div>
   </section>
 
@@ -381,9 +405,7 @@
       >
         <Icon
           class="ai-menu-panel__context-state"
-          :name="
-            task.enabled ? IconNameEnum.minus : IconNameEnum.planeRightFill
-          "
+          :name="task.enabled ? IconNameEnum.pause : IconNameEnum.play"
           :width="16"
           :height="16"
         />
@@ -467,13 +489,15 @@
 </template>
 
 <script setup lang="ts">
+import MenuSearch from '../UI/MenuSearch.vue';
+import { vMenuListPress } from '../../directives/menu-list-press';
+import MenuSectionHeading from '../UI/MenuSectionHeading.vue';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import {
   Button,
   ButtonTypeEnum,
   Icon,
   IconNameEnum,
-  Search,
   SizesEnum,
   Tooltip
 } from '@pksep/yui';
@@ -492,6 +516,7 @@ import MessageIcon from '../UI/MessageIcon.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import UnpinIcon from '../UI/UnpinIcon.vue';
 import TasksSuggestionIcon from './TasksSuggestionIcon.vue';
+import CreateTaskIcon from './CreateTaskIcon.vue';
 import AIActivityPanel from './AIActivityPanel.vue';
 
 const props = withDefaults(

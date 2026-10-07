@@ -29,6 +29,8 @@
 @import url('./bot.css');
 @import url('./ai-assistant.css');
 @import url('./menu-layout.css');
+@import url('./chat-folders.css');
+@import url('./menu-list-items.css');
 
 .chat_container_alert {
   background-color: var(--error-dark-color);
@@ -80,25 +82,31 @@
   }
 }
 
-.chat-container:has(.chat__header-desktop-search-row) {
+.chat-container:has(:is(.chat__header-desktop-search-row, .chat__header-mobile-search-row)) {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.chat-container:has(.chat__header-desktop-search-row) .chat {
+.chat-container:has(:is(.chat__header-desktop-search-row, .chat__header-mobile-search-row)) .chat {
   --basic-height: 100%;
+}
+
+.chat-container:has(.chat__unselected-topic) {
+  background-color: var(--surface-input-secondary);
 }
 
 .chat-container--wallpaper:has(.chat__message-wrapper) {
   background-color: var(--chat-wallpaper-background, var(--surface-main));
-  background-image: linear-gradient(
-      rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1))),
-      rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1)))
-    ),
+  background-image: linear-gradient(rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1))),
+      rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1)))),
     var(--chat-wallpaper-image);
 }
 
 .chat-container:has(.menu.menu--collapse) {
   --size-left-menu: 90px;
+}
+
+.chat-container:has(.menu.menu--folders:not(.menu--collapse)) {
+  --size-left-menu: 435px;
 }
 
 .chat-container.menu-collapse {
@@ -330,22 +338,28 @@ button.button-yui-kit.red-context-button {
 
 @media screen and (width <=768px) {
   .chat-container {
-    --mobile-header-height: 58px;
+    --mobile-header-height: 70px;
     --header-height: var(--mobile-header-height);
     --mobile-active-call-height: 45px;
     --mobile-pinned-messages-offset: var(--mobile-header-height);
   }
 
+  .chat-container:has(> .chat__header-wrapper) {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .chat-container:has(.pinned-messages) .chat__header {
+    align-self: stretch;
+  }
+
   .chat-container:has(.chat__header-active-call) {
-    --mobile-pinned-messages-offset: calc(
-      var(--mobile-header-height) + var(--mobile-active-call-height)
-    );
-    --header-height: calc(
-      var(--mobile-header-height) + var(--mobile-active-call-height)
-    );
-    --mobile-pinned-messages-offset: calc(
-      var(--mobile-header-height) + var(--mobile-active-call-height)
-    );
+    --mobile-pinned-messages-offset: calc(var(--mobile-header-height) + var(--mobile-active-call-height));
+    --header-height: calc(var(--mobile-header-height) + var(--mobile-active-call-height));
+  }
+
+  .chat-container:has(.chat__header-mobile-search-row) :is(.chat__input, .call-topic-actions) {
+    visibility: hidden;
+    pointer-events: none;
   }
 
   .chat__info {
@@ -411,14 +425,12 @@ button.button-yui-kit.red-context-button {
     font-size: 16px;
   }
 
-  .chat__header-wrapper
-    .chat__header-main
-    button.button-yui-kit.small.ghost-yui-kit {
+  .chat__header-wrapper .chat__header-main button.button-yui-kit.small.ghost-yui-kit {
     padding: 8px;
   }
 
   .chat-container:not(:has(.chat__message-wrapper)) {
-    background: var(--white) !important;
+    background: var(--surface-input-primary);
     overflow: hidden;
   }
 
@@ -427,6 +439,6 @@ button.button-yui-kit.red-context-button {
   }
 
   .chat-container--wallpaper:has(.chat__message-wrapper) {
-    background-color: var(--background-light-color);
+    background-color: var(--chat-wallpaper-image);
   }
 }

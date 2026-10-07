@@ -9,7 +9,7 @@ button.button-yui-kit.secondary-yui-kit.large.button-menu__info {
   margin-top: 15px;
   line-height: 100%;
 
-  background-color: var(--table-surface-search);
+  background-color: var(--surface-input-secondary);
 
   & svg.icon-yui-kit {
     color: var(--icon-color, var(--text-secondary));

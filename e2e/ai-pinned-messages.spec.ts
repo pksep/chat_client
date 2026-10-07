@@ -114,7 +114,7 @@ test('показывает закреп и позволяет переходит
   );
   await expect(firstMessage.locator('.message-content__html')).toHaveCSS(
     'line-height',
-    '20px'
+    '17px'
   );
 
   await pinMessage(page, firstMessage);
@@ -157,6 +157,13 @@ test('показывает закреп и позволяет переходит
   }
 
   const searchInputTestId = isMobile ? 'MobileSearchInput' : 'SearchInput';
+  await expect
+    .poll(async () => {
+      const header = await page.locator('.chat__header-wrapper').boundingBox();
+      const pinned = await pinnedPanel.boundingBox();
+      return Math.round(pinned!.y - header!.y - header!.height);
+    })
+    .toBe(0);
   const searchCountTestId = isMobile ? 'MobileSearchCount' : 'SearchCount';
   const searchPreviousTestId = isMobile ? 'MobileSearchPrev' : 'SearchPrev';
   await page

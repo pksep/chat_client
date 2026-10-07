@@ -243,6 +243,30 @@ export const savePersistentCustomImageRecord = async (
   };
 };
 
+export const removePersistentCustomImage = async (
+  config: NativeImageStoreConfig,
+  id: string
+): Promise<void> => {
+  if (!isNativePlatform()) {
+    return;
+  }
+
+  const items = await readNativeImageMetadata(config);
+  const item = items.find(existingItem => existingItem.id === id);
+
+  if (item) {
+    await Filesystem.deleteFile({
+      path: buildFilePath(config.directoryName, item.fileName),
+      directory: Directory.Data
+    }).catch(() => {});
+  }
+
+  await writeNativeImageMetadata(
+    config,
+    items.filter(existingItem => existingItem.id !== id)
+  );
+};
+
 export const migratePersistentCustomImages = async (
   config: NativeImageStoreConfig,
   items: StoredPersistentCustomImage[]

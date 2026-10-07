@@ -3,6 +3,7 @@ import { reactive } from 'vue';
 import type { IMedia } from '../components/interfaces/interfaces';
 import { isAndroidNativePlatform, NativeFile } from './native-file-bridge';
 import { getConfig } from './useConfig';
+import { buildMediaObjectUrl } from '../utils/media-url';
 
 type NativeDownloadPhase =
   | 'unknown'
@@ -47,7 +48,7 @@ const buildAbsoluteFileUrl = (path: string) => {
   }
 
   const config = getConfig();
-  return `${config.CHAT_PATH_TO_FILE_CDN}/${path}`;
+  return buildMediaObjectUrl(config.CHAT_PATH_TO_FILE_CDN, path);
 };
 
 const getFileExtension = (value?: string | null) => {
@@ -262,6 +263,11 @@ export const handleNativeFileClick = async (
         percent: null
       };
     }
+    return true;
+  }
+
+  if (state.phase === 'not-downloaded') {
+    await downloadNativeFileToDownloads(media);
     return true;
   }
 

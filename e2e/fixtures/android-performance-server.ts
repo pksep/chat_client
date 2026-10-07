@@ -99,12 +99,13 @@ export async function createAndroidPerformanceServer({
     at: number;
     bytes?: number;
   }[] = [];
-  const connections: { event: string; at: number }[] = [];
+  const connections: { event: string; at: number; payload?: unknown }[] = [];
   const state = {
     lagLatest: false,
     failMessages: false,
     missingFavorite: false,
-    favoriteCreatedAt: null as number | null
+    favoriteCreatedAt: null as number | null,
+    invitePreviewStatus: 404 as 401 | 404
   };
   const server = createServer(async (request, response) => {
     const url = new URL(request.url!, origin);
@@ -240,8 +241,34 @@ export async function createAndroidPerformanceServer({
       return;
     }
     if (pathname === '/calls/invite-preview') {
-      response.statusCode = 404;
+      response.statusCode = state.invitePreviewStatus;
       json({ message: 'Test call invite is unavailable' });
+      return;
+    }
+    if (pathname === '/calls/status' && state.callInviteActive) {
+      json({
+        active: true,
+        topicId: topics[0].id,
+        startTime: Date.now(),
+        roomReady: true,
+        participantCount: 2,
+        groupMode: true,
+        elapsedDurationMs: 0
+      });
+      return;
+    }
+    if (pathname === '/calls/invite-livekit-token' && state.callInviteActive) {
+      json({
+        token:
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ2aWRlbyI6eyJyb29tSm9pbiI6dHJ1ZX19.signature'
+      });
+      return;
+    }
+    if (pathname === '/calls/livekit-token' && state.callInviteActive) {
+      response.statusCode = 403;
+      json({
+        message: 'The regular token endpoint must not be used for invites'
+      });
       return;
     }
     if (pathname.startsWith('/sync/')) {
@@ -264,7 +291,41 @@ export async function createAndroidPerformanceServer({
     socket.on('disconnect', () =>
       connections.push({ event: 'disconnect', at: Date.now() })
     );
-    socket.onAny((_event, ...args) => {
+    socket.on('answerCall', (rawPayload, ack) => {
+      const payload = (
+        typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload
+      ) as {
+        userId: string;
+        roomId: string;
+        topicId?: string | null;
+      };
+      connections.push({ event: 'answerCall', at: Date.now(), payload });
+
+      if (state.callInviteActive) {
+        socket.emit('callAnswered', {
+          userId: payload.userId,
+          roomId: payload.roomId,
+          topicId: payload.topicId,
+          startTime: Date.now(),
+          elapsedDurationMs: 0
+        });
+      }
+
+      setTimeout(
+        () => {
+          if (typeof ack === 'function') {
+            ack({
+              accepted: true,
+              roomId: payload.roomId,
+              topicId: payload.topicId
+            });
+          }
+        },
+        state.callInviteActive ? 50 : 0
+      );
+    });
+    socket.onAny((event, ...args) => {
+      if (event === 'answerCall') return;
       const ack = args.at(-1);
       if (typeof ack === 'function') ack({ success: true });
     });

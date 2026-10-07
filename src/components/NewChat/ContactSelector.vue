@@ -47,9 +47,11 @@
       <li
         v-for="(contact, index) in contacts"
         :key="contact.id"
-        class="contact-selector__item"
+        class="contact-selector__item menu-list-row"
         :class="{
-          'contact-selector__item--excluded': isContactExcluded(contact.id)
+          'contact-selector__item--excluded': isContactExcluded(contact.id),
+          'contact-selector__item--selected': state.selectedIds.has(contact.id),
+          'menu-list-row--active': state.selectedIds.has(contact.id)
         }"
         @click="!isContactExcluded(contact.id) && handleNewContact(contact)"
         :data-testid="`${props.dataTestid}-ContactSelector-Item${index + 1}`"
@@ -98,13 +100,13 @@
       @click="onAddClick"
       :data-testid="`${props.dataTestid}-ContactSelector-AddButton`"
     >
-      Добавить
+      {{ props.addButtonText }}
     </Button>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from 'vue';
+import { computed, reactive, watch } from 'vue';
 import {
   Checkbox,
   ButtonTypeEnum,
@@ -133,20 +135,29 @@ import { isBotUser, isCallBotUser } from '../../utils/bot';
 type ContactSelectorFilter = IContactSelectorState['filter'];
 
 const props = withDefaults(defineProps<IContactSelectorProps>(), {
-  dataTestid: () => 'ContactSelector'
+  dataTestid: () => 'ContactSelector',
+  addButtonText: 'Добавить',
+  usersFilterLabel: 'Пользователи'
 });
 const emits = defineEmits<IContactSelectorEmits>();
 
 const state = reactive<IContactSelectorState>({
   q: '',
   filter: 'users',
-  selectedIds: props.selectedContactIds ?? new Set()
+  selectedIds: new Set(props.selectedContactIds)
 });
+
+watch(
+  () => props.selectedContactIds,
+  ids => {
+    state.selectedIds = new Set(ids);
+  }
+);
 const contactFilters: Array<{
   label: string;
   value: ContactSelectorFilter;
 }> = [
-  { label: 'Пользователи', value: 'users' },
+  { label: props.usersFilterLabel, value: 'users' },
   { label: 'Боты', value: 'bots' }
 ];
 
@@ -251,6 +262,44 @@ const onAddClick = (): void => {
 </script>
 
 <style scoped>
+.contact-selector__list {
+  gap: 0;
+}
+
+.contact-selector__item {
+  box-sizing: border-box;
+  min-height: 58px;
+  margin: 0;
+  padding: 4px 10px;
+  border-bottom-width: 0;
+  border-radius: 0;
+  box-shadow: none;
+  transition: none;
+}
+
+.contact-selector__item:has(+ .contact-selector__item)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 0.35px;
+  background: var(--border-table);
+  pointer-events: none;
+}
+
+@media screen and (width <= 768px) {
+  .contact-selector__item {
+    min-height: 80px;
+    padding: 10px 16px;
+  }
+
+  .contact-selector__item:has(+ .contact-selector__item)::after {
+    right: 16px;
+    left: 16px;
+  }
+}
+
 .contact-selector__item--excluded {
   opacity: 0.6;
   background-color: #f5f5f5;
@@ -273,7 +322,7 @@ const onAddClick = (): void => {
 .contact-selector__filters {
   display: flex;
   gap: 8px;
-  padding: 0 10px 8px;
+  padding-inline: 10px;
 }
 
 .contact-selector__filter {

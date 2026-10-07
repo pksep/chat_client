@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 public final class IncomingCallNotificationHelper {
@@ -29,8 +30,63 @@ public final class IncomingCallNotificationHelper {
 
     private static final String PREFS_NAME = "incoming_call_notifications";
     private static final String PREF_ACTIVE_ROOM_IDS = "active_room_ids";
+    private static final String PREF_DISMISSED_AT_PREFIX = "dismissed_at_";
+    private static final long INCOMING_CALL_MAX_AGE_MS = 60_000L;
+    private static final long DISMISSED_CALL_RETENTION_MS = 24 * 60 * 60_000L;
 
     private IncomingCallNotificationHelper() {}
+
+    static boolean isDirectCallPayload(String type, String topicType) {
+        if (!"incoming_call".equals(type)) {
+            return false;
+        }
+
+        return topicType == null || !"GROUP".equalsIgnoreCase(topicType.trim());
+    }
+
+    static boolean isIncomingCallFresh(
+        String sentAtValue,
+        String expiresAtValue,
+        long dismissedAt,
+        long now
+    ) {
+        long sentAt = parseTimestamp(sentAtValue, 0L);
+        long expiresAt = parseTimestamp(expiresAtValue, 0L);
+
+        if (expiresAt > 0L && now >= expiresAt) {
+            return false;
+        }
+
+        if (sentAt > 0L && now - sentAt > INCOMING_CALL_MAX_AGE_MS) {
+            return false;
+        }
+
+        return dismissedAt <= 0L || (sentAt > 0L && sentAt > dismissedAt);
+    }
+
+    static long parseTimestamp(String value, long fallback) {
+        if (value == null || value.trim().isEmpty()) {
+            return fallback;
+        }
+
+        try {
+            long parsed = Long.parseLong(value.trim());
+            return parsed > 0L ? parsed : fallback;
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
+    public static boolean shouldShowIncomingCall(
+        Context context,
+        String roomId,
+        String sentAtValue,
+        String expiresAtValue,
+        long now
+    ) {
+        long dismissedAt = getLastDismissedAt(context, roomId);
+        return isIncomingCallFresh(sentAtValue, expiresAtValue, dismissedAt, now);
+    }
 
     public static void showIncomingCall(
         Context context,
@@ -123,9 +179,18 @@ public final class IncomingCallNotificationHelper {
     }
 
     public static void dismissIncomingCall(Context context, String roomId) {
+        dismissIncomingCall(context, roomId, System.currentTimeMillis());
+    }
+
+    public static void dismissIncomingCall(
+        Context context,
+        String roomId,
+        long dismissedAt
+    ) {
         NotificationManagerCompat.from(context).cancel(buildNotificationId(roomId));
         IncomingCallActivity.dismissIfMatches(roomId);
         forgetActiveCall(context, roomId);
+        rememberDismissedCall(context, roomId, dismissedAt);
         if (getActiveCallRoomIds(context).isEmpty()) {
             IncomingCallRingtonePlayer.stop();
         }
@@ -133,9 +198,11 @@ public final class IncomingCallNotificationHelper {
 
     public static void dismissAllIncomingCalls(Context context) {
         NotificationManagerCompat manager = NotificationManagerCompat.from(context);
+        long dismissedAt = System.currentTimeMillis();
 
         for (String roomId : getActiveCallRoomIds(context)) {
             manager.cancel(buildNotificationId(roomId));
+            rememberDismissedCall(context, roomId, dismissedAt);
         }
 
         IncomingCallActivity.dismissActiveCall();
@@ -316,6 +383,46 @@ public final class IncomingCallNotificationHelper {
 
     private static void clearActiveCalls(Context context) {
         getPreferences(context).edit().remove(PREF_ACTIVE_ROOM_IDS).apply();
+    }
+
+    private static long getLastDismissedAt(Context context, String roomId) {
+        if (roomId == null || roomId.trim().isEmpty()) {
+            return 0L;
+        }
+
+        return getPreferences(context).getLong(PREF_DISMISSED_AT_PREFIX + roomId, 0L);
+    }
+
+    private static void rememberDismissedCall(
+        Context context,
+        String roomId,
+        long dismissedAt
+    ) {
+        if (roomId == null || roomId.trim().isEmpty() || dismissedAt <= 0L) {
+            return;
+        }
+
+        SharedPreferences preferences = getPreferences(context);
+        String key = PREF_DISMISSED_AT_PREFIX + roomId;
+        long storedDismissedAt = preferences.getLong(key, 0L);
+        long resolvedDismissedAt = Math.max(storedDismissedAt, dismissedAt);
+        long pruneBefore = System.currentTimeMillis() - DISMISSED_CALL_RETENTION_MS;
+        SharedPreferences.Editor editor = preferences.edit().putLong(
+            key,
+            resolvedDismissedAt
+        );
+
+        for (Map.Entry<String, ?> entry : preferences.getAll().entrySet()) {
+            if (
+                entry.getKey().startsWith(PREF_DISMISSED_AT_PREFIX) &&
+                entry.getValue() instanceof Long &&
+                (Long) entry.getValue() < pruneBefore
+            ) {
+                editor.remove(entry.getKey());
+            }
+        }
+
+        editor.apply();
     }
 
     private static SharedPreferences getPreferences(Context context) {

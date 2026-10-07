@@ -23,6 +23,10 @@
 <script setup lang="ts">
 import { vOnClickOutside } from '@vueuse/components';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import {
+  BackButtonPriority,
+  useBackButtonHandler
+} from '../../composables/useBackButton';
 
 const props = withDefaults(
   defineProps<{
@@ -178,6 +182,12 @@ watch(menuRef, menu => {
 });
 
 const closePopover = (event: Event) => emits('unmount-close', event);
+
+useBackButtonHandler(
+  () => props.visible,
+  () => closePopover(new Event('backButton')),
+  BackButtonPriority.overlay
+);
 
 const closePopoverOnPointerStart = (event: Event) => {
   if (!props.visible || !isOutsideEvent(event)) {

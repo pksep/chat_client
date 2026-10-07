@@ -1,10 +1,7 @@
 import { ref, onUnmounted, watch, type Ref } from 'vue';
 import { useBackButton } from '../../../composables/useBackButton';
 import {
-  navigateToAssistant,
-  navigateToDefault,
-  navigateToDialogsList,
-  navigateToGroupsList,
+  navigateBackFromChat,
   RouteTypes
 } from '../../../composables/navigation/useUrlRouting';
 import {
@@ -27,15 +24,7 @@ export function useMessageSwipe(route: Ref<{ id: string; type: string }>) {
       return;
     }
 
-    if (route.value.type === RouteTypes.AI) {
-      navigateToAssistant();
-    } else if (route.value.type === RouteTypes.DIALOGS) {
-      navigateToDialogsList();
-    } else if (route.value.type === RouteTypes.GROUP) {
-      navigateToGroupsList();
-    } else if (route.value.type === RouteTypes.FAVORITES) {
-      navigateToDefault();
-    }
+    navigateBackFromChat(route.value);
   };
 
   const onTouchStart = (e: TouchEvent) => {

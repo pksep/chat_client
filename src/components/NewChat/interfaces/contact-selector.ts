@@ -15,6 +15,8 @@ export interface IContactSelectorState {
 }
 
 export interface IContactSelectorProps {
+  addButtonText?: string;
+  usersFilterLabel?: string;
   isButtonDisabled?: boolean;
   selectedContactIds?: Set<string | number>;
   excludedContactIds?: Set<string | number>;

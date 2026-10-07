@@ -2,13 +2,13 @@
   <form class="menu__info-form" @submit.prevent="onSubmit">
     <slot> </slot>
     <div class="menu__info-form-block form__name">
-      <label for="name" class="menu__info-title-text"> Название: </label>
       <Input
-        id="name"
+        input-id="name"
+        aria-label="Название группы"
         class="initial"
         placeholder="Название"
         :model-value="newName"
-        :disabled="!!currentGroup && !currentGroup.isAdmin"
+        :disabled="!props.creating && !!currentGroup && !currentGroup.isAdmin"
         @click.stop
         @update:model-value="handleChangeName"
       />
@@ -48,6 +48,7 @@ const route = useUrlWatcher();
 const props = withDefaults(
   defineProps<{
     name?: string;
+    creating?: boolean;
   }>(),
   { name: '' }
 );
@@ -61,10 +62,12 @@ const isFormValid = computed(() => {
 
 const onSave = () => {
   if (isFormValid.value) {
-    currentGroup.value = {
-      ...currentGroup.value,
-      name: newName.value
-    };
+    if (!props.creating) {
+      currentGroup.value = {
+        ...currentGroup.value,
+        name: newName.value
+      };
+    }
     oldName.value = newName.value;
     emits('unmount-save', { name: newName.value });
   }
@@ -82,8 +85,9 @@ const handleChangeName = (newVal: string) => {
 watch(
   () => [currentGroup.value?.id, route.value.id, props.name],
   () => {
-    newName.value = currentGroup.value?.name || props.name;
-    oldName.value = currentGroup.value?.name || props.name;
+    const name = (!props.creating && currentGroup.value?.name) || props.name;
+    newName.value = name;
+    oldName.value = name;
   },
   { immediate: true }
 );

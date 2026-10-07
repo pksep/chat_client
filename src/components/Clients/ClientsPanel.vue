@@ -1,13 +1,40 @@
 <template>
   <section class="clients-panel" data-testid="ClientsPanel">
+    <ChatFoldersPanel
+      v-if="isManagingFolders && !isCollapse"
+      scope="clients"
+      :mobile="isMobile"
+      :topics="folderTopics"
+      :folders="clientFolders"
+      :loading="isFoldersLoading"
+      :selected-folder-id="activeFolderId"
+      @close="closeFolderManager"
+      @select-folder="selectFolder"
+      @select-topic="openTopic"
+    />
     <ChatsToolbar
-      v-if="!isCollapse"
+      v-else-if="!isCollapse"
       v-model="search"
       title="Клиенты"
       :show-create="false"
       :class="{ 'mobile-list-container__toolbar': isMobile }"
       data-testid="Clients"
     >
+      <template v-if="isMobile" #folders>
+        <ChatFolderRail
+          mobile
+          scope="clients"
+          :loading="isFoldersLoading"
+          :folders="clientFolders"
+          :topics="folderTopics"
+          :selected-folder-id="activeFolderId"
+          :is-managing="false"
+          is-active
+          :auth-user-id="getAuthUser()?.id"
+          @select="selectFolder"
+          @manage="openFolderManager"
+        />
+      </template>
       <template #filters>
         <div class="clients-panel__filter-rows">
           <ChatsToolbarFilters
@@ -36,16 +63,26 @@
       </p>
     </template>
     <TopicList
-      v-if="allowed && (loading || topics.length)"
+      v-if="!isManagingFolders && allowed && (loading || topics.length)"
+      folder-scope="clients"
       :class="isMobile ? '' : 'menu__contact-list'"
       :topics="topics"
       :is-loading="loading"
+      :is-collapse="isCollapse"
       :selected-topic-id="route.id || undefined"
       data-testid="Clients-Topics"
       @unmount-topic="openTopic"
     />
     <MenuEmptyState
-      v-if="allowed && !loading && !topics.length && !isCollapse"
+      v-if="
+        !isManagingFolders &&
+        allowed &&
+        !loading &&
+        !topics.length &&
+        !isCollapse
+      "
+      :text="search.trim() ? 'Ничего не найдено' : 'Здесь будут чаты'"
+      :hide-icon="!search.trim()"
       data-testid="Clients-Empty"
     />
   </section>
@@ -67,10 +104,23 @@ import ChatsToolbarFilters from '../Menu/ChatsToolbarFilters.vue';
 import ChatsToolbar from '../Menu/ChatsToolbar.vue';
 import MenuEmptyState from '../Menu/MenuEmptyState.vue';
 import type { ITopic } from '../interfaces/interfaces';
+import { useChatFolders } from '../../composables/useChatFolders';
+import ChatFolderRail from '../Menu/ChatFolderRail.vue';
+import ChatFoldersPanel from '../Menu/ChatFoldersPanel.vue';
 defineProps<{ isCollapse?: boolean; isMobile?: boolean }>();
 const { inquiries, allowed, loading } = useManagerInquiries();
 const route = useUrlWatcher();
 const { setActiveSection } = useChatMenu();
+const {
+  folders: clientFolders,
+  activeFolderId,
+  activeFolder,
+  isManagingFolders,
+  isLoading: isFoldersLoading,
+  selectFolder,
+  openFolderManager,
+  closeFolderManager
+} = useChatFolders('clients');
 const queue = ref('all');
 const source = ref('');
 const search = ref('');
@@ -83,12 +133,23 @@ const platforms = ['Сайт', 'Авито', 'ВКонтакте'].map(platform 
   value: platform,
   label: platform
 }));
+const folderTopics = computed(() => {
+  const byId = new Map(getTopicList().map(topic => [topic.id, topic]));
+  return inquiries.value.flatMap(item => {
+    const topic = byId.get(item.topic_id);
+    return topic
+      ? [{ ...topic, name: clientName(item), avatarUrl: item.avatar_url || '' }]
+      : [];
+  });
+});
 const topics = computed(() => {
   const byId = new Map(getTopicList().map(topic => [topic.id, topic]));
   const query = search.value.trim().toLocaleLowerCase('ru');
   return inquiries.value
     .filter(
       item =>
+        (!activeFolder.value ||
+          activeFolder.value.topicIds.includes(item.topic_id)) &&
         (queue.value !== 'new' || !item.manager_ids.length) &&
         (queue.value !== 'mine' ||
           item.manager_ids.includes(getAuthUser()?.id || '')) &&
@@ -127,17 +188,22 @@ const openTopic = (topic: ITopic) => {
   min-height: 0;
   width: 100%;
 }
+.clients-panel > .chat-folders-panel {
+  flex: 1;
+}
 .clients-panel :deep(.chats-toolbar__filter-button svg) {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
 }
 .clients-panel__filter-rows {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 5px;
+  padding-bottom: 10px;
 }
-.clients-panel__filter-rows > :deep(.chats-toolbar__filters:first-child) {
-  padding-bottom: 0;
+.clients-panel__filter-rows > :deep(.chats-toolbar__filters) {
+  display: contents;
 }
 .clients-panel__empty {
   color: var(--text-secondary);

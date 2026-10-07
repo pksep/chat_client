@@ -1,5 +1,6 @@
 package sep.pksep.app;
 
+import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
@@ -43,6 +44,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 
 import sep.pksep.app.plugins.AudioOutputPlugin;
 import sep.pksep.app.plugins.AndroidScreenSharePlugin;
@@ -73,12 +76,12 @@ public class MainActivity extends BridgeActivity {
         "webview_cache_apk_fingerprint";
     private static final String PREF_WEBVIEW_CACHE_VERSION_CODE =
         "webview_cache_version_code";
-    private static final String LAUNCH_APPEARANCE_PREFS = "launch_appearance";
-    private static final String PREF_LAUNCH_DARK_THEME = "dark_theme";
     private static final int LAUNCH_BACKGROUND_LIGHT_COLOR = 0xFFF8F9FD;
     private static final int LAUNCH_BACKGROUND_DARK_COLOR = 0xFF212531;
     private static final long LAUNCH_SPLASH_FALLBACK_TIMEOUT_MS = 6000L;
+    private android.animation.ValueAnimator themeColorAnimator;
     private static final long STARTUP_OVERLAY_FALLBACK_TIMEOUT_MS = 30000L;
+    private static final int STARTUP_RUNTIME_PERMISSIONS_REQUEST_CODE = 4101;
     private boolean customPluginsRegistered = false;
     private static volatile boolean appInForeground = false;
     private static volatile boolean activityCreated = false;
@@ -133,12 +136,19 @@ public class MainActivity extends BridgeActivity {
         if (!launchedFromIncomingCall && !preparedNativeLaunch) {
             ChatStartupHistory.start(this, launchedFromChatNotification ? getIntent().getStringExtra(EXTRA_TOPIC_ID) : null);
         }
-        if (preparedNativeLaunch) setTheme(R.style.AppTheme_PreparedMain);
+        if (preparedNativeLaunch) {
+            setTheme(isDarkLaunchTheme()
+                ? R.style.AppTheme_PreparedMainDark
+                : R.style.AppTheme_PreparedMain);
+        } else if (isDarkLaunchTheme()) {
+            setTheme(R.style.AppTheme_NoActionBarLaunchDark);
+        }
         SplashScreen launchSplash = preparedNativeLaunch
             ? null
             : SplashScreen.installSplashScreen(this);
         configureLaunchSplash(launchSplash);
         if (!preparedNativeLaunch) applyLaunchBackground();
+        LaunchAppearance.applySystemBars(this);
         if (!launchedFromIncomingCall &&
             shouldClearWebViewCacheForCurrentVersion()) {
             markStartupBenchmark("asset-cache-cleanup-start");
@@ -158,6 +168,14 @@ public class MainActivity extends BridgeActivity {
 
         markStartupBenchmark("activity-prepared");
         super.onCreate(savedInstanceState);
+        WebView systemBarsWebView = bridge == null ? null : bridge.getWebView();
+        LaunchAppearance.applySystemBars(this, systemBarsWebView);
+        if (systemBarsWebView != null) {
+            systemBarsWebView.post(
+                () -> LaunchAppearance.applySystemBars(this, systemBarsWebView)
+            );
+        }
+        requestMissingStartupRuntimePermissions();
         if (BuildConfig.CHAT_STARTUP_BENCHMARK) {
             WebView.setWebContentsDebuggingEnabled(true);
         }
@@ -197,7 +215,14 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    public void onStop() {
+        super.onStop();
+        LaunchAppearance.finishLauncherIconUpdate(this);
+    }
+
+    @Override
     public void onDestroy() {
+        if (themeColorAnimator != null) themeColorAnimator.cancel();
         activityCreated = false;
         super.onDestroy();
     }
@@ -1080,15 +1105,33 @@ public class MainActivity extends BridgeActivity {
         webView.setBackgroundColor(getLaunchBackgroundColor());
     }
 
-    public void setLaunchDarkTheme(boolean ignoredIsDarkTheme) {
-        getSharedPreferences(LAUNCH_APPEARANCE_PREFS, MODE_PRIVATE)
-            .edit()
-            .putBoolean(PREF_LAUNCH_DARK_THEME, false)
-            .apply();
+    public void setLaunchDarkTheme(boolean isDarkTheme) {
+        int previousColor = LaunchAppearance.backgroundColor(this);
+        int previousStatusBarColor = LaunchAppearance.statusBarColor(this);
+        LaunchAppearance.setDark(this, isDarkTheme);
+        runOnUiThread(() -> {
+            int fromColor = themeColorAnimator != null &&
+                themeColorAnimator.isRunning()
+                ? (int) themeColorAnimator.getAnimatedValue()
+                : previousColor;
+            int fromStatusBarColor = themeColorAnimator != null &&
+                themeColorAnimator.isRunning()
+                ? getWindow().getStatusBarColor()
+                : previousStatusBarColor;
+            if (themeColorAnimator != null) themeColorAnimator.cancel();
+            themeColorAnimator = LaunchAppearance.animateSystemBars(
+                this,
+                fromColor,
+                LaunchAppearance.backgroundColor(this),
+                fromStatusBarColor,
+                LaunchAppearance.statusBarColor(this),
+                bridge == null ? null : bridge.getWebView()
+            );
+        });
     }
 
     private boolean isDarkLaunchTheme() {
-        return false;
+        return LaunchAppearance.isDark(this);
     }
 
     private int getLaunchBackgroundColor() {
@@ -1123,6 +1166,51 @@ public class MainActivity extends BridgeActivity {
         handleCallIntent(intent);
         handleNotificationLaunchIntent(intent);
         handleShareIntent(intent);
+        requestMissingStartupRuntimePermissions();
+    }
+
+    /**
+     * Checks all runtime permissions required by the app every time its main
+     * activity is started. Android only shows dialogs for permissions which
+     * are still missing, so already granted permissions are never requested
+     * again. Media picker access is intentionally excluded: Android grants
+     * its selected URI directly, without a broad storage permission.
+     */
+    private void requestMissingStartupRuntimePermissions() {
+        List<String> missingPermissions = new ArrayList<>();
+
+        addMissingRuntimePermission(missingPermissions, Manifest.permission.CAMERA);
+        addMissingRuntimePermission(missingPermissions, Manifest.permission.RECORD_AUDIO);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            addMissingRuntimePermission(
+                missingPermissions,
+                Manifest.permission.BLUETOOTH_CONNECT
+            );
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            addMissingRuntimePermission(
+                missingPermissions,
+                Manifest.permission.POST_NOTIFICATIONS
+            );
+        }
+
+        if (!missingPermissions.isEmpty()) {
+            requestPermissions(
+                missingPermissions.toArray(new String[0]),
+                STARTUP_RUNTIME_PERMISSIONS_REQUEST_CODE
+            );
+        }
+    }
+
+    private void addMissingRuntimePermission(
+        List<String> missingPermissions,
+        String permission
+    ) {
+        if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
+            missingPermissions.add(permission);
+        }
     }
 
     private boolean isChatMessageNotificationIntent(Intent intent) {
@@ -1131,7 +1219,13 @@ public class MainActivity extends BridgeActivity {
         }
 
         Bundle extras = intent.getExtras();
-        if (extras == null || "incoming_call".equals(extras.getString(EXTRA_TYPE))) {
+        if (
+            extras == null ||
+            IncomingCallNotificationHelper.isDirectCallPayload(
+                extras.getString(EXTRA_TYPE),
+                extras.getString(IncomingCallNotificationHelper.EXTRA_TOPIC_TYPE)
+            )
+        ) {
             return false;
         }
 
@@ -1202,9 +1296,12 @@ public class MainActivity extends BridgeActivity {
         boolean isExplicitChatNotification =
             ChatNotificationHelper.ACTION_OPEN_CHAT_NOTIFICATION.equals(
                 intent.getAction()
-            );
+        );
         boolean isIncomingCallNotification =
-            "incoming_call".equals(extras.getString(EXTRA_TYPE)) &&
+            IncomingCallNotificationHelper.isDirectCallPayload(
+                extras.getString(EXTRA_TYPE),
+                extras.getString(IncomingCallNotificationHelper.EXTRA_TOPIC_TYPE)
+            ) &&
             extras.containsKey(EXTRA_ROOM_ID);
 
         if (
@@ -1311,12 +1408,20 @@ public class MainActivity extends BridgeActivity {
             return false;
         }
 
-        if ("incoming_call".equals(intent.getStringExtra(EXTRA_TYPE))) {
+        if (
+            IncomingCallNotificationHelper.isDirectCallPayload(
+                intent.getStringExtra(EXTRA_TYPE),
+                intent.getStringExtra(IncomingCallNotificationHelper.EXTRA_TOPIC_TYPE)
+            )
+        ) {
             return true;
         }
 
         Uri data = intent.getData();
-        return data != null && "incoming_call".equals(data.getQueryParameter(EXTRA_TYPE));
+        return data != null && IncomingCallNotificationHelper.isDirectCallPayload(
+            data.getQueryParameter(EXTRA_TYPE),
+            data.getQueryParameter(IncomingCallNotificationHelper.EXTRA_TOPIC_TYPE)
+        );
     }
 
     public void setIncomingCallWindowEnabled(boolean enabled) {

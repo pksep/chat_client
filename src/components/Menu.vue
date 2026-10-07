@@ -10,68 +10,103 @@
       :data-testid="`${props.dataTestid}-Menu-ChatsToolbar-CollapseIcon`"
     />
 
+    <ChatFolderRail
+      v-if="!isCollapse && !isShareSelectionActive"
+      :scope="activeSection === 'clients' ? 'clients' : 'chats'"
+      :loading="isChatFoldersLoading"
+      :folders="activeSection === 'clients' ? clientFolders : chatFolders"
+      :topics="activeSection === 'clients' ? clientFolderTopics : allTopics"
+      :selected-folder-id="
+        activeSection === 'clients' ? activeClientFolderId : activeFolderId
+      "
+      :is-managing="
+        activeSection === 'clients'
+          ? isManagingClientFolders
+          : isManagingFolders
+      "
+      :is-active="activeSection === 'chats' || activeSection === 'clients'"
+      :auth-user-id="authUserId"
+      @select="handleSelectFolder"
+      @manage="handleOpenFolderManager"
+    />
+
     <div
       class="menu__start"
       :data-testid="`${props.dataTestid}-Menu-StartContainer`"
     >
       <template v-if="activeSection === 'chats'">
-        <ChatsToolbar
-          v-if="!isShareSelectionActive"
-          :model-value="toolbarState.search"
-          :filter="toolbarState.filter"
-          :filter-counts="filterCounts"
-          :filter-muted-only="filterMutedOnly"
-          :is-collapse="isCollapse"
-          :data-testid="`${props.dataTestid}-Menu`"
-          @update:model-value="setSearch"
-          @update:filter="setFilter"
-          @create-chat="handleNewContactModal"
-          @create-group="handleNewGroupModal"
-          @create-bot="handleNewBotModal"
+        <ChatFoldersPanel
+          v-if="isManagingFolders && !isShareSelectionActive"
+          :topics="allTopics"
+          :folders="chatFolders"
+          :loading="isChatFoldersLoading"
+          :selected-folder-id="activeFolderId"
+          @close="closeFolderManager"
+          @select-folder="handleSelectFolder"
+          @select-topic="unmountTopicClick"
         />
 
-        <ShareSelectionToolbar
-          v-else
-          :message="shareMessage"
-          :search="toolbarState.search"
-          :filter="toolbarState.filter"
-          :filter-counts="filterCounts"
-          :selected-count="selectedTopicsCount"
-          :summary-label="pendingShareSummaryLabel"
-          :is-sending="isSendingSharedFiles"
-          :is-collapse="isCollapse"
-          :data-testid="`${props.dataTestid}-Menu`"
-          @update:message="updateShareMessage"
-          @update:search="setSearch"
-          @update:filter="setFilter"
-          @cancel="closeShareSelection"
-          @send="handleSendSharedFiles"
-        />
+        <template v-else>
+          <ChatsToolbar
+            v-if="!isShareSelectionActive"
+            :model-value="toolbarState.search"
+            :filter="toolbarState.filter"
+            :filter-counts="filterCounts"
+            :filter-muted-only="filterMutedOnly"
+            :is-collapse="isCollapse"
+            :data-testid="`${props.dataTestid}-Menu`"
+            @update:model-value="setSearch"
+            @update:filter="setFilter"
+            @create-chat="handleNewContactModal"
+            @create-group="handleNewGroupModal"
+            @create-bot="handleNewBotModal"
+          />
 
-        <TopicList
-          class="menu__contact-list"
-          :topics="topicGroups"
-          @unmount-topic="unmountTopicClick"
-          :selected-topic-id="selectedContactId"
-          :show-checkbox="isShareSelectionActive"
-          :selected-topic-ids="selectedTopicIds"
-          :search-query="toolbarState.search"
-          :toolbar-filter="toolbarState.filter"
-          :is-loading="shouldShowTopicListSkeleton"
-          :message-results="
-            isShareSelectionActive ? [] : filteredMessageSearchResults
-          "
-          :is-message-search-loading="
-            !isShareSelectionActive &&
-            (isMessageSearchPending || isMessageSearchLoading)
-          "
-          :data-testid="`${props.dataTestid}-Menu-ContactList`"
-          @unmount-message="handleMessageSearchClick"
-        />
+          <ShareSelectionToolbar
+            v-else
+            :message="shareMessage"
+            :search="toolbarState.search"
+            :filter="toolbarState.filter"
+            :filter-counts="filterCounts"
+            :selected-count="selectedTopicsCount"
+            :summary-label="pendingShareSummaryLabel"
+            :is-sending="isSendingSharedFiles"
+            :is-collapse="isCollapse"
+            :data-testid="`${props.dataTestid}-Menu`"
+            @update:message="updateShareMessage"
+            @update:search="setSearch"
+            @update:filter="setFilter"
+            @cancel="closeShareSelection"
+            @send="handleSendSharedFiles"
+          />
+
+          <TopicList
+            class="menu__contact-list"
+            :topics="topicGroups"
+            @unmount-topic="unmountTopicClick"
+            :selected-topic-id="selectedContactId"
+            :show-checkbox="isShareSelectionActive"
+            :selected-topic-ids="selectedTopicIds"
+            :search-query="toolbarState.search"
+            :toolbar-filter="toolbarState.filter"
+            :is-loading="shouldShowTopicListSkeleton"
+            :message-results="
+              isShareSelectionActive ? [] : filteredMessageSearchResults
+            "
+            :is-collapse="isCollapse"
+            :is-message-search-loading="
+              !isShareSelectionActive &&
+              (isMessageSearchPending || isMessageSearchLoading)
+            "
+            :data-testid="`${props.dataTestid}-Menu-ContactList`"
+            @unmount-message="handleMessageSearchClick"
+          />
+        </template>
       </template>
 
       <CallsPage
         v-else-if="activeSection === 'calls'"
+        :is-collapse="isCollapse"
         :data-testid="`${props.dataTestid}-Menu-CallsPage`"
       />
 
@@ -81,14 +116,18 @@
       />
 
       <AIMenuPanel
-        v-else-if="activeSection === 'ai'"
+        v-else-if="activeSection === 'ai' && chatAccess.ai"
         :is-collapse="isCollapse"
         :data-testid="`${props.dataTestid}-Menu-AIPanel`"
       />
 
       <MenuProfilePanel
         v-else
+        :is-collapse="isCollapse"
         :data-testid="`${props.dataTestid}-Menu-ProfilePanel`"
+        @create-chat="handleNewContactModal"
+        @create-group="handleNewGroupModal"
+        @create-bot="handleNewBotModal"
       />
     </div>
 
@@ -124,6 +163,7 @@ import {
   computed,
   defineAsyncComponent,
   onBeforeUnmount,
+  onMounted,
   ref,
   watch
 } from 'vue';
@@ -177,9 +217,14 @@ import {
   type ChatTopicOpenTelemetryMeta
 } from '../services/useChatNavigationTelemetry';
 import { resolveChatMenuSectionForRoute } from '../utils/chatMenuNavigation';
+import { useChatFolders } from '../composables/useChatFolders';
+import ChatFolderRail from './Menu/ChatFolderRail.vue';
+import { useChatAccess } from '../composables/useChatAccess';
+import ChatFoldersPanel from './Menu/ChatFoldersPanel.vue';
 
 const CallsPage = defineAsyncComponent(() => import('./Calls/CallsPage.vue'));
 const AIMenuPanel = defineAsyncComponent(() => import('./AI/AIMenuPanel.vue'));
+const { access: chatAccess } = useChatAccess();
 const MenuProfilePanel = defineAsyncComponent(
   () => import('./Menu/MenuProfilePanel.vue')
 );
@@ -216,6 +261,25 @@ const isMessageSearchPending = ref(false);
 let messageSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let messageSearchRequestToken = 0;
 const authUserId = computed(() => getAuthUser()?.id || '');
+const {
+  folders: chatFolders,
+  activeFolderId,
+  activeFolder,
+  isManagingFolders,
+  isLoading: isChatFoldersLoading,
+  loadFolders,
+  selectFolder,
+  openFolderManager,
+  closeFolderManager
+} = useChatFolders();
+const {
+  folders: clientFolders,
+  activeFolderId: activeClientFolderId,
+  isManagingFolders: isManagingClientFolders,
+  selectFolder: selectClientFolder,
+  openFolderManager: openClientFolderManager
+} = useChatFolders('clients');
+const clientFolderTopics = computed(() => getTopicList().filter(isClientTopic));
 const pendingShareSummaryLabel = computed(() =>
   getShareSelectionSummaryLabel(
     pendingShareBatches.value.flatMap(batch => batch.files)
@@ -253,6 +317,10 @@ const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
   return true;
 };
 
+const matchesActiveFolder = (topic?: ITopic | null): boolean =>
+  !!topic &&
+  (!activeFolder.value || activeFolder.value.topicIds.includes(topic.id));
+
 const filterBadgeState = computed(() =>
   getChatsToolbarFilterBadgeState(allTopics.value, authUserId.value)
 );
@@ -268,8 +336,8 @@ const filterMutedOnly = computed(() =>
 const topicGroups = computed(() => {
   const query = normalizeAtSearchQuery(toolbarState.search);
 
-  const filteredByType = allTopics.value.filter(topic =>
-    matchesToolbarFilter(topic)
+  const filteredByType = allTopics.value.filter(
+    topic => matchesToolbarFilter(topic) && matchesActiveFolder(topic)
   );
 
   if (!query) {
@@ -297,7 +365,9 @@ const filteredMessageSearchResults = computed(() => {
     const topic =
       result.topic || allTopics.value.find(t => t.id === result.topicId);
 
-    return matchesToolbarFilter(topic || null);
+    return (
+      matchesToolbarFilter(topic || null) && matchesActiveFolder(topic || null)
+    );
   });
 });
 
@@ -313,8 +383,14 @@ const { state: isCollapse, toggle } = useResizeState({
 
 const handleCollapse = (): void => {
   setSearch('');
+  if (!isCollapse.value) closeFolderManager();
   toggle();
 };
+
+watch([isCollapse, activeSection], ([collapsed, section]) => {
+  if (collapsed || (section !== 'chats' && section !== 'clients'))
+    closeFolderManager();
+});
 
 const unmountTopicClick = (
   topic: ITopic,
@@ -384,9 +460,30 @@ const handleSendSharedFiles = async (): Promise<void> => {
 
 const menuClasses = computed(() => [
   'menu',
-  { 'menu--collapse': isCollapse.value },
+  {
+    'menu--collapse': isCollapse.value,
+    'menu--folders': !isCollapse.value && !isShareSelectionActive.value
+  },
   props.class
 ]);
+
+const handleSelectFolder = (folderId: string | null): void => {
+  if (activeSection.value === 'clients') {
+    selectClientFolder(folderId);
+    return;
+  }
+  setActiveSection('chats');
+  selectFolder(folderId);
+};
+
+const handleOpenFolderManager = (): void => {
+  if (activeSection.value === 'clients') {
+    openClientFolderManager();
+    return;
+  }
+  setActiveSection('chats');
+  openFolderManager();
+};
 
 const handleNewGroupModal = () => {
   emits('unmount-new-group', { isChapterOpen: true });
@@ -421,6 +518,30 @@ watch(
   },
   { immediate: true }
 );
+
+watch(
+  [isTopicsLoading, authUserId],
+  ([loading, userId]) => {
+    if (!loading && userId) void loadFolders();
+  },
+  { immediate: true }
+);
+
+watch(
+  () => chatFolders.value.map(folder => folder.id).join('|'),
+  () => {
+    if (
+      activeFolderId.value &&
+      !chatFolders.value.some(folder => folder.id === activeFolderId.value)
+    ) {
+      selectFolder(null);
+    }
+  }
+);
+
+onMounted(() => {
+  void loadFolders();
+});
 
 watch(
   [() => toolbarState.search, isShareSelectionActive],

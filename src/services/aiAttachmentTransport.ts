@@ -1,3 +1,4 @@
+import { fetchWithAiAccess } from '../composables/useChatAccess';
 /** Ошибка сети при работе с файлами не является ошибкой модели или команды ERP. */
 export const fetchAiAttachmentResponse = async (
   url: string,
@@ -8,7 +9,7 @@ export const fetchAiAttachmentResponse = async (
     ? AbortSignal.any([init.signal, timeout])
     : timeout;
   try {
-    return await fetch(url, { ...init, signal });
+    return await fetchWithAiAccess(url, { ...init, signal });
   } catch {
     if (init.signal?.aborted) throw new Error('Подготовка вложений отменена.');
     if (timeout.aborted)

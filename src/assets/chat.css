@@ -575,7 +575,6 @@ p.chat__nothing-paragraph {
 
   .chat__message-wrapper--favorite>.chat__message-bubble {
     height: 100%;
-    padding-top: var(--mobile-pinned-messages-offset, 58px);
   }
 
   .chat__message-bubble__scroll-indicators {
@@ -716,13 +715,7 @@ p.chat__nothing-paragraph {
     top: 6px;
   }
 
-  .chat__mobile-route-view--messages:not(:has(.pinned-messages)) .chat__floating-date-divider {
-    top: calc(var(--mobile-pinned-messages-offset, 58px) - 9px);
-    z-index: 3;
-  }
-
   .chat__message-wrapper--favorite>.chat__floating-date-divider {
-    top: calc(var(--mobile-pinned-messages-offset, 58px) - 9px);
     z-index: 3;
   }
 

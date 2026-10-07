@@ -1,6 +1,6 @@
 <template>
   <section
-    :class="['menu__info-users', $attrs.class]"
+    :class="['menu__info-users', props.class, $attrs.class]"
     :data-testid="`${props.dataTestid}-Container`"
   >
     <Button
@@ -39,14 +39,15 @@
             ]"
             :user="user"
             :dataTestid="`${props.dataTestid}-ContactListInModal-UserProfile${index + 1}`"
-            @click.stop="openUserInfo(user)"
+            @click.stop="!props.creating && openUserInfo(user)"
             @unmount-click="
-              user.id !== authUser.id &&
+              !props.creating &&
+                user.id !== authUser?.id &&
                 openActivePopover(user.id.toString(), $event)
             "
           />
           <ContextMenu
-            v-if="currentGroup?.isAdmin"
+            v-if="!props.creating && currentGroup?.isAdmin"
             :visible="isOpen[user.id.toString()]"
             :position="position"
             @unmount-close="closeActivePopover(user.id.toString())"
@@ -54,13 +55,13 @@
           >
             <template #default>
               <Button
-                class="menu__info-button-little error-dark-color"
+                class="red-context-button"
                 :type="ButtonTypeEnum.popover"
-                :size="SizesEnum.little"
+                :size="SizesEnum.small"
                 @click="deleteUserFromChat(user.id.toString())"
                 :data-testid="`${props.dataTestid}-ContactListInModal-RemoveButton${index + 1}`"
               >
-                Удалить из канала
+                <Icon :name="IconNameEnum.deleteSmall" /> Удалить из канала
               </Button>
             </template>
           </ContextMenu>
@@ -74,7 +75,7 @@
     :open="newContactOpen"
     @unmount-close="closeContactModal"
     @unmount-next="handleAddMembers"
-    title="Канал"
+    title="Добавить участников"
     close-button-text="Назад"
     start-button-text="Добавить"
     :data-testid="`${props.dataTestid}-NewChatMobileModal-Container`"
@@ -116,6 +117,7 @@ import { getAuthUser } from '../../composables/useAuth';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 
 interface ContactListInModalProps {
+  creating?: boolean;
   showAddButton?: boolean;
   contacts?: IUser[];
   filteredContacts?: IUser[];
@@ -201,7 +203,7 @@ const handleNewContact = (users: IUser[]) => {
 };
 
 const handleAddMembers = async (): Promise<void> => {
-  if (route.value.id) {
+  if (!props.creating && route.value.id) {
     await addGroupMembers(currentGroup.value.group.id, selectedUsers.value);
   } else {
     emits('unmount-added-users', selectedUsers.value);

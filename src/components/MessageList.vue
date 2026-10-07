@@ -147,12 +147,24 @@
           :data-testid="`${props.dataTestid}-CallTopicDefaultMessage`"
         />
       </template>
-      <template v-if="activeTopic && shouldShowInlineCallTopicActions" #after>
+      <template #after>
         <CallTopicActions
+          v-if="activeTopic && shouldShowInlineCallTopicActions"
           class="call-topic-actions--message-inline"
           :topic="activeTopic"
           :data-testid="`${props.dataTestid}-CallTopicActionsInline`"
         />
+        <div
+          v-if="isDeletedAccountTopic"
+          class="top-element"
+          :data-testid="`${props.dataTestid}-MessageList-DeletedAccountMessage`"
+        >
+          <div class="system-message chat__deleted-account-message">
+            <span class="system-message-text"
+              >Чат с этим пользователем недоступен</span
+            >
+          </div>
+        </div>
       </template>
     </MessageListUserItems>
     <div
@@ -436,7 +448,6 @@
     v-if="
       !shouldRenderUserMessageSkeleton &&
       !isSelectionMode &&
-      !isMobileTopicSearchMode &&
       activeTopic &&
       shouldShowDockedCallTopicActions
     "
@@ -583,8 +594,7 @@ import {
 import { isUnreadTrackableMessage } from '../utils/messageTracking';
 import {
   consumePendingSearchNavigation,
-  getPendingSearchNavigation,
-  isMobileTopicSearchActive
+  getPendingSearchNavigation
 } from '../composables/useMessageSearch';
 import {
   normalizeReplyQuoteOccurrenceIndex,
@@ -889,13 +899,12 @@ const authUserId = computed(() =>
 const isSelectionMode = computed(() =>
   isMessageSelectionModeForTopic(route.value.id)
 );
-const isMobileTopicSearchMode = computed(
-  () => isMobile.value && isMobileTopicSearchActive.value
-);
 const activeTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : null
 );
-const isActiveCallTopic = computed(() => isCallTopic(activeTopic.value));
+const isActiveCallTopic = computed(
+  () => route.value.type === RouteTypes.CALL || isCallTopic(activeTopic.value)
+);
 const isCallTopicActionsOpen = ref(false);
 const shouldShowCallTopicActionsToggle = computed(
   () => isCompactMessageInput.value && isActiveCallTopic.value
@@ -976,7 +985,6 @@ const shouldRenderMessageComposer = computed(
   () =>
     !isDefaultRoute.value &&
     !isSelectionMode.value &&
-    !isMobileTopicSearchMode.value &&
     !isDeletedAccountTopic.value
 );
 const topicUnreadCount = computed(() =>
@@ -4360,12 +4368,8 @@ watch(
 );
 
 watch(
-  [
-    () => route.value?.id,
-    () => route.value?.type,
-    () => scrollAnchor.viewportMode.value
-  ],
-  ([topicId, routeType, viewportMode], [previousTopicId]) => {
+  [() => route.value?.id, () => route.value?.type],
+  ([topicId, routeType], [previousTopicId]) => {
     if (previousTopicId && previousTopicId !== topicId) {
       setSuspendIncomingMergeForTopic(previousTopicId, false);
     }
@@ -4374,7 +4378,10 @@ watch(
       return;
     }
 
-    setSuspendIncomingMergeForTopic(topicId, viewportMode !== 'live');
+    // Appending uses the scroll anchor to keep a reader's current position.
+    // Do not hide new socket messages merely because the reader is viewing
+    // history: otherwise they only appear after a later scroll interaction.
+    setSuspendIncomingMergeForTopic(topicId, false);
   },
   { immediate: true }
 );
@@ -4690,3 +4697,15 @@ defineExpose({
   scrollToMessage: handleScrollToMessage
 });
 </script>
+
+<style scoped>
+.chat__deleted-account-message > .system-message-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0 10px;
+  background: rgb(28 38 53 / 70%);
+}
+</style>

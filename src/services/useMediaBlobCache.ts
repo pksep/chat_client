@@ -6,6 +6,11 @@ import {
   isHeicMediaPath
 } from '../utils/media-format';
 import { createMediaObjectUrl } from '../utils/media-object-url';
+import {
+  buildMediaObjectUrl,
+  MEDIA_CACHE_VERSION,
+  withMediaCacheVersion
+} from '../utils/media-url';
 
 const isInquiryFile = (path: string) =>
   /^manager-private\/[0-9a-f-]{36}$/i.test(path);
@@ -32,7 +37,7 @@ const loadInquiryFile = async (path: string): Promise<string | null> => {
 };
 
 const DB_NAME = 'chat-media-blob-cache-db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const MEDIA_BLOB_STORE = 'mediaBlobs';
 const MAX_CACHE_BYTES = 200 * 1024 * 1024;
 const MAX_CACHE_ITEM_BYTES = 64 * 1024 * 1024;
@@ -52,6 +57,9 @@ const objectUrlCache = new Map<string, string>();
 const pendingMediaRequests = new Map<string, Promise<string | null>>();
 const pendingCachedMediaReads = new Map<string, Promise<string | null>>();
 let dbPromise: Promise<IDBDatabase | null> | null = null;
+
+const getMediaCacheKey = (path: string): string =>
+  `${MEDIA_CACHE_VERSION}:${path}`;
 
 const hasIndexedDb = () =>
   typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined';
@@ -76,6 +84,10 @@ const openDb = async (): Promise<IDBDatabase | null> => {
           keyPath: 'key'
         });
         mediaStore.createIndex('accessedAt', 'accessedAt', { unique: false });
+      } else {
+        // The media endpoint URL changed after repairing corrupted encrypted
+        // objects. Old blobs must not be reused after this one-time upgrade.
+        request.transaction?.objectStore(MEDIA_BLOB_STORE).clear();
       }
     };
 
@@ -165,7 +177,7 @@ const getAllRecords = async (): Promise<CachedMediaBlobRecord[]> => {
   });
 };
 
-const deleteRecord = async (path: string): Promise<void> => {
+const deleteRecord = async (key: string): Promise<void> => {
   const db = await openDb();
 
   if (!db) {
@@ -175,7 +187,7 @@ const deleteRecord = async (path: string): Promise<void> => {
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(MEDIA_BLOB_STORE, 'readwrite');
     const store = tx.objectStore(MEDIA_BLOB_STORE);
-    const request = store.delete(path);
+    const request = store.delete(key);
 
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
@@ -199,12 +211,13 @@ const ensureCacheWithinLimit = async (): Promise<void> => {
   );
 
   for (const record of sortedByAccess) {
-    await deleteRecord(record.path);
+    await deleteRecord(record.key);
 
-    const cachedObjectUrl = objectUrlCache.get(record.path);
+    const cacheKey = getMediaCacheKey(record.path);
+    const cachedObjectUrl = objectUrlCache.get(cacheKey);
     if (cachedObjectUrl) {
       URL.revokeObjectURL(cachedObjectUrl);
-      objectUrlCache.delete(record.path);
+      objectUrlCache.delete(cacheKey);
     }
 
     bytesToFree -= record.size || 0;
@@ -218,7 +231,7 @@ const ensureCacheWithinLimit = async (): Promise<void> => {
 const buildMediaSourceUrl = (path: string): string => {
   const config = getConfig();
   if (/^(blob:|data:|file:\/\/|https?:\/\/)/i.test(path)) {
-    return buildBrowserCompatibleImageUrl(path);
+    return buildBrowserCompatibleImageUrl(withMediaCacheVersion(path));
   }
 
   const cdnBase = config.CHAT_PATH_TO_FILE_CDN.replace(/\/+$/, '');
@@ -227,14 +240,14 @@ const buildMediaSourceUrl = (path: string): string => {
     try {
       const resolvedCdn = new URL(cdnBase, window.location.href);
       return buildBrowserCompatibleImageUrl(
-        new URL(path, resolvedCdn.origin).toString()
+        withMediaCacheVersion(new URL(path, resolvedCdn.origin).toString())
       );
     } catch {
       return path;
     }
   }
 
-  return buildBrowserCompatibleImageUrl(`${cdnBase}/${path}`);
+  return buildBrowserCompatibleImageUrl(buildMediaObjectUrl(cdnBase, path));
 };
 
 export const readResponseBlobWithinLimit = async (
@@ -293,7 +306,7 @@ export const getCachedMediaObjectUrl = (
     return null;
   }
 
-  return objectUrlCache.get(path) || null;
+  return objectUrlCache.get(getMediaCacheKey(path)) || null;
 };
 
 export const loadCachedMediaObjectUrl = async (
@@ -301,15 +314,16 @@ export const loadCachedMediaObjectUrl = async (
 ): Promise<string | null> => {
   if (!path || typeof window === 'undefined') return null;
 
-  const cachedObjectUrl = objectUrlCache.get(path);
+  const cacheKey = getMediaCacheKey(path);
+  const cachedObjectUrl = objectUrlCache.get(cacheKey);
   if (cachedObjectUrl) return cachedObjectUrl;
 
-  const pendingRead = pendingCachedMediaReads.get(path);
+  const pendingRead = pendingCachedMediaReads.get(cacheKey);
   if (pendingRead) return pendingRead;
 
   const read = (async () => {
     try {
-      const existingRecord = await getRecord(path);
+      const existingRecord = await getRecord(cacheKey);
       if (!existingRecord?.blob) return null;
       // Старые версии кешировали HEIC, который WebView не умеет показывать.
       if (isHeicMediaPath(path) && existingRecord.blob.type !== 'image/webp') {
@@ -317,7 +331,7 @@ export const loadCachedMediaObjectUrl = async (
       }
 
       const objectUrl = await createMediaObjectUrl(existingRecord.blob);
-      objectUrlCache.set(path, objectUrl);
+      objectUrlCache.set(cacheKey, objectUrl);
       if (shouldRefreshAccessedAt(existingRecord.accessedAt)) {
         void putRecord({
           ...existingRecord,
@@ -329,11 +343,11 @@ export const loadCachedMediaObjectUrl = async (
       console.warn('Failed to read cached media object URL:', error);
       return null;
     } finally {
-      pendingCachedMediaReads.delete(path);
+      pendingCachedMediaReads.delete(cacheKey);
     }
   })();
 
-  pendingCachedMediaReads.set(path, read);
+  pendingCachedMediaReads.set(cacheKey, read);
   return read;
 };
 
@@ -351,12 +365,13 @@ export const ensureMediaObjectUrl = async (
     }
   }
 
-  const cachedObjectUrl = objectUrlCache.get(path);
+  const cacheKey = getMediaCacheKey(path);
+  const cachedObjectUrl = objectUrlCache.get(cacheKey);
   if (cachedObjectUrl) {
     return cachedObjectUrl;
   }
 
-  const pendingRequest = pendingMediaRequests.get(path);
+  const pendingRequest = pendingMediaRequests.get(cacheKey);
   if (pendingRequest) {
     return pendingRequest;
   }
@@ -381,17 +396,17 @@ export const ensureMediaObjectUrl = async (
       );
 
       if (!blob) {
-        objectUrlCache.set(path, sourceUrl);
+        objectUrlCache.set(cacheKey, sourceUrl);
         return sourceUrl;
       }
 
       const now = new Date().toISOString();
       const objectUrl = await createMediaObjectUrl(blob);
 
-      objectUrlCache.set(path, objectUrl);
+      objectUrlCache.set(cacheKey, objectUrl);
 
       await putRecord({
-        key: path,
+        key: cacheKey,
         path,
         blob,
         mimeType: blob.type || 'application/octet-stream',
@@ -406,11 +421,11 @@ export const ensureMediaObjectUrl = async (
       console.warn('Failed to ensure media object URL:', error);
       return null;
     } finally {
-      pendingMediaRequests.delete(path);
+      pendingMediaRequests.delete(cacheKey);
     }
   })();
 
-  pendingMediaRequests.set(path, request);
+  pendingMediaRequests.set(cacheKey, request);
   return request;
 };
 

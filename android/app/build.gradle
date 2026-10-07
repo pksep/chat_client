@@ -21,8 +21,62 @@ def getAppVersionCode() {
 def rustorePushProjectIdOverride = project.findProperty("rustorePushProjectId")
 def rustorePushProjectId = "-IIn57B6vQDQpG7JJtG2Cnl1wcJEpQFE"
 def chatAllowCleartextOverride = project.findProperty("chatAllowCleartext")
+def chatStartupBenchmarkEnabled = project.findProperty("chatStartupBenchmark") == "true"
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
+
+def readTracerSetting = { String propertyName, String environmentName ->
+    def value = project.findProperty(propertyName) ?:
+        System.getenv(environmentName) ?:
+        localProperties.getProperty(propertyName)
+    return value?.toString()?.trim()
+}
+
+def rustoreTracerAppToken = readTracerSetting(
+    "rustoreTracerAppToken",
+    "RUSTORE_TRACER_APP_TOKEN"
+)
+def rustoreTracerPluginToken = readTracerSetting(
+    "rustoreTracerPluginToken",
+    "RUSTORE_TRACER_PLUGIN_TOKEN"
+)
+def rustoreTracerConfigured = rustoreTracerAppToken && rustoreTracerPluginToken
+def rustoreTracerUploadArtifacts = (
+    readTracerSetting(
+        "rustoreTracerUploadArtifacts",
+        "RUSTORE_TRACER_UPLOAD_ARTIFACTS"
+    ) ?: "false"
+).toBoolean()
 
 apply plugin: 'com.android.application'
+apply plugin: 'ru.ok.tracer'
+
+tracer {
+    create("defaultConfig") {
+        // Tokens can come from Gradle properties, environment variables, or
+        // the ignored android/local.properties file. Never commit them.
+        appToken = rustoreTracerAppToken ?: "tracer-not-configured"
+        pluginToken = rustoreTracerPluginToken ?: "tracer-not-configured"
+        uploadMapping = rustoreTracerUploadArtifacts
+        uploadNativeSymbols = rustoreTracerUploadArtifacts
+        uploadRetryCount = 2
+        dontFailOnUploadFailure = true
+    }
+    create("debug") {
+        isDisabled = true
+        uploadMapping = false
+        uploadNativeSymbols = false
+        environment = "debug"
+    }
+    create("release") {
+        isDisabled = !rustoreTracerConfigured || chatStartupBenchmarkEnabled
+        environment = "release"
+    }
+}
 
 android {
     packaging {
@@ -42,7 +96,7 @@ android {
         versionName getAppVersionName()
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // Явно включается только для локального профилирования release APK.
-        buildConfigField "boolean", "CHAT_STARTUP_BENCHMARK", (project.findProperty("chatStartupBenchmark") == "true").toString()
+        buildConfigField "boolean", "CHAT_STARTUP_BENCHMARK", chatStartupBenchmarkEnabled.toString()
         aaptOptions {
             // Локальный WebView читает стартовые ресурсы без распаковки ZIP.
             noCompress 'js', 'css', 'html'
@@ -81,9 +135,10 @@ android {
 
     buildFeatures {
         buildConfig true
+        resValues true
     }
 
-    if (project.findProperty("chatStartupBenchmark") == "true") {
+    if (chatStartupBenchmarkEnabled) {
         sourceSets.release {
             java.srcDir 'src/benchmark/java'
             manifest.srcFile 'src/benchmark/AndroidManifest.xml'
@@ -110,8 +165,13 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation "androidx.work:work-runtime:$workManagerVersion"
 
+    implementation "com.google.firebase:firebase-messaging:$firebaseMessagingVersion"
     implementation "ru.rustore.sdk:pushclient:7.4.0"
     implementation "ru.rustore.sdk:appupdate:10.2.0"
+
+    implementation platform("ru.ok.tracer:tracer-platform:1.4.0")
+    implementation "ru.ok.tracer:tracer-crash-report"
+    implementation "ru.ok.tracer:tracer-crash-report-native"
 
     implementation project(':capacitor-android')
     implementation project(':capacitor-cordova-android-plugins')
@@ -122,3 +182,5 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
+
+apply plugin: 'com.google.gms.google-services'

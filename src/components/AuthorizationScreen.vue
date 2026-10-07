@@ -238,6 +238,7 @@ import {
 import LinkIcon from './UI/LinkIcon.vue';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useQrAuth } from '../composables/useQrAuth';
+import { useBackButtonHandler } from '../composables/useBackButton';
 import { showErrorNotification } from '../composables/useNotifications';
 import { getUsersList } from '../composables/useUsers';
 import { isBotUser } from '../utils/bot';
@@ -276,6 +277,10 @@ interface IAuthorizationScreenEmits {
 
 const props = defineProps<IAuthorizationScreenProps>();
 const emits = defineEmits<IAuthorizationScreenEmits>();
+useBackButtonHandler(
+  () => props.isCredentialsStep,
+  () => emits('back')
+);
 onMounted(() => emits('ready'));
 const { isScanning, scanQrCode } = useQrAuth();
 

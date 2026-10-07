@@ -1,3 +1,4 @@
+import { refreshChatAccess } from '../../composables/useChatAccess';
 import { bindIncomingChatEvents } from './incoming-events';
 import {
   User,
@@ -31,6 +32,14 @@ import type {
 } from '../customBackgroundLibrary';
 import type { UserStatusValue } from '../../utils/userStatus';
 import { ChatTopic, ChatTopicInterface } from './topic';
+import {
+  ChatFolderApi,
+  ChatFolderInterface,
+  type ChatFolder,
+  type ChatFolderScope,
+  type CreateChatFolderPayload,
+  type SaveChatFolderPayload
+} from './chat-folder';
 import {
   ChatMessage,
   ChatMessageInterface,
@@ -82,6 +91,20 @@ export interface WebSocketEvent {
 
 const UPLOAD_RETRY_MAX_DELAY_MS = 5000;
 const VIDEO_UPLOAD_COVER_TIMEOUT_MS = 8000;
+const PUBLIC_CALL_INVITE_PATHS = [
+  '/calls/invite-preview',
+  '/calls/invite-livekit-token'
+] as const;
+
+const isPublicCallInviteRequest = (url: unknown): boolean => {
+  if (typeof url !== 'string') {
+    return false;
+  }
+
+  return PUBLIC_CALL_INVITE_PATHS.some(
+    path => url === path || url.startsWith(`${path}?`)
+  );
+};
 
 interface UploadTarget {
   objectName: string;
@@ -111,6 +134,7 @@ export class ChatSDK {
   private auth: ChatAuthInterface;
   private user: ChatUserInterface;
   private topic: ChatTopicInterface;
+  private chatFolder: ChatFolderInterface;
   private message: ChatMessageInterface;
   private group: ChatGroupInterface;
   private media: ChatMediaInterface;
@@ -130,10 +154,11 @@ export class ChatSDK {
     this.auth = new ChatAuth(this.apiUrl, this.token);
     this.user = new ChatUser(this.reqi);
     this.topic = new ChatTopic(this.reqi);
+    this.ws = new ChatWS(null);
+    this.chatFolder = new ChatFolderApi(this.reqi, this.ws);
     this.message = new ChatMessage(this.reqi);
     this.group = new ChatGroup(this.reqi);
     this.media = new ChatMedia(this.reqi);
-    this.ws = new ChatWS(null);
     this.utils = new ChatUtils(this.reqi);
   }
 
@@ -174,9 +199,15 @@ export class ChatSDK {
       }
 
       (reqi as any)[methodName] = (...args: any[]) => {
-        return withErpRefreshOnAuthError(() =>
-          originalMethod.apply(reqi, args)
-        );
+        const request = () => originalMethod.apply(reqi, args);
+
+        // Invite endpoints are public. Their 401 means that the invite is
+        // invalid or expired, not that the current user's chat session ended.
+        if (isPublicCallInviteRequest(args[0])) {
+          return request();
+        }
+
+        return withErpRefreshOnAuthError(request);
       };
     }
 
@@ -340,10 +371,23 @@ export class ChatSDK {
               return;
             }
 
+            let code: string | undefined;
+
+            try {
+              const response = JSON.parse(xhr.responseText) as {
+                code?: unknown;
+              };
+              code =
+                typeof response.code === 'string' ? response.code : undefined;
+            } catch {
+              // Some proxies return a non-JSON error page. The status is still
+              // enough for the regular, bounded retry policy.
+            }
+
             reject(
               Object.assign(
                 new Error(`Failed to upload multipart part: ${xhr.status}`),
-                { status: xhr.status }
+                { status: xhr.status, code }
               )
             );
           };
@@ -668,7 +712,11 @@ export class ChatSDK {
 
         this.ws.setSocket(this.socket);
 
+        this.socket.on('userAccessUpdated', () => {
+          void refreshChatAccess();
+        });
         this.socket.on('connect', () => {
+          void refreshChatAccess();
           authReconnectAttempted = false;
           this.emitConnectionState(true);
           recordTelemetryEvent({
@@ -965,6 +1013,10 @@ export class ChatSDK {
     return this.user.saveCustomBackground(kind, image);
   }
 
+  deleteCustomBackground(kind: CustomBackgroundKind, id: string) {
+    return this.user.deleteCustomBackground(kind, id);
+  }
+
   async getRecentTopics(userId: string): Promise<Topic[]> {
     return this.user.getRecentTopics(userId);
   }
@@ -985,6 +1037,46 @@ export class ChatSDK {
 
   async getTopics(): Promise<PaginatedResponse<ITopic>> {
     return this.topic.getTopics();
+  }
+
+  async getChatFolders(): Promise<ChatFolder[]> {
+    return this.chatFolder.getChatFolders();
+  }
+
+  async syncChatFolders(): Promise<ChatFolder[]> {
+    return this.chatFolder.syncChatFolders();
+  }
+
+  async setChatFolderTopic(
+    folderId: string,
+    topicId: string,
+    included: boolean
+  ): Promise<ChatFolder> {
+    return this.chatFolder.setChatFolderTopic(folderId, topicId, included);
+  }
+
+  async createChatFolder(
+    payload: CreateChatFolderPayload
+  ): Promise<ChatFolder> {
+    return this.chatFolder.createChatFolder(payload);
+  }
+
+  async updateChatFolder(
+    folderId: string,
+    payload: SaveChatFolderPayload
+  ): Promise<ChatFolder> {
+    return this.chatFolder.updateChatFolder(folderId, payload);
+  }
+
+  async deleteChatFolder(folderId: string): Promise<void> {
+    return this.chatFolder.deleteChatFolder(folderId);
+  }
+
+  async reorderChatFolders(
+    scope: ChatFolderScope,
+    folderIds: string[]
+  ): Promise<ChatFolder[]> {
+    return this.chatFolder.reorderChatFolders(scope, folderIds);
   }
 
   async createTopic(topicData: { peerId: string }): Promise<Topic> {

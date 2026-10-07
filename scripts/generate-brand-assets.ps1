@@ -1,17 +1,18 @@
-param([switch] $AppIconsOnly)
+param([switch] $AppIconsOnly, [switch] $AndroidThemeIconsOnly)
 
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $lightLogoAsset = Join-Path $projectRoot 'assets\logo-light.svg'
 $darkLogoAsset = Join-Path $projectRoot 'assets\logo-dark.svg'
-# Иконки приложения не зависят от темы интерфейса.
+# Иконки PWA используют тёмный логотип; Android хранит оба варианта.
 $appIconAsset = $darkLogoAsset
 $androidResources = Join-Path $projectRoot 'android\app\src\main\res'
 $iosSplashResources = Join-Path $projectRoot 'ios\App\App\Assets.xcassets\Splash.imageset'
 $favicon = Join-Path $projectRoot 'public\images\favicon.ico'
 $lightSplashBackground = '#F8F9FD'
 $darkSplashBackground = '#262A38'
+$lightLauncherBackground = '#D6E4FF'
 $magick = (Get-Command magick -ErrorAction Stop).Source
 $temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $temporaryDirectory = Join-Path $temporaryRoot (
@@ -64,7 +65,49 @@ function Render-FigmaSvg {
         -resize "${Size}x${Size}" $Destination
 }
 
+function Generate-AndroidThemeIcons {
+    foreach ($density in @('ldpi', 'mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi')) {
+        $mipmapDirectory = Join-Path $androidResources "mipmap-$density"
+        foreach ($part in @(
+            @{ Existing = 'sep_launcher_chat_bubbles_2026'; Light = 'sep_launcher_chat_bubbles_light_2026' },
+            @{ Existing = 'sep_launcher_chat_bubbles_round_2026'; Light = 'sep_launcher_chat_bubbles_light_round_2026' },
+            @{ Existing = 'sep_launcher_chat_bubbles_foreground_2026'; Light = 'sep_launcher_chat_bubbles_light_foreground_2026' }
+        )) {
+            $size = [int](& $magick identify -format '%w' -- (
+                Join-Path $mipmapDirectory "$($part.Existing).png"
+            ))
+            $rendered = Join-Path $temporaryDirectory "$($part.Light)-$density.png"
+            Render-FigmaSvg $lightLogoAsset $size $rendered
+            Copy-GeneratedAsset $rendered (Join-Path $mipmapDirectory "$($part.Light).png")
+        }
+
+        $backgroundSize = [int](& $magick identify -format '%w' -- (
+            Join-Path $mipmapDirectory 'sep_launcher_chat_bubbles_background_2026.png'
+        ))
+        $background = Join-Path $temporaryDirectory "launcher-light-background-$density.png"
+        & $magick -size "${backgroundSize}x${backgroundSize}" "xc:$lightLauncherBackground" $background
+        Copy-GeneratedAsset $background (Join-Path $mipmapDirectory (
+            'sep_launcher_chat_bubbles_light_background_2026.png'
+        ))
+    }
+
+    foreach ($qualifier in @('', '-ldpi', '-mdpi', '-hdpi', '-xhdpi', '-xxhdpi', '-xxxhdpi')) {
+        $lightDirectory = Join-Path $androidResources "drawable$qualifier"
+        $darkDirectory = Join-Path $androidResources "drawable-night$qualifier"
+        Copy-GeneratedAsset (Join-Path $lightDirectory 'splash_icon.png') (
+            Join-Path $lightDirectory 'splash_icon_light.png'
+        )
+        Copy-GeneratedAsset (Join-Path $darkDirectory 'splash_icon.png') (
+            Join-Path $lightDirectory 'splash_icon_dark.png'
+        )
+    }
+}
+
 try {
+    if ($AndroidThemeIconsOnly) {
+        Generate-AndroidThemeIcons
+        return
+    }
     # Общие PNG, PWA и Android всегда строятся из одного тёмного SVG.
     foreach ($appearance in @('light', 'dark')) {
         $sourceLogo = if ($appearance -eq 'dark') { $darkLogoAsset } else { $lightLogoAsset }
@@ -290,6 +333,7 @@ try {
             Join-Path $mipmapDirectory 'sep_launcher_chat_bubbles_foreground_2026.png'
         )
     }
+    Generate-AndroidThemeIcons
 } finally {
     $resolvedTemporaryDirectory = [IO.Path]::GetFullPath($temporaryDirectory)
     if (

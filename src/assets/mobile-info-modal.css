@@ -30,7 +30,7 @@ dialog.modal-yui-kit.modal-yui-kit_bottom {
   justify-items: center;
   gap: 12px;
   margin: 0;
-  padding: 14px 10px 10px;
+  padding: 14px 0 10px;
 }
 
 .modal-info-mobile__start--disabled>.modal-info-mobile__avatar-button {
@@ -68,10 +68,13 @@ dialog.modal-yui-kit.modal-yui-kit_bottom {
   padding: 0 8px;
   border: 1px solid var(--border-table);
   border-radius: 17px;
-  background: var(--white);
+  background: var(--surface-overlay);
+  color: var(--text-primary);
 
   font-size: 14px;
   cursor: pointer;
+
+  transition: all 0.2s ease;
 }
 
 .modal-info-mobile__tab--active {
@@ -107,6 +110,8 @@ section.menu__info-users.modal-info-mobile__contact-list {
   text-align: center;
 }
 
+
+
 .chat__mobile-group-info-title h3 {
   margin: 0;
   font-size: 16px;
@@ -132,7 +137,14 @@ p.modal-info-mobile__end--paragraph {
   font-size: 14px;
 }
 
+dialog.modal-yui-kit.modal-yui-kit_bottom.chat__header-modal-info--active {
+  background-color: var(--surface-main-modal);
+}
+
 @media screen and (width <=768px) {
+
+
+
   dialog.modal-yui-kit.modal-yui-kit_bottom {
     display: grid;
   }
@@ -153,9 +165,20 @@ p.modal-info-mobile__end--paragraph {
     & .modal-yui-kit__modal-content {
       height: 100%;
       min-height: 0;
+      padding: 0;
       padding-top: 5px;
-      padding-inline: 10px;
       overflow: hidden;
+    }
+
+
+    & .mobile__modal-header {
+      padding: 0 10px;
+    }
+
+
+    & .mobile__modal-content {
+      padding: 0 10px;
+
     }
   }
 }

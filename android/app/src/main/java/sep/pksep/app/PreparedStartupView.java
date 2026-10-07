@@ -6,8 +6,6 @@ import android.view.Gravity;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 
-import androidx.core.content.ContextCompat;
-
 import org.json.JSONArray;
 
 /** Keeps the original app logo visible while the real WebView is prepared. */
@@ -20,11 +18,13 @@ final class PreparedStartupView extends FrameLayout {
     PreparedStartupView(Context context, Intent intent, boolean topicLaunch) {
         super(context);
         setClickable(true);
-        setBackgroundColor(ContextCompat.getColor(context, R.color.launch_background));
+        setBackgroundColor(LaunchAppearance.backgroundColor(context));
         setContentDescription("startup-logo");
 
         ImageView logo = new ImageView(context);
-        logo.setImageResource(R.drawable.splash_icon);
+        logo.setImageResource(LaunchAppearance.isDark(context)
+            ? R.drawable.splash_icon_dark
+            : R.drawable.splash_icon_light);
         logo.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
         addView(
             logo,

@@ -1,5 +1,8 @@
 <template>
-  <section class="calls-page" :data-testid="`${props.dataTestid}-Container`">
+  <section
+    :class="['calls-page', { 'calls-page--collapse': props.isCollapse }]"
+    :data-testid="`${props.dataTestid}-Container`"
+  >
     <CallsHeader
       class="calls-page__header"
       :total-count="state.totalItems || callHistory.length"
@@ -8,7 +11,7 @@
 
     <div class="calls-page__content">
       <div class="calls-page__search-shell">
-        <Search
+        <MenuSearch
           class="calls-page__search"
           :model-value="searchValue"
           :data-testid="`${props.dataTestid}-Search`"
@@ -26,6 +29,7 @@
 
       <div
         v-else-if="filteredCalls.length"
+        v-menu-list-press
         ref="callListRef"
         class="calls-page__list"
         @scroll="handleListScroll"
@@ -33,14 +37,17 @@
         <template v-for="call in filteredCalls" :key="call.messageId">
           <div
             :class="[
-              'calls-page__item',
+              'calls-page__item menu-list-row',
               {
-                'calls-page__item--active': isActiveRouteCall(call)
+                'calls-page__item--active': isActiveRouteCall(call),
+                'menu-list-row--active': isActiveRouteCall(call)
               }
             ]"
             role="button"
             tabindex="0"
             :data-testid="`${props.dataTestid}-Item-${call.messageId}`"
+            @pointerenter="event => handleCompactCallEnter(call, event)"
+            @pointerleave="scheduleCompactCallClose"
             @click="openCallBot(call)"
             @keydown.enter.prevent="openCallBot(call)"
             @keydown.space.prevent="openCallBot(call)"
@@ -87,7 +94,7 @@
             </span>
           </div>
 
-          <div class="calls-page__delimetr"></div>
+          <div class="calls-page__delimetr menu-list-divider"></div>
         </template>
 
         <div v-if="state.isLoadingMore" class="calls-page__loading-more">
@@ -143,6 +150,45 @@
       </div>
     </div>
   </section>
+
+  <Teleport to="body">
+    <div
+      v-if="compactHoverCall"
+      ref="compactCallPopoverRef"
+      :class="[
+        'contact-list__compact-popover',
+        'calls-page__compact-popover',
+        {
+          'calls-page__compact-popover--active':
+            isActiveRouteCall(compactHoverCall)
+        }
+      ]"
+      :style="compactCallPopoverStyle"
+      role="button"
+      tabindex="0"
+      :aria-label="`Открыть звонок ${compactHoverCall.displayName}`"
+      :data-testid="`${props.dataTestid}-CompactPopover`"
+      @pointerenter="cancelCompactCallClose"
+      @pointerleave="scheduleCompactCallClose"
+      @click="handleCompactCallClick"
+      @keydown.enter.prevent="handleCompactCallClick"
+      @keydown.space.prevent="handleCompactCallClick"
+    >
+      <div class="calls-page__compact-popover-content">
+        <h4 class="calls-page__compact-name">
+          {{ compactHoverCall.displayName }}
+        </h4>
+        <div class="calls-page__compact-meta">
+          <span class="calls-page__compact-status">
+            {{ compactHoverCall.title }}
+          </span>
+          <span class="calls-page__compact-date">
+            {{ compactHoverCall.dateLabel }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script lang="ts">
@@ -150,6 +196,8 @@ let savedCallsScrollTop = 0;
 </script>
 
 <script setup lang="ts">
+import MenuSearch from '../UI/MenuSearch.vue';
+import { vMenuListPress } from '../../directives/menu-list-press';
 import {
   computed,
   nextTick,
@@ -158,7 +206,6 @@ import {
   ref,
   watch
 } from 'vue';
-import { Search } from '@pksep/yui';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import MessageCallInfoIcon from '../Messages/MessageCallInfoIcon.vue';
 import MessageCallTypeIcon from '../Messages/MessageCallTypeIcon.vue';
@@ -188,6 +235,9 @@ import {
   type CallBotCallSummaryBrief
 } from '../../services/useCallBot';
 import { showErrorNotification } from '../../composables/useNotifications';
+import { useResizeState } from '../../composables/useResizeState';
+import { MAX_W_MD } from '../../utils/constants';
+import { useCallUnreadState } from '../../services/useCallUnreadState';
 
 interface CallHistoryItem {
   messageId: string;
@@ -216,18 +266,29 @@ const props = withDefaults(
     dataTestid?: string;
     isActive?: boolean;
     autoSelectFirst?: boolean;
+    isCollapse?: boolean;
   }>(),
   {
     dataTestid: 'CallsPage',
     isActive: true,
-    autoSelectFirst: false
+    autoSelectFirst: false,
+    isCollapse: false
   }
 );
 
 const searchValue = ref('');
 const callListRef = ref<HTMLElement | null>(null);
+const compactHoverCall = ref<CallHistoryItem | null>(null);
+const compactCallPopoverRef = ref<HTMLElement | null>(null);
+const compactCallPopoverPosition = ref({ left: 0, top: 0 });
+const compactCallPopoverStyle = computed(() => ({
+  left: `${compactCallPopoverPosition.value.left}px`,
+  top: `${compactCallPopoverPosition.value.top}px`
+}));
 const loadingMoreLabel = 'Загружаем ещё звонки...';
 const authUserId = computed(() => getAuthUser()?.id || '');
+const { state: isMobile } = useResizeState(MAX_W_MD);
+const { markCallsSeen } = useCallUnreadState();
 const { getSelectedTopic } = useTopics();
 const { rawCallHistory, callHistoryState } = useCallHistoryStore();
 const { selectedCall } = useCallBot();
@@ -240,6 +301,7 @@ let callsScrollRestoreFrameId: number | null = null;
 let callsScrollRestoreAttempts = 0;
 let pendingCallsScrollTop: number | null = null;
 let isRestoringCallsScroll = false;
+let compactCallCloseTimer: number | null = null;
 
 const buildCallItem = (
   serverCall: ServerCallHistoryItem
@@ -265,6 +327,10 @@ const buildCallItem = (
   }
 
   const createdAt = new Date(serverCall.createdAt);
+  const dateLabel = createdAt.toLocaleDateString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit'
+  });
   const displayName =
     topic?.name ||
     topic?.group?.title ||
@@ -361,6 +427,80 @@ const openCallBot = (call: CallHistoryItem): void => {
 
   selectCallTopic(call);
   navigateToCall(call.callTopicId);
+};
+
+const cancelCompactCallClose = (): void => {
+  if (compactCallCloseTimer === null) return;
+
+  window.clearTimeout(compactCallCloseTimer);
+  compactCallCloseTimer = null;
+};
+
+const closeCompactCallPopover = (): void => {
+  cancelCompactCallClose();
+  compactHoverCall.value = null;
+};
+
+const scheduleCompactCallClose = (): void => {
+  cancelCompactCallClose();
+  compactCallCloseTimer = window.setTimeout(() => {
+    compactCallCloseTimer = null;
+    compactHoverCall.value = null;
+  }, 120);
+};
+
+const getCompactCallPopoverTop = (
+  anchorTop: number,
+  popoverHeight: number
+): number => {
+  const viewportPadding = 10;
+  const maximumTop = Math.max(
+    viewportPadding,
+    window.innerHeight - popoverHeight - viewportPadding
+  );
+
+  return Math.min(Math.max(anchorTop, viewportPadding), maximumTop);
+};
+
+const handleCompactCallEnter = (
+  call: CallHistoryItem,
+  event: PointerEvent
+): void => {
+  if (!props.isCollapse || isMobile.value) return;
+
+  const target = event.currentTarget;
+  if (!(target instanceof HTMLElement)) return;
+
+  cancelCompactCallClose();
+  const targetRect = target.getBoundingClientRect();
+  const menuRect = target.closest('.menu')?.getBoundingClientRect();
+
+  compactCallPopoverPosition.value = {
+    left: (menuRect?.right ?? targetRect.right) + 10,
+    top: getCompactCallPopoverTop(targetRect.top, targetRect.height)
+  };
+  compactHoverCall.value = call;
+
+  void nextTick(() => {
+    if (compactHoverCall.value?.messageId !== call.messageId) return;
+
+    const popoverHeight =
+      compactCallPopoverRef.value?.getBoundingClientRect().height ||
+      targetRect.height;
+    compactCallPopoverPosition.value = {
+      ...compactCallPopoverPosition.value,
+      top: getCompactCallPopoverTop(targetRect.top, popoverHeight)
+    };
+  });
+};
+
+const handleCompactCallClick = (): void => {
+  const call = compactHoverCall.value;
+  if (!call) return;
+
+  markCallsSeen(call.createdAt, authUserId.value || undefined);
+  closeCompactCallPopover();
+  openCallBot(call);
 };
 
 const selectRouteCallIfNeeded = (): boolean => {
@@ -528,6 +668,7 @@ const restoreCallsScrollPosition = (): void => {
 const handleListScroll = (): void => {
   const listElement = callListRef.value;
 
+  closeCompactCallPopover();
   saveCallsScrollPosition();
 
   if (!listElement || !state.hasMore || state.isLoadingMore) {
@@ -564,9 +705,17 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  closeCompactCallPopover();
   saveCallsScrollPosition();
   finishCallsScrollRestore();
 });
+
+watch(
+  () => props.isCollapse,
+  isCollapse => {
+    if (!isCollapse) closeCompactCallPopover();
+  }
+);
 
 watch(
   () => props.isActive,
@@ -615,7 +764,7 @@ watch(
 }
 
 .calls-page__list {
-  gap: 2px;
+  gap: 0;
 }
 
 .calls-page__delimetr {

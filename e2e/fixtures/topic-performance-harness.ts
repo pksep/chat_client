@@ -18,6 +18,7 @@ import { ChatSDK } from '../../src/services/useChatSDK';
 import { navigateToNotificationTarget } from '../../src/services/useNotificationNavigation';
 import * as messages from '../../src/services/useMessages';
 import { emojiDirective } from '../../src/directives/emoji';
+import { setTopicMessageVisibilityChecker } from '../../src/services/useTopicViewportState';
 import '../../src/assets/globals.css';
 import '../../src/assets/chat-container.css';
 import '@pksep/yui/styles';
@@ -148,6 +149,31 @@ export async function initializeTopicPerformanceFixture(
         syncLastMessage: false,
         skipPersist: true
       });
+    },
+    appendOwnMessage(topicId: string) {
+      const message = {
+        id: `${topicId}-local-${Date.now()}`,
+        topicId,
+        text: 'Локальное сообщение для проверки реакции',
+        type: 'TEXT',
+        senderUserId: user.id,
+        senderUser: user,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        status: 'DELIVERED',
+        media: [],
+        reactions: [],
+        messageRead: [],
+        isReadByMe: true
+      } as IMessage;
+      messages.addMessageToLocal(topicId, message);
+      return message;
+    },
+    emitChatEvent(event: { type: string; payload: unknown }) {
+      (getChatSDK() as any)?.ws.handleWebSocketEvent(event);
+    },
+    setMessageVisibility(topicId: string, visible: boolean) {
+      setTopicMessageVisibilityChecker(topicId, () => visible);
     }
   };
 }

@@ -61,7 +61,10 @@ public final class ChatNotificationHelper {
         int requestCode = REQUEST_CODE_PROVIDER.incrementAndGet();
         // The launcher paints the fresh server response while Chromium starts
         // behind its native frame.
-        Intent intent = new Intent(context, NotificationTapLaunchActivity.class)
+        Class<?> launchActivity = LaunchAppearance.isDark(context)
+            ? DarkNotificationTapLaunchActivity.class
+            : NotificationTapLaunchActivity.class;
+        Intent intent = new Intent(context, launchActivity)
             .setAction(ACTION_OPEN_CHAT_NOTIFICATION)
             .addFlags(
                 Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP

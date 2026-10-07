@@ -142,12 +142,32 @@
   border-top-right-radius: 4px;
 }
 
-.highlighted.message__bubble {
-  background-color: #767F9DE5;
+.chat__message-wrapper,
+.ai-assistant__scroll {
+  isolation: isolate;
 }
 
-:is([data-theme='light'], .theme-light) .highlighted.message__bubble {
-  background-color: var(--surface-authorization);
+.message.highlighted {
+  --message-highlight-background: #767f9de5;
+  border-radius: 0;
+  background-color: transparent;
+  transition: none;
+}
+
+.message.highlighted::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 0;
+  background-color: var(--message-highlight-background);
+  box-shadow: 0 0 0 100vw var(--message-highlight-background);
+  clip-path: inset(0 -100vw);
+  pointer-events: none;
+}
+
+:is([data-theme='light'], .theme-light) .message.highlighted {
+  --message-highlight-background: var(--surface-authorization);
 }
 
 .message-quote-highlight {
@@ -227,6 +247,11 @@
   border-radius: 20px;
   padding: 10px 15px;
   gap: 8px;
+}
+
+.message__article--emoji-referenced .message-footer-row {
+  justify-self: stretch;
+  width: 100%;
 }
 
 .message__article__text--emoji {
@@ -797,6 +822,23 @@
 .message__other .message-file-stack .message-reference-forward {
   margin-left: auto;
   background-color: var(--blue12);
+}
+
+:where([data-theme='dark'], .theme-dark) .message-reference-forward {
+  background-color: var(--surface-overlay);
+}
+
+:where([data-theme='dark'], .theme-dark)
+  .message-reference-block--outgoing
+  .message-reference-forward,
+:where([data-theme='dark'], .theme-dark)
+  .message__other+.message-file-stack
+  .message-reference-forward,
+:where([data-theme='dark'], .theme-dark)
+  .message__other
+  .message-file-stack
+  .message-reference-forward {
+  background-color: var(--table-surface-pressed);
 }
 
 .message-reference-reply {
@@ -1490,7 +1532,8 @@ div.message-content__file {
   --blockquote-bg-color: var(--surface-overlay);
 }
 
-.chat__input {
+.chat__input,
+.chat__header-mobile-search-controls {
   align-self: end;
   padding: 0 10px 15px 15px;
   position: relative;
@@ -1664,7 +1707,8 @@ div.message-content__file {
 }
 
 @media screen and (width <=480px) {
-  .chat__input {
+  .chat__input,
+  .chat__header-mobile-search-controls {
     box-sizing: border-box;
     padding: 5px 10px calc(20px + env(safe-area-inset-bottom, 0px));
     position: fixed;

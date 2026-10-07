@@ -8,11 +8,7 @@ import android.os.Bundle;
 import android.os.Looper;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.ContextCompat;
-import androidx.core.graphics.ColorUtils;
 import androidx.core.splashscreen.SplashScreen;
-import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsControllerCompat;
 
 import org.json.JSONArray;
 
@@ -57,6 +53,9 @@ public class NotificationLaunchActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         markStartupBenchmark("launcher-activity-start");
+        if (LaunchAppearance.isDark(this)) {
+            setTheme(R.style.AppTheme_StartupLaunchDark);
+        }
         SplashScreen launchSplash = SplashScreen.installSplashScreen(this);
         launchSplash.setKeepOnScreenCondition(() -> !launcherLogoPresented);
         launchSplash.setOnExitAnimationListener(provider -> provider.remove());
@@ -71,19 +70,7 @@ public class NotificationLaunchActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         activeLaunch = new WeakReference<>(this);
 
-        int launchBackground = ContextCompat.getColor(
-            this,
-            R.color.launch_background
-        );
-        boolean lightSystemBars = ColorUtils.calculateLuminance(
-            launchBackground
-        ) > 0.5d;
-        getWindow().setStatusBarColor(launchBackground);
-        getWindow().setNavigationBarColor(launchBackground);
-        WindowInsetsControllerCompat insetsController =
-            WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-        insetsController.setAppearanceLightStatusBars(lightSystemBars);
-        insetsController.setAppearanceLightNavigationBars(lightSystemBars);
+        LaunchAppearance.applySystemBars(this);
 
         beginLaunch(
             launchIntent,

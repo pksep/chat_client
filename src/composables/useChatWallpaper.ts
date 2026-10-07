@@ -8,6 +8,7 @@ import {
   migratePersistentCustomImages,
   persistSelectedId,
   readPersistedSelectedId,
+  removePersistentCustomImage,
   savePersistentCustomImageRecord
 } from '../services/customImagePersistence';
 import { createCustomBackgroundSync } from '../services/useCustomBackgroundSync';
@@ -26,6 +27,7 @@ export interface ChatWallpaperOption {
 interface ChatWallpaperPreviewItem {
   id: string;
   previewStyle: CSSProperties;
+  isCustom: boolean;
 }
 
 interface StoredCustomWallpaper {
@@ -194,6 +196,31 @@ const saveStoredCustomWallpaper = async (
     tx.onabort = () => {
       db.close();
       reject(tx.error || new Error('Не удалось сохранить фон'));
+    };
+  });
+};
+
+const removeStoredCustomWallpaper = async (id: string): Promise<void> => {
+  if (!isIndexedDbAvailable()) {
+    return;
+  }
+
+  const db = await openWallpaperDb();
+
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(WALLPAPER_STORE_NAME, 'readwrite');
+    tx.objectStore(WALLPAPER_STORE_NAME).delete(id);
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+    tx.onabort = () => {
+      db.close();
+      reject(tx.error || new Error('Не удалось удалить фон'));
     };
   });
 };
@@ -553,6 +580,16 @@ const wallpaperSync = createCustomBackgroundSync('chat', {
       wallpaper,
       ...customWallpapers.value.filter(item => item.id !== wallpaper.id)
     ].sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id));
+  },
+  remove: async id => {
+    if (isNativeCustomImagePersistenceAvailable()) {
+      await removePersistentCustomImage(WALLPAPER_NATIVE_STORE, id);
+    } else {
+      await removeStoredCustomWallpaper(id);
+    }
+    customWallpapers.value = customWallpapers.value.filter(
+      wallpaper => wallpaper.id !== id
+    );
   }
 });
 
@@ -578,6 +615,24 @@ const setCustomWallpaper = async (dataUrl: string): Promise<void> => {
   selectedWallpaperId.value = wallpaper.id;
   cacheStartupCustomWallpaper(wallpaper.dataUrl);
   persistSelectedWallpaperId(wallpaper.id);
+};
+
+const deleteCustomWallpaper = async (id: string): Promise<void> => {
+  ensureInitialized();
+
+  const wasSelected = selectedWallpaperId.value === id;
+  await wallpaperSync.remove(id);
+
+  if (!wasSelected) {
+    return;
+  }
+
+  selectedWallpaperId.value = 'none';
+  persistSelectedWallpaperId('none');
+
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(LEGACY_CHAT_WALLPAPER_CUSTOM_STORAGE_KEY);
+  }
 };
 
 const currentWallpaperStyle = computed<CSSProperties>(() => {
@@ -612,6 +667,7 @@ const wallpaperPreviewItems = computed<ChatWallpaperPreviewItem[]>(() => {
     .visible()
     .map(wallpaper => ({
       id: wallpaper.id,
+      isCustom: true,
       previewStyle: buildPreviewStyle(wallpaper.dataUrl, {
         previewSize: 'cover',
         repeat: 'no-repeat',
@@ -621,12 +677,14 @@ const wallpaperPreviewItems = computed<ChatWallpaperPreviewItem[]>(() => {
 
   items.push({
     id: 'none',
+    isCustom: false,
     previewStyle: nonePreviewStyle
   });
 
   wallpaperOptions.forEach(option => {
     items.push({
       id: option.id,
+      isCustom: false,
       previewStyle: buildPreviewStyle(option.imageUrl, option)
     });
   });
@@ -646,6 +704,7 @@ export const useChatWallpaper = () => {
     hasCustomWallpaper: computed(() => wallpaperSync.visible().length > 0),
     isWallpaperApplied,
     selectWallpaper,
-    setCustomWallpaper
+    setCustomWallpaper,
+    deleteCustomWallpaper
   };
 };

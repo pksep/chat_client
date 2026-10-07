@@ -1,10 +1,12 @@
 <template>
   <ul
+    v-menu-list-press
     ref="listRootRef"
     :class="['contact-list', props.class]"
     role="list"
     :data-testid="`${props.dataTestid}-ContactList-List`"
     :aria-label="`${props.dataTestid} Contact List`"
+    @scroll.passive="closeCompactTopicPopover"
   >
     <li
       v-if="showContactSectionTitle"
@@ -23,12 +25,12 @@
         :data-testid="`${props.dataTestid}-ContactList-Skeleton${index}`"
       >
         <div class="contact-list__item contact-list__skeleton-item">
-          <span class="contact-list__skeleton-avatar"></span>
+          <SkeletonBlock class="contact-list__skeleton-avatar" />
           <div class="contact-list__skeleton-content">
-            <span class="contact-list__skeleton-line"></span>
-            <span
+            <SkeletonBlock class="contact-list__skeleton-line" />
+            <SkeletonBlock
               class="contact-list__skeleton-line contact-list__skeleton-line--short"
-            ></span>
+            />
           </div>
         </div>
       </li>
@@ -36,7 +38,10 @@
     <li
       v-for="(topic, index) in displayTopics"
       :key="topic.id"
-      class="contact-list__li"
+      :class="[
+        'contact-list__li menu-list-row',
+        { 'menu-list-row--active': isTopicActive(topic) }
+      ]"
       :data-topic-id="topic.id"
       role="listitem"
       tabindex="0"
@@ -45,7 +50,7 @@
     >
       <div
         :class="[
-          'contact-list__item',
+          'contact-list__item menu-list-item',
           {
             'contact-list__item--active': isTopicActive(topic),
             'contact-list__item--selection': props.showCheckbox
@@ -56,6 +61,8 @@
         :aria-expanded="isOpen[topic.id] ? 'true' : 'false'"
         :aria-haspopup="true"
         @pointerdown="event => handleTopicPress(topic, event)"
+        @pointerenter="event => handleCompactTopicEnter(topic, index, event)"
+        @pointerleave="scheduleCompactTopicClose"
         @pointermove="handleTopicPressMove"
         @pointerup="handleTopicPressEnd"
         @pointercancel="handleTopicPressCancel"
@@ -66,204 +73,58 @@
         @keydown.enter="event => handleClick(topic, index, event)"
         @keydown.space="event => handleClick(topic, index, event)"
       >
-        <FavoriteTopicIcon
-          v-if="isTopicFavorite(topic)"
-          class="contact-list__avatar"
-          :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
-        />
-        <component
-          v-else
-          :is="isBotTopic(topic) ? BotAvatar : CachedAvatar"
-          :class="[
-            'contact-list__avatar',
-            {
-              'contact-list__avatar--interactive':
-                !props.showCheckbox &&
-                topic.type === TopicType.DM &&
-                !isTopicFavorite(topic)
-            }
-          ]"
-          :initials="topic.name"
-          :path="getTopicAvatarPath(topic)"
-          :alt="`Avatar of ${topic.name}`"
-          :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
-          is-icon
-          :is-online="isTopicUserOnline(topic)"
-        />
-        <div
-          :class="[
-            'contact-list__block--wrapper',
-            {
-              'contact-list__block--wrapper--selection': props.showCheckbox
-            }
-          ]"
-        >
-          <h5
-            role="heading"
-            aria-level="5"
-            class="contact-list__title"
-            :data-testid="`${props.dataTestid}-ContactList-Title${index + 1}`"
+        <span class="contact-list__avatar-shell">
+          <FavoriteTopicIcon
+            v-if="isTopicFavorite(topic)"
+            class="contact-list__avatar"
+            :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
+          />
+          <component
+            v-else
+            :is="isBotTopic(topic) ? BotAvatar : CachedAvatar"
+            :class="[
+              'contact-list__avatar',
+              {
+                'contact-list__avatar--interactive':
+                  !props.showCheckbox &&
+                  topic.type === TopicType.DM &&
+                  !isTopicFavorite(topic)
+              }
+            ]"
+            :initials="topic.name"
+            :path="getTopicAvatarPath(topic)"
+            :alt="`Avatar of ${topic.name}`"
+            :data-testid="`${props.dataTestid}-ContactList-Avatar${index + 1}`"
+            is-icon
+            :is-online="isTopicUserOnline(topic)"
+          />
+          <span
+            v-if="
+              props.isCollapse &&
+              getTopicUnreadBadgeCount(topic, authedUser?.id) > 0
+            "
+            :class="[
+              'menu-bottom-nav__unread-count',
+              {
+                'menu-bottom-nav__unread-count--muted':
+                  topic.info?.isMute && !topic.taggedMe
+              }
+            ]"
+            :data-testid="`${props.dataTestid}-ContactList-AvatarUnread${index + 1}`"
+            aria-hidden="true"
           >
-            <span class="contact-list__title-text">{{ topic.name }}</span>
-            <Tooltip
-              v-if="getTopicStatusIcon(topic) && getTopicStatusLabel(topic)"
-              :hint="getTopicStatusLabel(topic)"
-              position="top-center"
-              type="black"
-              size="small"
-              :data-testid="`${props.dataTestid}-ContactList-StatusTooltip${index + 1}`"
-            >
-              <EmojiIcon
-                class="contact-list__title-status"
-                :emoji="getTopicStatusIcon(topic)"
-                @click.stop
-              />
-            </Tooltip>
-
-            <div
-              v-if="getTopicActiveCall(topic)"
-              class="contact-list__call-indicator"
-              :data-testid="`${props.dataTestid}-ContactList-Call${index + 1}`"
-              :aria-label="`Active call in ${topic.name}`"
-            >
-              <LeaveIcon class="contact-list__call-indicator-icon" />
-              <span class="contact-list__time contact-list__time--call">
-                {{ getTopicActiveCallTime(topic) }}
-              </span>
-            </div>
-          </h5>
-          <div v-if="!props.showCheckbox" class="contact-list__top">
-            <MessageStatusIcons
-              v-if="
-                topic.lastMessage?.senderUserId === authedUser?.id &&
-                !topic.lastMessage?.isSystem &&
-                !hasExternalMessageChannel(topic.lastMessage?.ex)
-              "
-              :class="{
-                'contact-list__message-status-icons': true,
-                'is-read':
-                  getTopicLastMessageStatus(topic) === MessageStatusEnum.READ
-              }"
-              :message-status="getTopicLastMessageStatus(topic)"
-              :is-read="
-                getTopicLastMessageStatus(topic) === MessageStatusEnum.READ
-              "
-              :is-me-sender="true"
-              :data-testid="`${props.dataTestid}-ContactList-MessageStatusIcons${index + 1}`"
-            />
-            <span
-              v-if="topic.lastMessage?.createdAt"
-              class="contact-list__time"
-              :data-testid="`${props.dataTestid}-ContactList-Time${index + 1}`"
-              :aria-label="`Last message at ${formatListTime(new Date(topic.lastMessage?.createdAt))}`"
-            >
-              {{ formatListTime(new Date(topic.lastMessage?.createdAt)) }}
-            </span>
-          </div>
-          <div class="contact-list__preview">
-            <div
-              v-if="topic.typingUserIds?.length"
-              class="contact-list__description contact-list__description--typing"
-              :data-testid="`${props.dataTestid}-ContactList-Typing${index + 1}`"
-            >
-              <TypingIndicator :label="getTopicTypingLabel(topic)" />
-            </div>
-            <div
-              v-else-if="!!topic.lastMessage?.text"
-              class="contact-list__description"
-              v-emoji
-              :data-testid="`${props.dataTestid}-ContactList-Description${index + 1}`"
-              :aria-label="`Latest message: ${stripHtml(topic.lastMessage?.text || 'No message')}`"
-            >
-              {{ stripHtml(topic.lastMessage?.text) }}
-            </div>
-            <div
-              v-else-if="
-                topic.lastMessage?.media?.length > 0 &&
-                topic.lastMessage.media[0].type === MediaType.File
-              "
-              class="contact-list__description contact-list__description__media"
-            >
-              <AttachFileIcon />
-              <p>Медиа</p>
-            </div>
-            <div
-              v-else-if="topic.lastMessage?.media?.length > 0"
-              class="contact-list__description contact-list__description__media"
-              :data-testid="`${props.dataTestid}-ContactList-Media${index + 1}`"
-            >
-              <template
-                v-for="media in topic.lastMessage.media.slice(0, 3)"
-                :key="media.id"
-                ><div>
-                  <img
-                    v-if="media.type !== MediaType.File"
-                    :src="getFullMediaPath(media)"
-                  />
-
-                  <MiniPlayIcon
-                    v-if="media.type === MediaType.Video"
-                    class="contact-list__description__media__play"
-                  />
-                </div>
-              </template>
-
-              <p>{{ getTopicLastMessageLabel(topic.lastMessage?.media) }}</p>
-            </div>
-            <div v-if="!props.showCheckbox" class="contact-list__bottom">
-              <div
-                v-if="
-                  topic.hasUnreadReaction &&
-                  getTopicUnreadReactionMessageId(topic.id)
-                "
-                class="contact-list__reaction-indicator"
-                :data-testid="`${props.dataTestid}-ContactList-Reaction${index + 1}`"
-                role="button"
-                tabindex="0"
-                aria-label="Новая реакция на ваше сообщение"
-                @click.stop="event => handleReactionClick(topic, index, event)"
-                @keydown.enter.stop="
-                  event => handleReactionClick(topic, index, event)
-                "
-                @keydown.space.stop.prevent="
-                  event => handleReactionClick(topic, index, event)
-                "
-              >
-                <ReactionHeartIcon />
-              </div>
-              <div
-                v-if="topic.taggedMe"
-                class="contact-list__notification contact-list__mention"
-                :data-testid="`${props.dataTestid}-ContactList-Mention${index + 1}`"
-              >
-                @
-              </div>
-              <div
-                v-if="hasTopicUnreadIndicator(topic, authedUser?.id)"
-                :class="{
-                  'contact-list__notification': true,
-                  'contact-list__notification--muted': topic.info?.isMute
-                }"
-                :data-testid="`${props.dataTestid}-ContactList-Notification${index + 1}`"
-                :aria-label="getTopicUnreadIndicatorLabel(topic)"
-              >
-                <template
-                  v-if="getTopicUnreadBadgeCount(topic, authedUser?.id)"
-                >
-                  {{ getTopicUnreadBadgeCount(topic, authedUser?.id) }}
-                </template>
-              </div>
-              <div
-                class="contact-list__pin"
-                v-if="topic.info?.isPin"
-                :data-testid="`${props.dataTestid}-ContactList-Pin${index + 1}`"
-                :aria-label="`Pinned contact`"
-              >
-                <PinIcon v-if="topic.info?.isPin" />
-              </div>
-            </div>
-          </div>
-        </div>
+            {{ getTopicUnreadBadgeCount(topic, authedUser?.id) }}
+          </span>
+        </span>
+        <TopicListItemContent
+          :topic="topic"
+          :index="index"
+          :data-testid="props.dataTestid"
+          :show-checkbox="props.showCheckbox"
+          :show-last-online="props.showLastOnline"
+          :current-time="currentTime"
+          @reaction-click="event => handleReactionClick(topic, index, event)"
+        />
         <Checkbox
           v-if="props.showCheckbox"
           class="contact-list__selection-checkbox"
@@ -274,62 +135,71 @@
           :data-testid="`${props.dataTestid}-ContactList-Checkbox${index + 1}`"
         />
       </div>
-      <ContextMenu
-        v-if="!props.showCheckbox"
-        :visible="!!isOpen[topic.id]"
+      <TopicFolderContextMenu
+        v-if="!props.showCheckbox && isOpen[topic.id]"
+        :topic-id="topic.id"
+        :scope="
+          props.folderScope || (isClientTopic(topic) ? 'clients' : 'chats')
+        "
         :position="position"
         :data-testid="`${props.dataTestid}-ContactList-ContextMenu${index + 1}`"
-        @unmount-close="() => closeActivePopover(topic.id)"
+        @close="() => closeActivePopover(topic.id)"
       >
-        <Button
-          :type="ButtonTypeEnum.popover"
-          :size="SizesEnum.small"
-          @click.stop="() => handlePin(topic)"
-          :data-testid="`${props.dataTestid}-ContactList-PinButton${index + 1}`"
-          :aria-label="
-            topic.info.isPin ? `Unpin ${topic.name}` : `Pin ${topic.name}`
-          "
-        >
-          <template v-if="!topic.info.isPin"> <PinIcon /> Закрепить </template>
-          <template v-else> <UnpinIcon /> Открепить </template>
-        </Button>
-        <Button
-          :type="ButtonTypeEnum.popover"
-          :size="SizesEnum.small"
-          @click.stop="() => handleReadState(topic)"
-          :data-testid="`${props.dataTestid}-ContactList-ReadStateButton${index + 1}`"
-          :aria-label="
-            hasTopicUnreadIndicator(topic, authedUser?.id)
-              ? `Mark ${topic.name} as read`
-              : `Mark ${topic.name} as new`
-          "
-        >
-          <template v-if="hasTopicUnreadIndicator(topic, authedUser?.id)">
-            <ReadIcon style="padding: 2px" /> Отметить прочитанным
-          </template>
-          <template v-else
-            ><Icon :name="IconNameEnum.chat" style="padding: 2px" /> Пометить
-            как новое</template
+        <template #before>
+          <Button
+            :type="ButtonTypeEnum.popover"
+            :size="SizesEnum.small"
+            @click.stop="() => handlePin(topic)"
+            :data-testid="`${props.dataTestid}-ContactList-PinButton${index + 1}`"
+            :aria-label="
+              topic.info.isPin ? `Unpin ${topic.name}` : `Pin ${topic.name}`
+            "
           >
-        </Button>
-        <Button
-          :type="ButtonTypeEnum.popover"
-          :size="SizesEnum.small"
-          @click="() => handleMute(topic)"
-          :data-testid="`${props.dataTestid}-ContactList-NotificationButton${index + 1}`"
-          :aria-label="
-            topic.info.isMute
-              ? `Disable notifications for ${topic.name}`
-              : `Enable notifications for ${topic.name}`
-          "
-          :class="{ 'red-context-button': !topic.info.isMute }"
-        >
-          <template v-if="topic.info.isMute">
-            <UnmuteIcon /> Вкл. уведомление
-          </template>
-          <template v-else><MuteIcon /> Выкл. уведомление </template>
-        </Button>
-      </ContextMenu>
+            <template v-if="!topic.info.isPin">
+              <PinIcon /> Закрепить
+            </template>
+            <template v-else> <UnpinIcon /> Открепить </template>
+          </Button>
+          <Button
+            :type="ButtonTypeEnum.popover"
+            :size="SizesEnum.small"
+            @click.stop="() => handleReadState(topic)"
+            :data-testid="`${props.dataTestid}-ContactList-ReadStateButton${index + 1}`"
+            :aria-label="
+              hasTopicUnreadIndicator(topic, authedUser?.id)
+                ? `Mark ${topic.name} as read`
+                : `Mark ${topic.name} as new`
+            "
+          >
+            <template v-if="hasTopicUnreadIndicator(topic, authedUser?.id)">
+              <ReadIcon style="padding: 2px" /> Отметить прочитанным
+            </template>
+            <template v-else
+              ><Icon :name="IconNameEnum.chat" style="padding: 2px" /> Пометить
+              как новое</template
+            >
+          </Button>
+        </template>
+        <template #after>
+          <Button
+            :type="ButtonTypeEnum.popover"
+            :size="SizesEnum.small"
+            @click="() => handleMute(topic)"
+            :data-testid="`${props.dataTestid}-ContactList-NotificationButton${index + 1}`"
+            :aria-label="
+              topic.info.isMute
+                ? `Disable notifications for ${topic.name}`
+                : `Enable notifications for ${topic.name}`
+            "
+            :class="{ 'red-context-button': !topic.info.isMute }"
+          >
+            <template v-if="topic.info.isMute">
+              <UnmuteIcon /> Вкл. уведомления
+            </template>
+            <template v-else><MuteIcon /> Выкл. уведомления </template>
+          </Button>
+        </template>
+      </TopicFolderContextMenu>
     </li>
     <li
       v-if="showMessageSectionTitle"
@@ -348,7 +218,7 @@
     <li
       v-for="(result, index) in props.messageResults"
       :key="`message-${result.id}`"
-      class="contact-list__li"
+      class="contact-list__li menu-list-row"
       role="listitem"
       tabindex="0"
       :data-testid="`${props.dataTestid}-ContactList-MessageResult${index + 1}`"
@@ -356,7 +226,7 @@
       @keydown.space="handleMessageResultClick(result)"
     >
       <div
-        class="contact-list__item contact-list__item--message-result"
+        class="contact-list__item contact-list__item--message-result menu-list-item"
         role="button"
         tabindex="0"
         @click="handleMessageResultClick(result)"
@@ -452,10 +322,66 @@
       </svg>
     </li>
   </ul>
+
+  <Teleport to="body">
+    <div
+      v-if="isMobile && hasOpenTopicContextMenu"
+      class="contact-list__context-menu-dismiss-layer"
+      aria-hidden="true"
+      @touchstart.stop
+      @pointerdown.stop
+      @pointerup.stop
+      @click.stop.prevent="dismissTopicContextMenu"
+      @contextmenu.stop.prevent="dismissTopicContextMenu"
+    ></div>
+  </Teleport>
+
+  <Teleport to="body">
+    <div
+      v-if="compactHoverTopic"
+      ref="compactPopoverRef"
+      :class="[
+        'contact-list__compact-popover',
+        {
+          'contact-list__compact-popover--active': isTopicActive(
+            compactHoverTopic.topic
+          )
+        }
+      ]"
+      :style="compactPopoverStyle"
+      role="button"
+      tabindex="0"
+      :aria-label="`Открыть чат ${compactHoverTopic.topic.name}`"
+      :data-testid="`${props.dataTestid}-ContactList-CompactPopover`"
+      @pointerenter="cancelCompactTopicClose"
+      @pointerleave="scheduleCompactTopicClose"
+      @click="event => handleCompactPopoverClick(event)"
+      @keydown.enter.prevent="event => handleCompactPopoverClick(event)"
+      @keydown.space.prevent="event => handleCompactPopoverClick(event)"
+    >
+      <TopicListItemContent
+        :key="compactHoverTopic.topic.id"
+        :topic="compactHoverTopic.topic"
+        :index="compactHoverTopic.index"
+        :data-testid="`${props.dataTestid}-CompactPopover`"
+        :current-time="currentTime"
+        force-description-fade
+        @reaction-click="
+          event =>
+            handleReactionClick(
+              compactHoverTopic.topic,
+              compactHoverTopic.index,
+              event
+            )
+        "
+      />
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-import { hasExternalMessageChannel } from '../../utils/managerMessageChannel';
+import { vMenuListPress } from '../../directives/menu-list-press';
+import SkeletonBlock from '../UI/SkeletonBlock.vue';
 import {
   computed,
   nextTick,
@@ -472,22 +398,16 @@ import {
   CheckboxSizeEnum,
   Icon,
   IconNameEnum,
-  SizesEnum,
-  Tooltip
+  SizesEnum
 } from '@pksep/yui';
-import ContextMenu from './ContextMenu.vue';
-import MessageStatusIcons from '../Messages/MessageStatusIcons.vue';
+import TopicFolderContextMenu from './TopicFolderContextMenu.vue';
+import { isClientTopic } from '../../composables/useManagerInquiries';
+import type { ChatFolderScope } from '../../services/useChatSDK/chat-folder';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import BotAvatar from '../UI/BotAvatar.vue';
-import EmojiIcon from '../UI/EmojiIcon.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { getAuthUser } from '../../composables/useAuth';
-import {
-  IMedia,
-  IMessage,
-  ITopic,
-  MessageStatusEnum
-} from '../interfaces/interfaces';
+import { IMessage, ITopic } from '../interfaces/interfaces';
 import { useTopics } from '../../composables/useTopics';
 import { formatListTime } from '../../composables/useTime';
 import { useResizeState } from '../../composables/useResizeState';
@@ -498,37 +418,27 @@ import {
   navigateToGroup
 } from '../../composables/navigation';
 import { MediaType } from '@pksep/zod-shared-chat';
-import AttachFileIcon from '../UI/AttachFileIcon.vue';
-import MiniPlayIcon from '../UI/MiniPlayIcon.vue';
-import { stripHtml } from '../../utils/stripHtml';
 import PinIcon from '../UI/PinIcon.vue';
 import UnpinIcon from '../UI/UnpinIcon.vue';
 import UnmuteIcon from '../UI/UnmuteIcon.vue';
 import MuteIcon from '../UI/MuteIcon.vue';
 import ReadIcon from '../UI/ReadIcon.vue';
 import { TopicType } from '../../services/useChatSDK/types';
-import { getUserById, getUserLastOnline } from '../../composables/useUsers';
+import { getUserLastOnline } from '../../composables/useUsers';
 import { getHasWebsocketConnection, markAsRead } from '../../services/useChat';
-import { useMessageMedia } from '../Messages/composables/useMessageMedia';
-import TypingIndicator from '../UI/TypingIndicator.vue';
-import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
-import { formatUserStatusText } from '../../utils/userStatus';
-import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
 import {
   getTopicUnreadBadgeCount,
   hasTopicUnreadIndicator
 } from '../../utils/topicUnreadBadge';
 import {
-  activeCallFormattedTime,
   activeCallTopicId,
   isCallActive,
   pendingGroupCallInfo
 } from '../../services/useCallState';
-import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
 import type { IMessageSearchResult } from '../../composables/useMessageSearch';
 import { isBotTopic, isDeletedBotUser } from '../../utils/bot';
-import ReactionHeartIcon from '../UI/ReactionHeartIcon.vue';
 import FavoriteTopicIcon from '../UI/FavoriteTopicIcon.vue';
+import TopicListItemContent from './TopicListItemContent.vue';
 import { requestTopicReactionJump } from '../../services/useTopicViewportState';
 import {
   getInteractionTelemetryPayload,
@@ -538,32 +448,30 @@ import {
 } from '../../services/useChatNavigationTelemetry';
 import { isFavoriteTopic } from '../../utils/favorite-topic';
 import {
-  getClientMessageById,
   getFullMessagesByTopicId,
   hasKnownTopicMessagesState,
   hydrateMessagePreviewFromCache,
   hydrateMessagesFromCache
 } from '../../services/useMessages';
-import {
-  resolveLastMessageStatus,
-  resolveTopicLastMessage
-} from '../../utils/topic-last-message';
+import { resolveTopicLastMessage } from '../../utils/topic-last-message';
 import { preloadAvatarPath } from '../../services/avatar-image-verification';
 
 interface IExtendedContactListProps extends IContactListProps {
   showCheckbox?: boolean;
+  showLastOnline?: boolean;
   selectedTopicIds?: Set<string | number>;
   searchQuery?: string;
   toolbarFilter?: string;
   messageResults?: IMessageSearchResult[];
   isMessageSearchLoading?: boolean;
   isLoading?: boolean;
+  isCollapse?: boolean;
+  folderScope?: ChatFolderScope;
 }
 
 const {
   togglePinTopic,
   toggleMuteTopic,
-  getTopicTypingUsers,
   setTopicMarkedUnread,
   resetTopicUnreadState,
   getTopicUnreadReactionMessageId
@@ -571,12 +479,14 @@ const {
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
   showCheckbox: false,
+  showLastOnline: false,
   selectedTopicIds: () => new Set<string | number>(),
   searchQuery: '',
   toolbarFilter: '',
   messageResults: () => [],
   isMessageSearchLoading: false,
-  isLoading: false
+  isLoading: false,
+  isCollapse: false
 });
 
 const emits = defineEmits<{
@@ -594,6 +504,10 @@ const { state: isMobile } = useResizeState(MAX_W_MD);
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
+
+const hasOpenTopicContextMenu = computed(() =>
+  Object.values(isOpen.value).some(Boolean)
+);
 
 const authedUser = computed(() => getAuthUser());
 const isTopicFavorite = (topic?: ITopic | null): boolean =>
@@ -624,15 +538,17 @@ const displayTopics = computed(() =>
       : { ...topic, lastMessage };
   })
 );
-const getTopicLastMessageStatus = (topic: ITopic) =>
-  resolveLastMessageStatus(
-    topic.lastMessage,
-    getClientMessageById(topic.id, topic.lastMessage?.id)
-  );
 // Переподключение обновляет реактивные статусы, сохраняя DOM и наблюдатели превью.
 const listRootRef = ref<HTMLElement | null>(null);
 const pendingActiveTopicId = ref<string | null>(null);
-const { getFullMediaPath } = useMessageMedia();
+const compactHoverTopic = ref<{ topic: ITopic; index: number } | null>(null);
+const compactPopoverRef = ref<HTMLElement | null>(null);
+const compactPopoverPosition = ref({ left: 0, top: 0 });
+const compactPopoverStyle = computed(() => ({
+  left: `${compactPopoverPosition.value.left}px`,
+  top: `${compactPopoverPosition.value.top}px`
+}));
+let compactTopicCloseTimer: number | null = null;
 const currentTime = ref(Date.now());
 let currentTimeInterval: ReturnType<typeof setInterval> | null = null;
 let startupTopicsFrame = 0;
@@ -889,38 +805,9 @@ const syncTopicCacheObserver = async (): Promise<void> => {
 
 const isTopicActive = (topic: ITopic): boolean =>
   topic.id === pendingActiveTopicId.value ||
-  !!isOpen[topic.id] ||
+  !!isOpen.value[topic.id] ||
   props.selectedTopicIds.has(topic.id) ||
   (!isMobile.value && topic.id === props.selectedTopicId);
-
-const getTopicEffectiveUser = (topic: ITopic) =>
-  topic.type === TopicType.DM && topic.user?.id
-    ? getUserById(topic.user.id) || topic.user
-    : topic.user;
-
-const getTopicStatusIcon = (topic: ITopic): string =>
-  topic.type === TopicType.DM
-    ? getTopicEffectiveUser(topic)?.status?.icon || ''
-    : '';
-
-watch(
-  () =>
-    props.topics
-      .map(topic => getTopicStatusIcon(topic))
-      .filter((icon): icon is string => Boolean(icon))
-      .join('|'),
-  iconsSignature => {
-    preloadNotoEmojiAssets(
-      iconsSignature ? iconsSignature.split('|').filter(Boolean) : [],
-      {
-        highPriority: true
-      }
-    );
-  },
-  {
-    immediate: true
-  }
-);
 
 const cancelDescriptionOverflowSync = (): void => {
   if (descriptionOverflowRafId) {
@@ -1022,6 +909,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  closeCompactTopicPopover();
   if (startupTopicsFrame) cancelAnimationFrame(startupTopicsFrame);
   if (startupTopicsIdle) window.cancelIdleCallback(startupTopicsIdle);
   document.removeEventListener('scroll', revealStartupTopicsOnScroll, true);
@@ -1042,6 +930,15 @@ onBeforeUnmount(() => {
   queuedTopicCacheWarmIds.length = 0;
   queuedTopicCacheWarmSet.clear();
 });
+
+watch(
+  () => props.isCollapse,
+  isCollapse => {
+    if (!isCollapse) {
+      closeCompactTopicPopover();
+    }
+  }
+);
 
 watch(
   [
@@ -1211,6 +1108,14 @@ const clearTopicPointerDownContext = (): void => {
   topicPointerDownContext = null;
 };
 
+const dismissTopicContextMenu = (): void => {
+  clearTopicPointerDownContext();
+  topicPressPointerId = null;
+  topicPressMoved = false;
+  pendingActiveTopicId.value = null;
+  closeActivePopover();
+};
+
 const resolveTopicClickTarget = (
   topic: ITopic,
   index?: number,
@@ -1252,6 +1157,78 @@ const resolveTopicClickTarget = (
     topic: props.topics[pointerDownTopicIndex],
     index: pointerDownTopicIndex
   };
+};
+
+const cancelCompactTopicClose = (): void => {
+  if (!compactTopicCloseTimer) {
+    return;
+  }
+
+  clearTimeout(compactTopicCloseTimer);
+  compactTopicCloseTimer = null;
+};
+
+const closeCompactTopicPopover = (): void => {
+  cancelCompactTopicClose();
+  compactHoverTopic.value = null;
+};
+
+const scheduleCompactTopicClose = (): void => {
+  cancelCompactTopicClose();
+  compactTopicCloseTimer = window.setTimeout(() => {
+    compactTopicCloseTimer = null;
+    compactHoverTopic.value = null;
+  }, 120);
+};
+
+const getCompactPopoverTop = (
+  anchorTop: number,
+  popoverHeight: number
+): number => {
+  const viewportPadding = 10;
+  const maximumTop = Math.max(
+    viewportPadding,
+    window.innerHeight - popoverHeight - viewportPadding
+  );
+
+  return Math.min(Math.max(anchorTop, viewportPadding), maximumTop);
+};
+
+const handleCompactTopicEnter = (
+  topic: ITopic,
+  index: number,
+  event: PointerEvent
+): void => {
+  if (!props.isCollapse || isMobile.value || props.showCheckbox) {
+    return;
+  }
+
+  const target = event.currentTarget;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  cancelCompactTopicClose();
+  const targetRect = target.getBoundingClientRect();
+  const menuRect = target.closest('.menu')?.getBoundingClientRect();
+
+  compactPopoverPosition.value = {
+    left: (menuRect?.right ?? targetRect.right) + 10,
+    top: getCompactPopoverTop(targetRect.top, targetRect.height)
+  };
+  compactHoverTopic.value = { topic, index };
+
+  void nextTick(() => {
+    if (compactHoverTopic.value?.topic.id !== topic.id) return;
+
+    const popoverHeight =
+      compactPopoverRef.value?.getBoundingClientRect().height ||
+      targetRect.height;
+    compactPopoverPosition.value = {
+      ...compactPopoverPosition.value,
+      top: getCompactPopoverTop(targetRect.top, popoverHeight)
+    };
+  });
 };
 
 const handleClick = async (
@@ -1317,6 +1294,21 @@ const handleClick = async (
   }
 
   emits('unmount-topic', targetTopic, telemetry);
+};
+
+const handleCompactPopoverClick = (event: Event): void => {
+  const hoverTopic = compactHoverTopic.value;
+  if (!hoverTopic) {
+    return;
+  }
+
+  if (hasTopicUnreadIndicator(hoverTopic.topic, authedUser.value?.id)) {
+    resetTopicUnreadState(hoverTopic.topic.id);
+    void setTopicMarkedUnread(hoverTopic.topic, false);
+  }
+
+  closeCompactTopicPopover();
+  void handleClick(hoverTopic.topic, hoverTopic.index, event);
 };
 
 const handleTopicPress = (topic: ITopic, event: PointerEvent): void => {
@@ -1452,41 +1444,6 @@ const isTopicUserOnline = (topic: ITopic): boolean => {
   );
 };
 
-const getTopicLastMessageLabel = (media: IMedia[]): string => {
-  let text = '';
-  const haveImage = media.some(m => m.type === MediaType.Image);
-  const haveVideo = media.some(m => m.type === MediaType.Video);
-  if (haveImage) {
-    text += 'Фото';
-  }
-
-  if (haveVideo) {
-    if (text) {
-      text += ', видео';
-    } else {
-      text = 'Видео';
-    }
-  }
-
-  return text;
-};
-
-const getTopicTypingLabel = (topic: ITopic): string =>
-  getTypingIndicatorLabel(topic.type, getTopicTypingUsers(topic.id));
-
-const getTopicStatusLabel = (topic: ITopic): string =>
-  topic.type === TopicType.DM
-    ? formatUserStatusText(getTopicEffectiveUser(topic)?.status)
-    : '';
-
-const getTopicUnreadIndicatorLabel = (topic: ITopic): string => {
-  const unreadCount = getTopicUnreadBadgeCount(topic, authedUser.value?.id);
-
-  return unreadCount > 0
-    ? `${unreadCount} new messages`
-    : `${topic.name} marked as new`;
-};
-
 const getTopicActiveCall = (topic: ITopic) => {
   if (isTopicFavorite(topic)) {
     return null;
@@ -1501,46 +1458,6 @@ const getTopicActiveCall = (topic: ITopic) => {
 
   return pendingGroupCallInfo.value?.[topic.id] || topic.activeCall || null;
 };
-
-const getTopicActiveCallTime = (topic: ITopic): string => {
-  if (isCallActive.value && activeCallTopicId.value === topic.id) {
-    return activeCallFormattedTime.value;
-  }
-
-  const startTime = getTopicActiveCall(topic)?.startTime;
-  const elapsedDurationMs = getTopicActiveCall(topic)?.elapsedDurationMs ?? 0;
-
-  if (typeof startTime !== 'number' || !Number.isFinite(startTime)) {
-    if (elapsedDurationMs > 0) {
-      const elapsedSeconds = Math.max(0, Math.floor(elapsedDurationMs / 1000));
-      const hours = Math.floor(elapsedSeconds / 3600);
-      const minutes = Math.floor((elapsedSeconds % 3600) / 60);
-      const seconds = elapsedSeconds % 60;
-
-      if (hours > 0) {
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-      }
-
-      return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    }
-
-    return 'Звонок';
-  }
-
-  const elapsedSeconds = Math.max(
-    0,
-    Math.floor((elapsedDurationMs + (currentTime.value - startTime)) / 1000)
-  );
-  const hours = Math.floor(elapsedSeconds / 3600);
-  const minutes = Math.floor((elapsedSeconds % 3600) / 60);
-  const seconds = elapsedSeconds % 60;
-
-  if (hours > 0) {
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  }
-
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-};
 </script>
 
 <style scoped>
@@ -1549,7 +1466,7 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
 }
 
 .contact-list__description--typing {
-  color: var(--primary-color);
+  color: var(--text-brand);
 }
 
 .contact-list__block--wrapper--selection {
@@ -1574,7 +1491,7 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
 }
 
 .contact-list__call-indicator-icon {
-  color: var(--green2);
+  color: var(--status-success);
   width: 20px;
   transform: rotate(-120deg);
 }
@@ -1601,6 +1518,10 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
   text-align: center;
 }
 
+.contact-list__search-state--empty {
+  padding: 100px 16px 0;
+}
+
 .contact-list__item--message-result {
   cursor: pointer;
 }
@@ -1616,14 +1537,6 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
 
 .contact-list__empty-icon {
   color: var(--border-table);
-}
-
-.contact-list__skeleton-avatar,
-.contact-list__skeleton-line {
-  display: block;
-  background: linear-gradient(90deg, #eef2f7, #f8fafc, #eef2f7);
-  background-size: 180% 100%;
-  animation: contact-list-skeleton-pulse 1.2s ease-in-out infinite;
 }
 
 .contact-list__skeleton-avatar {
@@ -1652,15 +1565,5 @@ const getTopicActiveCallTime = (topic: ITopic): string => {
 .contact-list__skeleton-line--short {
   width: 54%;
   height: 12px;
-}
-
-@keyframes contact-list-skeleton-pulse {
-  0% {
-    background-position: 100% 0;
-  }
-
-  100% {
-    background-position: -80% 0;
-  }
 }
 </style>

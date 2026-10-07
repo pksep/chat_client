@@ -125,12 +125,16 @@ import {
   getMessageReplyQuoteOccurrenceIndex,
   getMessageReplyQuoteText
 } from '../../utils/messageReplyQuote';
-import { useBackButton } from '../../composables/useBackButton';
+import {
+  BackButtonPriority,
+  useBackButton
+} from '../../composables/useBackButton';
 import { setReactionMessage } from '../../services/useChat';
 import { parseCallTopicDefaultMessageEx } from '../../utils/call-topic';
 import {
   buildMediaDownloadUrl,
-  triggerBrowserDownload
+  triggerBrowserDownload,
+  triggerBrowserDownloads
 } from '../../utils/media-download';
 import { VIDEO_FALLBACK_THUMBNAIL } from '../../utils/mediaPreview';
 
@@ -194,7 +198,7 @@ watch(
   () => sliderElements.value.length > 0,
   isOpen => {
     if (isOpen) {
-      addBackHandler(closeSlider);
+      addBackHandler(closeSlider, BackButtonPriority.overlay);
       return;
     }
 
@@ -278,7 +282,19 @@ const downloadMediaFile = async (media: IMedia) => {
 };
 
 const handleDownloadMessageMedia = async () => {
-  for (const media of props.media || []) {
+  const mediaFiles = props.media || [];
+
+  if (!isAndroidNativePlatform()) {
+    await triggerBrowserDownloads(
+      mediaFiles.map(media => ({
+        url: getFullMediaPath(media, false),
+        fileName: media.originName || 'file'
+      }))
+    );
+    return;
+  }
+
+  for (const media of mediaFiles) {
     await downloadMediaFile(media);
   }
 };

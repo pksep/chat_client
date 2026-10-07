@@ -2,6 +2,7 @@
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   height: calc(var(--default-height) - var(--mobile-list-height, 53px));
+  background-color: var(--surface-input-primary);
   overflow: hidden;
   overflow-x: hidden;
   position: relative;
@@ -82,7 +83,7 @@
   position: sticky;
   top: 0;
   z-index: 99;
-  background-color: var(--white);
+  background-color: var(--surface-input-primary);
   padding: 10px 0 0;
 }
 
@@ -100,18 +101,14 @@
   gap: 10px;
 }
 
-.modal-info-mobile__start.modal-info-mobile__start--disabled
-  > form.menu__info-form
-  > .menu__info-form-block.form__name
-  > fieldset.input-yui-kit:disabled
-  > input.input-yui-kit__input {
+.modal-info-mobile__start.modal-info-mobile__start--disabled>form.menu__info-form>.menu__info-form-block.form__name>fieldset.input-yui-kit:disabled>input.input-yui-kit__input {
   color: inherit !important;
   background-color: transparent !important;
 }
 
-@media screen and (width <= 768px) {
+@media screen and (width <=768px) {
   .mobile-list-container {
-    --mobile-list-height: 0;
+    --mobile-list-height: 0px;
 
     &::-webkit-scrollbar {
       width: 0;
@@ -131,6 +128,7 @@
   .mobile__list-modal__contact-selector {
     overflow-y: auto;
   }
+
   .contact-selector__item {
     margin-inline-end: 5px;
   }

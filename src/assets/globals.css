@@ -139,3 +139,28 @@ select,
 .emoji-glyph--fallback .emoji-glyph__image {
   display: none;
 }
+
+:root.theme-switching,
+:root.theme-switching *,
+:root.theme-switching *::before,
+:root.theme-switching *::after {
+  transition-property: color, background-color, border-color, outline-color,
+    text-decoration-color, fill, stroke, box-shadow, opacity, filter, transform,
+    -webkit-text-fill-color !important;
+  transition-duration: 0.2s !important;
+  transition-timing-function: ease !important;
+  transition-delay: 0s !important;
+}
+
+:root.theme-snapshot,
+:root.theme-snapshot *,
+:root.theme-snapshot *::before,
+:root.theme-snapshot *::after {
+  transition: none !important;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.2s !important;
+  animation-timing-function: ease !important;
+}
