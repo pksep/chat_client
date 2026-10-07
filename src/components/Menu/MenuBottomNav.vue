@@ -244,6 +244,7 @@ import { getTopicList } from '../../composables/useTopics';
 import { Icon, IconNameEnum } from '@pksep/yui';
 import {
   isClientTopic,
+  useManagerInquiries,
   useManagerInboxSubscription
 } from '../../composables/useManagerInquiries';
 import AiAvatar from '../AI/AiAvatar.vue';
@@ -286,9 +287,12 @@ defineOptions({
 const { activeSection, setActiveSection } = useChatMenu();
 const {
   access: chatAccess,
+  ready: isChatAccessReady,
   settled: accessSettled,
   cachedMenuCount
 } = useChatAccess();
+const { allowed: managerAllowed, resolved: managerAccessResolved } =
+  useManagerInquiries();
 const { closeFolderManager, isManagingFolders: isManagingChatFolders } =
   useChatFolders();
 const { isManagingFolders: isManagingClientFolders } =
@@ -488,6 +492,8 @@ const closeActivityPanel = (event?: Event): void => {
 };
 
 const handleActivitySelect = (sessionId: string): void => {
+  if (!chatAccess.value.ai) return;
+
   closeActivityPanel();
   setActiveSection('ai');
   selectSession(sessionId);
@@ -495,6 +501,9 @@ const handleActivitySelect = (sessionId: string): void => {
 };
 
 const handleSection = (section: ChatMenuSection): void => {
+  if (section === 'ai' && !chatAccess.value.ai) return;
+  if (section === 'clients' && !chatAccess.value.client) return;
+
   const animate =
     !isManagingChatFolders.value &&
     !isManagingClientFolders.value &&
@@ -542,6 +551,25 @@ watch(
   [() => activeSection.value, () => rawCallHistory.value[0]?.id],
   ([section]) => {
     if (section === 'calls') markCallsSeen(Date.now(), authUser.value?.id);
+  },
+  { immediate: true }
+);
+
+/** Молча закрывает раздел клиентов после подтверждённого отзыва права. */
+watch(
+  [
+    isChatAccessReady,
+    () => chatAccess.value.client,
+    managerAccessResolved,
+    managerAllowed,
+    () => activeSection.value
+  ],
+  ([ready, clientAccess, resolved, allowed, section]): void => {
+    if (!ready || section !== 'clients') return;
+    if (clientAccess && (!resolved || allowed)) return;
+
+    setActiveSection('chats');
+    navigateToDefault();
   },
   { immediate: true }
 );

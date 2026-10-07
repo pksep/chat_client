@@ -162,6 +162,12 @@ import {
   getLatestReadOutgoingMessageIndex,
   shouldDisplayMessageAsRead
 } from '../../utils/messageReadStatus';
+import {
+  managerMessageChannel,
+  type ManagerMessageChannel
+} from '../../utils/managerMessageChannel';
+import { useManagerInquiries } from '../../composables/useManagerInquiries';
+import { channelLabel } from '../../composables/useManagerRoutes';
 
 interface Props {
   dataTestid: string;
@@ -210,6 +216,7 @@ const route = useUrlWatcher();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const quotedOverflowMessageIds = ref<Set<string>>(new Set());
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
+const { byTopic: managerInquiriesByTopic } = useManagerInquiries();
 const listRootRef = ref<HTMLElement | null>(null);
 const messageElementsById = new Map<string, HTMLElement>();
 let indexedMessageElements: IndexedMessageElement[] = [];
@@ -619,6 +626,13 @@ const isSameMessageGroup = (
     return false;
   }
 
+  if (
+    managerMessageChannel(currentMessage.ex) !==
+    managerMessageChannel(nextMessage.ex)
+  ) {
+    return false;
+  }
+
   return (
     currentMessage.senderUserId === nextMessage.senderUserId &&
     getCachedMessageDay(currentMessage) === getCachedMessageDay(nextMessage)
@@ -913,6 +927,22 @@ const getRenderedMessageElementsInIndexRange = (
 const ensureMessageRendered = (messageId: string): Promise<boolean> =>
   Promise.resolve(messageIndexById.value.has(messageId));
 
+const getMessageSenderRole = (message: IMessage): string => {
+  if (isCallTopicDefaultMessage(message)) {
+    return '';
+  }
+
+  const inquiry = managerInquiriesByTopic.value.get(message.topicId);
+  const channel: ManagerMessageChannel | '' =
+    inquiry?.guest_user_id === message.senderUserId
+      ? managerMessageChannel(message.ex)
+      : '';
+
+  return channel
+    ? channelLabel(channel)
+    : parseUserEx(message.senderUser?.ex)?.erpRole || '';
+};
+
 watch(
   messageElementIdentity,
   () => {
@@ -936,9 +966,7 @@ const getBubbleProps = (message: IMessage, index: number) => ({
   senderUser: isCallTopicDefaultMessage(message)
     ? undefined
     : message.senderUser,
-  senderRole: isCallTopicDefaultMessage(message)
-    ? ''
-    : parseUserEx(message.senderUser?.ex)?.erpRole || '',
+  senderRole: getMessageSenderRole(message),
   avatar: isCallTopicDefaultMessage(message)
     ? ''
     : message.senderUser?.avatarUrl || '',

@@ -111,7 +111,7 @@
       />
 
       <ClientsPanel
-        v-else-if="activeSection === 'clients'"
+        v-else-if="activeSection === 'clients' && managerAllowed"
         :is-collapse="isCollapse"
       />
 
@@ -122,7 +122,7 @@
       />
 
       <MenuProfilePanel
-        v-else
+        v-else-if="activeSection === 'profile'"
         :is-collapse="isCollapse"
         :data-testid="`${props.dataTestid}-Menu-ProfilePanel`"
         @create-chat="handleNewContactModal"
@@ -154,7 +154,10 @@
 </template>
 
 <script lang="ts" setup>
-import { isClientTopic } from '../composables/useManagerInquiries';
+import {
+  isClientTopic,
+  useManagerInquiries
+} from '../composables/useManagerInquiries';
 import ClientsPanel from './Clients/ClientsPanel.vue';
 import {
   computed,
@@ -235,6 +238,7 @@ const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 const selectedContactId = computed(() => route.value?.id);
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
+const { allowed: managerAllowed } = useManagerInquiries();
 const {
   pendingShareBatches,
   isShareSelectionActive,

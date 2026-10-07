@@ -7,7 +7,6 @@
     @pointerdown.capture="handleContentEditorPointerDown"
     @click.capture="handleContentEditorPopoverClick"
   >
-    <ClientReplyRoutes v-if="props.topicId" :topic-id="props.topicId" />
     <button
       v-if="!isEditorReady"
       type="button"
@@ -235,7 +234,6 @@ import {
   SizesEnum
 } from '@pksep/yui';
 import EditIcon from '../UI/EditIcon.vue';
-import ClientReplyRoutes from '../Clients/ClientReplyRoutes.vue';
 import ForwardIcon from '../UI/ForwardIcon.vue';
 import { stripHtml } from '../../utils/stripHtml';
 import type { IMessage } from '../interfaces/interfaces';
@@ -268,6 +266,7 @@ import {
   matchesUserSearch,
   normalizeAtSearchQuery
 } from '../../utils/searchMatch';
+import { useManagerRouteSubscription } from '../../composables/useManagerRoutes';
 
 interface Props {
   topicId?: string;
@@ -304,6 +303,9 @@ const props = withDefaults(defineProps<Props>(), {
   showCallTopicActionsToggle: false,
   isCallTopicActionsOpen: false
 });
+const managerTopicId = computed(() => props.topicId);
+useManagerRouteSubscription(managerTopicId);
+
 const TYPING_IDLE_TIMEOUT_MS = 2500;
 const TYPING_PING_INTERVAL_MS = 2000;
 
