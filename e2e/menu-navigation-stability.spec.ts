@@ -144,6 +144,18 @@ test('Переход к переписке и уточнение её типа �
   await expect(
     menu.locator('[data-testid$="MenuBottomNav-Clients"]')
   ).toHaveClass(/menu-bottom-nav__button--active/);
+
+  // Возврат из переписки не сбрасывает выбранный список клиентов.
+  for (const path of ['/dialogs', '/group']) {
+    await page.evaluate(path => {
+      window.history.pushState({}, '', path);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }, path);
+    await refreshInquiries(page);
+    await expect(
+      menu.locator('[data-testid$="MenuBottomNav-Clients"]')
+    ).toHaveClass(/menu-bottom-nav__button--active/);
+  }
 });
 
 test('Нижнее меню во всех мобильных разделах сохраняет геометрию «Звонков»', async ({
