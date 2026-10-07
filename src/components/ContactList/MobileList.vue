@@ -188,10 +188,7 @@ let savedChatsScrollTop = 0;
 
 <script setup lang="ts">
 import { useChatAccess } from '../../composables/useChatAccess';
-import {
-  isClientTopic,
-  useManagerInquiries
-} from '../../composables/useManagerInquiries';
+import { isClientTopic } from '../../composables/useManagerInquiries';
 import ClientsPanel from '../Clients/ClientsPanel.vue';
 import {
   reactive,
@@ -245,7 +242,6 @@ import {
   matchesTopicSearch,
   normalizeAtSearchQuery
 } from '../../utils/searchMatch';
-import { resolveChatMenuSectionForRoute } from '../../utils/chatMenuNavigation';
 import { useChatFolders } from '../../composables/useChatFolders';
 import ChatFoldersPanel from '../Menu/ChatFoldersPanel.vue';
 import ChatFolderRail from '../Menu/ChatFolderRail.vue';
@@ -276,7 +272,6 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
 const { getTopicList, loading: isTopicsLoading } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, animateSectionChange, setActiveSection } = useChatMenu();
-const { byTopic: clientInquiries } = useManagerInquiries();
 const mountedSections = reactive(new Set<ChatMenuSection>(['chats']));
 const { isShareSelectionActive, selectedTopicIds, toggleShareTopic } =
   useShareSelection();
@@ -762,28 +757,6 @@ watch(
     messageSearchDebounceTimer = setTimeout(() => {
       void runMessageSearch(query, requestToken);
     }, 300);
-  },
-  { immediate: true }
-);
-
-watch(
-  [
-    () => route.value?.type,
-    () => route.value?.id,
-    () => clientInquiries.value.has(route.value?.id || '')
-  ],
-  ([routeType, topicId]) => {
-    const section = resolveChatMenuSectionForRoute(
-      routeType,
-      topicId,
-      !!topicId &&
-        (clientInquiries.value.has(topicId) ||
-          isClientTopic(getTopicList().find(topic => topic.id === topicId)))
-    );
-
-    if (section) {
-      setActiveSection(section);
-    }
   },
   { immediate: true }
 );

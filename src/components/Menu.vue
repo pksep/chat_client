@@ -154,10 +154,7 @@
 </template>
 
 <script lang="ts" setup>
-import {
-  isClientTopic,
-  useManagerInquiries
-} from '../composables/useManagerInquiries';
+import { isClientTopic } from '../composables/useManagerInquiries';
 import ClientsPanel from './Clients/ClientsPanel.vue';
 import {
   computed,
@@ -216,7 +213,6 @@ import {
   recordChatTopicNavigationRequest,
   type ChatTopicOpenTelemetryMeta
 } from '../services/useChatNavigationTelemetry';
-import { resolveChatMenuSectionForRoute } from '../utils/chatMenuNavigation';
 import { useChatFolders } from '../composables/useChatFolders';
 import ChatFolderRail from './Menu/ChatFolderRail.vue';
 import { useChatAccess } from '../composables/useChatAccess';
@@ -239,7 +235,6 @@ const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 const selectedContactId = computed(() => route.value?.id);
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
-const { byTopic: clientInquiries } = useManagerInquiries();
 const {
   pendingShareBatches,
   isShareSelectionActive,
@@ -496,28 +491,6 @@ const handleNewContactModal = () => {
 const handleNewBotModal = () => {
   emits('unmount-new-bot', { isChapterOpen: true });
 };
-
-watch(
-  [
-    () => route.value?.type,
-    () => route.value?.id,
-    () => clientInquiries.value.has(route.value?.id || '')
-  ],
-  ([routeType, topicId]) => {
-    const section = resolveChatMenuSectionForRoute(
-      routeType,
-      topicId,
-      !!topicId &&
-        (clientInquiries.value.has(topicId) ||
-          isClientTopic(getTopicList().find(topic => topic.id === topicId)))
-    );
-
-    if (section) {
-      setActiveSection(section);
-    }
-  },
-  { immediate: true }
-);
 
 watch(
   [isTopicsLoading, authUserId],
