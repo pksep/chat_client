@@ -32,6 +32,9 @@ for (const theme of ['light', 'dark']) {
         foreground: getComputedStyle(element).color
       }));
       const firstBox = (await first.boundingBox())!;
+      const background = await first.evaluate(
+        element => getComputedStyle(element).backgroundColor
+      );
       const targetBox = (await items.last().boundingBox())!;
       const allBox = await page
         .getByTestId('ChatFolders-Rail-All')
@@ -84,11 +87,11 @@ for (const theme of ['light', 'dark']) {
       const previewBox = (await preview.boundingBox())!;
       expect(previewBox.width).toBeCloseTo(firstBox.width, 1);
       expect(previewBox.height).toBeCloseTo(firstBox.height, 1);
-      expect(horizontal ? previewBox.y : previewBox.x).toBeCloseTo(
-        horizontal ? firstBox.y : firstBox.x,
-        1
-      );
+      if (horizontal) expect(previewBox.y).toBeCloseTo(targetBox.y + 20, 1);
+      else expect(previewBox.x).toBeCloseTo(firstBox.x, 1);
       await expect(preview).toHaveCSS('transition-duration', '0s');
+      if (horizontal)
+        await expect(preview).toHaveCSS('background-color', background);
       await expect(preview.locator(avatarSelector)).toHaveCSS(
         'background-color',
         color.background

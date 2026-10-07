@@ -48,19 +48,18 @@
           <template v-else>
             <ChatsToolbar
               :model-value="toolbarState.search"
-              :filter="toolbarState.filter"
               :filter-counts="filterCounts"
               :filter-muted-only="filterMutedOnly"
               class="mobile-list-container__toolbar"
               :data-testid="`${props.dataTestid}-MobileList`"
               @update:model-value="setSearch"
-              @update:filter="setFilter"
               @create-chat="handleShowAccount(TopicType.DM)"
               @create-group="handleShowAccount(TopicType.Group)"
               @create-bot="handleShowBot"
             >
-              <template v-if="!isShareSelectionActive" #folders>
+              <template #folders>
                 <ChatFolderRail
+                  v-if="!isShareSelectionActive"
                   mobile
                   :loading="isChatFoldersLoading"
                   :folders="chatFolders"
@@ -230,8 +229,6 @@ import {
   searchMessages,
   type IMessageSearchResult
 } from '../../composables/useMessageSearch';
-import { isBotTopic } from '../../utils/bot';
-import { isFavoriteTopic } from '../../utils/favorite-topic';
 import { isCallTopic } from '../../utils/call-topic';
 import {
   getChatsToolbarFilterBadgeState,
@@ -270,7 +267,7 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
 });
 
 const { getTopicList, loading: isTopicsLoading } = useTopics();
-const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
+const { state: toolbarState, setSearch } = useChatsToolbarState();
 const { activeSection, animateSectionChange, setActiveSection } = useChatMenu();
 const mountedSections = reactive(new Set<ChatMenuSection>(['chats']));
 const { isShareSelectionActive, selectedTopicIds, toggleShareTopic } =
@@ -336,32 +333,13 @@ const state = reactive({
   checkUsers: new Set<string | number>()
 });
 
-const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
+const isVisibleChatTopic = (topic?: ITopic | null): boolean => {
   if (!topic) {
     return false;
   }
 
   if (isCallTopic(topic)) {
     return false;
-  }
-
-  if (toolbarState.filter === 'chats') {
-    return (
-      topic.type === TopicType.DM &&
-      !isBotTopic(topic) &&
-      !isFavoriteTopic(topic, authUserId.value)
-    );
-  }
-
-  if (toolbarState.filter === 'groups') {
-    return (
-      topic.type === TopicType.Group &&
-      !isFavoriteTopic(topic, authUserId.value)
-    );
-  }
-
-  if (toolbarState.filter === 'bots') {
-    return isBotTopic(topic);
   }
 
   return true;
@@ -373,15 +351,15 @@ const matchesActiveFolder = (topic?: ITopic | null): boolean =>
 
 const contactList = computed(() => {
   const query = normalizeAtSearchQuery(toolbarState.search);
-  const filteredByType = allTopics.value.filter(
-    topic => matchesToolbarFilter(topic) && matchesActiveFolder(topic)
+  const filteredByFolder = allTopics.value.filter(
+    topic => isVisibleChatTopic(topic) && matchesActiveFolder(topic)
   );
 
   if (!query) {
-    return [...filteredByType];
+    return [...filteredByFolder];
   }
 
-  return filteredByType.filter(topic => matchesTopicSearch(topic, query));
+  return filteredByFolder.filter(topic => matchesTopicSearch(topic, query));
 });
 
 const filteredMessageSearchResults = computed(() => {
@@ -394,7 +372,7 @@ const filteredMessageSearchResults = computed(() => {
       result.topic || allTopics.value.find(t => t.id === result.topicId);
 
     return (
-      matchesToolbarFilter(topic || null) && matchesActiveFolder(topic || null)
+      isVisibleChatTopic(topic || null) && matchesActiveFolder(topic || null)
     );
   });
 });

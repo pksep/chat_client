@@ -29,16 +29,16 @@ for (const theme of ['light', 'dark']) {
     expect(contentBox.width).toBe(isMobile ? 393 : 435);
     expect(foldersBox.x).toBe(0);
     expect(foldersBox.width).toBe(isMobile ? 393 : 90);
-    expect(firstBox.width).toBe(70);
-    expect(firstBox.height).toBe(isMobile ? 72 : 52);
-    expect(firstBox.x).toBe(isMobile ? 16 : 10);
+    expect(firstBox.width).toBe(isMobile ? 98 : 70);
+    expect(firstBox.height).toBe(isMobile ? 33 : 52);
+    expect(firstBox.x).toBe(isMobile ? 54 : 10);
     await expect(first.locator('.startup-shell__folder-avatar')).toHaveCSS(
       'width',
-      '38px'
+      isMobile ? '14px' : '38px'
     );
     await expect(first.locator('.startup-shell__folder-avatar')).toHaveCSS(
       'height',
-      '38px'
+      isMobile ? '14px' : '38px'
     );
     await expect(first.locator('.startup-shell__folder-name')).toHaveCSS(
       'height',
@@ -49,7 +49,7 @@ for (const theme of ['light', 'dark']) {
       .nth(1)
       .boundingBox())!;
     expect(isMobile ? secondBox.x - firstBox.x : secondBox.y - firstBox.y).toBe(
-      isMobile ? 90 : 74
+      isMobile ? 103 : 74
     );
     await expect(page.locator('.startup-shell__folder-footer')).toBeVisible({
       visible: !isMobile
@@ -75,7 +75,16 @@ for (const theme of ['light', 'dark']) {
       const searchBox = (await page
         .locator('.startup-shell__search')
         .boundingBox())!;
-      expect(searchBox.y).toBeGreaterThanOrEqual(foldersBox.y + 72);
+      expect(searchBox.y).toBe(60);
+      expect(foldersBox.y - searchBox.y - searchBox.height).toBe(10);
+      expect(
+        (
+          await page
+            .locator('.startup-shell__folder-item--manage')
+            .boundingBox()
+        )?.x
+      ).toBe(16);
+      await expect(page.locator('.startup-shell__filters')).toBeHidden();
       await page
         .locator('html')
         .evaluate(element =>

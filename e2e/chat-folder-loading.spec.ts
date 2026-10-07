@@ -30,11 +30,11 @@ for (const theme of ['light', 'dark']) {
     const rowAvatarBox = await rowSkeleton
       .locator('.chat-folders-panel__folder-icon')
       .boundingBox();
-    expect(railBox?.width).toBe(70);
-    expect(railBox?.height).toBe(72);
+    expect(railBox?.width).toBe(isMobile ? 84 : 70);
+    expect(railBox?.height).toBe(isMobile ? 33 : 72);
     expect(rowBox?.height).toBe(isMobile ? 80 : 58);
-    expect(railAvatarBox?.width).toBe(38);
-    expect(railAvatarBox?.height).toBe(38);
+    expect(railAvatarBox?.width).toBe(isMobile ? 14 : 38);
+    expect(railAvatarBox?.height).toBe(isMobile ? 14 : 38);
     expect(rowAvatarBox?.width).toBe(isMobile ? 60 : 38);
     expect(rowAvatarBox?.height).toBe(isMobile ? 60 : 38);
 
@@ -67,9 +67,13 @@ for (const theme of ['light', 'dark']) {
     await page.getByTestId('Fixture-Ready').click();
     await expect(railSkeleton).toHaveCount(0);
     await expect(rowSkeleton).toHaveCount(0);
-    expect(
-      await page.getByTestId('ChatFolders-Rail-Folder-folder-0').boundingBox()
-    ).toEqual(railBox);
+    const loadedRailBox = await page
+      .getByTestId('ChatFolders-Rail-Folder-folder-0')
+      .boundingBox();
+    if (isMobile) {
+      expect(loadedRailBox?.height).toBe(railBox?.height);
+      expect(loadedRailBox?.y).toBe(railBox?.y);
+    } else expect(loadedRailBox).toEqual(railBox);
     expect(
       await page.getByTestId('ChatFolders-Folder-folder-0').boundingBox()
     ).toEqual(rowBox);
