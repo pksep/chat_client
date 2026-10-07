@@ -298,7 +298,7 @@
   box-sizing: border-box;
   height: auto;
   min-height: 33px;
-  padding: 0 0 0 10px;
+  padding: 0 0 10px;
   flex: 1;
   flex-direction: row;
   flex-wrap: wrap;
@@ -1106,9 +1106,11 @@ dialog.chat-folder-delete-modal .confirm__modal__title {
   }
 
   .chat-folders-panel--mobile {
-    grid-template-rows: var(--menu-section-heading-height) calc(
+    grid-template-rows:
+      var(--menu-section-heading-height) calc(
         var(--menu-section-search-height) + 20px
-      ) minmax(0, 1fr);
+      )
+      minmax(0, 1fr);
     box-sizing: border-box;
     min-height: 100%;
     padding-top: var(--menu-section-safe-top);
