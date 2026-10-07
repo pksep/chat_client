@@ -50,11 +50,13 @@ export class ManagerRequestError extends Error {
 const inquiries = ref<ManagerInquiry[]>([]);
 const managers = ref<ManagerOption[]>([]);
 const allowed = ref(false);
-const { access: chatAccess } = useChatAccess();
+const resolved = ref(false);
+const { access: chatAccess, ready: isChatAccessReady } = useChatAccess();
 watch(
-  () => chatAccess.value.client,
-  granted => {
+  [() => chatAccess.value.client, isChatAccessReady],
+  ([granted, ready]): void => {
     generation++;
+    resolved.value = ready && !granted;
     if (granted) {
       void refreshManagerInquiries();
       return;
@@ -181,6 +183,7 @@ export async function refreshManagerInquiries(): Promise<void> {
       const access = await managerRequest<{ allowed: boolean }>('access');
       if (currentGeneration !== generation) return;
       allowed.value = access.allowed;
+      resolved.value = true;
       if (!access.allowed) {
         clearManagerRoutes();
         inquiries.value = [];
@@ -210,7 +213,20 @@ export async function refreshManagerInquiries(): Promise<void> {
       managers.value = people;
       lastRefreshError = '';
     } catch (cause) {
-      if (currentGeneration === generation) notifyRefreshError(cause);
+      if (currentGeneration !== generation) return;
+
+      if (cause instanceof ManagerRequestError && cause.status === 403) {
+        clearManagerRoutes();
+        allowed.value = false;
+        resolved.value = true;
+        inquiries.value = [];
+        managers.value = [];
+        lastRefreshError = '';
+
+        return;
+      }
+
+      notifyRefreshError(cause);
     } finally {
       if (currentGeneration === generation) loading.value = false;
       refreshPromise = null;
@@ -262,6 +278,7 @@ export function useManagerInboxSubscription() {
         inquiries.value = [];
         managers.value = [];
         allowed.value = false;
+        resolved.value = false;
         lastRefreshError = '';
         void (refreshPromise || Promise.resolve()).then(
           refreshManagerInquiries
@@ -293,6 +310,7 @@ export function useManagerInboxSubscription() {
     inquiries.value = [];
     managers.value = [];
     allowed.value = false;
+    resolved.value = false;
   });
 }
 
@@ -301,6 +319,7 @@ export function useManagerInquiries() {
     inquiries,
     managers,
     allowed: computed(() => allowed.value && chatAccess.value.client),
+    resolved,
     loading,
     byTopic: computed(
       () => new Map(inquiries.value.map(item => [item.topic_id, item]))

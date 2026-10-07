@@ -23,6 +23,14 @@ const makeFolders = (): ChatFolder[] => [
   }
 ];
 
+interface FixtureState {
+  folders: ChatFolder[];
+  patches: { id: string; topicIds: string[] }[];
+  errors: string[];
+  failNext: boolean;
+  delay: number;
+}
+
 async function fixture(
   page: Page,
   options: {
@@ -30,8 +38,10 @@ async function fixture(
     clients?: boolean;
     many?: boolean;
     mobileShell?: boolean;
+    support?: boolean;
+    panel?: boolean;
   } = {}
-) {
+): Promise<FixtureState> {
   const state = {
     folders: options.empty ? [] : makeFolders(),
     patches: [] as { id: string; topicIds: string[] }[],
@@ -39,6 +49,19 @@ async function fixture(
     failNext: false,
     delay: 0
   };
+  if (options.support) {
+    state.folders.unshift({
+      id: 'support-folder',
+      name: 'Поддержка',
+      icon: 'heart',
+      scope: 'clients',
+      isSystem: true,
+      position: 0,
+      topicIds: ['menu-topic-0'],
+      createdAt: '',
+      updatedAt: ''
+    });
+  }
   if (options.many) {
     state.folders = Array.from({ length: 40 }, (_, index) => ({
       ...makeFolders()[0],
@@ -86,13 +109,88 @@ async function fixture(
   });
   const params = new URLSearchParams();
   if (options.clients) params.set('clients', '');
+  if (options.panel) params.set('panel', '');
   if (options.mobileShell) params.set('mobile-shell', '');
   await page.goto(`/e2e/fixtures/topic-folder-menu.html?${params}`);
   await expect(
-    page.getByTestId('Fixture-Topics-ContactList-Item1')
+    page.getByTestId(
+      options.panel ? 'ChatFolders-Panel' : 'Fixture-Topics-ContactList-Item1'
+    )
   ).toBeVisible();
   return state;
 }
+
+test('Системная поддержка выбирается как фильтр и недоступна для редактирования и перемещения', async ({
+  page
+}) => {
+  test.setTimeout(60000);
+  const state = await fixture(page, {
+    clients: true,
+    support: true,
+    panel: true
+  });
+  const folder = page.getByTestId('ChatFolders-Folder-support-folder');
+
+  await expect(folder).toHaveAttribute('aria-description', 'Системная папка');
+  await folder.click();
+  await expect(page.getByTestId('Fixture-SelectedFolder')).toHaveText(
+    'support-folder'
+  );
+  await expect(page.getByTestId('ChatFolders-EditorModal')).toHaveCount(0);
+  await folder.click({ button: 'right' });
+  await expect(page.getByTestId('ChatFolders-Actions')).toHaveCount(0);
+  await folder.press('Alt+ArrowDown');
+  await expect(page.locator('[data-folder-id]').first()).toHaveAttribute(
+    'data-folder-id',
+    'support-folder'
+  );
+  expect(state.patches).toEqual([]);
+  expect(state.errors).toEqual([]);
+});
+
+test('Поддержка возвращается после восстановления доступа к клиентам', async ({
+  page
+}): Promise<void> => {
+  const state = await fixture(page, {
+    clients: true,
+    support: true,
+    panel: true
+  });
+  const support = state.folders.find(folder => folder.isSystem)!;
+
+  state.folders = state.folders.filter(folder => !folder.isSystem);
+  await page.getByTestId('Fixture-Refresh').click();
+  await expect(
+    page.getByTestId('ChatFolders-Folder-support-folder')
+  ).toHaveCount(0);
+  state.folders.unshift(support);
+  await page.getByTestId('Fixture-Refresh').click();
+  await expect(
+    page.getByTestId('ChatFolders-Folder-support-folder')
+  ).toBeVisible();
+  expect(state.errors).toEqual([]);
+});
+
+test('Клиентские топики нельзя вручную добавлять в системную поддержку', async ({
+  page,
+  isMobile
+}) => {
+  const state = await fixture(page, { clients: true, support: true });
+
+  await openContext(page);
+  await openFolders(page, isMobile);
+  await expect(foldersMenu(page).getByRole('menuitemcheckbox')).toHaveCount(1);
+  await expect(
+    foldersMenu(page).getByText('Поддержка', { exact: true })
+  ).toHaveCount(0);
+  await foldersMenu(page)
+    .getByRole('menuitemcheckbox', { name: 'Клиенты' })
+    .click();
+  expect(state.patches).toEqual([
+    { id: 'client-folder', topicIds: ['client-existing', 'menu-topic-0'] }
+  ]);
+  expect(state.errors).toEqual([]);
+});
 
 const context = (page: Page) => page.locator('.topic-folder-context-menu');
 const foldersMenu = (page: Page) =>

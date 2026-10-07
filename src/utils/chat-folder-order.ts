@@ -3,6 +3,7 @@ import type { ChatFolder } from '../services/useChatSDK/chat-folder';
 export const sortChatFolders = (folders: readonly ChatFolder[]): ChatFolder[] =>
   [...folders].sort(
     (a, b) =>
+      Number(!!b.isSystem) - Number(!!a.isSystem) ||
       (a.position ?? 0) - (b.position ?? 0) ||
       a.createdAt.localeCompare(b.createdAt) ||
       a.id.localeCompare(b.id)

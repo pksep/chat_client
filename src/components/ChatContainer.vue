@@ -307,6 +307,9 @@ watch(
       routeType === RouteTypes.GROUP ||
       routeType === RouteTypes.FAVORITES
     ) {
+      // Возврат к списку сохраняет выбранный раздел, включая клиентов.
+      if (!topicId) return;
+
       setActiveSection(
         clientInquiries.value.has(topicId || '') ||
           isClientTopic(getTopicList().find(topic => topic.id === topicId))

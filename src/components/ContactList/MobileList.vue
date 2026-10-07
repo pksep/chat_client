@@ -125,7 +125,10 @@
           ]"
           :aria-hidden="activeSection !== 'clients'"
         >
-          <ClientsPanel v-if="mountedSections.has('clients')" is-mobile />
+          <ClientsPanel
+            v-if="managerAllowed && mountedSections.has('clients')"
+            is-mobile
+          />
         </section>
 
         <section
@@ -187,7 +190,10 @@ let savedChatsScrollTop = 0;
 
 <script setup lang="ts">
 import { useChatAccess } from '../../composables/useChatAccess';
-import { isClientTopic } from '../../composables/useManagerInquiries';
+import {
+  isClientTopic,
+  useManagerInquiries
+} from '../../composables/useManagerInquiries';
 import ClientsPanel from '../Clients/ClientsPanel.vue';
 import {
   reactive,
@@ -269,6 +275,7 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
 const { getTopicList, loading: isTopicsLoading } = useTopics();
 const { state: toolbarState, setSearch } = useChatsToolbarState();
 const { activeSection, animateSectionChange, setActiveSection } = useChatMenu();
+const { allowed: managerAllowed } = useManagerInquiries();
 const mountedSections = reactive(new Set<ChatMenuSection>(['chats']));
 const { isShareSelectionActive, selectedTopicIds, toggleShareTopic } =
   useShareSelection();
