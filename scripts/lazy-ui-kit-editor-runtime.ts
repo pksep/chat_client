@@ -87,7 +87,7 @@ export const lazyUiKitEditorRuntime = (): Plugin => {
       const sourceOf = (unit: Unit) =>
         code.slice(unit.node.start, unit.node.end);
       const first = units.find(unit =>
-        /^function [A-Za-z_$][\w$]*\(C\) \{\s*this\.content = C;\s*\}$/.test(
+        /^function [A-Za-z_$][\w$]*\(([A-Za-z_$][\w$]*)\) \{\s*this\.content = \1;\s*\}$/.test(
           sourceOf(unit)
         )
       );

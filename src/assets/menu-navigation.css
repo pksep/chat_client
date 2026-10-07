@@ -449,20 +449,45 @@
   color: var(--text-disabled);
 }
 
-.menu-profile__status-input {
+fieldset.menu-profile__status-input.input-yui-kit {
+  flex: 1;
   min-width: 0;
   min-height: 42px;
+  height: 42px;
+  margin: 0;
+  padding: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+fieldset.menu-profile__status-input.input-yui-kit::before {
+  display: none;
+}
+
+fieldset.menu-profile__status-input.input-yui-kit .input-yui-kit__input {
+  min-width: 0;
+  min-height: 42px;
+  height: 42px;
   padding: 12px 10px 10px;
   background-color: transparent;
   border: none;
   color: var(--text-primary);
 
   font-size: 14px;
+  line-height: normal;
   outline: none;
   width: 100%;
+  border-radius: 0;
+  text-overflow: clip;
 }
 
-.menu-profile__status-input::placeholder {
+fieldset.menu-profile__status-input.input-yui-kit
+  .input-yui-kit__input::placeholder,
+fieldset.menu-profile__status-input.input-yui-kit
+  .input-yui-kit__input:read-write:focus::placeholder {
   color: var(--text-disabled);
 }
 
@@ -1052,7 +1077,7 @@ dialog.menu-profile__wallpaper-modal > .modal-yui-kit__modal-content {
     backdrop-filter: blur(18px);
   }
 
-  .mobile-list-container:has(.menu-profile__status-input:focus)
+  .mobile-list-container:has(.menu-profile__status-input:focus-within)
     > .menu-bottom-nav {
     display: none;
   }

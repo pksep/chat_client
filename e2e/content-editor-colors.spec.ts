@@ -70,10 +70,10 @@ test('formatting toolbar stays hidden after selecting all and deleting the text'
   await expect(page.locator('.formatting-toolbar')).toBeVisible();
 });
 
-test('native spellchecking prefers Russian and switches to English without changing message HTML', async ({
+test('editor language changes without changing message HTML', async ({
   page
 }) => {
-  await expect(editor(page)).toHaveAttribute('spellcheck', 'true');
+  await expect(editor(page)).toHaveAttribute('spellcheck', 'false');
   await expect(editor(page)).toHaveAttribute('lang', 'ru');
   await editor(page).fill('Русский текст');
   await expect(editor(page)).toHaveAttribute('lang', 'ru');
@@ -87,6 +87,43 @@ test('native spellchecking prefers Russian and switches to English without chang
   await editor(page).press('Control+a');
   await editor(page).press('Backspace');
   await expect(editor(page)).toHaveAttribute('lang', 'ru');
+});
+
+test('editor underlines mixed Russian and English errors without adding them to message HTML', async ({
+  page
+}) => {
+  await editor(page).fill(
+    'Привет ашибка праверка hello mispelled sentense ок Ок ОК ok Ok OK'
+  );
+  await expect(editor(page).locator('.yui-spelling-error')).toHaveText(
+    ['ашибка', 'праверка', 'mispelled', 'sentense'],
+    { timeout: 15000 }
+  );
+  await expect(editor(page).locator('.yui-spelling-error').first()).toHaveCSS(
+    'text-decoration-style',
+    'wavy'
+  );
+  expect(await page.locator('#draft').textContent()).not.toContain(
+    'yui-spelling-error'
+  );
+  await editor(page).press('Control+a');
+  await editor(page).press('Backspace');
+  await expect(editor(page).locator('.yui-spelling-error')).toHaveCount(0);
+  await expect(page.locator('.formatting-toolbar')).toBeHidden();
+
+  await pasteHtml(
+    page,
+    '<p>Это <strong>аш</strong>ибка.</p><p><em>mis</em>pelled <code>qwertywrong</code> <a href="https://example.com">mispelled</a></p>'
+  );
+  await expect(editor(page).locator('.yui-spelling-error')).toHaveText([
+    'аш',
+    'ибка',
+    'mis',
+    'pelled'
+  ]);
+  expect(await page.locator('#draft').textContent()).not.toContain(
+    'yui-spelling-error'
+  );
 });
 
 test('selected text and background colors survive sending and partial copying', async ({
@@ -292,9 +329,9 @@ test('mobile clipboard actions preserve marked colors and remove external colors
   });
   await editor(page).dispatchEvent('contextmenu');
   await page.getByRole('button', { name: 'Скопировать', exact: true }).click();
-  expect(await page.evaluate(() => window.colorClipboard.html)).toContain(
-    'data-yui-color="#ff6868"'
-  );
+  await expect
+    .poll(() => page.evaluate(() => window.colorClipboard.html))
+    .toContain('data-yui-color="#ff6868"');
 
   await page.evaluate(() => window.colorHarness.editor.commands.clearContent());
   await editor(page).dispatchEvent('contextmenu');

@@ -19,7 +19,7 @@ export const lazyUiKitEmojiRuntime = (): Plugin => {
       if (!id.replace(/\\/g, '/').endsWith('/@pksep/yui/dist/sep-yui.mjs'))
         return;
       const startMatch = code.match(
-        /const\s+[A-Za-z_$][\w$]*\s*=\s*"https:\/\/cdn\.jsdelivr\.net\/npm\/emoji-datasource-apple@[^/]+\/img\/apple\/64"/
+        /(const|var|,)\s*[A-Za-z_$][\w$]*\s*=\s*"https:\/\/cdn\.jsdelivr\.net\/npm\/emoji-datasource-apple@[^/]+\/img\/apple\/64"/
       );
       const start = startMatch?.index ?? -1;
       const sourcePanelStart = code.indexOf(
@@ -49,13 +49,30 @@ export const lazyUiKitEmojiRuntime = (): Plugin => {
           'Изменилась структура эмодзи в UI-kit: обновите lazy-ui-kit-emoji-runtime для новой версии.'
         );
       }
-      runtimeSource = `${vueImport}\n${code.slice(start, componentEnd)}\nexport default ${componentName};`;
+      const startsInsideDeclaration = startMatch?.[1] === ',';
+      const emojiSource = startsInsideDeclaration
+        ? `const ${code.slice(start + 1, componentEnd)}`
+        : code.slice(start, componentEnd);
+      runtimeSource = `${vueImport}\n${emojiSource}\nexport default ${componentName};`;
       const remainder = code.slice(componentEnd);
       const panelStart = remainder.indexOf('__name: "EmojiPickerPanel"');
       const editor = remainder.slice(0, panelStart);
       const panel = remainder.slice(panelStart);
       const identifier = '[A-Za-z_$][\\w$]*';
+      const stickerStart = editor.indexOf('__name: "EmojiStickerPicker"');
+      const stickerName =
+        stickerStart < 0
+          ? undefined
+          : editor
+              .slice(Math.max(0, stickerStart - 200), stickerStart)
+              .match(/\b([A-Za-z_$][\w$]*)\s*=\s*[^=]*$/)?.[1];
       const pickerUse = new RegExp(
+        stickerName
+          ? `\\b${identifier}\\(${stickerName}, \\{`
+          : `\\b${identifier}\\(${identifier}\\(${componentName}\\), \\{`,
+        'g'
+      );
+      const panelPickerUse = new RegExp(
         `\\b${identifier}\\(${identifier}\\(${componentName}\\), \\{`,
         'g'
       );
@@ -114,7 +131,7 @@ export const lazyUiKitEmojiRuntime = (): Plugin => {
       if (
         panelStart < 0 ||
         [...editor.matchAll(pickerUse)].length !== 3 ||
-        [...panel.matchAll(pickerUse)].length !== 1 ||
+        [...panel.matchAll(panelPickerUse)].length !== 1 ||
         !editorReady ||
         !panelReadyName
       ) {
@@ -131,24 +148,60 @@ export const lazyUiKitEmojiRuntime = (): Plugin => {
       } = editorReady;
       // Инициализация размера, категорий и недавних эмодзи нужна после появления
       // дочернего DOM. nextTick родителя заканчивается раньше асинхронного импорта.
-      const editorWithReady = editor.replace(
+      let editorWithReady = editor.replace(
         pickerUse,
         match => `${match}
-        onVnodeMounted: () => {
+        ${stickerName ? 'onReady' : 'onVnodeMounted'}: () => {
           if (!${editorButtonRoot}) return;
           ${positionPicker}(${editorButtonRoot}); ${measurePicker}(${editorButtonRoot});
           const root = ${editorButtonRoot}.querySelector(".emoji-picker");
           if (root) { ${resetRecent}(root); ${resetGroup}(root); ${recentReady} = false; ${rememberRecent}(root); }
         },`
       );
+      if (stickerName) {
+        const stickerSource = editor.slice(stickerStart);
+        const mounted = stickerSource.match(
+          new RegExp(
+            `return\\s+${identifier}\\((async\\s*\\(\\)\\s*=>\\s*\\{[\\s\\S]*?\\})\\),`
+          )
+        )?.[1];
+        const emitName = stickerSource.match(
+          /\b([A-Za-z_$][\w$]*)\("select-sticker",/
+        )?.[1];
+        const nativePickerUse = new RegExp(
+          `\\b${identifier}\\(${identifier}\\(${componentName}\\), ${identifier}\\(${identifier}\\.\\$attrs, \\{`,
+          'g'
+        );
+        if (
+          !mounted ||
+          !emitName ||
+          [...editorWithReady.matchAll(nativePickerUse)].length !== 1
+        ) {
+          this.error('Изменилось подключение эмодзи внутри панели стикеров.');
+        }
+        editorWithReady = editorWithReady
+          .replace(
+            'emits: ["select", "select-sticker"],',
+            'emits: ["select", "select-sticker", "ready"],'
+          )
+          .replace(
+            nativePickerUse,
+            match => `${match}
+              onVnodeMounted: async () => {
+                await (${mounted})();
+                ${emitName}("ready");
+              },`
+          );
+      }
       const panelWithReady = panel.replace(
-        pickerUse,
+        panelPickerUse,
         match => `${match} onVnodeMounted: ${panelReadyName},`
       );
       return {
         code:
           'import { defineAsyncComponent as __chatAsyncEmoji } from "vue";\n' +
           code.slice(0, start) +
+          (startsInsideDeclaration ? ';\n' : '') +
           `const ${componentName} = __chatAsyncEmoji(() => import(${JSON.stringify(runtimeId)}));\n` +
           editorWithReady +
           panelWithReady,

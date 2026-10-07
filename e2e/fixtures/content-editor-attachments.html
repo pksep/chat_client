@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        margin: 0;
+        background: var(--surface-main);
+      }
+      #app {
+        position: fixed;
+        inset: auto 16px 16px;
+        padding: 16px;
+        border-radius: 15px;
+        background: var(--surface-overlay);
+      }
+      html[data-anchor='top'] #app {
+        top: 16px;
+        bottom: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app"></main>
+    <script type="module">
+      import { createApp, h, ref } from 'vue';
+      import { ContentEditor } from '@pksep/yui';
+      import '@pksep/yui/styles';
+
+      document.documentElement.dataset.anchor =
+        new URLSearchParams(location.search).get('anchor') || 'bottom';
+
+      createApp({
+        setup() {
+          const draft = ref('');
+          return () =>
+            h(ContentEditor, {
+              activeAttachFile: true,
+              modelValue: draft.value,
+              'onUpdate:modelValue': value => (draft.value = value)
+            });
+        }
+      }).mount('#app');
+    </script>
+  </body>
+</html>

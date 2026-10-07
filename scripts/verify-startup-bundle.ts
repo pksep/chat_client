@@ -141,7 +141,7 @@ try {
           await page.evaluate(() =>
             document.documentElement.classList.contains('theme-dark')
           )
-        ).toBe(dark && !mobile);
+        ).toBe(dark);
         expect(requests.some(path => path.endsWith('/theme-init.js'))).toBe(
           false
         );
