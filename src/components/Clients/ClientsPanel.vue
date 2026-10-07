@@ -114,7 +114,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Icon, IconNameEnum } from '@pksep/yui';
 import {
   clientName,
