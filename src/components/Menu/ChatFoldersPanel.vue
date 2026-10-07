@@ -83,11 +83,15 @@
             ]"
             :data-testid="`ChatFolders-Folder-${folder.id}`"
             :data-folder-id="folder.id"
-            aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+            :aria-keyshortcuts="
+              folder.isSystem ? undefined : 'Alt+ArrowUp Alt+ArrowDown'
+            "
             :aria-description="
-              props.mobile
-                ? 'Удерживайте и перетащите, чтобы изменить порядок'
-                : 'Перетащите, чтобы изменить порядок'
+              folder.isSystem
+                ? 'Системная папка'
+                : props.mobile
+                  ? 'Удерживайте и перетащите, чтобы изменить порядок'
+                  : 'Перетащите, чтобы изменить порядок'
             "
             @click="openDetails(folder.id)"
             @contextmenu.prevent="openFolderMenu(folder.id, $event)"
@@ -575,6 +579,8 @@ const updateDetailsName = (value: string): void => {
 };
 
 const openFolderMenu = (folderId: string, event: MouseEvent): void => {
+  if (props.folders.find(folder => folder.id === folderId)?.isSystem) return;
+
   openMenuFolderId.value = folderId;
   openActivePopover('folderMenu', event);
 };
@@ -612,6 +618,8 @@ const openCreateEditor = (): void => {
 };
 
 const openEditEditor = (folder: ChatFolder): void => {
+  if (folder.isSystem) return;
+
   resetEditor();
   editingFolderId.value = folder.id;
   draftName.value =
@@ -661,6 +669,11 @@ const saveEditor = async (): Promise<void> => {
 const openDetails = (folderId: string): void => {
   const folder = props.folders.find(item => item.id === folderId);
   if (!folder) return;
+  if (folder.isSystem) {
+    emits('select-folder', folderId);
+    return;
+  }
+
   closeFolderMenu();
   isIconPickerOpen.value = false;
   detailsFolderId.value = folderId;
@@ -747,6 +760,8 @@ const saveDetailsIcon = async (icon: ChatFolderIcon): Promise<void> => {
 };
 
 const requestDelete = (folderId: string): void => {
+  if (props.folders.find(folder => folder.id === folderId)?.isSystem) return;
+
   closeFolderMenu();
   deleteFolderTargetId.value = folderId;
 };

@@ -11,6 +11,7 @@ export interface ChatFolder {
   name: string;
   icon: ChatFolderIcon;
   scope?: ChatFolderScope;
+  isSystem?: boolean;
   position?: number;
   topicIds: readonly string[];
   createdAt: string;

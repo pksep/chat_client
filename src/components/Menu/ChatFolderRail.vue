@@ -83,14 +83,18 @@
           :data-testid="`ChatFolders-Rail-Folder-${folder.id}`"
           :data-folder-id="folder.id"
           :aria-keyshortcuts="
-            props.mobile
-              ? 'Alt+ArrowLeft Alt+ArrowRight'
-              : 'Alt+ArrowUp Alt+ArrowDown'
+            folder.isSystem
+              ? undefined
+              : props.mobile
+                ? 'Alt+ArrowLeft Alt+ArrowRight'
+                : 'Alt+ArrowUp Alt+ArrowDown'
           "
           :aria-description="
-            props.mobile
-              ? 'Удерживайте и перетащите, чтобы изменить порядок'
-              : 'Перетащите, чтобы изменить порядок'
+            folder.isSystem
+              ? 'Системная папка'
+              : props.mobile
+                ? 'Удерживайте и перетащите, чтобы изменить порядок'
+                : 'Перетащите, чтобы изменить порядок'
           "
           @click="handleFolderSelect(folder.id)"
         >

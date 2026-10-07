@@ -94,7 +94,15 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  useId,
+  watch
+} from 'vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -118,8 +126,16 @@ const props = defineProps<{
   dataTestid: string;
 }>();
 const emit = defineEmits<{ (event: 'close'): void }>();
-const { folders, loadFolders, addTopicToFolder, removeTopicFromFolder } =
-  useChatFolders(props.scope);
+const {
+  folders: allFolders,
+  loadFolders,
+  addTopicToFolder,
+  removeTopicFromFolder
+} = useChatFolders(props.scope);
+const folders = computed(() =>
+  allFolders.value.filter(folder => !folder.isSystem)
+);
+
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const panelId = `topic-folders-${useId()}`;
 const triggerRef = ref<InstanceType<typeof Button> | null>(null);

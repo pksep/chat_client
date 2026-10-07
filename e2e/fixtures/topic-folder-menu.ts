@@ -29,7 +29,7 @@ const showPanel = new URLSearchParams(location.search).has('panel');
 const showMobileShell = new URLSearchParams(location.search).has(
   'mobile-shell'
 );
-const wrapTopicList = (list: VNode) =>
+const wrapTopicList = (list: VNode): VNode =>
   showMobileShell
     ? h('div', { class: 'mobile-list-container' }, [
         h('div', { class: 'mobile-list-container__content' }, [
@@ -80,11 +80,12 @@ const { state: notifications } = useNotifications();
 await folderState.loadFolders();
 
 createApp({
-  setup() {
+  setup(): () => VNode {
     const panelVisible = ref(showPanel);
     const selection = ref(false);
     const concurrencyResult = ref('');
     const topicOpens = ref(0);
+    const selectedFolder = ref('');
     const switchUser = () => {
       authedUser.value = { ...user, id: 'folder-menu-other-user' };
     };
@@ -194,6 +195,9 @@ createApp({
                   folders: folderState.folders.value,
                   mobile: matchMedia('(max-width: 768px)').matches,
                   scope,
+                  onSelectFolder: (id: string): void => {
+                    selectedFolder.value = id;
+                  },
                   onClose: () => {
                     panelVisible.value = false;
                   }
@@ -211,6 +215,11 @@ createApp({
                   style: 'width:min(345px,100%);margin:0;padding:10px 0'
                 })
               ),
+          h(
+            'output',
+            { 'data-testid': 'Fixture-SelectedFolder' },
+            selectedFolder.value
+          ),
           h(
             'output',
             { 'data-testid': 'Fixture-ConcurrentResult' },
