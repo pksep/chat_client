@@ -92,12 +92,8 @@ export const useChatFolderDrag = (options: FolderDragOptions) => {
     const container = containerRef.value;
     const currentIndex = draftIds.value.indexOf(candidate.id);
     const coordinate = horizontal ? clientX : clientY;
-    const scroll = wrapped
-      ? container.closest<HTMLElement>('.mobile-list-container__section')
-          ?.scrollTop || 0
-      : horizontal
-        ? container.scrollLeft
-        : container.scrollTop;
+    const scroll =
+      horizontal && !wrapped ? container.scrollLeft : container.scrollTop;
     if (
       coordinate === previousCoordinate &&
       (!wrapped || clientY === previousCrossCoordinate) &&
@@ -195,16 +191,11 @@ export const useChatFolderDrag = (options: FolderDragOptions) => {
     const y = horizontal && !wrapped ? previewTop : clientY - offsetY;
     preview.style.transform = `translate3d(${x}px, ${y}px, 0)`;
     const rect = containerRef.value.getBoundingClientRect();
-    const scrollContainer = wrapped
-      ? containerRef.value.closest<HTMLElement>(
-          '.mobile-list-container__section'
-        )
-      : containerRef.value;
-    const scrollRect = scrollContainer?.getBoundingClientRect() || rect;
+    const scrollContainer = containerRef.value;
     const scrollHorizontal = horizontal && !wrapped;
     const coordinate = scrollHorizontal ? clientX : clientY;
-    const start = scrollHorizontal ? scrollRect.left : scrollRect.top;
-    const end = scrollHorizontal ? scrollRect.right : scrollRect.bottom;
+    const start = scrollHorizontal ? rect.left : rect.top;
+    const end = scrollHorizontal ? rect.right : rect.bottom;
     const crossCoordinate = wrapped
       ? clientX
       : horizontal

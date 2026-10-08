@@ -101,7 +101,7 @@
         <div class="message-group__messages">
           <MessageBubble
             v-for="(message, groupIndex) in item.messages"
-            :key="message.id"
+            :key="getMessageRenderKey(message)"
             :class="
               messageChat(
                 resolveMessageIsMeSender(message) ? 'user' : 'assistant'
@@ -150,6 +150,7 @@ import {
 } from '../../composables/useSelectedMessages';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { parseCallMessage } from '../../utils/parseCallMessage';
+import { parseMessageEx } from '../../utils/messageReplyQuote';
 import { parseUserEx } from '../../utils/parseUserEx';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
@@ -538,6 +539,11 @@ const resolveMessageIsMeSender = (message?: IMessage) =>
     : getParsedCallMessage(message)?.isOutgoing ??
       props.authUserId === message?.senderUserId;
 
+const getMessageRenderKey = (message: IMessage): string => {
+  const { clientId } = parseMessageEx(message.ex);
+  return typeof clientId === 'string' && clientId ? clientId : message.id;
+};
+
 const latestReadOutgoingMessageIndex = computed(() =>
   getLatestReadOutgoingMessageIndex(
     visibleMessages.value,
@@ -689,7 +695,7 @@ const renderItems = computed<RenderItem[]>(() => {
 
     items.push({
       kind: 'group',
-      key: `group-${groupMessages[0]?.id || index}-${groupMessages[groupMessages.length - 1]?.id || endIndex}`,
+      key: `group-${getMessageRenderKey(message) || index}`,
       messages: groupMessages,
       startIndex: index,
       isMeSender: resolveMessageIsMeSender(message)

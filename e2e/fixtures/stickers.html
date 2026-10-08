@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Проверка стикеров</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp } from 'vue';
+      import StickersHarness from './StickersHarness.vue';
+      import '@pksep/yui/styles';
+      import '../../src/assets/message-bubble.css';
+      createApp(StickersHarness).mount('#app');
+    </script>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Анимация одного эмодзи</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp } from 'vue';
+      import EmojiMessagesHarness from './EmojiMessagesHarness.vue';
+      import { emojiDirective } from '../../src/directives/emoji';
+      import '@pksep/yui/styles';
+      import '../../src/assets/globals.css';
+      import '../../src/assets/message-bubble.css';
+      createApp(EmojiMessagesHarness)
+        .directive('emoji', emojiDirective)
+        .mount('#app');
+    </script>
+  </body>
+</html>

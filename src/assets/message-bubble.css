@@ -1427,11 +1427,13 @@ div.message-content__file {
   margin-top: 4px;
 }
 
-.message__article--emoji .message-footer-row {
+.message__article--emoji .message-footer-row,
+.message-sticker-stack .message-footer-row {
   align-items: center;
 }
 
-.message__content__articles__my .message__article--emoji .message-footer-row {
+.message__content__articles__my .message__article--emoji .message-footer-row,
+.message__content__articles__my .message-sticker-stack .message-footer-row {
   justify-content: flex-end;
 }
 
@@ -1439,7 +1441,8 @@ div.message-content__file {
   align-self: center;
 }
 
-.message__content__articles__my .message__article--emoji .message-footer-row .message-time {
+.message__content__articles__my .message__article--emoji .message-footer-row .message-time,
+.message__content__articles__my .message-sticker-stack .message-footer-row .message-time {
   margin-inline: 0;
 }
 

@@ -77,6 +77,8 @@ import {
 import { stageAiAttachments } from '../../../services/aiAttachments';
 import { buildForwardMessageSendPlan } from '../../../utils/forward-message-send-plan';
 import { getUploadFileSizeError } from '../../../services/useChatSDK/multipart-upload';
+import { createStickerMessage } from '../../../utils/stickers';
+import { prepareKeyboardSticker } from '../../../utils/sticker-animation';
 
 const MAX_HTML_LENGTH = 4000;
 const FORWARD_TEXT_SEND_DELAY_MS = 250;
@@ -369,6 +371,8 @@ interface IQueuedFilePayload {
 }
 
 interface IAttachChunkOptions {
+  keyboardSticker?: boolean;
+  keyboardStickerDurationMs?: number;
   managerReplyRouteId?: string;
   topicId?: string;
   isMedia?: boolean;
@@ -1439,6 +1443,48 @@ export function useMessageSender(
     };
   };
 
+  const handleSendSticker = async (stickerId: string): Promise<void> => {
+    const content = createStickerMessage(stickerId);
+    const topicId = route.value.id;
+    if (
+      !content ||
+      !topicId ||
+      state.editMessage ||
+      route.value.type === RouteTypes.AI
+    )
+      return;
+    if (useManagerInquiries().byTopic.value.has(topicId)) return;
+
+    const replyMessage = state.replyMessage;
+    const clientId = generateUUID();
+    queuePendingTextMessage({
+      topicId,
+      text: content.text,
+      replyMessageId: replyMessage?.id,
+      replyMessage,
+      ex: createMessageEx({
+        clientId,
+        ...content.metadata,
+        ...createReplyQuoteEx(replyMessage)
+      })
+    });
+    clearPendingMessageAutoRetry(topicId, clientId);
+    if (state.replyMessage === replyMessage) state.replyMessage = null;
+    state.hideUnreadMarker = true;
+    await nextTick();
+    scrollToBottom();
+
+    try {
+      const didSend = await trySendPendingTextMessage(topicId, clientId, {
+        markNotDeliveredOnFailure: false
+      });
+      if (!didSend)
+        schedulePendingMessageAutoRetry(topicId, clientId, { reset: true });
+    } catch {
+      schedulePendingMessageAutoRetry(topicId, clientId, { reset: true });
+    }
+  };
+
   const handleSend = async (
     payload?: string[] | IHandleSendPayload
   ): Promise<void> => {
@@ -2045,6 +2091,16 @@ export function useMessageSender(
       media: localMedia,
       ex: createMessageEx({
         clientId,
+        ...(options?.keyboardSticker
+          ? {
+              kind: 'sticker',
+              sticker: {
+                pack: 'keyboard',
+                version: 1,
+                durationMs: options.keyboardStickerDurationMs || 0
+              }
+            }
+          : {}),
         ...replyQuoteEx
       })
     };
@@ -2279,6 +2335,29 @@ export function useMessageSender(
   const isMediaShareFile = (file: File): boolean =>
     file.type.startsWith('image/') || file.type.startsWith('video/');
 
+  const handleSendKeyboardMedia = async (file: File): Promise<void> => {
+    if (
+      !route.value.id ||
+      state.editMessage ||
+      route.value.type === RouteTypes.AI ||
+      useManagerInquiries().byTopic.value.has(route.value.id) ||
+      !['image/gif', 'image/webp', 'image/png', 'image/jpeg'].includes(
+        file.type
+      )
+    )
+      return;
+    const prepared = await prepareKeyboardSticker(file);
+    await handleQueuedAttachmentFiles(
+      [{ file: prepared.file, isMedia: true }],
+      {
+        keyboardSticker: true,
+        keyboardStickerDurationMs: prepared.durationMs,
+        text: 'Стикер',
+        forwardMessageIds: []
+      }
+    );
+  };
+
   const handleAttachSharedFiles = async (
     files: File[],
     text?: string | null,
@@ -2427,6 +2506,8 @@ export function useMessageSender(
 
   return {
     handleSend,
+    handleSendSticker,
+    handleSendKeyboardMedia,
     handleAttachFile,
     handleAttachSharedFiles,
     handleRetryMessage
