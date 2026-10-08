@@ -1,3 +1,18 @@
+# [1.43.0](https://github.com/pksep/chat_client/compare/v1.42.0...v1.43.0) (2026-10-08)
+
+
+### Bug Fixes
+
+* **chat:** detect network loss promptly and truncate profile details ([ad1a922](https://github.com/pksep/chat_client/commit/ad1a922f3c179b0b87d4afa231453f931f5f90d0))
+* **folders:** keep mobile search and folders pinned while scrolling ([e0cdee7](https://github.com/pksep/chat_client/commit/e0cdee795679b08ed9ad9639784693f670a5fa7f))
+* keep support unread badges circular ([2c676b2](https://github.com/pksep/chat_client/commit/2c676b22706eaca007124ddff75f3c81228c1496))
+* preserve confirmed chat access during refresh failures ([735184c](https://github.com/pksep/chat_client/commit/735184c6a408b0b219740062067bb273142c4450))
+
+
+### Features
+
+* **chat:** add animated stickers and emoji with UI fixes ([f795960](https://github.com/pksep/chat_client/commit/f795960e1cb17ca14e3b45678ae0d6e8e69968fe))
+
 # [1.42.0](https://github.com/pksep/chat_client/compare/v1.41.0...v1.42.0) (2026-10-07)
 
 
