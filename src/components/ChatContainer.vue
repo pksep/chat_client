@@ -341,7 +341,7 @@ watch(
       if (chatAccess.value.ai) setActiveSection('ai');
       else if (chatAccessReady.value) navigateToDefault();
     }
-    if (!chatAccess.value.client) {
+    if (chatAccessReady.value && !chatAccess.value.client) {
       if (route.value.id && customerTopicIds.has(route.value.id))
         navigateToDefault();
       const visible = topics.filter(topic => !customerTopicIds.has(topic.id));

@@ -14,6 +14,7 @@ const scriptFrom = (path: string): ts.SourceFile => {
 
 const aiScript = scriptFrom('../src/components/Chat.vue');
 const menuScript = scriptFrom('../src/components/Menu/MenuBottomNav.vue');
+const containerScript = scriptFrom('../src/components/ChatContainer.vue');
 
 const findGuard = (script: ts.SourceFile, name: string): string => {
   for (const statement of script.statements) {
@@ -56,7 +57,75 @@ const findClientGuard = (): string => {
 const transpileGuard = (source: string): string =>
   ts.transpile(`return (${source});`, { target: ts.ScriptTarget.ES2022 });
 
+const findCustomerTopicGuard = (): string => {
+  for (const statement of containerScript.statements) {
+    if (!ts.isExpressionStatement(statement)) continue;
+
+    const call = statement.expression;
+
+    if (
+      ts.isCallExpression(call) &&
+      call.expression.getText(containerScript) === 'watch' &&
+      call.arguments[0]?.getText(containerScript).includes('getTopicList()') &&
+      call.arguments[1]
+    )
+      return call.arguments[1].getText(containerScript);
+  }
+
+  throw new Error('Не найден обработчик доступа к клиентской переписке');
+};
+
 describe('совместимость защиты разделов с общими правами Chat', () => {
+  for (const [ready, access, redirects, visibleTopics] of [
+    [false, false, 0, 2],
+    [false, true, 0, 2],
+    [true, true, 0, 2],
+    [true, false, 1, 1]
+  ] as const) {
+    test(`клиентская переписка: подтверждение=${ready}, доступ=${access}`, (): void => {
+      let navigations = 0;
+      let topics = [
+        { id: 'customer', client: true },
+        { id: 'ordinary', client: false }
+      ];
+      const createGuard = new Function(
+        'route',
+        'RouteTypes',
+        'chatAccess',
+        'chatAccessReady',
+        'activeSection',
+        'getTopicList',
+        'isClientTopic',
+        'customerTopicIds',
+        'setTopics',
+        'navigateToDefault',
+        'setActiveSection',
+        transpileGuard(findCustomerTopicGuard())
+      );
+      const guard: () => void = createGuard(
+        { value: { type: RouteTypes.GROUP, id: 'customer' } },
+        RouteTypes,
+        { value: { client: access, ai: false } },
+        { value: ready },
+        { value: 'chats' },
+        (): typeof topics => topics,
+        (topic: { client: boolean }): boolean => topic.client,
+        new Set<string>(),
+        (visible: typeof topics): void => {
+          topics = visible;
+        },
+        (): void => {
+          navigations++;
+        },
+        (): void => {}
+      );
+      guard();
+
+      expect(navigations).toBe(redirects);
+      expect(topics).toHaveLength(visibleTopics);
+    });
+  }
+
   for (const routeType of [RouteTypes.AI, RouteTypes.ASSISTANT]) {
     for (const [ready, allowed, redirects] of [
       [false, false, 0],

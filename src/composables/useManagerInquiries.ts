@@ -41,7 +41,8 @@ export interface ManagerOption {
 export class ManagerRequestError extends Error {
   constructor(
     message: string,
-    public status: number
+    public status: number,
+    public accessDenied = false
   ) {
     super(message);
   }
@@ -94,6 +95,14 @@ const notifyRefreshError = (cause: unknown): void => {
   showErrorNotification(message);
 };
 
+function revokeManagerAccess(): void {
+  clearManagerRoutes();
+  allowed.value = false;
+  resolved.value = true;
+  inquiries.value = [];
+  managers.value = [];
+}
+
 export async function managerRequest<T>(
   path: string,
   body?: unknown
@@ -101,6 +110,14 @@ export async function managerRequest<T>(
   const base = getConfig().CHAT_API_DOMAIN?.replace(/\/+$/, '');
   const token = getAuthToken() || getStoredChatAccessToken();
   if (!base || !token) throw new Error('Требуется подключение к чату');
+  const actorId = authedUser.value?.id;
+  const requestGeneration = generation;
+  const isCurrentRequest = (): boolean =>
+    requestGeneration === generation &&
+    actorId === authedUser.value?.id &&
+    base === getConfig().CHAT_API_DOMAIN?.replace(/\/+$/, '') &&
+    token === (getAuthToken() || getStoredChatAccessToken());
+
   const response = await fetchWithAuthRedirect(`${base}/manager/${path}`, {
     method: body === undefined ? 'GET' : 'POST',
     headers: {
@@ -113,21 +130,27 @@ export async function managerRequest<T>(
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    if (response.status === 403 && path !== 'access') {
-      // Отсутствие права синхронизации с ЕРП не закрывает сам раздел обращений.
+    let accessDenied = response.status === 403 && path === 'access';
+
+    if (response.status === 403 && path !== 'access' && isCurrentRequest()) {
+      // Отказ на отдельное действие не означает отзыв права на весь раздел.
       const access = await managerRequest<{ allowed: boolean }>('access').catch(
-        () => null
+        (cause: unknown): { allowed: false } | null =>
+          cause instanceof ManagerRequestError && cause.accessDenied
+            ? { allowed: false }
+            : null
       );
-      if (access?.allowed === false) {
-        clearManagerRoutes();
-        allowed.value = false;
-        inquiries.value = [];
-        managers.value = [];
-      }
+      accessDenied = access?.allowed === false;
     }
+
+    if (accessDenied && isCurrentRequest()) revokeManagerAccess();
+
     throw new ManagerRequestError(
-      managerRequestErrorMessage(response.status),
-      response.status
+      response.status === 403 && !accessDenied
+        ? 'Нет доступа к этому действию'
+        : managerRequestErrorMessage(response.status),
+      response.status,
+      accessDenied
     );
   }
   return data as T;
@@ -215,12 +238,7 @@ export async function refreshManagerInquiries(): Promise<void> {
     } catch (cause) {
       if (currentGeneration !== generation) return;
 
-      if (cause instanceof ManagerRequestError && cause.status === 403) {
-        clearManagerRoutes();
-        allowed.value = false;
-        resolved.value = true;
-        inquiries.value = [];
-        managers.value = [];
+      if (cause instanceof ManagerRequestError && cause.accessDenied) {
         lastRefreshError = '';
 
         return;
