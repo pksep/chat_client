@@ -10,49 +10,24 @@
     <button
       v-if="!isEditorReady"
       type="button"
-      class="chat__input-bootstrap"
-      aria-label="Начните печатать"
-      @pointerdown.prevent="handleBootstrapInputPointerDown"
+      class="chat__input-skeleton"
+      aria-label="Загрузка поля ввода"
+      :data-testid="`${props.dataTestid}-MessageList-InputSkeleton`"
+      @pointerdown.prevent="handleInputSkeletonPointerDown"
     >
-      <svg
-        class="chat__input-bootstrap-attach"
-        aria-hidden="true"
-        viewBox="0 0 24 24"
-        fill="none"
-      >
-        <path
-          d="M8.4 12.8 14.9 6.3a3.2 3.2 0 0 1 4.5 4.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8-8"
-          stroke="currentColor"
-          stroke-width="1.8"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+      <SkeletonBlock class="chat__input-skeleton__text" />
+      <span class="chat__input-skeleton__toolbar" aria-hidden="true">
+        <SkeletonBlock
+          v-for="index in 6"
+          :key="index"
+          class="chat__input-skeleton__toolbar-button"
         />
-      </svg>
-      <span>Начните печатать...</span>
-      <svg
-        class="chat__input-bootstrap-smile"
-        aria-hidden="true"
-        viewBox="0 0 24 24"
-        fill="none"
-      >
-        <circle
-          cx="12"
-          cy="12"
-          r="9"
-          stroke="currentColor"
-          stroke-width="1.8"
-        />
-        <circle cx="9" cy="10" r="1" fill="currentColor" />
-        <circle cx="15" cy="10" r="1" fill="currentColor" />
-        <path
-          d="M8.5 14.2c.9 1.2 2 1.8 3.5 1.8s2.6-.6 3.5-1.8"
-          stroke="currentColor"
-          stroke-width="1.8"
-          stroke-linecap="round"
-        />
-      </svg>
+      </span>
     </button>
-    <div :data-testid="`${props.dataTestid}-MessageList-ContentEditor`">
+    <div
+      class="chat__input-editor"
+      :data-testid="`${props.dataTestid}-MessageList-ContentEditor`"
+    >
       <ContentEditor
         :active-send="props.forwardMessages.length > 0 || props.allowEmptySend"
         v-model="internalInputText"
@@ -65,6 +40,8 @@
         :slash-items="botCommands"
         :slash-config="slashConfig"
         :read-clipboard-text="readClipboardText"
+        :stickers="availableStickers"
+        @unmount-sticker="emit('sendSticker', $event)"
         @unmount-send="handleSend"
         @unmount-attach-file="(...args: any[]) => $emit('attachFile', ...args)"
         @mention-change="handleMentionChange"
@@ -235,7 +212,11 @@ import {
 } from '@pksep/yui';
 import EditIcon from '../UI/EditIcon.vue';
 import ForwardIcon from '../UI/ForwardIcon.vue';
+import SkeletonBlock from '../UI/SkeletonBlock.vue';
 import { stripHtml } from '../../utils/stripHtml';
+import { chatStickers } from '../../utils/stickers';
+import { bindKeyboardMedia } from '../../services/useKeyboardMedia';
+import { useManagerInquiries } from '../../composables/useManagerInquiries';
 import type { IMessage } from '../interfaces/interfaces';
 import { currentGroup } from '../../composables/useGroup';
 import { getSelectedTopic } from '../../composables/useTopics';
@@ -312,6 +293,8 @@ const TYPING_PING_INTERVAL_MS = 2000;
 const emit = defineEmits([
   'update:modelValue',
   'send',
+  'sendSticker',
+  'sendKeyboardMedia',
   'attachFile',
   'clearEdit',
   'clearReply',
@@ -326,6 +309,14 @@ const internalInputText = computed({
   get: () => props.modelValue,
   set: val => emit('update:modelValue', val)
 });
+
+const availableStickers = computed(() =>
+  props.editMessage ||
+  route.value.type === RouteTypes.AI ||
+  useManagerInquiries().byTopic.value.has(props.topicId || route.value.id)
+    ? []
+    : chatStickers
+);
 
 const replyActionTitle = computed(() => {
   if (props.replyMessage?.replyQuoteText) {
@@ -521,7 +512,7 @@ const handleEditorMounted = async (): Promise<void> => {
 };
 let hasReportedEditorReady = false;
 
-const handleBootstrapInputPointerDown = (): void => {
+const handleInputSkeletonPointerDown = (): void => {
   shouldFocusEditorWhenReady = true;
 };
 
@@ -573,6 +564,8 @@ let isTypingActive = false;
 let activeTypingTopicId: string | null = null;
 let lastTypingPingAt = 0;
 let unlistenTauriFileDrop: (() => void) | null = null;
+let unlistenKeyboardMedia: (() => void) | null = null;
+let keyboardMediaDisposed = false;
 let inputResizeObserver: ResizeObserver | null = null;
 let inputMutationObserver: MutationObserver | null = null;
 let lastReportedInputHeight = 0;
@@ -766,6 +759,14 @@ watch(
 );
 
 onMounted(() => {
+  void bindKeyboardMedia({
+    getTargetElement: () =>
+      availableStickers.value.length ? inputContainerRef.value : null,
+    onMedia: file => emit('sendKeyboardMedia', file)
+  }).then(unlisten => {
+    if (keyboardMediaDisposed) unlisten?.();
+    else unlistenKeyboardMedia = unlisten;
+  });
   if ('ResizeObserver' in window && inputContainerRef.value) {
     inputResizeObserver = new ResizeObserver(reportInputHeight);
     inputResizeObserver.observe(inputContainerRef.value);
@@ -797,6 +798,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  keyboardMediaDisposed = true;
   inputResizeObserver?.disconnect();
   inputResizeObserver = null;
   inputMutationObserver?.disconnect();
@@ -804,6 +806,7 @@ onBeforeUnmount(() => {
   lastReportedInputHeight = 0;
   emit('heightChange', 0);
   unlistenTauriFileDrop?.();
+  unlistenKeyboardMedia?.();
   void stopTyping();
 });
 </script>
@@ -813,42 +816,104 @@ onBeforeUnmount(() => {
   min-height: 75px;
 }
 
-.chat__input-bootstrap {
+.chat__input--booting > .chat__input-editor {
+  position: absolute;
+  top: 0;
+  left: 15px;
+  right: 10px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.chat__input-skeleton {
   box-sizing: border-box;
   width: 100%;
-  height: 50px;
+  min-height: 105px;
   margin: 0;
-  padding: 0 18px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  border: 0;
-  border-radius: 28px;
-  background: var(--background-primary, #fff);
-  color: var(--text-secondary, #7d8795);
-  font: inherit;
-  font-size: 16px;
-  text-align: left;
+  padding: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  border: 0.5px solid var(--border-table);
+  border-radius: 20px;
+  background: var(--surface-input-primary);
   cursor: text;
 }
 
-.chat__input:has(.ProseMirror[contenteditable='true'])
-  > .chat__input-bootstrap {
-  display: none;
+.chat__input-skeleton__text {
+  width: min(36%, 260px);
+  height: 14px;
+  margin: 20px 16px;
+  border-radius: 5px;
 }
 
-.chat__input-bootstrap span {
-  flex: 1;
+.chat__input-skeleton__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  margin: 0 16px 16px;
 }
 
-.chat__input-bootstrap svg {
-  width: 26px;
-  height: 26px;
-  flex: none;
+.chat__input-skeleton__toolbar-button {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
 }
 
-.chat__input-bootstrap-attach {
-  transform: rotate(-8deg);
+.chat__input-skeleton__toolbar-button:last-child {
+  margin-left: auto;
+}
+
+@media screen and (width <= 480px) {
+  .chat__input--booting > .chat__input-editor {
+    top: 5px;
+    left: 10px;
+  }
+
+  .chat__input-skeleton {
+    grid-template-columns: 22px minmax(0, 1fr) 22px;
+    grid-template-rows: 1fr;
+    align-items: center;
+    gap: 10px;
+    height: 50px;
+    min-height: 50px;
+    padding: 0 14px;
+    border-width: 1px;
+    border-radius: 30px;
+  }
+
+  .chat__input-skeleton__text {
+    grid-column: 2;
+    grid-row: 1;
+    width: min(42%, 150px);
+    margin: 0;
+  }
+
+  .chat__input-skeleton__toolbar {
+    display: contents;
+  }
+
+  .chat__input-skeleton__toolbar-button {
+    display: none;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    border-radius: 50%;
+  }
+
+  .chat__input-skeleton__toolbar-button:first-child,
+  .chat__input-skeleton__toolbar-button:last-child {
+    display: block;
+    grid-row: 1;
+  }
+
+  .chat__input-skeleton__toolbar-button:first-child {
+    grid-column: 1;
+  }
+
+  .chat__input-skeleton__toolbar-button:last-child {
+    grid-column: 3;
+  }
 }
 
 .chat__input-prompt-toggle {

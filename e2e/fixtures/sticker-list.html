@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проверка появления стикеров</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp } from 'vue';
+      import '@pksep/yui/styles';
+      import '../../src/assets/message-bubble.css';
+      import StickerListHarness from './StickerListHarness.vue';
+      createApp(StickerListHarness).mount('#app');
+    </script>
+  </body>
+</html>

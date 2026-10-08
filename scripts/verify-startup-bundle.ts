@@ -275,6 +275,25 @@ try {
         await expect(
           picker.locator('.v3-groups .v3-group[aria-label="Флаги"]')
         ).toHaveCount(1);
+        await picker
+          .getByRole('button', { name: 'Стикеры', exact: true })
+          .click();
+        const stickers = picker.locator('.sticker-picker__item');
+        await expect(stickers).toHaveCount(15);
+        const pickerSearch = picker.locator('.v3-search input');
+        for (const query of ['люблю', 'LOVE']) {
+          await pickerSearch.fill(query);
+          await expect(stickers).toHaveCount(1);
+          await expect(stickers).toHaveAttribute(
+            'data-sticker-id',
+            'sep-robot-heart'
+          );
+        }
+        await pickerSearch.fill('');
+        await picker
+          .getByRole('button', { name: 'Смайлы и люди', exact: true })
+          .click();
+        await expect(picker.locator('.v3-body-inner')).toBeVisible();
         const emoji = picker.locator('.v3-emojis button:visible').first();
         const emojiText = (await emoji.innerText()).trim();
         await emoji.click();

@@ -1,7 +1,7 @@
 .menu {
   --size-avatar: 25px;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-rows: minmax(0, 1fr) auto auto auto;
   padding: 10px 10px 0;
   border-right-width: 0.5px;
   border-right-style: solid;
@@ -19,7 +19,7 @@
   min-height: 0;
   padding: 10px 0 0;
   align-content: start;
-  overflow-y: auto;
+  overflow: hidden auto;
 }
 
 .menu.menu--collapse {

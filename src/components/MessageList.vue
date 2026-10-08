@@ -9,6 +9,8 @@
     ref="chatWrapperRef"
     v-if="isAiRoute"
     :style="chatMessageWrapperStyle"
+    @pointerdown.capture="preserveMobileMessageInputFocus"
+    @mousedown.capture="preserveMobileMessageInputFocus"
     @wheel.passive="handleFloatingDateDividerUserScroll"
     @touchmove.passive="handleFloatingDateDividerUserScroll"
     @touchstart="onTouchStart"
@@ -110,6 +112,8 @@
     ref="chatWrapperRef"
     :style="chatMessageWrapperStyle"
     @vue:mounted="scrollToBottom"
+    @pointerdown.capture="preserveMobileMessageInputFocus"
+    @mousedown.capture="preserveMobileMessageInputFocus"
     @scroll="handleScroll"
     @wheel.passive="handleFloatingDateDividerUserScroll"
     @touchmove.passive="handleUserMessageTouchMove"
@@ -470,6 +474,8 @@
     :is-call-topic-actions-open="isCallTopicActionsOpen"
     :data-testid="props.dataTestid"
     @send="handleSend"
+    @send-sticker="handleSendSticker"
+    @send-keyboard-media="handleSendKeyboardMedia"
     @attach-file="handleAttachFile"
     @clear-edit="handleSetEditMessage(null)"
     @clear-reply="handleSetReplyMessage(null)"
@@ -661,7 +667,10 @@ const MOBILE_MAX_VISIBLE_MESSAGES_LIMIT = MOBILE_NOTIFICATION_HISTORY_LIMIT;
 type UpdateBannerState = 'available' | 'downloading' | 'downloaded';
 
 const updateBannerState = computed<UpdateBannerState>(() => {
-  if (props.updateActionLabel === 'Перезапустить') {
+  if (
+    props.updateActionLabel === 'Перезапустить' ||
+    props.updateActionLabel === 'Установлено'
+  ) {
     return 'downloaded';
   }
 
@@ -685,6 +694,10 @@ const updateBannerTitle = computed(() => {
 });
 
 const updateBannerDescription = computed(() => {
+  if (props.updateActionLabel === 'Установлено') {
+    return 'Завершаем установку обновления';
+  }
+
   if (updateBannerState.value === 'downloading') {
     return 'Пожалуйста, не закрывайте приложение';
   }
@@ -972,6 +985,17 @@ const renderedLastUserMessageSignature = computed(() => {
     lastMessage.media?.length || 0,
     getMessageReactionLayoutSignature(lastMessage.reactions)
   ].join('\u001f');
+});
+const renderedUserReactionsSignature = computed(() => {
+  const signatures: string[] = [];
+  for (const message of renderedUserMessages.value) {
+    if (message.reactions?.length) {
+      signatures.push(
+        `${message.id}:${getMessageReactionLayoutSignature(message.reactions)}`
+      );
+    }
+  }
+  return signatures.join('\u001e');
 });
 const hasCallTopicDefaultMessage = computed(() =>
   renderedUserMessages.value.some(isCallTopicDefaultMessage)
@@ -3615,6 +3639,8 @@ const handleScroll = (): void => {
 
 const {
   handleSend: handleMessageSend,
+  handleSendSticker,
+  handleSendKeyboardMedia,
   handleAttachFile,
   handleRetryMessage
 } = useMessageSender(
@@ -4421,6 +4447,28 @@ const isEditableEventTarget = (e: Event) => {
   return e.composedPath().some(target => isEditableElement(target));
 };
 
+const preserveMobileMessageInputFocus = (event: Event): void => {
+  if (!isMobile.value || !event.cancelable || isEditableEventTarget(event)) {
+    return;
+  }
+
+  const inputRoot = messageListInputRef.value?.getRootElement?.();
+  const root = inputRoot?.getRootNode();
+  const activeElement =
+    root instanceof Document || root instanceof ShadowRoot
+      ? root.activeElement
+      : null;
+
+  if (
+    activeElement instanceof HTMLElement &&
+    activeElement.isContentEditable &&
+    inputRoot?.contains(activeElement)
+  ) {
+    // Сохраняем фокус до blur: повторный focus открывает клавиатуру после «Назад».
+    event.preventDefault();
+  }
+};
+
 const focusMessageInput = () => {
   messageListInputRef.value?.focus();
 };
@@ -4592,22 +4640,35 @@ watch(
     () => route.value?.type,
     () => renderedTopicId.value,
     () => renderedUserMessages.value.length,
-    () => renderedLastUserMessageSignature.value
+    () => renderedLastUserMessageSignature.value,
+    () => renderedUserReactionsSignature.value
   ],
   (
-    [topicId, routeType, topicMessagesId],
-    [previousTopicId, previousRouteType, previousTopicMessagesId]
+    [topicId, routeType, topicMessagesId, messageCount, , reactionsSignature],
+    [
+      previousTopicId,
+      previousRouteType,
+      previousTopicMessagesId,
+      previousMessageCount,
+      ,
+      previousReactionsSignature
+    ]
   ) => {
     const isSameRenderedTopic =
       !!topicId &&
       topicId === previousTopicId &&
       routeType === previousRouteType &&
       topicMessagesId === previousTopicMessagesId;
+    const isReactionLayoutChange =
+      messageCount === previousMessageCount &&
+      reactionsSignature !== previousReactionsSignature;
     const shouldPinBottom =
       isSameRenderedTopic &&
       isUserMessagesRoute.value &&
       !shouldRenderUserMessageSkeleton.value &&
-      shouldKeepCurrentTopicBottomPosition();
+      (isReactionLayoutChange
+        ? scrollAnchor.isAtBottom()
+        : shouldKeepCurrentTopicBottomPosition());
 
     if (!shouldPinBottom) {
       return;

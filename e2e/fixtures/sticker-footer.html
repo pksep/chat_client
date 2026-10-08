@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Сравнение времени и реакций стикера и эмодзи</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp } from 'vue';
+      import StickerFooterHarness from './StickerFooterHarness.vue';
+      import '@pksep/yui/styles';
+      import '../../src/assets/globals.css';
+      import '../../src/assets/message-bubble.css';
+      createApp(StickerFooterHarness).mount('#app');
+    </script>
+  </body>
+</html>

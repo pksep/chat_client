@@ -52,6 +52,7 @@ import sep.pksep.app.plugins.AndroidScreenSharePlugin;
 import sep.pksep.app.plugins.CallScreenPlugin;
 import sep.pksep.app.plugins.ChatBackgroundSyncPlugin;
 import sep.pksep.app.plugins.LaunchStartupPlugin;
+import sep.pksep.app.plugins.KeyboardMediaPlugin;
 import sep.pksep.app.plugins.NativeFilePlugin;
 import sep.pksep.app.plugins.NotificationAudioPlugin;
 import sep.pksep.app.plugins.NotificationTapPlugin;
@@ -1277,6 +1278,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(RuStorePushPlugin.class);
         registerPlugin(RuStoreUpdatePlugin.class);
         registerPlugin(ShareIntentPlugin.class);
+        registerPlugin(KeyboardMediaPlugin.class);
         registerPlugin(TelemetryDevicePlugin.class);
         registerPlugin(VpnStatusPlugin.class);
         customPluginsRegistered = true;

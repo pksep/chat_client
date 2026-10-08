@@ -146,6 +146,11 @@
       <template v-if="!isCollapse"> Загрузить на устройство </template>
     </Button>
 
+    <MenuUpdateButton
+      :is-collapse="isCollapse"
+      :data-testid="`${props.dataTestid}-Menu`"
+    />
+
     <MenuBottomNav
       :is-collapse="isCollapse"
       :data-testid="`${props.dataTestid}-Menu-BottomNav`"
@@ -192,6 +197,7 @@ import { TopicType } from '../services/useChatSDK/types';
 import { useChatsToolbarState } from '../composables/useChatsToolbarState';
 import { useChatMenu } from '../composables/useChatMenu';
 import MenuBottomNav from './Menu/MenuBottomNav.vue';
+import MenuUpdateButton from './Menu/MenuUpdateButton.vue';
 import { getAuthUser } from '../composables/useAuth';
 import { useShareSelection } from '../composables/useShareSelection';
 import { getShareSelectionSummaryLabel } from '../utils/shareSelectionSummary';

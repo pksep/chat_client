@@ -1,0 +1,11 @@
+{
+  "collection": "Animated Noto Emoji",
+  "author": "Google",
+  "catalog": "https://googlefonts.github.io/noto-emoji-animation/data/api.json",
+  "source": "https://googlefonts.github.io/noto-emoji-animation/",
+  "assetUrlPattern": "https://fonts.gstatic.com/s/e/notoemoji/latest/{codepoint}/512.webp",
+  "license": "CC-BY-4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "catalogDate": "2026-10-08",
+  "codepointCount": 881
+}

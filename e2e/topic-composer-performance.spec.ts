@@ -9,6 +9,78 @@ import {
   resetMetrics
 } from './fixtures/topic-performance-page';
 
+test('после обновления темы до готовности редактора виден скелетон ввода', async ({
+  page
+}) => {
+  const { errors } = await openFixture(page, { shell: true });
+  await openTopic(page, 0);
+  await expect(page.locator('.chat__input .ProseMirror')).toBeVisible();
+
+  // В сборке редактор загружается отдельно. Задерживаем его и в dev-фикстуре.
+  await page.route(
+    '**/src/components/Messages/MessageListInput.vue*',
+    async route => {
+      if (new URL(route.request().url()).searchParams.has('type')) {
+        return route.fallback();
+      }
+      const response = await route.fetch();
+      const source = (await response.text())
+        .replace('  computed,', '  defineAsyncComponent,\n  computed,')
+        .replace('  ContentEditor,', '  ContentEditor as LoadingTestEditor,');
+      expect(source).toContain('ContentEditor as LoadingTestEditor');
+      await route.fulfill({
+        response,
+        body: `${source}\nconst ContentEditor = defineAsyncComponent(() => new Promise(resolve => {
+        window.releaseLoadingEditor = () => resolve(LoadingTestEditor);
+      }));`
+      });
+    }
+  );
+  await page.route('**/dialogs/performance-0', route =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><div id="app"></div>'
+    })
+  );
+  await page.reload();
+  await page.evaluate(async () => {
+    const path = '/e2e/fixtures/topic-performance-harness.ts';
+    const fixture = await import(/* @vite-ignore */ path);
+    (window as any).topicPerformance =
+      await fixture.initializeTopicPerformanceFixture(4, true);
+    (window as any).topicPerformance.navigate('performance-0');
+  });
+
+  const skeleton = page.locator('.chat__input-skeleton');
+  await expect(skeleton).toBeVisible();
+  await expect(page.locator('.chat__input-bootstrap')).toHaveCount(0);
+  await expect(page.locator('.chat__input .editor-component')).toHaveCount(0);
+  const frames = await page.evaluate(async () => {
+    const samples: number[] = [];
+    for (let frame = 0; frame < 8; frame++) {
+      await new Promise<void>(resolve =>
+        requestAnimationFrame(() => resolve())
+      );
+      samples.push(
+        document.querySelector('.chat__input')!.getBoundingClientRect().height
+      );
+    }
+    return samples;
+  });
+  expect(frames.every(height => height >= 75)).toBe(true);
+  expect(new Set(frames).size).toBe(1);
+
+  await skeleton.click();
+  await page.evaluate(() => (window as any).releaseLoadingEditor());
+  const editor = page.locator('.chat__input .ProseMirror');
+  await expect(editor).toBeVisible();
+  await expect(editor).toBeFocused();
+  await expect(skeleton).toHaveCount(0);
+  await editor.fill('Проверка после обновления');
+  await expect(editor).toHaveText('Проверка после обновления');
+  expect(errors).toEqual([]);
+});
+
 test('мобильный первый кадр темы содержит поле ввода полной высоты', async ({
   page
 }) => {

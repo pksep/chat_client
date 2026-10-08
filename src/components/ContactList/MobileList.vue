@@ -161,6 +161,7 @@
         </section>
       </div>
     </div>
+    <MenuUpdateButton :data-testid="`${props.dataTestid}-MobileList`" />
     <MenuBottomNav
       :is-collapse="false"
       :data-testid="`${props.dataTestid}-MobileList-BottomNav`"
@@ -226,6 +227,7 @@ import {
   useChatMenu
 } from '../../composables/useChatMenu';
 import MenuBottomNav from '../Menu/MenuBottomNav.vue';
+import MenuUpdateButton from '../Menu/MenuUpdateButton.vue';
 import { getAuthUser } from '../../composables/useAuth';
 import { useShareSelection } from '../../composables/useShareSelection';
 import type { ITopic } from '../interfaces/interfaces';

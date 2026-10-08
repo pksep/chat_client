@@ -1,0 +1,6 @@
+Animated Noto Emoji by Google
+Source: https://googlefonts.github.io/noto-emoji-animation/
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+Animations are displayed from the official Google CDN without re-encoding. The bundled codepoint catalog is a snapshot of the official catalog from 2026-10-08.

@@ -202,7 +202,7 @@ const plainMessageText = computed(() =>
     .trim()
 );
 const singleEmojiPattern =
-  /^(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})(?:\uFE0F|\uFE0E)?(?:\u200D(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})(?:\uFE0F|\uFE0E)?)*$/u;
+  /^(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})(?:\uFE0F|\uFE0E)?\p{Emoji_Modifier}?(?:\u200D(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})(?:\uFE0F|\uFE0E)?\p{Emoji_Modifier}?)*$/u;
 const isCallMessage = computed(() =>
   Boolean(
     props.parsedCallMessage !== undefined
