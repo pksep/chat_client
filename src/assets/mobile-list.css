@@ -1,6 +1,6 @@
 .mobile-list-container {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   height: calc(var(--default-height) - var(--mobile-list-height, 53px));
   background-color: var(--surface-input-primary);
   overflow: hidden;

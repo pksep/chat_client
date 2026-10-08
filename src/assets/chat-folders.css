@@ -288,6 +288,7 @@
   padding: 0;
   gap: 0;
   flex-direction: row;
+  flex-shrink: 0;
   overflow: hidden;
   border-right: 0;
   background: transparent;
@@ -298,6 +299,7 @@
   box-sizing: border-box;
   height: auto;
   min-height: 33px;
+  max-height: 40dvh;
   padding: 0 0 10px;
   flex: 1;
   flex-direction: row;
@@ -305,7 +307,7 @@
   align-items: center;
   align-content: flex-start;
   gap: 5px;
-  overflow: visible;
+  overflow: hidden auto;
   touch-action: pan-y;
 }
 
@@ -1083,11 +1085,6 @@ dialog.chat-folder-delete-modal .confirm__modal__title {
 }
 
 @media screen and (width <= 768px) {
-  .mobile-list-container__toolbar.chats-toolbar--with-folders {
-    /* Много строк папок не должны перекрывать список при прокрутке. */
-    position: relative;
-  }
-
   dialog.chat-folder-editor-modal.modal-yui-kit::after,
   dialog.chat-folder-details-modal.modal-yui-kit::after {
     content: none;

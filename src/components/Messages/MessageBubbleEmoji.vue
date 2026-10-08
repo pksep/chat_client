@@ -177,7 +177,8 @@ watch(
   emojiSymbols,
   emojis => {
     preloadNotoEmojiAssets(emojis, {
-      highPriority: true
+      highPriority: true,
+      animated: true
     });
   },
   {

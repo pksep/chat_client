@@ -406,6 +406,42 @@ test('Настройки и системные папки доступны бе�
   await expect(page.locator('.contact-list__li')).toHaveCount(1);
 });
 
+for (const clients of [false, true]) {
+  for (const dark of [false, true]) {
+    test(`Поиск и папки закреплены при прокрутке: ${clients ? 'клиенты' : 'чаты'}, ${dark ? 'тёмная' : 'светлая'}`, async ({
+      page,
+      isMobile
+    }) => {
+      test.skip(!isMobile, 'Закрепление мобильной панели');
+      await page.setViewportSize({ width: 393, height: 480 });
+      await openFixture(page, { clients, dark });
+      const section = page.locator('.mobile-list-container__section');
+      const toolbar = page.locator('.mobile-list-container__toolbar');
+      const search = page.locator('.chats-toolbar__search');
+      const folders = page.locator('.chat-folder-rail');
+      const start = {
+        toolbar: (await toolbar.boundingBox())!,
+        search: (await search.boundingBox())!,
+        folders: (await folders.boundingBox())!
+      };
+      await section.evaluate(el => (el.scrollTop = 160));
+      await expect
+        .poll(() => section.evaluate(el => el.scrollTop))
+        .toBeGreaterThan(0);
+      for (const [name, locator] of [
+        ['toolbar', toolbar],
+        ['search', search],
+        ['folders', folders]
+      ] as const) {
+        expect((await locator.boundingBox())!.y).toBe(start[name].y);
+        await expect(locator).toBeInViewport();
+      }
+      await page.getByTestId('ChatFolders-Rail-Manage').tap();
+      await expect(page.getByTestId('ChatFolders-Panel')).toBeVisible();
+    });
+  }
+}
+
 test('Большое число строк не закрывает список, перетаскивание прокручивает папки', async ({
   page,
   isMobile
@@ -414,6 +450,9 @@ test('Большое число строк не закрывает список,
   await page.setViewportSize({ width: 320, height: 640 });
   const saves = await openFixture(page, { many: true });
   const section = page.locator('.mobile-list-container__section');
+  const folderList = page.locator('.chat-folder-rail__items');
+  const toolbar = page.locator('.mobile-list-container__toolbar');
+  const toolbarY = (await toolbar.boundingBox())!.y;
   const last = page.getByTestId('ChatFolders-Rail-Folder-folder-29');
   await last.scrollIntoViewIfNeeded();
   await expect(last).toBeInViewport();
@@ -423,7 +462,11 @@ test('Большое число строк не закрывает список,
   await expect(
     page.getByRole('heading', { name: 'Клиент Сайт', exact: true })
   ).toBeInViewport();
+  expect((await toolbar.boundingBox())!.y).toBe(toolbarY);
+  expect((await toolbar.boundingBox())!.height).toBeLessThan(640 / 2 + 100);
+  await expect(page.locator('.chats-toolbar__search')).toBeInViewport();
   await section.evaluate(el => (el.scrollTop = 0));
+  await folderList.evaluate(el => (el.scrollTop = 0));
   const source = (await page
     .getByTestId('ChatFolders-Rail-Folder-folder-0')
     .boundingBox())!;
@@ -432,10 +475,13 @@ test('Большое число строк не закрывает список,
     source.y + source.height / 2
   );
   await page.mouse.down();
-  await page.mouse.move(160, 630, { steps: 6 });
+  const folderBox = (await folderList.boundingBox())!;
+  await page.mouse.move(160, folderBox.y + folderBox.height - 2, { steps: 6 });
   await expect
-    .poll(() => section.evaluate(el => el.scrollTop))
+    .poll(() => folderList.evaluate(el => el.scrollTop))
     .toBeGreaterThan(100);
+  expect(await section.evaluate(el => el.scrollTop)).toBe(0);
+  expect((await toolbar.boundingBox())!.y).toBe(toolbarY);
   await expect(page.locator('.chat-folder-drag-preview')).toBeVisible();
   await page.keyboard.press('Escape');
   await page.mouse.up();

@@ -12,6 +12,195 @@ async function mountUpdates(page: Page) {
   });
 }
 
+test('восстановление сети не ждёт Socket.IO backoff и не дублирует попытки', async ({
+  page
+}) => {
+  await openFixture(page);
+
+  const result = await page.evaluate(async () => {
+    const path = '/src/services/useChatSDK/index.ts';
+    const { ChatSDK } = await import(/* @vite-ignore */ path);
+    return [false, true].map(connected => {
+      const sdk = new ChatSDK({
+        apiUrl: `${location.origin}/performance-api`,
+        wsUrl: 'ws://chat.example.test',
+        token: 'test-token'
+      });
+      let disconnects = 0;
+      let connects = 0;
+
+      (sdk as any).socket = {
+        connected,
+        disconnect: () => {
+          disconnects++;
+        },
+        connect: () => {
+          connects++;
+        }
+      };
+
+      sdk.reconnectImmediatelyAfterNetworkRestore();
+      sdk.reconnectImmediatelyAfterNetworkRestore();
+
+      return { disconnects, connects };
+    });
+  });
+
+  expect(result).toEqual([
+    { disconnects: 1, connects: 1 },
+    { disconnects: 1, connects: 1 }
+  ]);
+});
+
+test('ожидание сети появляется сразу и сохраняется при устаревшем состоянии сокета', async ({
+  page,
+  context
+}) => {
+  await page.clock.install();
+  await openFixture(page);
+  await page.evaluate(async () => {
+    const path = '/e2e/fixtures/network-harness.ts';
+    const fixture = await import(/* @vite-ignore */ path);
+    (window as any).networkFixture = fixture;
+    (window as any).networkConnection = fixture.controlConnection();
+    (window as any).connectionProfile = fixture.mountConnectionProfile();
+  });
+  const profile = page.getByTestId('NetworkProfile-UserProfile-Container');
+  await expect(profile.locator('.connection-status')).toHaveCount(0);
+  await page.clock.pauseAt(Date.now() + 1000);
+  await context.setOffline(true);
+
+  const states = await page.evaluate(async () => {
+    const { getHasWebsocketConnection, nextTick } = (window as any)
+      .networkFixture;
+    await nextTick();
+    const status = () => ({
+      connected: getHasWebsocketConnection(),
+      text: document
+        .querySelector(
+          '[data-testid="NetworkProfile-UserProfile-Container"] .connection-status'
+        )
+        ?.textContent?.trim()
+    });
+    const beforeFocus = status();
+    window.dispatchEvent(new Event('focus'));
+    await nextTick();
+    return [beforeFocus, status()];
+  });
+  expect(states).toEqual([
+    { connected: false, text: 'Ожидание сети' },
+    { connected: false, text: 'Ожидание сети' }
+  ]);
+  await page.clock.runFor(1200);
+  await expect(profile.locator('.connection-status')).toHaveText(
+    'Ожидание сети'
+  );
+  await page.clock.runFor(9000);
+  await expect(profile.locator('.connection-status')).toHaveText('Нет сети');
+
+  await context.setOffline(false);
+  await page.evaluate(() => {
+    const sdk = (window as any).topicPerformance.sdk;
+    sdk.emitConnectionState(true);
+  });
+  await expect(profile.locator('.connection-status')).toHaveCount(0);
+  await context.setOffline(true);
+  await expect(profile.locator('.connection-status')).toHaveText(
+    'Ожидание сети'
+  );
+  await context.setOffline(false);
+});
+
+for (const failure of ['error', 'timeout'] as const) {
+  test(`потеря связи без offline обнаруживается быстро (${failure})`, async ({
+    page
+  }) => {
+    let unavailable = false;
+    let requests = 0;
+    let release!: () => void;
+    const stalled = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    await openFixture(page);
+    await page.route('**/live-health*', async route => {
+      requests++;
+      if (unavailable && failure === 'error') return route.abort();
+      if (unavailable) await stalled;
+      await route.fulfill({ json: { status: 'ok' } }).catch(() => {});
+    });
+    await page.evaluate(async () => {
+      const path = '/e2e/fixtures/network-harness.ts';
+      const fixture = await import(/* @vite-ignore */ path);
+      (window as any).networkFixture = fixture;
+      (window as any).networkConnection = fixture.controlConnection();
+      (window as any).connectionProfile = fixture.mountConnectionProfile();
+    });
+    const profile = page.getByTestId('NetworkProfile-UserProfile-Container');
+    await expect.poll(() => requests).toBeGreaterThan(0);
+    await expect(profile.locator('.connection-status')).toHaveCount(0);
+
+    const startedAt = Date.now();
+    unavailable = true;
+    await expect(profile.locator('.connection-status')).toHaveText(
+      'Ожидание сети',
+      { timeout: 3000 }
+    );
+    expect(Date.now() - startedAt).toBeLessThan(3000);
+    expect(
+      await page.evaluate(() => ({
+        browserOnline: navigator.onLine,
+        socketConnected: (window as any).topicPerformance.sdk.isConnected()
+      }))
+    ).toEqual({ browserOnline: true, socketConnected: true });
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(profile.locator('.connection-status')).toHaveText(
+      'Ожидание сети'
+    );
+
+    unavailable = false;
+    release();
+    await expect(profile.locator('.connection-status')).toHaveCount(0);
+    expect(
+      await page.evaluate(
+        () => (window as any).networkConnection.calls.disconnect
+      )
+    ).toBe(1);
+  });
+}
+
+test('offline в нативном приложении сразу показывает ожидание сети', async ({
+  page,
+  context
+}) => {
+  await openFixture(page);
+  await page.evaluate(async () => {
+    const path = '/e2e/fixtures/network-harness.ts';
+    const fixture = await import(/* @vite-ignore */ path);
+    (window as any).networkFixture = fixture;
+    (window as any).networkConnection = fixture.controlConnection();
+    (window as any).connectionProfile = fixture.mountConnectionProfile();
+    fixture.Capacitor.isNativePlatform = () => true;
+  });
+  const profile = page.getByTestId('NetworkProfile-UserProfile-Container');
+  await expect(profile.locator('.connection-status')).toHaveCount(0);
+  await context.setOffline(true);
+
+  const status = await page.evaluate(async () => {
+    const fixture = (window as any).networkFixture;
+    window.dispatchEvent(new Event('focus'));
+    await fixture.nextTick();
+    return {
+      connected: fixture.getHasWebsocketConnection(),
+      text: document
+        .querySelector(
+          '[data-testid="NetworkProfile-UserProfile-Container"] .connection-status'
+        )
+        ?.textContent?.trim()
+    };
+  });
+  expect(status).toEqual({ connected: false, text: 'Ожидание сети' });
+});
+
 const visibility = (page: Page, value: string) =>
   page.evaluate(value => {
     Object.defineProperty(document, 'visibilityState', {

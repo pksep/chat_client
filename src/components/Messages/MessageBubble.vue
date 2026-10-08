@@ -41,6 +41,13 @@
         @navigate-message="handleNavigateMessage"
       />
 
+      <MessageBubbleSticker
+        v-if="sticker && !props.loader"
+        v-bind="props"
+        :sticker="sticker"
+        @navigate-message="handleNavigateMessage"
+      />
+
       <MessageBubbleFiles
         v-if="!props.loader && docFiles.length > 0"
         v-bind="props"
@@ -109,6 +116,8 @@ import { MediaType } from '@pksep/zod-shared-chat';
 import { IMedia } from '../interfaces/interfaces';
 import MessageContextMenu from './MessageContextMenu.vue';
 import MessageBubbleText from './MessageBubbleText.vue';
+import MessageBubbleSticker from './MessageBubbleSticker.vue';
+import { getMessageSticker } from '../../utils/stickers';
 import { hasExternalMessageChannel } from '../../utils/managerMessageChannel';
 import MessageBubbleFiles from './MessageBubbleFiles.vue';
 import MessageBubbleMedia from './MessageBubbleMedia.vue';
@@ -214,16 +223,21 @@ const docFiles = computed(
   () => props.media?.filter(media => media.type === MediaType.File) || []
 );
 
-const mediaFiles = computed(
-  () => props.media?.filter(media => media.type !== MediaType.File) || []
+const mediaFiles = computed(() =>
+  sticker.value
+    ? []
+    : props.media?.filter(media => media.type !== MediaType.File) || []
 );
 
 const hasTextContent = computed(() =>
   Boolean(stripHtml(props.message || '').trim())
 );
 
+const sticker = computed(() => getMessageSticker(props.messageEx, props.media));
+
 const shouldRenderStandaloneText = computed(
   () =>
+    !sticker.value &&
     hasTextContent.value &&
     mediaFiles.value.length === 0 &&
     docFiles.value.length === 0

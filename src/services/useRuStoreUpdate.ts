@@ -16,7 +16,9 @@ export enum RuStoreInstallStatus {
   DOWNLOADED = 1,
   DOWNLOADING = 2,
   FAILED = 3,
-  PENDING = 5
+  INSTALLING = 4,
+  PENDING = 5,
+  DOWNLOAD_INTERRUPTED = 6
 }
 
 export interface RuStoreAppUpdateInfo {

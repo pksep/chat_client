@@ -171,7 +171,7 @@
             :key="value"
             @click.stop="handleReactMessage(value)"
             class="select-reactions-item"
-            v-emoji="{ animated: true }"
+            v-emoji
           >
             {{ value }}
           </div>
@@ -209,7 +209,11 @@
         </Button>
 
         <Button
-          v-if="props.isMeSender && !!props.message"
+          v-if="
+            props.isMeSender &&
+            !!props.message &&
+            !getMessageSticker(props.messageEx, props.media)
+          "
           :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="handleEditMessage"
@@ -415,6 +419,7 @@ import PinConfirmModal from '../UI/PinConfirmModal.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import ReplyIcon from '../UI/ReplyIcon.vue';
 import EditIcon from '../UI/EditIcon.vue';
+import { getMessageSticker } from '../../utils/stickers';
 import PinIcon from '../UI/PinIcon.vue';
 import UnpinIcon from '../UI/UnpinIcon.vue';
 import CopyIcon from '../UI/CopyIcon.vue';

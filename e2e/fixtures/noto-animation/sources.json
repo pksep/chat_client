@@ -1,0 +1,29 @@
+{
+  "collection": "Animated Noto Emoji",
+  "author": "Google",
+  "license": "CC-BY-4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "source": "https://googlefonts.github.io/noto-emoji-animation/",
+  "assets": [
+    {
+      "codepoint": "1f642",
+      "url": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f642/512.webp",
+      "sha256": "649b1026c246417a42e7bb6d0dcb1b3832c7eef8ace5a2e2167270850295b075"
+    },
+    {
+      "codepoint": "2764_fe0f",
+      "url": "https://fonts.gstatic.com/s/e/notoemoji/latest/2764_fe0f/512.webp",
+      "sha256": "8f02722ca349a1b1a0c7a02d7ec3c716e09eccdbf696adf89c67afe2bb175b56"
+    },
+    {
+      "codepoint": "1f44d_1f3fd",
+      "url": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f44d_1f3fd/512.webp",
+      "sha256": "8a4889157346a1bcd92a26959fcd41daf03889b40e8d4a4f919d65665a6d8cab"
+    },
+    {
+      "codepoint": "1f44d",
+      "url": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f44d/512.webp",
+      "sha256": "f456f329ec2457828e0511f31b855e1b3b21c91f53d7d465dc3a1aa7d3b73383"
+    }
+  ]
+}

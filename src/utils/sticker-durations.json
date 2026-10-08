@@ -1,0 +1,17 @@
+{
+  "sep-robot-angry": 3000,
+  "sep-robot-confused": 2400,
+  "sep-robot-cool": 3000,
+  "sep-robot-devil": 3000,
+  "sep-robot-dizzy": 2400,
+  "sep-robot-happy": 3840,
+  "sep-robot-heart": 3840,
+  "sep-robot-sad": 3840,
+  "sep-robot-shy": 3000,
+  "sep-robot-sleepy": 3000,
+  "sep-robot-star-eyes": 3000,
+  "sep-robot-starstruck": 2400,
+  "sep-robot-surprised": 2400,
+  "sep-robot-thinking": 3840,
+  "sep-robot-yes": 3840
+}

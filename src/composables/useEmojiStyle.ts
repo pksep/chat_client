@@ -1,9 +1,25 @@
+import notoAnimatedCodepoints from '../utils/noto-animated-codepoints.json';
+
 const DEFAULT_NOTO_EMOJI_ASSET_BASE_URL = '/emoji/noto';
+const DEFAULT_NOTO_EMOJI_ANIMATION_ASSET_BASE_URL =
+  'https://fonts.gstatic.com/s/e/notoemoji/latest';
+const animatedCodepoints = new Map(
+  notoAnimatedCodepoints.map(codepoint => [
+    codepoint.replace(/_fe0[ef]/gi, ''),
+    codepoint
+  ])
+);
+
+export const NOTO_EMOJI_ANIMATION_ATTRIBUTION =
+  'Animated Noto Emoji — Google. CC BY 4.0: https://creativecommons.org/licenses/by/4.0/. Источник: https://googlefonts.github.io/noto-emoji-animation/.';
 const NOTO_EMOJI_FONT_STYLE_ID = 'chat-noto-emoji-font-faces';
 const emojiAssetCandidateCache = new Map<string, string[]>();
 const loadedEmojiAssetSources = new Set<string>();
 const preloadedEmojiAssetSources = new Set<string>();
 const failedEmojiAssetSources = new Set<string>();
+const emojiAnimationDurationCache = new Map<string, Promise<number>>();
+const playedEmojiAnimationKeys = new Set<string>();
+const DEFAULT_EMOJI_ANIMATION_DURATION_MS = 3000;
 
 type EmojiAssetCandidatesOptions = {
   animated?: boolean;
@@ -11,6 +27,7 @@ type EmojiAssetCandidatesOptions = {
 
 type EmojiPreloadOptions = {
   highPriority?: boolean;
+  animated?: boolean;
 };
 
 const normalizeAssetBaseUrl = (value?: string): string => {
@@ -139,12 +156,26 @@ export const getNotoEmojiAssetCandidates = (
     )
   ).filter(source => !failedEmojiAssetSources.has(source));
 
-  if (!staticCandidates.length) {
+  const animationCodepoint = options.animated
+    ? animatedCodepoints.get(fallbackKey.replace(/-/g, '_'))
+    : undefined;
+  const animationBase = (
+    import.meta.env.VITE_EMOJI_ANIMATION_ASSET_BASE_URL?.trim() ||
+    DEFAULT_NOTO_EMOJI_ANIMATION_ASSET_BASE_URL
+  ).replace(/\/+$/, '');
+  const candidates = buildUniqueCandidates([
+    ...(animationCodepoint
+      ? [`${animationBase}/${animationCodepoint}/512.webp`]
+      : []),
+    ...staticCandidates
+  ]).filter(source => !failedEmojiAssetSources.has(source));
+
+  if (!candidates.length) {
     return [];
   }
 
-  emojiAssetCandidateCache.set(cacheKey, staticCandidates);
-  return staticCandidates;
+  emojiAssetCandidateCache.set(cacheKey, candidates);
+  return candidates;
 };
 
 export const hasFailedNotoEmojiAsset = (source: string): boolean =>
@@ -183,6 +214,85 @@ export const markNotoEmojiAssetLoaded = (source: string): void => {
   }
 };
 
+const getWebpAnimationDuration = (bytes: Uint8Array): number => {
+  if (
+    bytes.length < 20 ||
+    String.fromCharCode(...bytes.subarray(0, 4)) !== 'RIFF' ||
+    String.fromCharCode(...bytes.subarray(8, 12)) !== 'WEBP'
+  ) {
+    return 0;
+  }
+
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let durationMs = 0;
+  let frameCount = 0;
+
+  for (let position = 12; position + 8 <= bytes.length; ) {
+    const size = view.getUint32(position + 4, true);
+
+    if (position + 8 + size > bytes.length) {
+      break;
+    }
+
+    if (
+      String.fromCharCode(...bytes.subarray(position, position + 4)) ===
+        'ANMF' &&
+      size >= 16
+    ) {
+      durationMs += Math.max(
+        10,
+        bytes[position + 20] +
+          (bytes[position + 21] << 8) +
+          (bytes[position + 22] << 16)
+      );
+      frameCount += 1;
+    }
+
+    position += 8 + size + (size % 2);
+  }
+
+  return frameCount > 1 ? durationMs : 0;
+};
+
+export const getNotoEmojiAnimationDuration = (
+  source: string
+): Promise<number> => {
+  if (!source.endsWith('/512.webp')) {
+    return Promise.resolve(0);
+  }
+
+  const cachedDuration = emojiAnimationDurationCache.get(source);
+
+  if (cachedDuration) {
+    return cachedDuration;
+  }
+
+  const duration = fetch(source, { cache: 'force-cache' })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`Emoji animation request failed: ${response.status}`);
+      }
+
+      return response.arrayBuffer();
+    })
+    .then(buffer => getWebpAnimationDuration(new Uint8Array(buffer)))
+    .then(durationMs => durationMs || DEFAULT_EMOJI_ANIMATION_DURATION_MS)
+    .catch(() => DEFAULT_EMOJI_ANIMATION_DURATION_MS);
+
+  emojiAnimationDurationCache.set(source, duration);
+  return duration;
+};
+
+export const claimNotoEmojiAnimationPlayback = (
+  animationKeys: readonly string[]
+): string | null => {
+  const keys = [...new Set(animationKeys.filter(Boolean))];
+  const firstUnplayedKey = keys.find(key => !playedEmojiAnimationKeys.has(key));
+
+  keys.forEach(key => playedEmojiAnimationKeys.add(key));
+  return firstUnplayedKey || null;
+};
+
 const appendEmojiPreloadLink = (
   source: string,
   options: EmojiPreloadOptions
@@ -218,7 +328,7 @@ export const preloadNotoEmojiAssets = (
 
   const sources = buildUniqueCandidates(
     emojis
-      .map(emoji => getNotoEmojiAssetCandidates(emoji)[0] || '')
+      .map(emoji => getNotoEmojiAssetCandidates(emoji, options)[0] || '')
       .filter(Boolean)
   );
 
@@ -238,12 +348,12 @@ export const preloadNotoEmojiAssets = (
     if (options.highPriority) {
       image.setAttribute('fetchpriority', 'high');
     }
-    image.src = source;
     image.onload = () => {
       markNotoEmojiAssetLoaded(source);
     };
     image.onerror = () => {
       markNotoEmojiAssetFailed(source);
     };
+    image.src = source;
   });
 };

@@ -65,6 +65,7 @@ const shouldShowNativeUpdateBanner = (
       RuStoreUpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS ||
     appUpdateInfo.installStatus === RuStoreInstallStatus.DOWNLOADED ||
     appUpdateInfo.installStatus === RuStoreInstallStatus.DOWNLOADING ||
+    appUpdateInfo.installStatus === RuStoreInstallStatus.INSTALLING ||
     appUpdateInfo.installStatus === RuStoreInstallStatus.PENDING
   );
 };
@@ -72,6 +73,7 @@ const shouldShowNativeUpdateBanner = (
 const isActiveNativeInstallStatus = (installStatus: number): boolean =>
   installStatus === RuStoreInstallStatus.DOWNLOADED ||
   installStatus === RuStoreInstallStatus.DOWNLOADING ||
+  installStatus === RuStoreInstallStatus.INSTALLING ||
   installStatus === RuStoreInstallStatus.PENDING;
 
 export function useMobileApp() {
@@ -104,7 +106,7 @@ export function useMobileApp() {
       totalBytesToDownload > 0
     ) {
       updateDownloadPercent.value = Math.min(
-        95,
+        100,
         Math.max(0, Math.round((bytesDownloaded / totalBytesToDownload) * 100))
       );
     } else if (updateInstallStatus.value !== RuStoreInstallStatus.PENDING) {
@@ -130,18 +132,19 @@ export function useMobileApp() {
     );
   };
 
-  const refreshNativeUpdateInfo = async () => {
+  const refreshNativeUpdateInfo = async (): Promise<boolean> => {
     if (!isRuStoreUpdateSupported()) {
       applyNativeUpdateInfo(null);
-      return;
+      return false;
     }
 
     try {
       const appUpdateInfo = await getRuStoreAppUpdateInfo();
       applyNativeUpdateInfo(appUpdateInfo);
+      return !!appUpdateInfo;
     } catch (error) {
       console.warn('Failed to get RuStore update info:', error);
-      applyNativeUpdateInfo(null);
+      return false;
     }
   };
 
@@ -375,6 +378,7 @@ export function useMobileApp() {
     if (
       updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADING ||
       updateInstallStatus.value === RuStoreInstallStatus.PENDING ||
+      updateInstallStatus.value === RuStoreInstallStatus.INSTALLING ||
       isUpdateFlowPending.value
     ) {
       return;
@@ -382,18 +386,38 @@ export function useMobileApp() {
 
     isUpdateFlowPending.value = true;
 
-    try {
-      if (updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADED) {
+    const completeUpdate = async () => {
+      updateInstallStatus.value = RuStoreInstallStatus.INSTALLING;
+      try {
         await completeRuStoreFlexibleUpdate();
+        applyNativeUpdateInfo({
+          updateAvailability: RuStoreUpdateAvailability.UPDATE_NOT_AVAILABLE,
+          installStatus: RuStoreInstallStatus.UNKNOWN
+        });
+      } catch (error) {
+        if (updateInstallStatus.value === RuStoreInstallStatus.INSTALLING) {
+          updateInstallStatus.value = RuStoreInstallStatus.DOWNLOADED;
+        }
+        throw error;
+      }
+    };
+
+    try {
+      if (updateInstallStatus.value !== RuStoreInstallStatus.DOWNLOADED) {
+        if (!(await refreshNativeUpdateInfo())) return;
+      }
+
+      if (updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADED) {
+        await completeUpdate();
         return;
       }
 
-      await refreshNativeUpdateInfo();
-
-      if (!nativeAppUpdateInfo.value) {
-        throw new Error('Не удалось получить информацию об обновлении');
+      if (
+        isActiveNativeInstallStatus(updateInstallStatus.value) ||
+        !showUpdateBanner.value
+      ) {
+        return;
       }
-
       await startRuStoreFlexibleUpdate();
     } catch (error) {
       console.warn('Failed to start RuStore update flow:', error);
@@ -430,6 +454,14 @@ export function useMobileApp() {
       return 'Обновить';
     }
 
+    if (updateInstallStatus.value === RuStoreInstallStatus.INSTALLING) {
+      return 'Установлено';
+    }
+
+    if (updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADED) {
+      return 'Перезапустить';
+    }
+
     if (typeof updateDownloadPercent.value === 'number') {
       return `${updateDownloadPercent.value}%`;
     }
@@ -442,15 +474,15 @@ export function useMobileApp() {
       return '0%';
     }
 
-    if (updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADED) {
-      return 'Перезапустить';
-    }
-
     return 'Установить';
   });
 
   const updateProgress = computed<number | null | undefined>(() => {
-    if (!Capacitor.isNativePlatform()) {
+    if (
+      !Capacitor.isNativePlatform() ||
+      updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADED ||
+      updateInstallStatus.value === RuStoreInstallStatus.INSTALLING
+    ) {
       return undefined;
     }
 
@@ -470,6 +502,7 @@ export function useMobileApp() {
       Capacitor.isNativePlatform() &&
       (isUpdateFlowPending.value ||
         updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADING ||
+        updateInstallStatus.value === RuStoreInstallStatus.INSTALLING ||
         updateInstallStatus.value === RuStoreInstallStatus.PENDING)
   );
 
@@ -482,7 +515,10 @@ export function useMobileApp() {
       return 'downloading';
     }
 
-    if (updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADED) {
+    if (
+      updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADED ||
+      updateInstallStatus.value === RuStoreInstallStatus.INSTALLING
+    ) {
       return 'downloaded';
     }
 

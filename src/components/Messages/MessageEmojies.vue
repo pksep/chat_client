@@ -20,7 +20,9 @@
           <EmojiIcon
             class="reaction-item__emoji"
             :emoji="emoji"
-            :animated="true"
+            :animated="messageReaction.shouldAnimate"
+            play-once
+            :animation-key="messageReaction.animationKey"
           />
         </div>
         <CachedAvatar
@@ -90,7 +92,6 @@
               <EmojiIcon
                 class="message-reactions-details__emoji-icon"
                 :emoji="reaction.emoji"
-                :animated="true"
               />
             </div>
           </button>
@@ -115,7 +116,10 @@ import type { IUser } from '../interfaces/interfaces';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import EmojiIcon from '../UI/EmojiIcon.vue';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
-import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
+import {
+  claimNotoEmojiAnimationPlayback,
+  preloadNotoEmojiAssets
+} from '../../composables/useEmojiStyle';
 import { prefetchMediaObjectUrl } from '../../services/useMediaBlobCache';
 
 const LONG_PRESS_DELAY_MS = 450;
@@ -129,6 +133,9 @@ type MessageReactions = Reaction & {
   count: number;
   user?: IUser;
   isOwn: boolean;
+  animationKeys: string[];
+  animationKey?: string;
+  shouldAnimate: boolean;
 };
 
 type ReactionDetailsItem = {
@@ -144,27 +151,53 @@ type ReactionDetailsItem = {
   createdAtMs: number;
 };
 
-const reactionContent = computed<Record<string, MessageReactions>>(
-  () =>
-    props.reactions?.reduce(
-      (aggr, val) => {
-        if (aggr[val.text]?.count > 0) {
-          aggr[val.text].count++;
-          aggr[val.text].isOwn =
-            aggr[val.text].isOwn || val.senderUserId === currentUserId.value;
-        } else {
-          aggr[val.text] = {
-            ...val,
-            count: 1,
-            user: getUserById(val.senderUserId),
-            isOwn: val.senderUserId === currentUserId.value
-          };
-        }
-        return aggr;
-      },
-      {} as Record<string, MessageReactions>
-    ) || {}
-);
+const getReactionAnimationKey = (reaction: Reaction): string =>
+  reaction.id ||
+  [
+    reaction.messageId,
+    reaction.senderUserId,
+    reaction.text,
+    reaction.updatedAt || reaction.createdAt || ''
+  ].join(':');
+
+const reactionContent = computed<Record<string, MessageReactions>>(() => {
+  const grouped = (props.reactions || []).reduce(
+    (aggr, val) => {
+      const animationKey = getReactionAnimationKey(val);
+
+      if (aggr[val.text]?.count > 0) {
+        aggr[val.text].count++;
+        aggr[val.text].isOwn =
+          aggr[val.text].isOwn || val.senderUserId === currentUserId.value;
+        aggr[val.text].animationKeys.push(animationKey);
+      } else {
+        aggr[val.text] = {
+          ...val,
+          count: 1,
+          user: getUserById(val.senderUserId),
+          isOwn: val.senderUserId === currentUserId.value,
+          animationKeys: [animationKey],
+          animationKey: undefined,
+          shouldAnimate: false
+        };
+      }
+
+      return aggr;
+    },
+    {} as Record<string, MessageReactions>
+  );
+
+  Object.values(grouped).forEach(reaction => {
+    const animationKey = claimNotoEmojiAnimationPlayback(
+      reaction.animationKeys
+    );
+
+    reaction.animationKey = animationKey || undefined;
+    reaction.shouldAnimate = Boolean(animationKey);
+  });
+
+  return grouped;
+});
 
 watch(
   reactionContent,
