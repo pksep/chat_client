@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted, readonly, ref, watch } from 'vue';
+import { onMounted, onUnmounted, readonly, ref, watch, type Ref } from 'vue';
 import {
   authedUser,
   getStoredChatAccessToken,
@@ -20,6 +20,44 @@ let controller: AbortController | undefined;
 let subscribers = 0;
 let timer: ReturnType<typeof setInterval> | undefined;
 let aiController = new AbortController();
+let checkedToken: string | null | undefined;
+
+interface ChatAccessState {
+  access: Readonly<Ref<Readonly<ChatAccessValues>>>;
+  ready: Readonly<Ref<boolean>>;
+  settled: Readonly<Ref<boolean>>;
+  cachedMenuCount: Readonly<Ref<number | null>>;
+}
+
+function invalidateAccessCheck(): void {
+  version++;
+  controller?.abort();
+  controller = undefined;
+  pending = undefined;
+  ready.value = false;
+}
+
+function resetChatAccess(): void {
+  invalidateAccessCheck();
+  checkedToken = undefined;
+  settled.value = false;
+  cachedMenuCount.value = readMenuLayout(
+    authedUser.value?.id,
+    getConfig().CHAT_API_DOMAIN
+  );
+  access.value = { client: false, ai: false };
+}
+
+function applyChatAccess(
+  values: ChatAccessValues,
+  userId: string,
+  base: string
+): void {
+  access.value = { client: values.client, ai: values.ai };
+  ready.value = true;
+  cachedMenuCount.value = 3 + Number(values.client) + Number(values.ai);
+  saveMenuLayout(userId, base, cachedMenuCount.value);
+}
 
 watch(
   () => access.value.ai,
@@ -31,40 +69,54 @@ watch(
 );
 
 watch(
+  [() => authedUser.value?.id, () => getConfig().CHAT_API_DOMAIN],
+  (): void => {
+    resetChatAccess();
+
+    if (subscribers) void refreshChatAccess();
+  },
+  { flush: 'sync' }
+);
+
+watch(
   [
-    () => authedUser.value?.id,
     () => parseUserEx(authedUser.value?.ex).erpRoleId,
     () => parseUserEx(authedUser.value?.ex).erpRole,
-    () => parseUserEx(authedUser.value?.ex).isDeletedBot,
-    () => getConfig().CHAT_API_DOMAIN
+    () => parseUserEx(authedUser.value?.ex).isDeletedBot
   ],
-  () => {
-    version++;
-    controller?.abort();
-    pending = undefined;
-    ready.value = false;
-    settled.value = false;
-    cachedMenuCount.value = readMenuLayout(
-      authedUser.value?.id,
-      getConfig().CHAT_API_DOMAIN
-    );
-    access.value = { client: false, ai: false };
+  (): void => {
+    invalidateAccessCheck();
+
+    // Обновление роли того же профиля ещё не означает отзыв персональных прав.
+    if (parseUserEx(authedUser.value?.ex).isDeletedBot) {
+      access.value = { client: false, ai: false };
+    }
+
     if (subscribers) void refreshChatAccess();
   },
   { flush: 'sync' }
 );
 
 export function refreshChatAccess(): Promise<void> {
-  if (pending) return pending;
   const userId = authedUser.value?.id;
   const base = getConfig().CHAT_API_DOMAIN?.replace(/\/+$/, '');
   const token = getAuthToken() || getStoredChatAccessToken();
+
+  if (checkedToken !== token) {
+    resetChatAccess();
+    checkedToken = token;
+  }
+
   if (!userId || !base || !token) {
     access.value = { client: false, ai: false };
     ready.value = false;
     settled.value = true;
+
     return Promise.resolve();
   }
+
+  if (pending) return pending;
+
   const currentVersion = version;
   const requestController = new AbortController();
   controller = requestController;
@@ -75,24 +127,31 @@ export function refreshChatAccess(): Promise<void> {
         headers: { Authorization: `Bearer ${token}` },
         signal: requestController.signal
       });
+
+      if (version !== currentVersion) return;
+
+      if (response.status === 401 || response.status === 403) {
+        applyChatAccess({ client: false, ai: false }, userId, base);
+
+        return;
+      }
+
       if (!response.ok) throw new Error('Не удалось проверить доступ');
+
       const data: ChatUserAccess = await response.json();
       if (
-        data.userId !== userId ||
+        data?.userId !== userId ||
         typeof data.effective?.client !== 'boolean' ||
         typeof data.effective?.ai !== 'boolean'
       )
         throw new Error('Некорректные права доступа');
+
       if (version === currentVersion) {
-        access.value = { ...data.effective };
-        ready.value = true;
-        cachedMenuCount.value =
-          3 + Number(data.effective.client) + Number(data.effective.ai);
-        saveMenuLayout(userId, base, cachedMenuCount.value);
+        applyChatAccess(data.effective, userId, base);
       }
     } catch {
       if (version === currentVersion) {
-        access.value = { client: false, ai: false };
+        // Последний подтверждённый снимок сохраняет меню, но не разрешает действие.
         ready.value = false;
       }
     } finally {
@@ -108,12 +167,21 @@ export function refreshChatAccess(): Promise<void> {
 }
 
 export async function requireAiAccess(): Promise<void> {
-  if (pending) await pending;
+  if (checkedToken !== (getAuthToken() || getStoredChatAccessToken())) {
+    await refreshChatAccess();
+  } else if (pending) await pending;
   else if (!ready.value) await refreshChatAccess();
+
+  if (!ready.value) {
+    throw new Error(
+      'Не удалось проверить доступ к ИИ-ассистенту. Попробуйте ещё раз.'
+    );
+  }
+
   if (!access.value.ai) throw new Error('Нет доступа к ИИ-ассистенту');
 }
 
-export const useChatAccess = () => ({
+export const useChatAccess = (): ChatAccessState => ({
   access: readonly(access),
   ready: readonly(ready),
   settled: readonly(settled),
@@ -131,7 +199,7 @@ export async function fetchWithAiAccess(
   return fetch(input, { ...init, signal });
 }
 
-const refreshOnFocus = () => {
+const refreshOnFocus = (): void => {
   void refreshChatAccess();
 };
 
@@ -147,12 +215,7 @@ export function useChatAccessSubscription(): void {
     if (--subscribers === 0) {
       clearInterval(timer);
       window.removeEventListener('focus', refreshOnFocus);
-      version++;
-      controller?.abort();
-      pending = undefined;
-      ready.value = false;
-      settled.value = false;
-      access.value = { client: false, ai: false };
+      resetChatAccess();
     }
   });
 }
