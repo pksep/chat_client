@@ -91,6 +91,7 @@ export interface WebSocketEvent {
 
 const UPLOAD_RETRY_MAX_DELAY_MS = 5000;
 const VIDEO_UPLOAD_COVER_TIMEOUT_MS = 8000;
+const IMMEDIATE_NETWORK_RECONNECT_THROTTLE_MS = 1000;
 const PUBLIC_CALL_INVITE_PATHS = [
   '/calls/invite-preview',
   '/calls/invite-livekit-token'
@@ -141,6 +142,7 @@ export class ChatSDK {
   private ws: ChatWSInterface;
   private utils: ChatUtilsInterface;
   private connectionStateListener?: (connected: boolean) => void;
+  private lastImmediateNetworkReconnectAt = 0;
 
   private reqi: Reqi;
 
@@ -652,6 +654,18 @@ export class ChatSDK {
     }
   }
 
+  async probeNetworkReachability(signal: AbortSignal): Promise<boolean> {
+    // Проверка сети не читает топики и не обращается к базе данных.
+    const url = new URL('/live-health', this.apiUrl);
+    url.searchParams.set('_', String(Date.now()));
+    const response = await fetch(url, {
+      cache: 'no-store',
+      credentials: 'omit',
+      signal
+    });
+    return response.status < 500;
+  }
+
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       let authReconnectAttempted = false;
@@ -973,6 +987,39 @@ export class ChatSDK {
       );
       this.socket.connect();
     }
+  }
+
+  reconnectImmediatelyAfterNetworkRestore(): void {
+    const socket = this.socket;
+
+    if (!socket) {
+      return;
+    }
+
+    const now = Date.now();
+
+    if (
+      now - this.lastImmediateNetworkReconnectAt <
+      IMMEDIATE_NETWORK_RECONNECT_THROTTLE_MS
+    ) {
+      return;
+    }
+
+    this.lastImmediateNetworkReconnectAt = now;
+    console.info('Socket.IO: Reconnecting immediately after network restore');
+    recordTelemetryEvent({
+      category: 'network',
+      name: 'network.websocket.immediate_reconnect',
+      entityType: 'websocket',
+      payload: {
+        wsUrl: this.wsUrl
+      }
+    });
+
+    // При смене сети connected может быть устаревшим. Сбрасываем соединение и
+    // задержку Manager, сохраняя подписки на события того же Socket.
+    socket.disconnect();
+    socket.connect();
   }
 
   async getUsers(params?: SearchParams): Promise<PaginatedResponse<User>> {

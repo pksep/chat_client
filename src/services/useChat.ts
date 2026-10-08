@@ -2,6 +2,7 @@ import { ref, shallowRef } from 'vue';
 import { MessageTypeEnum } from '@pksep/yui';
 import { ChatSDK } from './useChatSDK';
 import { createReconnectRefreshCoordinator } from './reconnect-refresh';
+import { createNetworkReachabilityCheck } from './network-reachability';
 import { getIsTopicNearBottom } from './useTopicViewportState';
 import {
   configureCustomBackgroundSync,
@@ -162,6 +163,8 @@ const browserOnline = ref(
     typeof navigator === 'undefined' ||
     navigator.onLine
 );
+const browserOfflineSignal = ref(false);
+const networkReachable = ref(true);
 const isRecentlyReconnected = ref(false);
 const currentUserId = ref<string | null>(null);
 const suspendIncomingMergeByTopic = ref<Record<string, boolean>>({});
@@ -1136,6 +1139,7 @@ const HARD_RECONNECT_THROTTLE_MS = 10000;
 const NATIVE_NETWORK_RECOVERY_GRACE_MS = 15000;
 const BROWSER_NETWORK_RECOVERY_GRACE_MS = 10000;
 const HTTP_HEALTH_PROBE_TIMEOUT_MS = 8000;
+const NETWORK_REACHABILITY_TIMEOUT_MS = 1200;
 const HTTP_HEALTH_PROBE_RETRY_DELAY_MS = 1500;
 const NATIVE_HTTP_HEALTH_PROBE_ATTEMPTS = 3;
 let networkStatePollInterval: ReturnType<typeof setInterval> | null = null;
@@ -1153,6 +1157,8 @@ let connectionAttemptId = 0;
 const route = useUrlWatcher();
 
 const hasLiveSocketConnection = (): boolean =>
+  networkReachable.value &&
+  !browserOfflineSignal.value &&
   Boolean(hasWebsocketConnection.value || chatSDK?.isConnected());
 
 const hasActiveCallRuntime = (): boolean =>
@@ -1226,6 +1232,22 @@ const clearBrowserOfflineFallback = (): void => {
   browserOfflineFallbackTimeout = null;
 };
 
+const confirmBrowserNetworkAvailable = (): void => {
+  networkReachabilityCheck.invalidate();
+  networkReachable.value = true;
+  browserOfflineSignal.value = false;
+  browserNetworkRecoveryUntil = 0;
+  browserOnline.value = true;
+  clearBrowserOfflineFallback();
+};
+
+const markBrowserNetworkUnavailable = (): void => {
+  networkReachabilityCheck.invalidate();
+  browserOfflineSignal.value = true;
+  hasWebsocketConnection.value = false;
+  isWebsocketConnecting.value = true;
+};
+
 const scheduleBrowserOfflineFallback = (): void => {
   clearBrowserOfflineFallback();
 
@@ -1237,7 +1259,7 @@ const scheduleBrowserOfflineFallback = (): void => {
       navigator.onLine ||
       hasLiveSocketConnection()
     ) {
-      browserOnline.value = true;
+      confirmBrowserNetworkAvailable();
       lastKnownNetworkFingerprint = getNetworkFingerprint(true);
       return;
     }
@@ -1250,7 +1272,9 @@ const scheduleBrowserOfflineFallback = (): void => {
 
 const beginBrowserNetworkRecoveryGrace = (): void => {
   browserNetworkRecoveryUntil = Date.now() + BROWSER_NETWORK_RECOVERY_GRACE_MS;
-  syncBrowserNetworkState(true);
+  // Статус меняется сразу; пауза нужна только для восстановления после смены сети.
+  browserOnline.value = true;
+  markBrowserNetworkUnavailable();
   scheduleBrowserOfflineFallback();
 };
 
@@ -1531,7 +1555,7 @@ const waitForChatHttpHealth = async (
     });
 
     if (healthy) {
-      browserOnline.value = true;
+      confirmBrowserNetworkAvailable();
       return true;
     }
 
@@ -1716,9 +1740,7 @@ const hardReconnectChatAfterNetworkChange = (
   isWebsocketConnecting.value = true;
   hasWebsocketConnection.value = false;
 
-  const sdk = chatSDK;
-  sdk.disconnect();
-  startChatConnectionInBackground(sdk);
+  chatSDK.reconnectImmediatelyAfterNetworkRestore();
 };
 
 const syncFreshDataForResume = (
@@ -1814,6 +1836,15 @@ const handleNetworkOrResumeChange = (
 
 const syncBrowserNetworkState = (isOnline: boolean): void => {
   if (isOnline) {
+    // Старый сокет может считаться подключённым до таймаута даже после offline.
+    if (
+      !networkReachable.value ||
+      (browserOfflineSignal.value && !navigator.onLine)
+    ) {
+      return;
+    }
+
+    browserOfflineSignal.value = false;
     clearBrowserOfflineFallback();
   }
 
@@ -1861,8 +1892,29 @@ const ensureNetworkStatePolling = (): void => {
 
   networkStatePollInterval = setInterval(() => {
     pollBrowserNetworkState();
+    void networkReachabilityCheck.check();
   }, 1000);
 };
+
+const networkReachabilityCheck = createNetworkReachabilityCheck({
+  timeoutMs: NETWORK_REACHABILITY_TIMEOUT_MS,
+  isEnabled: () => !!chatSDK && document.visibilityState === 'visible',
+  probe: signal => chatSDK!.probeNetworkReachability(signal),
+  onResult: reachable => {
+    if (!reachable) {
+      networkReachable.value = false;
+      return;
+    }
+
+    if (networkReachable.value) return;
+
+    confirmBrowserNetworkAvailable();
+    syncFreshDataForResume('network-poll', {
+      hardReconnect: true,
+      forceRefresh: true
+    });
+  }
+});
 
 const syncPresenceForVisibility = (): void => {
   if (!chatSDK) {
@@ -1978,6 +2030,8 @@ export const initializeChat = async (options: {
     wsUrl: options.wsUrl,
     token: options.token
   });
+  networkReachabilityCheck.invalidate();
+  networkReachable.value = true;
   notifyChatSDKReady(chatSDK);
   configureChatFolderSync(
     chatSDK,
@@ -1998,6 +2052,7 @@ export const initializeChat = async (options: {
   reconnectRefresh.invalidate();
   chatSDK.setConnectionStateListener(connected => {
     const wasConnected = hasWebsocketConnection.value;
+    if (connected) confirmBrowserNetworkAvailable();
     isWebsocketConnecting.value = browserOnline.value && !connected;
     hasWebsocketConnection.value = connected;
 
@@ -2078,6 +2133,7 @@ export const initializeChat = async (options: {
       }
 
       hiddenSince = Date.now();
+      networkReachabilityCheck.invalidate();
       syncPresenceForVisibility();
     });
     isVisibilityListenerAdded = true;
@@ -2092,6 +2148,7 @@ export const initializeChat = async (options: {
     });
 
     window.addEventListener('online', () => {
+      confirmBrowserNetworkAvailable();
       requestBackgroundSyncOnForeground('browser-online');
       handleNetworkOrResumeChange('browser-online', {
         assumeOnlineOnNative: true,
@@ -2102,6 +2159,7 @@ export const initializeChat = async (options: {
 
     window.addEventListener('offline', () => {
       if (Capacitor.isNativePlatform()) {
+        markBrowserNetworkUnavailable();
         handleNetworkOrResumeChange('network-change', {
           assumeOnlineOnNative: true,
           forceHardReconnect: true,
@@ -2169,6 +2227,7 @@ export const initializeChat = async (options: {
   }
 
   browserOnline.value = Capacitor.isNativePlatform() || navigator.onLine;
+  browserOfflineSignal.value = !navigator.onLine;
   lastKnownNetworkFingerprint = getNetworkFingerprint(browserOnline.value);
   isWebsocketConnecting.value = browserOnline.value;
   hasWebsocketConnection.value = false;
@@ -2582,9 +2641,15 @@ export const getMessagesWithLoadingStatus = (): ChatMessage[] => {
 };
 
 export const getIsWebsocketConnecting = () =>
-  getEffectiveBrowserNetworkState() && isWebsocketConnecting.value;
+  getEffectiveBrowserNetworkState() &&
+  (!networkReachable.value ||
+    browserOfflineSignal.value ||
+    isWebsocketConnecting.value);
 export const getHasWebsocketConnection = () =>
-  getEffectiveBrowserNetworkState() && hasWebsocketConnection.value;
+  getEffectiveBrowserNetworkState() &&
+  networkReachable.value &&
+  !browserOfflineSignal.value &&
+  hasWebsocketConnection.value;
 export const getHasBrowserNetwork = () => getEffectiveBrowserNetworkState();
 export const getCanSendReadReceipts = (): boolean => {
   return getHasWebsocketConnection() && getIsAppActivelyVisible();
