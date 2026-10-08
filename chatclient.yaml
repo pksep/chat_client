@@ -3,10 +3,10 @@
   cycles: 1
   deleted: 8
   inserted: 8
-  seconds: 199.739772312
+  seconds: 339.932075035
   version: 0.60.0
   what: judges-summary
-  when: 2026-10-07 22:19:04.949494739 Z
+  when: 2026-10-08 02:22:08.701995195 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -22746,18 +22746,6 @@
   total_stars: 0
   what: dimensions-of-terrain
   when: 2026-10-05 16:23:41.844715207 Z
-- _id: 1285
-  _job: 97877
-  _time: 2026-10-05 16:27:51.460027548 Z
-  _version: 0.19.16/0.61.1/0.17.11!0.17.23
-  analyzers: 18
-  text: |-
-    The average number of builds per week (83.2) is increasing (R=0.35).
-    The average number of commits per week (36.7) is decreasing (R=-0.67).
-    The average number of releases per month (8.4) is decreasing (R=-0.82).
-    The average monthly turnover (2.0 developers) is decreasing (R=-0.27).
-  what: assessment
-  when: 2026-10-05 16:27:51.482108164 Z
 - _id: 1287
   _job: 37503174666
   _time: 2026-10-06 17:25:09.932958099 Z
@@ -23030,17 +23018,6 @@
   when: 2026-10-06 09:04:40.000000000 Z
   where: github
   who: 93074025
-- _id: 1305
-  _job: 37694884666
-  _time: 2026-10-07 22:15:49.926843685 Z
-  _version: 0.19.6/0.60.0/0.17.11
-  earliest_issue_was_found: 1
-  events_were_scanned: 23298144701
-  latest_issue_was_found: 72
-  min_pull_was_found: 436
-  repository: 1053332035
-  what: iterate
-  where: github
 - _id: 1306
   _job: 37694884666
   _time: 2026-10-07 22:15:52.031052322 Z
@@ -23059,6 +23036,7 @@
   is_human: 1
   issue: 412
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -23083,6 +23061,7 @@
   is_human: 1
   issue: 426
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -23107,6 +23086,7 @@
   is_human: 1
   issue: 436
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -23129,3 +23109,26 @@
   total_stars: 0
   what: dimensions-of-terrain
   when: 2026-10-07 22:16:04.366278223 Z
+- _id: 1310
+  _job: 98143
+  _time: 2026-10-07 22:19:27.924985655 Z
+  _version: 0.19.16/0.61.1/0.17.11!0.17.23
+  analyzers: 18
+  text: |-
+    The average number of builds per week (83.2) is increasing (R=0.35).
+    The average number of commits per week (36.7) is decreasing (R=-0.67).
+    The average number of releases per month (8.4) is decreasing (R=-0.82).
+    The average monthly turnover (2.0 developers) is decreasing (R=-0.41).
+  what: assessment
+  when: 2026-10-07 22:19:27.946692349 Z
+- _id: 1311
+  _job: 37716913111
+  _time: 2026-10-08 02:16:34.474372828 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  earliest_issue_was_found: 1
+  events_were_scanned: 23323241581
+  latest_issue_was_found: 72
+  min_pull_was_found: 436
+  repository: 1053332035
+  what: iterate
+  where: github
