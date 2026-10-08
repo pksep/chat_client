@@ -43,6 +43,10 @@
   color: var(--text-secondary);
   margin-top: -7px;
   grid-area: description;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .user-profile__ex--online {
