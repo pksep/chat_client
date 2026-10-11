@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="372841">
+<fb version="0.19.6" size="373106">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <inserted t="I">8</inserted>
-    <seconds t="F">250.35142291</seconds>
+    <seconds t="F">232.71571418</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-10-11T09:22:24Z</when>
+    <when t="T">2026-10-11T16:01:54Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -25724,19 +25724,6 @@ The average monthly turnover (2.0 developers) is decreasing (R=-0.57).</text>
     <when t="T">2026-10-10T01:19:51Z</when>
   </f>
   <f>
-    <_id t="I">1322</_id>
-    <_job t="I">38104218119</_job>
-    <_time t="T">2026-10-11T02:11:04Z</_time>
-    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
-    <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">23632705114</events_were_scanned>
-    <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">436</min_pull_was_found>
-    <repository t="I">1053332035</repository>
-    <what t="S">iterate</what>
-    <where t="S">github</where>
-  </f>
-  <f>
     <_id t="I">1323</_id>
     <_job t="I">38104218119</_job>
     <_time t="T">2026-10-11T02:11:08Z</_time>
@@ -25766,5 +25753,34 @@ The average number of releases per month (7.9) is decreasing (R=-0.78).
 The average monthly turnover (2.0 developers) is decreasing (R=-0.57).</text>
     <what t="S">assessment</what>
     <when t="T">2026-10-11T02:16:26Z</when>
+  </f>
+  <f>
+    <_id t="I">1325</_id>
+    <_job t="I">98661</_job>
+    <_time t="T">2026-10-11T09:23:04Z</_time>
+    <_version t="S">0.19.16/0.61.1/0.17.11!0.17.23</_version>
+    <ac t="I">0</ac>
+    <cost_of_qod t="F">3.1295401332401975</cost_of_qod>
+    <ev t="I">0</ev>
+    <pv t="I">12156</pv>
+    <qod t="I">0</qod>
+    <qod_per_day t="F">16.45033503262167</qod_per_day>
+    <qod_per_sec t="F">0.0</qod_per_sec>
+    <start t="T">2026-02-17T06:25:50Z</start>
+    <what t="S">earned-value</what>
+    <when t="T">2026-10-11T09:23:04Z</when>
+  </f>
+  <f>
+    <_id t="I">1326</_id>
+    <_job t="I">38153384692</_job>
+    <_time t="T">2026-10-11T15:58:05Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <earliest_issue_was_found t="I">1</earliest_issue_was_found>
+    <events_were_scanned t="I">23677666103</events_were_scanned>
+    <latest_issue_was_found t="I">72</latest_issue_was_found>
+    <min_pull_was_found t="I">436</min_pull_was_found>
+    <repository t="I">1053332035</repository>
+    <what t="S">iterate</what>
+    <where t="S">github</where>
   </f>
 </fb>
