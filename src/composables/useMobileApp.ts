@@ -444,11 +444,6 @@ export function useMobileApp() {
     }
   };
 
-  const dismissUpdateBanner = () => {
-    persistCurrentWebUpdateVersion();
-    showUpdateBanner.value = false;
-  };
-
   const updateActionLabel = computed(() => {
     if (!Capacitor.isNativePlatform()) {
       return 'Обновить';
@@ -575,7 +570,6 @@ export function useMobileApp() {
     currentAppVersion,
     handleInstall,
     handleUpdateClick,
-    checkForUpdates,
-    dismissUpdateBanner
+    checkForUpdates
   };
 }

@@ -45,6 +45,7 @@
             <div
               v-for="(media, i) in mediaFiles"
               :key="media.id"
+              :data-message-media-id="media.id"
               class="message-content__media"
               :style="getPreviewContainerStyle(media, i)"
               :data-testid="`${props.dataTestid}-MediaContainer`"

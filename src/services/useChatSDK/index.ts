@@ -121,6 +121,11 @@ export interface UploadTelemetryContext {
   signal?: AbortSignal;
 }
 
+export interface NetworkReachabilityProbeResult {
+  reachable: boolean;
+  httpStatus?: number;
+}
+
 export class ChatSDK {
   private apiUrl: string;
   private wsUrl: string;
@@ -654,7 +659,9 @@ export class ChatSDK {
     }
   }
 
-  async probeNetworkReachability(signal: AbortSignal): Promise<boolean> {
+  async probeNetworkReachability(
+    signal: AbortSignal
+  ): Promise<NetworkReachabilityProbeResult> {
     // Проверка сети не читает топики и не обращается к базе данных.
     const url = new URL('/live-health', this.apiUrl);
     url.searchParams.set('_', String(Date.now()));
@@ -663,7 +670,12 @@ export class ChatSDK {
       credentials: 'omit',
       signal
     });
-    return response.status < 500;
+    return {
+      // HTTP 4xx подтверждает доступность DNS, TLS и маршрута до сервера;
+      // ошибка сервера означает недоступность самого эндпоинта.
+      reachable: response.status < 500,
+      httpStatus: response.status
+    };
   }
 
   async connect(): Promise<void> {

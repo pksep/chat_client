@@ -427,6 +427,10 @@
           </div>
         </div>
 
+        <StickerPackSelect
+          :data-testid="`${props.dataTestid}-MenuProfilePanel-Stickers`"
+        />
+
         <div v-if="isMobile" class="menu-profile__update">
           <div
             class="menu-profile__wallpapers-trigger"
@@ -932,6 +936,7 @@ import {
   statusPresetDesignPreview
 } from './status-presets-design-preview';
 import ChatsToolbar from './ChatsToolbar.vue';
+import StickerPackSelect from './StickerPackSelect.vue';
 
 const CallBackgroundPreviewModal = defineAsyncComponent(
   () => import('../CallModal/CallBackgroundPreviewModal.vue')

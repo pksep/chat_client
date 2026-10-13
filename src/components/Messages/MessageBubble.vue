@@ -87,7 +87,9 @@
         :is-selected="props.isSelected"
         :is-me-sender="props.isMeSender"
         :message="props.message"
+        :message-ex="props.messageEx"
         :media="props.media"
+        :context-media-id="contextMediaId"
         :is-pin="props.isPin"
         :data-testid="dataTestid"
         @unmount-edit-message-id="emits('unmount-edit-message-id', $event)"
@@ -180,6 +182,7 @@ const {
 const isContextMenuOpen = computed(
   () => !!props.messageId && isOpen.value[props.messageId] === true
 );
+const contextMediaId = ref<string | null>(null);
 const isCallTopicDefaultMessageEx = computed(() =>
   Boolean(parseCallTopicDefaultMessageEx(props.messageEx))
 );
@@ -393,6 +396,13 @@ const handleContextMenu = (event: MouseEvent) => {
     return;
   }
 
+  const target = event.target;
+  contextMediaId.value =
+    target instanceof Element
+      ? target
+          .closest('[data-message-media-id]')
+          ?.getAttribute('data-message-media-id') || null
+      : null;
   openActivePopover(props.messageId, event);
 };
 

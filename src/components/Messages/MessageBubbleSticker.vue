@@ -41,6 +41,7 @@
         decoding="async"
       />
       <img
+        v-if="props.sticker.format !== 'webm' && props.sticker.format !== 'tgs'"
         :src="props.sticker.src"
         class="message-sticker__animation"
         :class="{ 'message-sticker__animation--loaded': imageLoaded }"
@@ -52,6 +53,32 @@
         decoding="async"
         loading="lazy"
         @load="imageLoaded = true"
+        @error="imageLoaded = false"
+      />
+      <StickerTgsAnimation
+        v-else-if="props.sticker.format === 'tgs'"
+        :src="props.sticker.src"
+        :label="props.sticker.label"
+        class="message-sticker__animation"
+        :class="{ 'message-sticker__animation--loaded': imageLoaded }"
+        :aria-hidden="!imageLoaded"
+        @load="imageLoaded = true"
+        @error="imageLoaded = false"
+      />
+      <video
+        v-else
+        :src="props.sticker.src"
+        class="message-sticker__animation"
+        :class="{ 'message-sticker__animation--loaded': imageLoaded }"
+        :aria-label="props.sticker.label"
+        width="220"
+        height="220"
+        autoplay
+        muted
+        loop
+        playsinline
+        disablepictureinpicture
+        @loadeddata="imageLoaded = true"
         @error="imageLoaded = false"
       />
     </div>
@@ -87,7 +114,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { ChatStickerItem } from '../../utils/stickers';
 import type { IMessageBubbleProps } from './interface/interface';
 import MessageAuthorMeta from './MessageAuthorMeta.vue';
@@ -97,10 +124,17 @@ import MessageStatusIcons from './MessageStatusIcons.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import ErrorIcon from '../UI/ErrorIcon.vue';
 import { MessageStatus } from '../../services/useChatSDK/types';
+import StickerTgsAnimation from './StickerTgsAnimation.vue';
 
 const props = defineProps<IMessageBubbleProps & { sticker: ChatStickerItem }>();
 defineEmits(['navigate-message']);
 const imageLoaded = ref(false);
+watch(
+  () => props.sticker.src,
+  () => {
+    imageLoaded.value = false;
+  }
+);
 const animateAppearance =
   props.isMeSender && props.messageStatus === MessageStatus.Wait;
 const showErrorIcon = computed(
@@ -147,7 +181,8 @@ const showErrorIcon = computed(
   cursor: default;
 }
 
-.message-sticker__image img {
+.message-sticker__image img,
+.message-sticker__image video {
   display: block;
   width: 100%;
   height: 100%;

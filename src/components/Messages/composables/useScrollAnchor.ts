@@ -358,7 +358,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       scrollTop: containerRef.value?.scrollTop || 0,
       startedAt: performance.now()
     };
-    if (preserveViewport) {
+    if (preserveViewport && viewportMode.value !== 'jump') {
       viewportMode.value = 'history';
     }
 

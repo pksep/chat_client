@@ -35,12 +35,6 @@
       class="chat__messages"
       ref="chatRef"
       :base-url="props.baseUrl ?? props.config?.CHAT_MASTRA_URL"
-      :show-update-banner="showUpdateBanner"
-      :update-action-label="updateActionLabel"
-      :update-progress="updateProgress"
-      :is-update-action-disabled="isUpdateActionDisabled"
-      :on-update-click="handleUpdateClick"
-      :on-dismiss-update-banner="dismissUpdateBanner"
       :dataTestid="`${props.dataTestid}-ChatContainer-Chat`"
       @rendered-topic-change="emit('rendered-topic-change', $event)"
     />
@@ -257,17 +251,7 @@ const CallModal = defineAsyncComponent(
   () => import('./CallModal/CallModal.vue')
 );
 
-const {
-  mobilePlatform,
-  handleInstall,
-  showDownloadModal,
-  showUpdateBanner,
-  updateActionLabel,
-  updateProgress,
-  isUpdateActionDisabled,
-  handleUpdateClick,
-  dismissUpdateBanner
-} = useMobileApp();
+const { mobilePlatform, handleInstall, showDownloadModal } = useMobileApp();
 
 const route = useUrlWatcher();
 const { access: chatAccess, ready: chatAccessReady } = useChatAccess();

@@ -14,6 +14,7 @@ import type { PtsMeta } from './useChatSDK/websocketEvents';
 import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { authedUser } from '../composables/useAuth';
+import { showErrorNotification } from '../composables/useNotifications';
 import {
   configureChatFolderSync,
   refreshChatFoldersFromSocket
@@ -54,6 +55,7 @@ import {
   deleteMessageFromLocal,
   editMessageFromLocal,
   playNotificationSound,
+  reconcileDeletedMessage,
   fetchMessagesForTopic,
   fetchPinnedMessagesForTopic,
   getFullMessagesByTopicId,
@@ -121,6 +123,14 @@ import {
   requestAnyChatBackgroundSync,
   saveAnyChatBackgroundSyncSession
 } from './useChatBackgroundSync';
+import { getTelemetryErrorPayload, recordTelemetryEvent } from './useTelemetry';
+import {
+  addNativeNetworkStatusListener,
+  getNativeNetworkStatus,
+  probeNativeEndpoint,
+  type NativeNetworkStatus
+} from './useTelemetryDevice';
+import type { PluginListenerHandle } from '@capacitor/core';
 
 let chatSDK: ChatSDK | null = null;
 type ChatSDKReadyWaiter = (sdk: ChatSDK) => void;
@@ -367,6 +377,7 @@ const setupChatListeners = (): void => {
     message: IMessage,
     opts?: MessageHandlingOptions
   ): void => {
+    if (reconcileDeletedMessage(message.topicId, message)) return;
     const { getSelectedTopic, updateLocalLastMessageTopic } = useTopics();
 
     if (
@@ -1142,6 +1153,7 @@ const HTTP_HEALTH_PROBE_TIMEOUT_MS = 8000;
 const NETWORK_REACHABILITY_TIMEOUT_MS = 1200;
 const HTTP_HEALTH_PROBE_RETRY_DELAY_MS = 1500;
 const NATIVE_HTTP_HEALTH_PROBE_ATTEMPTS = 3;
+const NETWORK_DIAGNOSTIC_FAILURE_REPEAT_MS = 60_000;
 let networkStatePollInterval: ReturnType<typeof setInterval> | null = null;
 let browserOfflineFallbackTimeout: ReturnType<typeof setTimeout> | null = null;
 let backgroundForegroundSyncTimeout: ReturnType<typeof setTimeout> | null =
@@ -1153,6 +1165,10 @@ let lastHardReconnectAt = 0;
 let nativeNetworkRecoveryUntil = 0;
 let browserNetworkRecoveryUntil = 0;
 let connectionAttemptId = 0;
+let lastNetworkHealthReachability: boolean | null = null;
+let lastNetworkHealthFailureTelemetryAt = 0;
+let nativeNetworkDiagnosticListener: PluginListenerHandle | null = null;
+let lastNativeNetworkDiagnosticSignature = '';
 
 const route = useUrlWatcher();
 
@@ -1896,10 +1912,165 @@ const ensureNetworkStatePolling = (): void => {
   }, 1000);
 };
 
+const getChatHealthDiagnosticUrl = (): string | null => {
+  const apiUrl = getConfig().CHAT_API_DOMAIN;
+
+  if (!apiUrl) {
+    return null;
+  }
+
+  try {
+    return new URL('/live-health', apiUrl).toString();
+  } catch {
+    return null;
+  }
+};
+
+const recordNativeNetworkStatus = (
+  source: string,
+  status: NativeNetworkStatus
+): void => {
+  const signature = JSON.stringify({
+    networkConnected: status.networkConnected,
+    networkValidated: status.networkValidated,
+    networkVpn: status.networkVpn,
+    networkWifi: status.networkWifi,
+    networkCellular: status.networkCellular,
+    networkEthernet: status.networkEthernet
+  });
+
+  if (signature === lastNativeNetworkDiagnosticSignature) {
+    return;
+  }
+
+  lastNativeNetworkDiagnosticSignature = signature;
+  recordTelemetryEvent({
+    category: 'network',
+    name: 'network.native.status_changed',
+    level:
+      status.networkConnected && status.networkValidated !== false
+        ? 'info'
+        : 'warn',
+    entityType: 'network',
+    payload: {
+      source,
+      nativeNetwork: status
+    }
+  });
+};
+
+const setupNativeNetworkDiagnostics = async (): Promise<void> => {
+  if (
+    nativeNetworkDiagnosticListener ||
+    !Capacitor.isNativePlatform() ||
+    Capacitor.getPlatform() !== 'android'
+  ) {
+    return;
+  }
+
+  try {
+    nativeNetworkDiagnosticListener = await addNativeNetworkStatusListener(
+      status => recordNativeNetworkStatus('callback', status)
+    );
+    const status = await getNativeNetworkStatus();
+    if (status) {
+      recordNativeNetworkStatus('initial', status);
+    }
+  } catch (error) {
+    recordTelemetryEvent({
+      category: 'network',
+      name: 'network.native.status_unavailable',
+      level: 'warn',
+      entityType: 'network',
+      payload: getTelemetryErrorPayload(error)
+    });
+  }
+};
+
+const recordNetworkHealthDiagnostic = (
+  reachable: boolean,
+  durationMs: number,
+  details: {
+    httpStatus?: number;
+    error?: unknown;
+  } = {}
+): void => {
+  const now = Date.now();
+  const wasUnreachable = lastNetworkHealthReachability === false;
+  const shouldRecordFailure =
+    !reachable &&
+    (!wasUnreachable ||
+      now - lastNetworkHealthFailureTelemetryAt >=
+        NETWORK_DIAGNOSTIC_FAILURE_REPEAT_MS);
+  const shouldRecordRecovery = reachable && wasUnreachable;
+
+  lastNetworkHealthReachability = reachable;
+
+  if (!shouldRecordFailure && !shouldRecordRecovery) {
+    return;
+  }
+
+  if (!reachable) {
+    lastNetworkHealthFailureTelemetryAt = now;
+  }
+
+  const healthUrl = getChatHealthDiagnosticUrl();
+
+  // fetch не различает ошибки DNS, TLS, оператора и таймауты. Проверка Android
+  // уточняет причину; результаты сохраняются до успешной отправки диагностики.
+  void Promise.all([
+    getNativeNetworkStatus().catch(() => null),
+    !reachable && healthUrl
+      ? probeNativeEndpoint(healthUrl).catch(error => ({
+          reachable: false,
+          durationMs: 0,
+          ...getTelemetryErrorPayload(error)
+        }))
+      : Promise.resolve(null)
+  ]).then(([nativeNetwork, nativeEndpointProbe]) => {
+    recordTelemetryEvent({
+      category: 'network',
+      name: reachable
+        ? 'network.chat_health.recovered'
+        : 'network.chat_health.unreachable',
+      level: reachable ? 'info' : 'warn',
+      entityType: 'network',
+      payload: {
+        endpoint: '/live-health',
+        reachable,
+        durationMs: Math.round(durationMs),
+        httpStatus: details.httpStatus,
+        ...(details.error
+          ? { webError: getTelemetryErrorPayload(details.error) }
+          : {}),
+        nativeNetwork,
+        nativeEndpointProbe
+      }
+    });
+  });
+};
+
 const networkReachabilityCheck = createNetworkReachabilityCheck({
   timeoutMs: NETWORK_REACHABILITY_TIMEOUT_MS,
   isEnabled: () => !!chatSDK && document.visibilityState === 'visible',
-  probe: signal => chatSDK!.probeNetworkReachability(signal),
+  probe: async signal => {
+    const startedAt = performance.now();
+
+    try {
+      const result = await chatSDK!.probeNetworkReachability(signal);
+      recordNetworkHealthDiagnostic(
+        result.reachable,
+        performance.now() - startedAt,
+        { httpStatus: result.httpStatus }
+      );
+      return result.reachable;
+    } catch (error) {
+      recordNetworkHealthDiagnostic(false, performance.now() - startedAt, {
+        error
+      });
+      return false;
+    }
+  },
   onResult: reachable => {
     if (!reachable) {
       networkReachable.value = false;
@@ -2030,6 +2201,9 @@ export const initializeChat = async (options: {
     wsUrl: options.wsUrl,
     token: options.token
   });
+  // Диагностика не меняет состояние соединения: она различает потерю сети
+  // Android и недоступность сервера чата у конкретного оператора.
+  void setupNativeNetworkDiagnostics();
   networkReachabilityCheck.invalidate();
   networkReachable.value = true;
   notifyChatSDKReady(chatSDK);
@@ -2452,12 +2626,16 @@ export const deleteMessageChat = async (params: {
   const sdk = getChatSDK();
 
   try {
-    sdk.sendWebSocketEvent(WebSocketEventType.DELETE_MESSAGE, {
+    const sent = sdk.sendWebSocketEvent(WebSocketEventType.DELETE_MESSAGE, {
       messageId: params.messageId,
       topicId: params.topicId
     });
+    if (!sent) await sdk.deleteMessage(params.topicId, params.messageId);
+    // При выходе из комнаты событие удаления может не прийти; старую историю фильтруем сразу.
+    deleteMessageFromLocal(params.topicId, params.messageId);
   } catch (error) {
-    console.error('[ChatSDK] Failed to send message via WebSocket:', error);
+    console.error('[ChatSDK] Не удалось удалить сообщение:', error);
+    showErrorNotification('Не удалось удалить сообщение');
   }
 };
 

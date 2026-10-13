@@ -159,6 +159,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
           '**/assets/MenuProfilePanel-*.js',
           '**/call-background/**',
           '**/emoji/**',
+          '**/stickers/**',
           '**/release/**',
           '**/video/**'
         ],
