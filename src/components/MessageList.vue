@@ -2,6 +2,7 @@
   <div
     :class="[
       'chat__message-wrapper',
+      'chat-scrollbar',
       {
         'chat__message-wrapper--content-deferred': shouldRenderAiMessageSkeleton
       }
@@ -97,6 +98,7 @@
   <div
     :class="[
       'chat__message-wrapper',
+      'chat-scrollbar',
       {
         'chat__message-wrapper--content-deferred':
           shouldDeferUserMessageContentLayout,
@@ -217,124 +219,6 @@
         <span class="chat__pagination-loading-text">загрузка...</span>
       </div>
     </Transition>
-    <section
-      v-if="!shouldRenderUserMessageSkeleton && props.showUpdateBanner"
-      ref="updateBannerRef"
-      :class="[
-        'chat-update-banner',
-        {
-          'chat-update-banner--dragging': isUpdateBannerDragging,
-          'chat-update-banner--dismissing': isUpdateBannerDismissing
-        }
-      ]"
-      :style="updateBannerSwipeStyle"
-      :data-testid="`${props.dataTestid}-MessageList-UpdateBanner`"
-      @pointerdown="handleUpdateBannerPointerDown"
-      @pointermove="handleUpdateBannerPointerMove"
-      @pointerup="handleUpdateBannerPointerUp"
-      @pointercancel="handleUpdateBannerPointerCancel"
-      @touchstart.stop
-      @touchend.stop
-    >
-      <div class="chat-update-banner__message">
-        <span
-          :class="[
-            'chat-update-banner__status-icon',
-            `chat-update-banner__status-icon--${updateBannerState}`
-          ]"
-          aria-hidden="true"
-        >
-          <svg
-            v-if="updateBannerState === 'downloaded'"
-            viewBox="0 0 18 18"
-            fill="none"
-          >
-            <path
-              d="M5 9.2L7.7 12L13.2 6"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <svg v-else viewBox="0 0 18 18" fill="none">
-            <path
-              d="M14 11.25V14C14 14.2761 13.883 14.5412 13.6746 14.7366C13.4662 14.932 13.1836 15.0417 12.8889 15.0417H5.11111C4.81643 15.0417 4.53381 14.932 4.32544 14.7366C4.11706 14.5412 4 14.2761 4 14V11.25"
-              stroke="currentColor"
-              stroke-width="1.375"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <path
-              d="M6.39587 7.95996L9.00003 10.5641L11.6042 7.95996"
-              stroke="currentColor"
-              stroke-width="1.375"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <path
-              d="M9 10.5654V4.31543"
-              stroke="currentColor"
-              stroke-width="1.375"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </span>
-
-        <div class="chat-update-banner__content">
-          <p class="chat-update-banner__title">
-            {{ updateBannerTitle }}
-          </p>
-          <p class="chat-update-banner__description">
-            {{ updateBannerDescription }}
-          </p>
-        </div>
-      </div>
-      <div class="chat-update-banner__actions">
-        <Button
-          :class="[
-            'chat-update-banner__action',
-            {
-              'chat-update-banner__action--progress':
-                props.updateProgress !== undefined
-            }
-          ]"
-          :size="SizesEnum.small"
-          :data-testid="`${props.dataTestid}-MessageList-UpdateBannerInstallButton`"
-          :disabled="props.isUpdateActionDisabled"
-          @click="props.onUpdateClick?.()"
-        >
-          <template v-if="props.updateProgress !== undefined">
-            <span class="chat-update-banner__action-progress-label">
-              {{ props.updateActionLabel }}
-            </span>
-            <span
-              class="chat-update-banner__action-progress"
-              aria-hidden="true"
-            >
-              <FileIcon
-                :is-me-sender="false"
-                :is-loaded="false"
-                :percent="props.updateProgress"
-                background-color="var(--grey2)"
-              />
-            </span>
-          </template>
-          <template v-else>{{ props.updateActionLabel }}</template>
-        </Button>
-        <button
-          v-if="!isMobile"
-          type="button"
-          class="chat-update-banner__close"
-          :data-testid="`${props.dataTestid}-MessageList-UpdateBannerCloseButton`"
-          aria-label="Закрыть уведомление об обновлении"
-          @click="props.onDismissUpdateBanner?.()"
-        >
-          <Icon :name="IconNameEnum.crossLarge" />
-        </button>
-      </div>
-    </section>
   </div>
 
   <div
@@ -461,7 +345,6 @@
   <MessageListInput
     v-if="shouldRenderMessageComposer"
     :topic-id="activeTopic?.id"
-    :key="`${route.type}:${route.id || 'default'}`"
     v-model="inputText"
     ref="messageListInputRef"
     :class="{
@@ -512,14 +395,11 @@ import MessageListAIItems from './Messages/MessageListAIItems.vue';
 import MessageListUserItems from './Messages/MessageListUserItems.vue';
 import MessageListInput from './Messages/MessageListInput.vue';
 import ReactionHeartIcon from './UI/ReactionHeartIcon.vue';
-import FileIcon from './UI/FileIcon.vue';
 import {
   MessageTypeEnum,
   PushNotification,
   Icon,
-  IconNameEnum,
-  Button,
-  SizesEnum
+  IconNameEnum
 } from '@pksep/yui';
 import type { IMessageListProps } from './interfaces/message-list';
 import type { AIMessage } from '../types/messages';
@@ -664,56 +544,11 @@ const MOBILE_INITIAL_MESSAGES_LIMIT = 48;
 const MOBILE_MAX_INITIAL_MESSAGES_LIMIT = 48;
 const MOBILE_EXPANDED_MESSAGES_LIMIT = MOBILE_NOTIFICATION_HISTORY_LIMIT;
 const MOBILE_MAX_VISIBLE_MESSAGES_LIMIT = MOBILE_NOTIFICATION_HISTORY_LIMIT;
-type UpdateBannerState = 'available' | 'downloading' | 'downloaded';
-
-const updateBannerState = computed<UpdateBannerState>(() => {
-  if (
-    props.updateActionLabel === 'Перезапустить' ||
-    props.updateActionLabel === 'Установлено'
-  ) {
-    return 'downloaded';
-  }
-
-  if (props.updateProgress !== undefined) {
-    return 'downloading';
-  }
-
-  return 'available';
-});
-
-const updateBannerTitle = computed(() => {
-  if (updateBannerState.value === 'downloading') {
-    return 'Загружаем обновление';
-  }
-
-  if (updateBannerState.value === 'downloaded') {
-    return 'Установлено обновление';
-  }
-
-  return 'Доступна новая версия приложения';
-});
-
-const updateBannerDescription = computed(() => {
-  if (props.updateActionLabel === 'Установлено') {
-    return 'Завершаем установку обновления';
-  }
-
-  if (updateBannerState.value === 'downloading') {
-    return 'Пожалуйста, не закрывайте приложение';
-  }
-
-  if (updateBannerState.value === 'downloaded') {
-    return 'Для начала работы перезапустите приложение';
-  }
-
-  return 'Обновите приложение, чтобы получить новые функции и улучшения';
-});
 const DESKTOP_INITIAL_MESSAGES_LIMIT = 100;
 
 const chatWrapperRef = useTemplateRef('chatWrapperRef');
 const messageListUserItemsRef = useTemplateRef<any>('messageListUserItemsRef');
 const messageListInputRef = useTemplateRef<any>('messageListInputRef');
-const updateBannerRef = useTemplateRef<HTMLElement>('updateBannerRef');
 
 const route = useUrlWatcher();
 const { state: isMobile } = useResizeState(MAX_W_MD);
@@ -724,119 +559,6 @@ const isNativeAndroid =
   Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
 const { onTouchStart, onTouchEnd } = useMessageSwipe(route);
-
-const UPDATE_BANNER_SWIPE_DURATION_MS = 240;
-const UPDATE_BANNER_SWIPE_MIN_DISTANCE_PX = 24;
-const UPDATE_BANNER_SWIPE_VELOCITY_PX_PER_MS = 0.55;
-const updateBannerOffsetX = ref(0);
-const isUpdateBannerDragging = ref(false);
-const isUpdateBannerDismissing = ref(false);
-let updateBannerPointerId: number | null = null;
-let updateBannerSwipeStartX = 0;
-let updateBannerSwipeStartTime = 0;
-let updateBannerDismissTimeoutId: number | null = null;
-
-const updateBannerSwipeStyle = computed(() => {
-  if (!isMobile.value) {
-    return undefined;
-  }
-
-  const bannerWidth = updateBannerRef.value?.offsetWidth || window.innerWidth;
-  const swipeProgress = Math.min(
-    Math.abs(updateBannerOffsetX.value) / bannerWidth,
-    1
-  );
-
-  return {
-    transform: `translate3d(${updateBannerOffsetX.value}px, 0, 0)`,
-    opacity: String(1 - swipeProgress * 0.85)
-  };
-});
-
-const resetUpdateBannerSwipe = () => {
-  updateBannerPointerId = null;
-  isUpdateBannerDragging.value = false;
-  updateBannerOffsetX.value = 0;
-};
-
-const handleUpdateBannerPointerDown = (event: PointerEvent) => {
-  if (
-    !isMobile.value ||
-    !event.isPrimary ||
-    event.button !== 0 ||
-    (event.target as HTMLElement).closest('button')
-  ) {
-    return;
-  }
-
-  updateBannerPointerId = event.pointerId;
-  updateBannerSwipeStartX = event.clientX;
-  updateBannerSwipeStartTime = performance.now();
-  isUpdateBannerDragging.value = true;
-  updateBannerRef.value?.setPointerCapture(event.pointerId);
-};
-
-const handleUpdateBannerPointerMove = (event: PointerEvent) => {
-  if (event.pointerId !== updateBannerPointerId) {
-    return;
-  }
-
-  const bannerWidth = updateBannerRef.value?.offsetWidth || window.innerWidth;
-  const offsetX = event.clientX - updateBannerSwipeStartX;
-  const maxOffsetX = bannerWidth * 1.1;
-
-  updateBannerOffsetX.value = Math.max(
-    -maxOffsetX,
-    Math.min(offsetX, maxOffsetX)
-  );
-};
-
-const dismissUpdateBannerWithAnimation = (direction: number) => {
-  const bannerWidth = updateBannerRef.value?.offsetWidth || window.innerWidth;
-
-  updateBannerPointerId = null;
-  isUpdateBannerDragging.value = false;
-  isUpdateBannerDismissing.value = true;
-  updateBannerOffsetX.value = direction * (bannerWidth + 32);
-
-  updateBannerDismissTimeoutId = window.setTimeout(() => {
-    props.onDismissUpdateBanner?.();
-    isUpdateBannerDismissing.value = false;
-    updateBannerOffsetX.value = 0;
-    updateBannerDismissTimeoutId = null;
-  }, UPDATE_BANNER_SWIPE_DURATION_MS);
-};
-
-const handleUpdateBannerPointerUp = (event: PointerEvent) => {
-  if (event.pointerId !== updateBannerPointerId) {
-    return;
-  }
-
-  const offsetX = updateBannerOffsetX.value;
-  const bannerWidth = updateBannerRef.value?.offsetWidth || window.innerWidth;
-  const swipeDuration = Math.max(
-    performance.now() - updateBannerSwipeStartTime,
-    1
-  );
-  const swipeVelocity = Math.abs(offsetX) / swipeDuration;
-  const hasEnoughDistance = Math.abs(offsetX) >= bannerWidth * 0.28;
-  const hasEnoughVelocity =
-    Math.abs(offsetX) >= UPDATE_BANNER_SWIPE_MIN_DISTANCE_PX &&
-    swipeVelocity >= UPDATE_BANNER_SWIPE_VELOCITY_PX_PER_MS;
-
-  if (hasEnoughDistance || hasEnoughVelocity) {
-    dismissUpdateBannerWithAnimation(Math.sign(offsetX) || 1);
-    return;
-  }
-
-  resetUpdateBannerSwipe();
-};
-
-const handleUpdateBannerPointerCancel = (event: PointerEvent) => {
-  if (event.pointerId === updateBannerPointerId) {
-    resetUpdateBannerSwipe();
-  }
-};
 
 const getLocalStorageInputText = computed(() => {
   const inputsJson = JSON.parse(localStorage.getItem('inputs') || '{}');
@@ -2251,11 +1973,13 @@ const handleUserMessageTouchCancel = (): void => {
 const shouldKeepTopicSwitchBottomPosition = (
   topicSwitchToken: number
 ): boolean =>
+  scrollAnchor.viewportMode.value !== 'jump' &&
   !hasTopicSwitchUserScrollIntent(topicSwitchToken) &&
   (completedTopicSwitchToken !== topicSwitchToken ||
     isCurrentTopicNearBottomNow());
 
 const shouldKeepCurrentTopicBottomPosition = (): boolean =>
+  scrollAnchor.viewportMode.value !== 'jump' &&
   !hasTopicSwitchUserScrollIntent(activeTopicSwitchToken) &&
   isCurrentTopicNearBottomNow();
 
@@ -3200,6 +2924,9 @@ const navigateToMessageId = async (
   optimisticMessage?: IMessage | null,
   behavior: MessageScrollBehavior = 'smooth'
 ): Promise<boolean> => {
+  clearVisibleMessagesExpansionSchedule();
+  scrollAnchor.prepareJumpMutation();
+
   const didJump = await jumpToMessageWithHighlight(
     messageId,
     quoteText,
@@ -3703,10 +3430,6 @@ onUnmounted(() => {
   if (activeTopicPreviewRefreshTimeoutId !== null) {
     window.clearTimeout(activeTopicPreviewRefreshTimeoutId);
     activeTopicPreviewRefreshTimeoutId = null;
-  }
-
-  if (updateBannerDismissTimeoutId !== null) {
-    window.clearTimeout(updateBannerDismissTimeoutId);
   }
 
   if (floatingDateDividerRafId) {
@@ -4510,13 +4233,22 @@ const tryBuildAnchor = (value: string) => {
 };
 
 const pasteTextToMessageInput = async () => {
+  const input = messageListInputRef.value;
+  const topicId = route.value.id;
+  if (await input?.pasteCopiedContent?.()) return;
   const clipboardText = await navigator.clipboard.readText();
 
-  if (!clipboardText) return;
+  if (
+    !clipboardText ||
+    input !== messageListInputRef.value ||
+    topicId !== route.value.id
+  )
+    return;
 
   const anchorHtml = tryBuildAnchor(clipboardText);
 
-  insertTextToMessageInput(anchorHtml);
+  if (anchorHtml) insertTextToMessageInput(anchorHtml);
+  else input?.insertPlainText?.(clipboardText);
 };
 
 const isMediaPreviewOpen = (): boolean =>

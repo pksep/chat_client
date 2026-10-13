@@ -1443,7 +1443,9 @@ export function useMessageSender(
     };
   };
 
-  const handleSendSticker = async (stickerId: string): Promise<void> => {
+  const handleSendSticker = async (
+    stickerId: Parameters<typeof createStickerMessage>[0]
+  ): Promise<void> => {
     const content = createStickerMessage(stickerId);
     const topicId = route.value.id;
     if (

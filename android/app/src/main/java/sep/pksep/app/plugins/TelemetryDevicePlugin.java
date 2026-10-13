@@ -15,6 +15,8 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.TimeZone;
@@ -22,6 +24,8 @@ import java.util.TimeZone;
 @CapacitorPlugin(name = "TelemetryDevice")
 public class TelemetryDevicePlugin extends Plugin {
     private static final String NETWORK_STATUS_CHANGE_EVENT = "networkStatusChange";
+    private static final int DEFAULT_HTTP_PROBE_TIMEOUT_MS = 3500;
+    private static final int MAX_HTTP_PROBE_TIMEOUT_MS = 8000;
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback networkCallback;
 
@@ -103,6 +107,78 @@ public class TelemetryDevicePlugin extends Plugin {
     @PluginMethod
     public void getNetworkStatus(PluginCall call) {
         call.resolve(buildNetworkStatus());
+    }
+
+    /**
+     * Runs outside WebView so a retained report tells us whether the carrier
+     * can reach the chat host at all, and not only that JavaScript fetch failed.
+     */
+    @PluginMethod
+    public void probeHttp(PluginCall call) {
+        String rawUrl = call.getString("url");
+        Integer requestedTimeoutMs = call.getInt("timeoutMs");
+        final int timeoutMs = Math.min(
+            Math.max(
+                requestedTimeoutMs == null ? DEFAULT_HTTP_PROBE_TIMEOUT_MS : requestedTimeoutMs,
+                500
+            ),
+            MAX_HTTP_PROBE_TIMEOUT_MS
+        );
+
+        if (rawUrl == null || rawUrl.trim().isEmpty()) {
+            call.reject("url is required");
+            return;
+        }
+
+        final String targetUrl = rawUrl.trim();
+
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+            JSObject result = buildNetworkStatus();
+            long startedAt = System.nanoTime();
+            result.put("reachable", false);
+
+            try {
+                URL url = new URL(targetUrl);
+                String protocol = url.getProtocol();
+
+                if (!"https".equalsIgnoreCase(protocol) && !"http".equalsIgnoreCase(protocol)) {
+                    throw new IllegalArgumentException("Only HTTP(S) URLs are supported");
+                }
+
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setInstanceFollowRedirects(true);
+                connection.setUseCaches(false);
+                connection.setConnectTimeout(timeoutMs);
+                connection.setReadTimeout(timeoutMs);
+                connection.setRequestProperty("Cache-Control", "no-cache");
+                connection.setRequestProperty("Accept", "application/json, text/plain, */*");
+
+                int status = connection.getResponseCode();
+                result.put("httpStatus", status);
+                // A 4xx response still proves that DNS, TLS and the HTTP route
+                // to the chat host are available. Server 5xx is unhealthy.
+                result.put("reachable", status < 500);
+            } catch (Exception error) {
+                result.put("errorClass", error.getClass().getSimpleName());
+                String message = error.getMessage();
+                if (message != null && !message.isEmpty()) {
+                    result.put("errorMessage", message.substring(0, Math.min(message.length(), 300)));
+                }
+            } finally {
+                result.put(
+                    "durationMs",
+                    Math.max(0L, (System.nanoTime() - startedAt) / 1_000_000L)
+                );
+
+                if (connection != null) {
+                    connection.disconnect();
+                }
+
+                call.resolve(result);
+            }
+        }, "chat-network-diagnostic").start();
     }
 
     private void addAppInfo(JSObject result) {

@@ -138,8 +138,6 @@ async function openNativeMenu(
 }
 
 const menuButton = (page: Page) => page.locator('.menu-update-button:visible');
-const topicButton = (page: Page) =>
-  page.locator('[data-testid$="MessageList-UpdateBannerInstallButton"]');
 const emitState = (page: Page, status: number, percent?: number) =>
   page.evaluate(
     ({ status, percent }) =>
@@ -151,7 +149,7 @@ const emitState = (page: Page, status: number, percent?: number) =>
     { status, percent }
   );
 
-test('RuStore: меню и сообщения проходят загрузку, перезапуск и скрытие кнопки', async ({
+test('RuStore: кнопка обновления проходит загрузку и перезапуск без баннера в сообщениях', async ({
   page,
   isMobile
 }) => {
@@ -195,15 +193,15 @@ test('RuStore: меню и сообщения проходят загрузку,
       path: test.info().outputPath('menu-downloading.png')
     });
   await page.evaluate(() => (window as any).ruStoreFixture.openTopic());
-  await expect(topicButton(page)).toHaveText('15%');
-  await expect(topicButton(page)).toBeDisabled();
-  await emitState(page, 2, 100);
-  await expect(topicButton(page)).toHaveText('100%');
-  await emitState(page, 1);
-  await expect(topicButton(page)).toHaveText('Перезапустить');
-  await expect(topicButton(page)).toBeEnabled();
+  await expect(page.locator('.chat__message-wrapper')).toBeVisible();
+  await expect(page.locator('.chat-update-banner')).toHaveCount(0);
   if (isMobile)
     await page.evaluate(() => (window as any).ruStoreFixture.back());
+  await expect(menuButton(page)).toHaveText('15%');
+  await expect(menuButton(page)).toBeDisabled();
+  await emitState(page, 2, 100);
+  await expect(menuButton(page)).toHaveText('100%');
+  await emitState(page, 1);
   await expect(menuButton(page)).toHaveText('Перезапустить');
   await expect(menuButton(page)).toBeEnabled();
   if (isMobile)
@@ -225,10 +223,9 @@ test('RuStore: меню и сообщения проходят загрузку,
   );
   if (isMobile)
     await page.evaluate(() => (window as any).ruStoreFixture.openTopic());
-  await expect(topicButton(page)).toHaveText('Установлено');
-  await expect(topicButton(page)).toBeDisabled();
+  await expect(page.locator('.chat__message-wrapper')).toBeVisible();
+  await expect(page.locator('.chat-update-banner')).toHaveCount(0);
   await page.evaluate(() => (window as any).ruStoreBridge.releaseComplete());
-  await expect(topicButton(page)).toHaveCount(0);
   if (isMobile)
     await page.evaluate(() => (window as any).ruStoreFixture.back());
   await expect(page.locator('.menu-update')).toHaveCount(0);

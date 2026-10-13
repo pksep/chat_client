@@ -1,5 +1,10 @@
 import { shallowReactive } from 'vue';
-import { getChatSDK, getHasBrowserNetwork, waitForChatSDK } from './useChat';
+import {
+  deleteMessageChat,
+  getChatSDK,
+  getHasBrowserNetwork,
+  waitForChatSDK
+} from './useChat';
 import {
   IMedia,
   IMessage,
@@ -662,7 +667,32 @@ const filterDeletedMessagesForTopic = (
     return messages;
   }
 
-  return messages.filter(message => !deletedIds.has(message.id));
+  return messages.filter(message => !reconcileDeletedMessage(topicId, message));
+};
+
+const isDeletedMessageForTopic = (
+  topicId: string,
+  message: IMessage
+): boolean => {
+  const deletedIds = deletedMessageIdsByTopic.get(topicId);
+  if (deletedIds?.has(message.id)) return true;
+
+  const clientId =
+    message.senderUserId === authedUser.value?.id ? getClientId(message) : null;
+  return !!clientId && !!deletedIds?.has(clientId);
+};
+
+export const reconcileDeletedMessage = (
+  topicId: string,
+  message: IMessage
+): boolean => {
+  if (!isDeletedMessageForTopic(topicId, message)) return false;
+  if (deletedMessageIdsByTopic.get(topicId)?.has(message.id)) return true;
+
+  // Отменённая отправка может подтвердиться уже после выхода из топика с новым ID.
+  rememberDeletedMessageId(topicId, message.id);
+  void deleteMessageChat({ topicId, messageId: message.id });
+  return true;
 };
 
 const isPendingOutgoingMessage = (message: IMessage): boolean => {
@@ -1942,7 +1972,7 @@ export const prefetchAroundMessageContext = (
 };
 
 export const addMessageToLocal = (topicId: string, message: IMessage): void => {
-  if (deletedMessageIdsByTopic.get(topicId)?.has(message.id)) {
+  if (reconcileDeletedMessage(topicId, message)) {
     return;
   }
 
@@ -2139,10 +2169,24 @@ export const deleteMessageFromLocal = (
   topicId: string,
   messageId: string
 ): void => {
+  const message = getClientMessageById(topicId, messageId);
+  const clientId =
+    message && message.senderUserId === authedUser.value?.id
+      ? getClientId(message)
+      : null;
+  if (clientId && clientId !== messageId) {
+    rememberDeletedMessageId(topicId, clientId);
+    clearPendingUploadMessage(topicId, clientId);
+    cancelDelayedOutgoingMessage(topicId, clientId);
+    cancelOutgoingDeliveryTimeout(topicId, clientId);
+    void deleteShadowTopicMessage(topicId, clientId);
+  }
   rememberDeletedMessageId(topicId, messageId);
   clearReactionOverlayForMessage(topicId, messageId);
   updateTopicMessageStores(topicId, messages =>
-    messages.filter(message => message.id !== messageId)
+    messages.filter(
+      message => message.id !== messageId && message.id !== clientId
+    )
   );
   schedulePersistMessages(topicId);
   syncTopicUnreadState(topicId);
@@ -2155,6 +2199,7 @@ export const deleteMessageFromLocal = (
   );
 
   clearPendingUploadMessage(topicId, messageId);
+  cancelDelayedOutgoingMessage(topicId, messageId);
   cancelOutgoingDeliveryTimeout(topicId, messageId);
   unpinLocalMessageForMe(topicId, messageId);
   void deleteShadowTopicMessage(topicId, messageId);
@@ -2443,7 +2488,7 @@ export const getTopicMessagePreview = (topicId: string): IMessage | null => {
     !message?.id ||
     message.deletedAt ||
     (message.topicId && message.topicId !== topicId) ||
-    deletedMessageIdsByTopic.get(topicId)?.has(message.id) ||
+    isDeletedMessageForTopic(topicId, message) ||
     canonicalTopicStateIds.has(topicId)
   )
     return null;

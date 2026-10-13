@@ -1,0 +1,38 @@
+@supports not selector(::-webkit-scrollbar) {
+  .chat-scrollbar {
+    scrollbar-color: var(--primary-color) transparent;
+    scrollbar-width: thin;
+  }
+}
+
+.chat-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  background: transparent;
+}
+
+.chat-scrollbar::-webkit-scrollbar-track,
+.chat-scrollbar::-webkit-scrollbar-track-piece,
+.chat-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.chat-scrollbar::-webkit-scrollbar-button,
+.chat-scrollbar::-webkit-scrollbar-button:single-button,
+.chat-scrollbar::-webkit-scrollbar-button:vertical:decrement,
+.chat-scrollbar::-webkit-scrollbar-button:vertical:increment {
+  display: none !important;
+  min-width: 0 !important;
+  width: 0 !important;
+  max-width: 0 !important;
+  min-height: 0 !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  border: 0 !important;
+  -webkit-appearance: none !important;
+  background: none !important;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--primary-color);
+}

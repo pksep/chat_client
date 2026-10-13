@@ -17,9 +17,21 @@ export type NativeNetworkStatus = {
   upstreamKbps?: number;
 };
 
+export type NativeEndpointProbe = NativeNetworkStatus & {
+  reachable: boolean;
+  httpStatus?: number;
+  durationMs: number;
+  errorClass?: string;
+  errorMessage?: string;
+};
+
 interface TelemetryDevicePlugin {
   getDeviceInfo: () => Promise<TelemetryDeviceInfo>;
   getNetworkStatus: () => Promise<NativeNetworkStatus>;
+  probeHttp: (options: {
+    url: string;
+    timeoutMs?: number;
+  }) => Promise<NativeEndpointProbe>;
   addListener: (
     eventName: 'networkStatusChange',
     listener: (status: NativeNetworkStatus) => void
@@ -137,6 +149,17 @@ export const getNativeNetworkStatus =
 
     return TelemetryDevice.getNetworkStatus();
   };
+
+export const probeNativeEndpoint = async (
+  url: string,
+  timeoutMs = 3500
+): Promise<NativeEndpointProbe | null> => {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') {
+    return null;
+  }
+
+  return TelemetryDevice.probeHttp({ url, timeoutMs });
+};
 
 export const addNativeNetworkStatusListener = async (
   listener: (status: NativeNetworkStatus) => void

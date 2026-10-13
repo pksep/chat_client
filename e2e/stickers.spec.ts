@@ -1,4 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { mockStickerCatalog } from './fixtures/sticker-catalog';
+
+test.beforeEach(async ({ page }) => {
+  await mockStickerCatalog(page);
+});
 
 test('время, статус и реакции стикера выглядят как у одного эмодзи', async ({
   page
@@ -323,7 +328,7 @@ for (const [stickerId, stickerLabel] of [
     });
     await page.route(`**/sep-robots/v1/${stickerId}.webp`, async route => {
       await animationReady;
-      await route.continue();
+      await route.fallback();
     });
     try {
       await page.goto('/e2e/fixtures/stickers.html');
@@ -426,7 +431,8 @@ test('анимация постоянно движется после неско
   const frame = await image.screenshot();
   await expect
     .poll(async () => (await image.screenshot()).equals(frame), {
-      timeout: 2500
+      timeout: 2500,
+      intervals: [70, 110, 170]
     })
     .toBe(false);
   await expect(playback.locator('button, canvas')).toHaveCount(0);

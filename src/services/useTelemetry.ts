@@ -47,13 +47,71 @@ type TelemetryEvent = {
 
 const TELEMETRY_BATCH_SIZE = 20;
 const TELEMETRY_MAX_QUEUE_SIZE = 300;
+const PERSISTED_NETWORK_TELEMETRY_KEY = 'chat.telemetry.network.pending.v1';
+const PERSISTED_NETWORK_TELEMETRY_MAX_SIZE = 180;
 const TELEMETRY_FLUSH_DELAY_MS = 2000;
 const TELEMETRY_RETRY_DELAY_MS = 10000;
 const MAX_STRING_LENGTH = 700;
 const MAX_ARRAY_LENGTH = 30;
 const MAX_DEPTH = 5;
 
-let telemetryQueue: TelemetryEvent[] = [];
+const getPersistedNetworkTelemetry = (): TelemetryEvent[] => {
+  if (typeof localStorage === 'undefined') {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(
+      localStorage.getItem(PERSISTED_NETWORK_TELEMETRY_KEY) || '[]'
+    );
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .filter(
+        (event): event is TelemetryEvent =>
+          !!event &&
+          typeof event === 'object' &&
+          event.category === 'network' &&
+          typeof event.id === 'string' &&
+          typeof event.name === 'string' &&
+          typeof event.occurredAt === 'string'
+      )
+      .slice(-PERSISTED_NETWORK_TELEMETRY_MAX_SIZE);
+  } catch {
+    // Повреждённые данные диагностики не должны мешать запуску чата.
+    return [];
+  }
+};
+
+const persistNetworkTelemetry = (events: TelemetryEvent[]): void => {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+
+  try {
+    const networkEvents = events
+      .filter(event => event.category === 'network')
+      .slice(-PERSISTED_NETWORK_TELEMETRY_MAX_SIZE);
+
+    if (networkEvents.length === 0) {
+      localStorage.removeItem(PERSISTED_NETWORK_TELEMETRY_KEY);
+      return;
+    }
+
+    localStorage.setItem(
+      PERSISTED_NETWORK_TELEMETRY_KEY,
+      JSON.stringify(networkEvents)
+    );
+  } catch {
+    // Хранилище может быть заполнено или недоступно в WebView;
+    // очередь в памяти продолжает работать до завершения приложения.
+  }
+};
+
+let telemetryQueue: TelemetryEvent[] = getPersistedNetworkTelemetry();
 let telemetryFlushTimer: ReturnType<typeof setTimeout> | null = null;
 let isTelemetryFlushInFlight = false;
 
@@ -193,13 +251,13 @@ export const flushTelemetryEvents = async (): Promise<void> => {
   }
 
   const batch = telemetryQueue.slice(0, TELEMETRY_BATCH_SIZE);
-  telemetryQueue = telemetryQueue.slice(batch.length);
   isTelemetryFlushInFlight = true;
 
   try {
     const config = getConfig();
 
     if (!config.CHAT_API_DOMAIN) {
+      scheduleTelemetryFlush(TELEMETRY_RETRY_DELAY_MS);
       return;
     }
 
@@ -215,16 +273,19 @@ export const flushTelemetryEvents = async (): Promise<void> => {
     });
 
     if (response.status === 401 || response.status === 403) {
+      // При недействительной сессии не переносим её диагностику в новую.
+      telemetryQueue = telemetryQueue.slice(batch.length);
+      persistNetworkTelemetry(telemetryQueue);
       return;
     }
 
     if (!response.ok) {
       throw new Error(`Telemetry request failed: ${response.status}`);
     }
+
+    telemetryQueue = telemetryQueue.slice(batch.length);
+    persistNetworkTelemetry(telemetryQueue);
   } catch (error) {
-    telemetryQueue = [...batch, ...telemetryQueue].slice(
-      -TELEMETRY_MAX_QUEUE_SIZE
-    );
     scheduleTelemetryFlush(TELEMETRY_RETRY_DELAY_MS);
   } finally {
     isTelemetryFlushInFlight = false;
@@ -259,7 +320,17 @@ export const recordTelemetryEvent = (input: TelemetryEventInput): void => {
     }
   };
 
+  const evictedEvent =
+    telemetryQueue.length >= TELEMETRY_MAX_QUEUE_SIZE
+      ? telemetryQueue[0]
+      : undefined;
   telemetryQueue = [...telemetryQueue, event].slice(-TELEMETRY_MAX_QUEUE_SIZE);
+
+  // Между запусками сохраняем только диагностику сети. Остальные события
+  // обновляют хранилище, только если вытесняют сетевое событие из очереди.
+  if (event.category === 'network' || evictedEvent?.category === 'network') {
+    persistNetworkTelemetry(telemetryQueue);
+  }
   scheduleTelemetryFlush(
     input.level === 'error' ? 0 : TELEMETRY_FLUSH_DELAY_MS
   );

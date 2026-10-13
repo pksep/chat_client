@@ -34,6 +34,7 @@
         <div
           v-for="(media, i) in docFiles"
           :key="media.id"
+          :data-message-media-id="media.id"
           class="message-content"
           :data-testid="`${props.dataTestid}-Content`"
         >
