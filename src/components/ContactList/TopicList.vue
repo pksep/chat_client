@@ -113,7 +113,9 @@
             :data-testid="`${props.dataTestid}-ContactList-AvatarUnread${index + 1}`"
             aria-hidden="true"
           >
-            {{ getTopicUnreadBadgeCount(topic, authedUser?.id) }}
+            {{
+              unreadBadgeLabel(getTopicUnreadBadgeCount(topic, authedUser?.id))
+            }}
           </span>
         </span>
         <TopicListItemContent
@@ -380,6 +382,7 @@
 </template>
 
 <script setup lang="ts">
+import { unreadBadgeLabel } from '../../utils/unread-badge-label';
 import { vMenuListPress } from '../../directives/menu-list-press';
 import SkeletonBlock from '../UI/SkeletonBlock.vue';
 import {

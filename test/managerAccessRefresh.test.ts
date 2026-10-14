@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import * as vue from 'vue';
 import ts from 'typescript';
 import type { ManagerInquiry } from '../src/composables/useManagerInquiries';
+import * as inquiryVisibility from '../src/utils/inquiry-message-visibility';
 
 interface ManagerState {
   allowed: vue.ComputedRef<boolean>;
@@ -51,6 +52,7 @@ function fixture(): {
   const exported: ManagerModule = {} as ManagerModule;
   const dependencies: Record<string, object> = {
     vue,
+    '../utils/inquiry-message-visibility': inquiryVisibility,
     './useAuth': {
       authedUser: user,
       getStoredChatAccessToken: (): string => token,

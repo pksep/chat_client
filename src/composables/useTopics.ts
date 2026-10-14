@@ -59,6 +59,7 @@ import {
   resolveTopicLastMessage
 } from '../utils/topic-last-message';
 import { compactPersonName } from '../utils/personName';
+import { hasInquiryTopicMarker } from '../utils/inquiry-message-visibility';
 import {
   applyTopicPinSetting,
   sortTopicsByPinOrder
@@ -262,7 +263,9 @@ const createTopicsApi = () => {
     topic: ITopic,
     lastMessage?: Message
   ): Message | undefined => {
-    const favoriteTopic = isFavoriteTopic(topic, authedUser.value?.id);
+    const favoriteTopic =
+      isFavoriteTopic(topic, authedUser.value?.id) ||
+      hasInquiryTopicMarker(topic);
     const localMessages = getFullMessagesByTopicId(topic.id);
     const localLastMessage = favoriteTopic
       ? [...localMessages].reverse().find(message => !message.isSystem)
@@ -279,7 +282,8 @@ const createTopicsApi = () => {
   const getLocalLastMessage = (topic: ITopic): Message | undefined => {
     const localMessages = getFullMessagesByTopicId(topic.id);
 
-    return isFavoriteTopic(topic, authedUser.value?.id)
+    return isFavoriteTopic(topic, authedUser.value?.id) ||
+      hasInquiryTopicMarker(topic)
       ? [...localMessages].reverse().find(message => !message.isSystem)
       : localMessages.at(-1);
   };
