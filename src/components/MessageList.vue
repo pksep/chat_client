@@ -142,6 +142,7 @@
       @set-forward-message="handleSetForwardMessage"
       @retry-message="handleRetryMessage"
       @scroll-to-message="handleScrollToMessage"
+      @open-sticker-pack="messageListInputRef?.openStickerPack?.($event)"
       @content-ready="handleUserMessagesContentReady"
     >
       <template

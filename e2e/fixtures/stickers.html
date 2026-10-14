@@ -8,11 +8,70 @@
   <body>
     <div id="app"></div>
     <script type="module">
-      import { createApp } from 'vue';
+      import { createApp, h } from 'vue';
+      import { createPinia } from 'pinia';
       import StickersHarness from './StickersHarness.vue';
+      import { getAuthUser, setAuthUser } from '../../src/composables/useAuth';
+      import { hiddenStickerPacks } from '../../src/services/sticker-preferences';
+      import { createStickerMessage } from '../../src/utils/stickers';
+      import TopicContent from '../../src/components/ContactList/TopicListItemContent.vue';
       import '@pksep/yui/styles';
       import '../../src/assets/message-bubble.css';
-      createApp(StickersHarness).mount('#app');
+      const stickerApp = createApp(StickersHarness);
+      stickerApp.mount('#app');
+      window.stickerFixture = {
+        unmount() {
+          stickerApp.unmount();
+        },
+        getStickerMessage: createStickerMessage,
+        mountTopicPreviews(stickers) {
+          const target = document.createElement('div');
+          target.id = 'sticker-topic-previews';
+          document.body.append(target);
+          const app = createApp({
+            render: () =>
+              h(
+                'div',
+                stickers.map((sticker, index) =>
+                  h(TopicContent, {
+                    topic: {
+                      id: `preview-${index}`,
+                      type: 'DM',
+                      name: 'Тестовый чат',
+                      lastMessage: {
+                        id: `message-${index}`,
+                        text: `Стикер: Набор ${index + 1}`,
+                        ex: JSON.stringify({
+                          kind: 'sticker',
+                          sticker: {
+                            id: sticker.id,
+                            pack: sticker.pack,
+                            version: sticker.version,
+                            asset: sticker
+                          }
+                        })
+                      }
+                    },
+                    index
+                  })
+                )
+              )
+          });
+          app.use(createPinia());
+          app.directive('emoji', {});
+          app.mount(target);
+        },
+        hidePacks(ids) {
+          setAuthUser({
+            id: 'sticker-click-test',
+            ...getAuthUser(),
+            ex: { hiddenStickerPacks: ids }
+          });
+        },
+        getHiddenPacks() {
+          return hiddenStickerPacks.value;
+        }
+      };
     </script>
   </body>
 </html>

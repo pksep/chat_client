@@ -20,10 +20,23 @@
         :is-dialog="true"
         time="12:30"
         data-testid="StickerMessage"
+        @open-sticker-pack="openStickerPack"
       />
     </div>
     <div ref="editorHost" class="fixture-editor">
+      <MessageListInput
+        v-if="composer"
+        ref="composerRef"
+        v-model="draft"
+        :topic-id="offlineTopicId"
+        :edit-message="null"
+        :reply-message="null"
+        :forward-messages="[]"
+        data-testid="StickerComposer"
+        @send-sticker="sendSticker"
+      />
       <ContentEditor
+        v-else
         v-model="draft"
         :stickers="catalog ? [] : chatStickers"
         @unmount-sticker="sendSticker"
@@ -31,7 +44,8 @@
     </div>
     <output data-testid="Draft">{{ draft }}</output>
     <ChatStickerPicker
-      v-if="catalog"
+      v-if="catalog && !composer"
+      ref="stickerPickerRef"
       :host="editorHost"
       :enabled="true"
       @select="sendSticker"
@@ -43,6 +57,7 @@
 import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue';
 import { ContentEditor } from '@pksep/yui';
 import MessageBubble from '../../src/components/Messages/MessageBubble.vue';
+import MessageListInput from '../../src/components/Messages/MessageListInput.vue';
 import { chatStickers, createStickerMessage } from '../../src/utils/stickers';
 import { setConfig } from '../../src/services/useConfig';
 import { MessageStatus } from '../../src/services/useChatSDK/types';
@@ -50,6 +65,7 @@ import { useMessageSender } from '../../src/components/Messages/composables/useM
 import { getFullMessagesByTopicId } from '../../src/services/useMessages';
 import { bindKeyboardMedia } from '../../src/services/useKeyboardMedia';
 import ChatStickerPicker from '../../src/components/Messages/ChatStickerPicker.vue';
+import { loadStickerPage } from '../../src/services/sticker-catalog';
 import type { IMedia } from '../../src/components/interfaces/interfaces';
 
 const draft = ref('<p>Несохранённый черновик</p>');
@@ -58,6 +74,11 @@ const messages = ref<
 >([]);
 const offline = new URLSearchParams(window.location.search).has('offline');
 const catalog = new URLSearchParams(window.location.search).has('catalog');
+const composer = new URLSearchParams(window.location.search).has('composer');
+const composerRef = ref<InstanceType<typeof MessageListInput> | null>(null);
+const initialPack = new URLSearchParams(window.location.search).get(
+  'message-pack'
+);
 const stickerApi = new URLSearchParams(window.location.search).get(
   'sticker-api'
 );
@@ -67,7 +88,14 @@ const offlineTopicId = 'd9fe27c7-0bb1-48c3-b00d-1120524bb070';
 let offlineSend: ((id: string) => Promise<void>) | undefined;
 let keyboardSend: ((file: File) => Promise<void>) | undefined;
 const editorHost = ref<HTMLElement | null>(null);
+const stickerPickerRef = ref<InstanceType<typeof ChatStickerPicker> | null>(
+  null
+);
 let unbindKeyboard: (() => void) | null = null;
+const openStickerPack = (pack: string) => {
+  if (composer) return composerRef.value?.openStickerPack(pack);
+  return stickerPickerRef.value?.openPack(pack);
+};
 if (offline) {
   const sender = useMessageSender(
     ref({ id: offlineTopicId, type: 'favorites' }),
@@ -105,6 +133,10 @@ onMounted(async () => {
       void keyboardSend?.(file);
     }
   });
+  if (catalog && initialPack) {
+    const page = await loadStickerPage(initialPack, '');
+    if (page.items[0]) sendSticker(page.items[0].id);
+  }
 });
 onBeforeUnmount(() => unbindKeyboard?.());
 const setTheme = (theme: string) =>

@@ -121,7 +121,14 @@ test('вкладка доступна всегда, категории прих�
     const picker = page.getByRole('region', { name: 'Каталог стикеров' });
     await expect(
       picker.locator('.chat-sticker-picker__packs button')
-    ).toHaveText(['Недавние', 'Серверные коты', 'Серверная рыба']);
+    ).toHaveCount(3);
+    expect(
+      await picker
+        .locator('.chat-sticker-picker__packs button')
+        .evaluateAll(buttons =>
+          buttons.map(button => button.getAttribute('aria-label'))
+        )
+    ).toEqual(['Недавние', 'Серверные коты', 'Серверная рыба']);
     await expect(picker.locator('.chat-sticker-picker__item')).toHaveCount(1);
     await expect
       .poll(() =>

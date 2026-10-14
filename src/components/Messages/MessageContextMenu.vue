@@ -441,6 +441,7 @@ import {
   createChatClipboardContent,
   writeChatClipboardContent,
   canCopyChatMedia,
+  usesNativeChatMediaClipboard,
   type PreparedChatClipboardMedia
 } from '../../utils/chat-clipboard';
 import { prepareChatClipboardMedia } from '../../services/chat-clipboard-media';
@@ -578,6 +579,13 @@ watch(
     if (!opened || !content || content.kind === 'sticker') return;
     const media = messageSticker.value ? props.media?.[0] : contextMedia.value;
     if (!media || !canCopyChatMedia(media)) return;
+    if (usesNativeChatMediaClipboard()) {
+      // Android copies a reference through the native clipboard. Downloading
+      // the complete media here is both unnecessary and caused false failures
+      // in WebView before the user could press "Copy".
+      copyPreparation.value = Promise.resolve({ original: new Blob() });
+      return;
+    }
     const controller = new AbortController();
     onCleanup(() => controller.abort());
     const preparation = prepareChatClipboardMedia(content, controller.signal);

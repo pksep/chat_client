@@ -16,6 +16,8 @@ import type {
   IUser
 } from '../components/interfaces/interfaces';
 import { stripHtml } from '../utils/stripHtml';
+import { getStickerMessagePreview } from '../utils/stickers';
+import { ensureStickerMessageMetadata } from './sticker-catalog';
 
 type TauriNotificationExtra = Record<string, unknown> & {
   callerId?: string | null;
@@ -151,6 +153,8 @@ const getSenderTitle = (sender?: IUser | null): string =>
   sender?.initials || 'New message';
 
 const getMessagePreview = (message: IMessage): string => {
+  const sticker = getStickerMessagePreview(message.ex, message.text);
+  if (sticker) return sticker;
   const text = stripHtml(message.text || '');
 
   if (text) {
@@ -304,6 +308,9 @@ export const showTauriMessageNotification = async ({
   if (!message.topicId) {
     return false;
   }
+
+  if (!isTauriRuntime()) return false;
+  await ensureStickerMessageMetadata(message.ex);
 
   const resolvedTopicType = normalizeTopicType(topic?.type);
   const isGroupTopic = resolvedTopicType === 'GROUP';

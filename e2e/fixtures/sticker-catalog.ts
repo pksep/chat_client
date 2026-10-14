@@ -107,7 +107,13 @@ export async function mockStickerCatalog(page: Page) {
     count: Number(count),
     format: format as CatalogSticker['format'],
     previewPath: `objects/${'a'.repeat(64)}.png`,
-    messagePreviewPath: `objects/${'b'.repeat(64)}.png`
+    messagePreviewPath: `objects/${'b'.repeat(64)}.png`,
+    thumbnail: {
+      path: `objects/${(90000 + Number(count)).toString(16).padStart(64, '0')}.${format === 'tgs' ? 'tgs' : format === 'webm' ? 'webm' : 'webp'}`,
+      format: format as CatalogSticker['format'],
+      width: 512,
+      height: 512
+    }
   }));
   const items = packs.flatMap((pack, packIndex) =>
     Array.from({ length: pack.count }, (_, index) =>
@@ -135,8 +141,14 @@ export async function mockStickerCatalog(page: Page) {
         recorder.onstop = () => resolve();
       });
       recorder.start();
+      let frame = 0;
+      const animation = setInterval(() => {
+        context.fillStyle = frame++ % 2 ? '#ed5465' : '#4a80dd';
+        context.fillRect(0, 0, 32, 32);
+      }, 33);
       await new Promise(resolve => setTimeout(resolve, 250));
       recorder.stop();
+      clearInterval(animation);
       await stopped;
       stream.getTracks().forEach(track => track.stop());
       return Array.from(new Uint8Array(await new Blob(chunks).arrayBuffer()));

@@ -420,7 +420,7 @@ test('анимация постоянно движется после неско
     .locator('.message-sticker__image');
   const image = playback.locator('.message-sticker__animation');
   await expect(image).toHaveClass(/--loaded/);
-  await expect(playback).toHaveCSS('cursor', 'default');
+  await expect(playback).toHaveCSS('cursor', 'pointer');
   const source = await image.getAttribute('src');
   await playback.click();
   expect(await image.getAttribute('src')).toBe(source);
@@ -436,7 +436,7 @@ test('анимация постоянно движется после неско
     })
     .toBe(false);
   await expect(playback.locator('button, canvas')).toHaveCount(0);
-  await expect(playback).toHaveCSS('cursor', 'default');
+  await expect(playback).toHaveCSS('cursor', 'pointer');
   await expect(page.locator('dialog:visible')).toHaveCount(0);
   await expect(page.getByTestId('SendCount')).toHaveText('Отправлено: 1');
 });

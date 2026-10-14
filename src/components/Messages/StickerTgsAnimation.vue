@@ -12,7 +12,10 @@ import { onBeforeUnmount, ref, watch } from 'vue';
 import type { AnimationItem } from 'lottie-web';
 import { loadTgsAnimation, loadTgsPlayer } from '../../utils/tgs-animation';
 
-const props = defineProps<{ src: string; label: string }>();
+const props = withDefaults(
+  defineProps<{ src: string; label: string; playing?: boolean }>(),
+  { playing: true }
+);
 const emit = defineEmits<{ load: []; error: [] }>();
 const host = ref<HTMLElement | null>(null);
 let animation: AnimationItem | undefined;
@@ -34,18 +37,26 @@ watch(
         container: element,
         renderer: 'svg',
         loop: true,
-        autoplay: true,
+        autoplay: props.playing,
         animationData,
         rendererSettings: {
           preserveAspectRatio: 'xMidYMid meet',
           progressiveLoad: false
         }
       });
+      animation.setSubframe(false);
       let ready = false;
-      animation.addEventListener('drawnFrame', () => {
+      const handleReady = () => {
         if (ready || current !== revision) return;
         ready = true;
         emit('load');
+      };
+      animation.addEventListener('drawnFrame', handleReady);
+      animation.addEventListener('DOMLoaded', () => {
+        if (!props.playing && current === revision) {
+          animation?.goToAndStop(0, true);
+          handleReady();
+        }
       });
       animation.addEventListener('data_failed', () => emit('error'));
       animation.addEventListener('error', () => emit('error'));
@@ -54,6 +65,13 @@ watch(
     }
   },
   { flush: 'post' }
+);
+watch(
+  () => props.playing,
+  playing => {
+    if (playing) animation?.play();
+    else animation?.pause();
+  }
 );
 onBeforeUnmount(() => {
   revision += 1;

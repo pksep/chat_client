@@ -1,39 +1,47 @@
 <template>
-  <Teleport v-if="enabled && groupsTarget" :to="groupsTarget">
-    <button
-      type="button"
-      class="sticker-picker__tab"
-      aria-label="Стикеры"
-      title="Стикеры"
-      :aria-pressed="active"
+  <Teleport
+    v-if="enabled"
+    :to="headerTarget || 'body'"
+    :disabled="!headerTarget"
+  >
+    <div
+      v-show="!!headerTarget"
+      ref="modeControl"
+      class="chat-sticker-picker__mode"
+      role="group"
+      aria-label="Выбор эмодзи или стикеров"
       @click.stop
+      @pointerdown.stop
+      @keydown="handleModeKey"
     >
-      <svg
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M19.5 13.5V7a3.5 3.5 0 0 0-3.5-3.5H8A3.5 3.5 0 0 0 4.5 7v10A3.5 3.5 0 0 0 8 20.5h4.5m7-7-7 7m7-7H16a3.5 3.5 0 0 0-3.5 3.5v3.5"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linejoin="round"
-        />
-      </svg>
-    </button>
+      <Switch
+        :items="modeItems"
+        :default-value="active ? 'stickers' : 'emoji'"
+        theme="minor"
+        data-testid="StickerPickerMode"
+        @change="chooseMode($event.value)"
+      />
+    </div>
   </Teleport>
-  <Teleport v-if="active && bodyTarget" :to="bodyTarget">
+  <Teleport
+    v-if="enabled && prepared"
+    :to="bodyTarget || 'body'"
+    :disabled="!bodyTarget"
+  >
     <section
       ref="scroller"
       class="chat-sticker-picker chat-scrollbar"
+      :class="{ 'chat-sticker-picker--preparing': !active }"
+      :aria-hidden="!active"
+      :inert="!active"
       aria-label="Каталог стикеров"
       @scroll.passive="handleScroll"
     >
       <div
         v-if="enabledPacks.length"
+        ref="packRail"
         class="chat-sticker-picker__packs"
+        :style="packRailStyle"
         :class="{ 'chat-sticker-picker__packs--dragging': isPackDragging }"
         aria-label="Наборы стикеров"
         @wheel="handlePacksWheel"
@@ -47,30 +55,36 @@
         <button
           type="button"
           :aria-pressed="selectedPack === 'recent'"
+          aria-label="Недавние"
+          title="Недавние"
+          class="chat-sticker-picker__recent"
           @click.stop="choosePack('recent')"
         >
-          Недавние
+          <img
+            :src="recentIconSrc"
+            alt=""
+            width="30"
+            height="30"
+            draggable="false"
+          />
         </button>
         <button
           v-for="pack in enabledPacks"
           :key="pack.id"
           type="button"
           :aria-pressed="selectedPack === pack.id"
+          :aria-label="pack.label"
+          :title="pack.label"
           @click.stop="choosePack(pack.id)"
         >
-          <img
+          <StickerPackImage
             class="chat-sticker-picker__pack-preview"
-            :src="
-              buildStickerAssetUrl(previewPaths[pack.id] || pack.previewPath)
-            "
-            alt=""
-            width="16"
-            height="16"
-            draggable="false"
-            decoding="async"
+            :thumbnail="pack.thumbnail"
+            :preview-path="previewPaths[pack.id] || pack.previewPath"
+            :label="pack.label"
+            :playing="active"
             @error="useFallbackPreview(pack)"
           />
-          <span>{{ pack.label }}</span>
         </button>
       </div>
       <p v-if="error" class="chat-sticker-picker__state" role="alert">
@@ -81,7 +95,7 @@
         v-else
         class="chat-sticker-picker__grid"
         :style="{
-          height: `${Math.ceil(items.length / columns) * rowHeight}px`
+          height: `${gridHeight}px`
         }"
       >
         <button
@@ -94,14 +108,23 @@
           :data-sticker-id="sticker.id"
           :style="{
             top: `${Math.floor(index / columns) * rowHeight}px`,
-            left: `${(index % columns) * columnWidth + (columnWidth - 60) / 2}px`
+            left: `${(index % columns) * columnWidth + (columnWidth - itemSize) / 2}px`,
+            width: `${itemSize}px`,
+            height: `${itemSize}px`,
+            '--sticker-display-size': `${itemSize}px`
           }"
-          @click.stop="select(sticker)"
+          @pointerdown="startStickerHold($event, sticker)"
+          @contextmenu.prevent.stop
+          @click.stop="select(sticker, $event)"
         >
-          <StickerPickerImage :sticker="sticker" :animate="animate" />
+          <StickerPickerImage :sticker="sticker" :animate="animate" preload />
         </button>
       </div>
-      <p v-if="loading" class="chat-sticker-picker__state" role="status">
+      <p
+        v-if="loading && !items.length"
+        class="chat-sticker-picker__state"
+        role="status"
+      >
         Загрузка стикеров…
       </p>
       <p v-else-if="!items.length && !error" class="chat-sticker-picker__state">
@@ -115,6 +138,11 @@
       </p>
     </section>
   </Teleport>
+  <StickerPreview
+    v-if="previewSticker"
+    :sticker="previewSticker"
+    @close="closeStickerPreview"
+  />
 </template>
 
 <script setup lang="ts">
@@ -126,6 +154,7 @@ import {
   shallowRef,
   watch
 } from 'vue';
+import { Switch } from '@pksep/yui';
 import {
   loadStickerPacks,
   loadStickerPage,
@@ -134,25 +163,48 @@ import {
   type StickerPack
 } from '../../services/sticker-catalog';
 import StickerPickerImage from './StickerPickerImage.vue';
+import StickerPackImage from './StickerPackImage.vue';
+import StickerPreview from './StickerPreview.vue';
+import {
+  BackButtonPriority,
+  useBackButtonHandler
+} from '../../composables/useBackButton';
 import '../../assets/chat-scrollbar.css';
 import type { CatalogSticker } from '../../utils/stickers';
-import { hiddenStickerPacks } from '../../services/sticker-preferences';
 import {
-  buildStickerAssetUrl,
-  getStickerApiBaseUrl
-} from '../../utils/sticker-assets';
+  hiddenStickerPacks,
+  orderStickerPacks
+} from '../../services/sticker-preferences';
+import { getStickerApiBaseUrl } from '../../utils/sticker-assets';
 
 // Адаптер сохраняет пикер и иконку публичной UI 0.1.332, заменяя только сетку стикеров.
 const props = defineProps<{ host: HTMLElement | null; enabled: boolean }>();
 const emit = defineEmits<{ select: [id: string] }>();
 const active = ref(false);
+const prepared = ref(false);
 const bodyTarget = shallowRef<HTMLElement | null>(null);
-const groupsTarget = shallowRef<HTMLElement | null>(null);
+const headerTarget = shallowRef<HTMLElement | null>(null);
+const modeControl = ref<HTMLElement | null>(null);
+const packRail = ref<HTMLElement | null>(null);
+const packRailStyle = ref<Record<string, string>>({});
+const recentIconSrc = ref('');
+const modeItems = [
+  { label: 'Эмодзи', value: 'emoji' },
+  { label: 'Стикеры', value: 'stickers' }
+];
 const scroller = ref<HTMLElement | null>(null);
 const packs = ref<StickerPack[]>([]);
 const previewPaths = ref<Record<string, string>>({});
+const messagePack = ref('');
 const enabledPacks = computed(() =>
-  packs.value.filter(pack => !hiddenStickerPacks.value.includes(pack.id))
+  orderStickerPacks(packs.value).filter(
+    pack =>
+      !hiddenStickerPacks.value.includes(pack.id) ||
+      pack.id === messagePack.value
+  )
+);
+const excludedPacks = computed(() =>
+  hiddenStickerPacks.value.filter(pack => pack !== messagePack.value)
 );
 const selectedPack = ref('');
 const query = ref('');
@@ -163,25 +215,48 @@ const nextCursor = ref<string | null>(null);
 const scrollTop = ref(0);
 const viewportHeight = ref(300);
 const viewportWidth = ref(320);
-const rowHeight = 70;
 const columns = computed(() =>
   Math.max(1, Math.min(5, Math.floor(viewportWidth.value / 60)))
 );
 const columnWidth = computed(() => viewportWidth.value / columns.value);
+const rows = computed(() => Math.ceil(items.value.length / columns.value));
+// Маленький набор помещается целиком; у последнего ряда нет лишнего нижнего отступа.
+const compact = computed(() => items.value.length <= 15 && !nextCursor.value);
+const itemSize = computed(() =>
+  Math.max(
+    1,
+    Math.min(
+      60,
+      columnWidth.value,
+      compact.value && rows.value
+        ? Math.floor(viewportHeight.value / rows.value)
+        : 60
+    )
+  )
+);
+const rowHeight = computed(() =>
+  compact.value && rows.value > 1
+    ? Math.min(70, (viewportHeight.value - itemSize.value) / (rows.value - 1))
+    : 70
+);
+const gridHeight = computed(() =>
+  rows.value ? (rows.value - 1) * rowHeight.value + itemSize.value : 0
+);
 const visibleItems = computed(() => {
   const first =
-    Math.max(0, Math.floor(Math.max(0, scrollTop.value - 44) / rowHeight) - 2) *
+    Math.max(0, Math.floor(scrollTop.value / rowHeight.value) - 2) *
     columns.value;
   const count =
-    (Math.ceil(viewportHeight.value / rowHeight) + 5) * columns.value;
+    (Math.ceil(viewportHeight.value / rowHeight.value) + 5) * columns.value;
   return items.value.slice(first, first + count).map((sticker, offset) => {
     const index = first + offset;
-    const top = 44 + Math.floor(index / columns.value) * rowHeight;
+    const top = Math.floor(index / columns.value) * rowHeight.value;
     return {
       sticker,
       index,
       animate:
-        top + 60 > scrollTop.value &&
+        active.value &&
+        top + itemSize.value > scrollTop.value &&
         top < scrollTop.value + viewportHeight.value
     };
   });
@@ -191,8 +266,95 @@ let abort: AbortController | null = null;
 let requestId = 0;
 let observer: MutationObserver | null = null;
 let resizeObserver: ResizeObserver | null = null;
+let packResizeObserver: ResizeObserver | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let refreshPacks = true;
+let loadedPageKey = '';
+let loadedPageTotal = 0;
+let pendingPack = '';
+let pickerWasOpen = false;
+const previewSticker = shallowRef<CatalogSticker | null>(null);
+let holdTimer: ReturnType<typeof setTimeout> | undefined;
+let suppressStickerClick = false;
+let stickerHold: {
+  pointerId: number;
+  x: number;
+  y: number;
+  target: HTMLElement;
+} | null = null;
+const closeStickerPreview = () => {
+  clearTimeout(holdTimer);
+  const previous = stickerHold;
+  stickerHold = null;
+  if (previewSticker.value) suppressStickerClick = true;
+  previewSticker.value = null;
+  if (previous?.target.hasPointerCapture(previous.pointerId))
+    previous.target.releasePointerCapture(previous.pointerId);
+  document.removeEventListener('pointermove', moveStickerHold, true);
+  document.removeEventListener('pointerup', endStickerHold, true);
+  document.removeEventListener('pointercancel', endStickerHold, true);
+  document.removeEventListener('keydown', handlePreviewKey, true);
+  window.removeEventListener('blur', closeStickerPreview);
+};
+const handlePreviewKey = (event: KeyboardEvent) => {
+  if (!previewSticker.value || event.key !== 'Escape') return;
+  event.preventDefault();
+  event.stopPropagation();
+  closeStickerPreview();
+};
+const moveStickerHold = (event: PointerEvent) => {
+  if (!stickerHold || event.pointerId !== stickerHold.pointerId) return;
+  if (previewSticker.value) {
+    event.preventDefault();
+    event.stopPropagation();
+  } else if (
+    Math.hypot(event.clientX - stickerHold.x, event.clientY - stickerHold.y) > 8
+  )
+    closeStickerPreview();
+};
+const endStickerHold = (event: PointerEvent) => {
+  if (!stickerHold || event.pointerId !== stickerHold.pointerId) return;
+  if (previewSticker.value) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  closeStickerPreview();
+};
+const startStickerHold = (event: PointerEvent, sticker: CatalogSticker) => {
+  if (
+    !event.isPrimary ||
+    event.button !== 0 ||
+    !(event.currentTarget instanceof HTMLElement)
+  )
+    return;
+  // Не передаём удержание внешней кнопке эмодзи: она вызывает фокус редактора.
+  event.stopPropagation();
+  event.preventDefault();
+  closeStickerPreview();
+  suppressStickerClick = false;
+  stickerHold = {
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    target: event.currentTarget
+  };
+  document.addEventListener('pointermove', moveStickerHold, true);
+  document.addEventListener('pointerup', endStickerHold, true);
+  document.addEventListener('pointercancel', endStickerHold, true);
+  document.addEventListener('keydown', handlePreviewKey, true);
+  window.addEventListener('blur', closeStickerPreview);
+  holdTimer = setTimeout(() => {
+    if (!stickerHold || !active.value || !stickerHold.target.isConnected)
+      return;
+    previewSticker.value = sticker;
+    stickerHold.target.setPointerCapture(stickerHold.pointerId);
+  }, 400);
+};
+useBackButtonHandler(
+  () => !!previewSticker.value,
+  closeStickerPreview,
+  BackButtonPriority.overlay
+);
 const isPackDragging = ref(false);
 let suppressPackClick = false;
 let packDrag: {
@@ -288,44 +450,104 @@ const loadFirstPage = async () => {
   abort = new AbortController();
   const signal = abort.signal;
   error.value = '';
-  items.value = [];
-  nextCursor.value = null;
-  scrollTop.value = 0;
-  if (scroller.value) scroller.value.scrollTop = 0;
+  const pageKey = () =>
+    JSON.stringify([
+      getStickerApiBaseUrl(),
+      selectedPack.value,
+      query.value,
+      excludedPacks.value
+    ]);
+  if (loadedPageKey !== pageKey()) {
+    items.value = [];
+    nextCursor.value = null;
+    scrollTop.value = 0;
+    if (scroller.value) scroller.value.scrollTop = 0;
+  }
   loading.value = true;
   try {
-    if (refreshPacks || !packs.value.length) {
-      packs.value = [];
-      previewPaths.value = {};
-      const result = await loadStickerPacks(signal);
-      if (id !== requestId) return;
-      packs.value = result.packs.filter(pack => pack.count > 0);
-      refreshPacks = false;
-    }
+    const refreshing = refreshPacks || !packs.value.length;
+    const refresh = refreshing
+      ? loadStickerPacks(signal)
+          .then(result => {
+            if (id !== requestId) return;
+            packs.value = result.packs.filter(pack => pack.count > 0);
+            refreshPacks = false;
+            return result;
+          })
+          .catch(reason => {
+            if (id === requestId && !signal.aborted && !packs.value.length)
+              error.value =
+                reason instanceof Error
+                  ? reason.message
+                  : 'Не удалось загрузить стикеры';
+            return undefined;
+          })
+      : undefined;
+    // Обновление каталога не убирает уже готовые обложки и кадры.
+    if (!packs.value.length) await refresh;
+    if (id !== requestId) return;
     if (!enabledPacks.value.length) return;
     if (
       selectedPack.value !== 'recent' &&
       !enabledPacks.value.some(pack => pack.id === selectedPack.value)
     )
       selectedPack.value = enabledPacks.value[0]?.id || 'recent';
-    const page =
+    const key = pageKey();
+    if (loadedPageKey !== key) {
+      items.value = [];
+      nextCursor.value = null;
+    }
+    const pageRequest =
       selectedPack.value === 'recent' && !query.value
-        ? {
-            items: (await loadRecentStickers(signal)).filter(
-              sticker => !hiddenStickerPacks.value.includes(sticker.pack)
+        ? loadRecentStickers(signal).then(recent => ({
+            items: recent.filter(
+              sticker => !excludedPacks.value.includes(sticker.pack)
             ),
-            nextCursor: null
-          }
-        : await loadStickerPage(
+            nextCursor: null,
+            total: recent.length,
+            revision: undefined
+          }))
+        : loadStickerPage(
             query.value ? '' : selectedPack.value,
             query.value,
             undefined,
             signal,
-            hiddenStickerPacks.value
+            excludedPacks.value
           );
+    const page = await pageRequest;
     if (id !== requestId) return;
-    items.value = page.items;
-    nextCursor.value = page.nextCursor;
+    const unchanged =
+      loadedPageKey === key &&
+      loadedPageTotal === page.total &&
+      page.items.every((sticker, index) => {
+        const previous = items.value[index];
+        return (
+          previous?.id === sticker.id &&
+          previous.version === sticker.version &&
+          previous.path === sticker.path
+        );
+      });
+    if (!unchanged || items.value.length <= page.items.length) {
+      items.value = page.items;
+      nextCursor.value = page.nextCursor;
+      if (!unchanged && scrollTop.value > gridHeight.value) {
+        scrollTop.value = 0;
+        if (scroller.value) scroller.value.scrollTop = 0;
+      }
+    }
+    loadedPageKey = key;
+    loadedPageTotal = page.total;
+    void refresh?.then(catalog => {
+      if (id !== requestId || signal.aborted || !catalog) return;
+      if (
+        (catalog.revision &&
+          page.revision &&
+          catalog.revision !== page.revision) ||
+        (selectedPack.value !== 'recent' &&
+          !enabledPacks.value.some(pack => pack.id === selectedPack.value))
+      )
+        void loadFirstPage();
+    });
   } catch (reason) {
     if (id === requestId && !signal.aborted)
       error.value =
@@ -348,7 +570,7 @@ const loadNextPage = async () => {
       query.value,
       nextCursor.value,
       signal,
-      hiddenStickerPacks.value
+      excludedPacks.value
     );
     if (id !== requestId) return;
     items.value = [...items.value, ...page.items];
@@ -364,6 +586,7 @@ const loadNextPage = async () => {
   }
 };
 const handleScroll = () => {
+  if (!previewSticker.value) closeStickerPreview();
   if (!scroller.value) return;
   scrollTop.value = scroller.value.scrollTop;
   if (
@@ -375,6 +598,8 @@ const handleScroll = () => {
     void loadNextPage();
 };
 const choosePack = (pack: string) => {
+  closeStickerPreview();
+  if (pack !== messagePack.value) messagePack.value = '';
   selectedPack.value = pack;
   query.value = '';
   const search = wrapper?.querySelector<HTMLInputElement>('.v3-search input');
@@ -385,19 +610,22 @@ const choosePack = (pack: string) => {
   clearTimeout(timer);
   void loadFirstPage();
 };
-const select = (sticker: CatalogSticker) => {
+const select = (sticker: CatalogSticker, event: MouseEvent) => {
+  if (previewSticker.value || (suppressStickerClick && event.detail !== 0)) {
+    suppressStickerClick = false;
+    return;
+  }
   rememberSticker(sticker);
   emit('select', sticker.id);
   wrapper?.closest<HTMLButtonElement>('.smile-button')?.click();
 };
 const deactivate = () => {
+  closeStickerPreview();
+  messagePack.value = '';
   resetPackDrag();
   suppressPackClick = false;
   active.value = false;
   wrapper?.classList.remove('chat-stickers--active');
-  abort?.abort();
-  requestId += 1;
-  loading.value = false;
   clearTimeout(timer);
 };
 // Пикер вложен в кнопку UI: пробел и Enter не должны активировать её.
@@ -422,9 +650,6 @@ const handleSearchPointerDown = (event: PointerEvent) => {
   }
 };
 const detachWrapper = () => {
-  packs.value = [];
-  previewPaths.value = {};
-  items.value = [];
   wrapper?.classList.remove(
     'chat-stickers--active',
     'chat-stickers--available'
@@ -434,7 +659,7 @@ const detachWrapper = () => {
   wrapper?.removeEventListener('pointerdown', handleSearchPointerDown, true);
   wrapper = null;
   bodyTarget.value = null;
-  groupsTarget.value = null;
+  headerTarget.value = null;
 };
 const syncWrapper = () => {
   const open = props.enabled
@@ -443,7 +668,9 @@ const syncWrapper = () => {
           [])
       ].find(element => element.getClientRects().length > 0) || null
     : null;
-  if (!open && active.value) deactivate();
+  if (!open && pickerWasOpen) pendingPack = '';
+  pickerWasOpen = !!open;
+  if (!open && active.value && !pendingPack) deactivate();
   const target =
     open ||
     (props.enabled &&
@@ -453,32 +680,87 @@ const syncWrapper = () => {
       ? wrapper
       : null);
   if (wrapper !== target) {
-    deactivate();
+    if (!pendingPack) deactivate();
     detachWrapper();
     wrapper = target;
-    selectedPack.value = '';
     refreshPacks = true;
-    wrapper?.classList.add('chat-stickers--available');
     wrapper?.addEventListener('keydown', handlePickerKey);
     wrapper?.addEventListener('keyup', handlePickerKey);
     wrapper?.addEventListener('pointerdown', handleSearchPointerDown, true);
   }
+  // UI обновляет class при повторном открытии, поэтому восстанавливаем классы адаптера.
+  if (wrapper && !wrapper.classList.contains('chat-stickers--available'))
+    wrapper.classList.add('chat-stickers--available');
+  if (
+    wrapper &&
+    wrapper.classList.contains('chat-stickers--active') !== active.value
+  )
+    wrapper.classList.toggle('chat-stickers--active', active.value);
   bodyTarget.value = wrapper?.querySelector<HTMLElement>('.v3-body') || null;
-  groupsTarget.value =
-    wrapper?.querySelector<HTMLElement>('.v3-groups') || null;
+  headerTarget.value =
+    wrapper?.querySelector<HTMLElement>('.v3-header') || null;
+  recentIconSrc.value =
+    wrapper?.querySelector<HTMLImageElement>(
+      '.v3-header .v3-groups .v3-group:first-child img'
+    )?.src || '';
+  // В мобильной сборке содержимое пикера появляется после асинхронного импорта.
+  if (open && bodyTarget.value && headerTarget.value && pendingPack) {
+    const pack = pendingPack;
+    pendingPack = '';
+    void showPack(pack);
+  }
 };
+const chooseMode = (mode: string) => {
+  pendingPack = '';
+  if (mode === 'emoji') {
+    deactivate();
+    return;
+  }
+  if (!props.enabled || !wrapper || !bodyTarget.value || active.value) return;
+  prepared.value = true;
+  active.value = true;
+  refreshPacks = true;
+  wrapper.classList.add('chat-stickers--active');
+  query.value =
+    wrapper.querySelector<HTMLInputElement>('.v3-search input')?.value || '';
+  void loadFirstPage();
+};
+const handleModeKey = (event: KeyboardEvent) => {
+  if (!(event.target instanceof HTMLElement)) return;
+  const items = [
+    ...(modeControl.value?.querySelectorAll<HTMLElement>(
+      '.switch-yui-kit-item'
+    ) || [])
+  ];
+  const index = items.indexOf(event.target);
+  if (index < 0) return;
+  let target = index;
+  if (event.key === 'ArrowRight' || event.key === 'End') target = 1;
+  else if (event.key === 'ArrowLeft' || event.key === 'Home') target = 0;
+  else if (event.key !== ' ' && event.key !== 'Enter') return;
+  event.preventDefault();
+  event.stopPropagation();
+  chooseMode(modeItems[target].value);
+  items[target].focus({ preventScroll: true });
+};
+watch([modeControl, active], async () => {
+  await nextTick();
+  modeControl.value
+    ?.querySelectorAll<HTMLElement>('.switch-yui-kit-item')
+    .forEach((item, index) => {
+      item.setAttribute('role', 'button');
+      item.setAttribute('tabindex', '0');
+      item.setAttribute('aria-label', modeItems[index].label);
+      item.setAttribute('aria-pressed', String(active.value === (index === 1)));
+    });
+});
 const click = (event: Event) => {
   if (!props.enabled || !(event.target instanceof Element)) return;
   syncWrapper();
   if (!wrapper || !bodyTarget.value) return;
-  if (event.target.closest('.sticker-picker__tab')) {
-    active.value = true;
-    refreshPacks = true;
-    wrapper.classList.add('chat-stickers--active');
-    query.value =
-      wrapper.querySelector<HTMLInputElement>('.v3-search input')?.value || '';
-    void loadFirstPage();
-  } else if (event.target.closest('.v3-groups .v3-group')) deactivate();
+  // Инициализация UI сама нажимает «Недавние»; это не выбор режима пользователем.
+  if (event.isTrusted && event.target.closest('.v3-groups .v3-group'))
+    deactivate();
 };
 const input = (event: Event) => {
   if (
@@ -494,6 +776,77 @@ const input = (event: Event) => {
   clearTimeout(timer);
   timer = setTimeout(() => void loadFirstPage(), 200);
 };
+
+const showPack = async (pack: string) => {
+  if (!wrapper || !bodyTarget.value) return;
+  messagePack.value = pack;
+  prepared.value = true;
+  active.value = true;
+  wrapper.classList.add('chat-stickers--active');
+  refreshPacks = true;
+  selectedPack.value = pack;
+  query.value = '';
+  const search = wrapper.querySelector<HTMLInputElement>('.v3-search input');
+  if (search) {
+    search.value = '';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  clearTimeout(timer);
+  await loadFirstPage();
+  await nextTick();
+  if (!active.value || selectedPack.value !== pack) return;
+  const selected = scroller.value?.querySelector<HTMLElement>(
+    '.chat-sticker-picker__packs button[aria-pressed="true"]'
+  );
+  const rail = selected?.parentElement;
+  if (selected && rail) {
+    const itemBounds = selected.getBoundingClientRect();
+    const railBounds = rail.getBoundingClientRect();
+    if (itemBounds.left < railBounds.left)
+      rail.scrollLeft -= railBounds.left - itemBounds.left;
+    else if (itemBounds.right > railBounds.right)
+      rail.scrollLeft += itemBounds.right - railBounds.right;
+  }
+};
+const openPack = async (pack: string) => {
+  if (!props.enabled || !props.host || pack === 'keyboard') return;
+  const host = props.host;
+  pendingPack = pack;
+  // Режим выбирается до открытия UI, включая первый асинхронный рендер.
+  prepared.value = true;
+  messagePack.value = pack;
+  selectedPack.value = pack;
+  query.value = '';
+  active.value = true;
+  const isOpen = [
+    ...host.querySelectorAll<HTMLElement>('.emoji-picker--open')
+  ].some(element => element.getClientRects().length > 0);
+  if (!isOpen) {
+    const trigger = [
+      ...host.querySelectorAll<HTMLElement>('.smile-button')
+    ].find(element => element.getClientRects().length > 0);
+    if (!trigger) {
+      pendingPack = '';
+      deactivate();
+      return;
+    }
+    trigger.click();
+  }
+  await nextTick();
+  if (host !== props.host || !props.enabled) return;
+  syncWrapper();
+};
+const prepare = (pack?: string) => {
+  if (!props.enabled || active.value) return;
+  if (prepared.value && (!pack || pack === selectedPack.value)) return;
+  prepared.value = true;
+  if (pack && pack !== 'keyboard') {
+    messagePack.value = pack;
+    selectedPack.value = pack;
+  }
+  void loadFirstPage();
+};
+defineExpose({ openPack, prepare });
 
 watch(
   () => [props.host, props.enabled] as const,
@@ -511,27 +864,59 @@ watch(
     host.addEventListener('input', input, true);
     syncWrapper();
     onCleanup(() => {
+      pendingPack = '';
+      pickerWasOpen = false;
       observer?.disconnect();
       host.removeAttribute('data-chat-stickers-enabled');
       host.removeEventListener('click', click, true);
       host.removeEventListener('input', input, true);
       deactivate();
       detachWrapper();
+      abort?.abort();
+      requestId += 1;
+      prepared.value = false;
+      packs.value = [];
+      previewPaths.value = {};
+      items.value = [];
+      selectedPack.value = '';
+      loadedPageKey = '';
+      loadedPageTotal = 0;
     });
   },
   { immediate: true }
 );
-watch(scroller, async element => {
+watch([scroller, active], async ([element]) => {
   resizeObserver?.disconnect();
   if (!element) return;
   await nextTick();
   const measure = () => {
+    if (!active.value) return;
     viewportHeight.value = element.clientHeight;
     viewportWidth.value = element.clientWidth;
   };
   measure();
   resizeObserver = new ResizeObserver(measure);
   resizeObserver.observe(element);
+});
+watch([packRail, headerTarget, active], async ([element]) => {
+  packResizeObserver?.disconnect();
+  if (!element) return;
+  await nextTick();
+  const groups = headerTarget.value?.querySelector<HTMLElement>('.v3-groups');
+  const parent = element.offsetParent;
+  if (!groups || !(parent instanceof HTMLElement)) return;
+  const measure = () => {
+    const bounds = groups.getBoundingClientRect();
+    const origin = parent.getBoundingClientRect();
+    packRailStyle.value = {
+      top: `${bounds.top - origin.top - parent.clientTop}px`,
+      left: `${bounds.left - origin.left - parent.clientLeft}px`,
+      width: `${bounds.width}px`
+    };
+  };
+  measure();
+  packResizeObserver = new ResizeObserver(measure);
+  packResizeObserver.observe(groups);
 });
 watch(
   () => hiddenStickerPacks.value.join(','),
@@ -540,30 +925,80 @@ watch(
   }
 );
 watch(getStickerApiBaseUrl, () => {
+  abort?.abort();
+  requestId += 1;
   packs.value = [];
   previewPaths.value = {};
   refreshPacks = true;
-  if (active.value) void loadFirstPage();
+  loadedPageKey = '';
+  loadedPageTotal = 0;
+  items.value = [];
+  if (prepared.value) void loadFirstPage();
 });
 onBeforeUnmount(() => {
+  pendingPack = '';
   deactivate();
   detachWrapper();
+  abort?.abort();
+  requestId += 1;
   observer?.disconnect();
   resizeObserver?.disconnect();
+  packResizeObserver?.disconnect();
 });
 </script>
 
 <style>
-[data-chat-stickers-enabled] .v3-groups .v3-group:first-child {
-  order: -2;
-}
 [data-chat-stickers-enabled]
-  .v3-groups:not(:has(> .sticker-picker__tab))::before {
+  .v3-header:not(:has(> .chat-sticker-picker__mode))::before {
   content: '';
   flex: 0 0 30px;
-  width: 30px;
   height: 30px;
   order: -1;
+}
+.chat-stickers--available {
+  position: relative;
+  --chat-picker-height: 427px;
+}
+.chat-stickers--active {
+  --chat-picker-height: 375px;
+}
+.emoji-picker.chat-stickers--available .v3-emoji-picker {
+  height: min(
+    var(--emoji-picker-height, var(--chat-picker-height)),
+    var(--chat-picker-height),
+    calc(100dvh - 16px)
+  );
+}
+.chat-sticker-picker__mode {
+  order: -1;
+  flex: 0 0 30px;
+  align-self: flex-start;
+  width: 200px;
+}
+.chat-stickers--available .chat-sticker-picker__mode .switch-yui-kit-list {
+  width: 200px;
+  height: 30px;
+  padding: 2px;
+  gap: 0;
+  box-sizing: border-box;
+  transition: none;
+}
+.chat-stickers--available .chat-sticker-picker__mode .switch-yui-kit-item {
+  width: 98px;
+  height: 26px;
+  padding: 0;
+  box-sizing: border-box;
+  line-height: 17px;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.chat-sticker-picker__mode .switch-yui-kit-item:focus-visible {
+  outline: 2px solid var(--border-hover, #9cbeff);
+  outline-offset: -2px;
+}
+.chat-stickers--active .v3-header > .v3-groups {
+  visibility: hidden;
 }
 .chat-stickers--active .v3-body-inner,
 .chat-stickers--active .v3-footer {
@@ -575,14 +1010,25 @@ onBeforeUnmount(() => {
   overscroll-behavior: contain;
   color: var(--text-primary, #1c2535);
 }
+.chat-sticker-picker--preparing {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  width: 320px;
+  height: 300px;
+  visibility: hidden;
+  pointer-events: none;
+}
 .chat-sticker-picker__packs {
   display: flex;
-  gap: 5px;
-  position: sticky;
-  top: 0;
+  gap: 8px;
+  align-items: center;
+  position: absolute;
+  top: 60px;
+  left: 15px;
+  width: calc(100% - 30px);
   z-index: 1;
-  height: 44px;
-  padding-bottom: 12px;
+  height: 30px;
   overflow-x: auto;
   background: var(--surface-overlay, white);
   scrollbar-width: none;
@@ -593,32 +1039,51 @@ onBeforeUnmount(() => {
   cursor: grab;
 }
 .chat-sticker-picker__packs button {
-  display: inline-flex;
+  position: relative;
+  display: grid;
   align-items: center;
-  gap: 5px;
-  flex: 0 0 auto;
-  height: 32px;
-  border: 1px solid var(--border-table, #e7e7e7);
-  border-radius: 20px;
-  padding: 5px 10px;
+  justify-items: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 14px;
-  line-height: 20px;
-  white-space: nowrap;
   cursor: pointer;
 }
 .chat-sticker-picker__pack-preview {
-  flex: 0 0 16px;
-  width: 16px;
-  height: 16px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
   pointer-events: none;
 }
-.chat-sticker-picker__packs button[aria-pressed='true'] {
-  border-color: var(--text-brand, #77a6ff);
-  color: var(--text-brand, #3373e4);
+.chat-sticker-picker__recent {
+  opacity: 0.55;
+}
+.chat-sticker-picker__recent img {
+  width: 30px;
+  height: 30px;
+  content: var(--emoji-recent-icon);
+  pointer-events: none;
+}
+:is([data-theme='dark'], .theme-dark) .chat-sticker-picker__recent {
+  opacity: 0.45;
+}
+:is([data-theme='dark'], .theme-dark) .chat-sticker-picker__recent img {
+  filter: brightness(0) invert(1);
+}
+.chat-sticker-picker__packs button[aria-pressed='true']::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--action-primary-bg, #77a6ff);
+  content: '';
 }
 .chat-sticker-picker__packs button:hover {
   background: var(--action-secondary-bg, #f8f9fd);
@@ -642,10 +1107,14 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   background: transparent;
   cursor: pointer;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .chat-sticker-picker__item img {
-  width: 60px;
-  height: 60px;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
 }
 .chat-sticker-picker__item:hover {
@@ -660,5 +1129,19 @@ onBeforeUnmount(() => {
   font-size: 13px;
   text-align: center;
   color: var(--text-secondary, #757d8a);
+}
+
+@media screen and (width <= 768px) {
+  .chat-sticker-picker,
+  .chat-sticker-picker__packs {
+    scrollbar-width: none;
+  }
+
+  .chat-sticker-picker::-webkit-scrollbar,
+  .chat-sticker-picker__packs::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
 }
 </style>

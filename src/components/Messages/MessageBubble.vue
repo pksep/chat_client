@@ -46,6 +46,7 @@
         v-bind="props"
         :sticker="sticker"
         @navigate-message="handleNavigateMessage"
+        @activate="handleStickerClick"
       />
 
       <MessageBubbleFiles
@@ -165,6 +166,7 @@ const emits = defineEmits([
   'unmount-forward-message',
   'unmount-retry-message-id',
   'unmount-navigate-message-id',
+  'open-sticker-pack',
   'toggle-selection'
 ]);
 
@@ -420,6 +422,11 @@ const handleMessageClick = () => {
   }
 
   emits('toggle-selection');
+};
+
+const handleStickerClick = () => {
+  if (props.isSelectionMode) handleMessageClick();
+  else if (sticker.value?.pack) emits('open-sticker-pack', sticker.value.pack);
 };
 
 const handleDoubleTap = (event: MouseEvent): void => {

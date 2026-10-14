@@ -1,3 +1,5 @@
+import { Clipboard } from '@capacitor/clipboard';
+import { Capacitor } from '@capacitor/core';
 import { MediaType } from '@pksep/zod-shared-chat';
 import type { IMedia } from '../components/interfaces/interfaces';
 import { getConfig } from '../services/useConfig';
@@ -6,12 +8,19 @@ import { parseMessageEx } from './messageReplyQuote';
 import { getMessageSticker, type CopiedSticker } from './stickers';
 
 const clipboardAttribute = 'data-sep-chat-clipboard';
+const nativeClipboardPrefix = 'sep-chat-clipboard:v1:';
 export const CHAT_CLIPBOARD_FILE_TYPE = 'web application/x-sep-chat-file';
 export const CHAT_CLIPBOARD_CONTENT_TYPE =
   'web application/x-sep-chat-content+json';
 export const MAX_CHAT_CLIPBOARD_BYTES = 20 * 1024 * 1024;
 export const MAX_CHAT_CLIPBOARD_PIXELS = 16 * 1024 * 1024;
 export type PreparedChatClipboardMedia = { original: Blob; image?: Blob };
+
+// Android WebView can report support for ClipboardItem but rejects binary
+// ClipboardItem writes at runtime. The Capacitor clipboard is reliable for a
+// lightweight chat-media reference; the original is loaded on paste.
+export const usesNativeChatMediaClipboard = (): boolean =>
+  Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
 const supportsClipboardType = (type: string): boolean => {
   try {
@@ -31,10 +40,14 @@ export const supportsChatClipboardFiles = (): boolean =>
 
 export const canCopyChatMedia = (media: IMedia): boolean => {
   const size = Number(media.size);
+  if (!Number.isFinite(size) || size <= 0 || size > MAX_CHAT_CLIPBOARD_BYTES)
+    return false;
+
+  // Native copy stores only a validated reference. It does not rasterize an
+  // image, so the browser-only pixel limitation is not relevant there.
+  if (usesNativeChatMediaClipboard()) return true;
+
   return (
-    Number.isFinite(size) &&
-    size > 0 &&
-    size <= MAX_CHAT_CLIPBOARD_BYTES &&
     (media.ex?.width || 0) * (media.ex?.height || 0) <=
       MAX_CHAT_CLIPBOARD_PIXELS &&
     (supportsChatClipboardFiles() ||
@@ -80,7 +93,8 @@ export const createChatClipboardContent = (
           pack: reference.pack,
           version: reference.version,
           ...(reference.asset ? { asset: reference.asset } : {}),
-          label: sticker.label
+          label: sticker.label,
+          ...(sticker.emoji ? { emoji: sticker.emoji } : {})
         }
       };
     }
@@ -166,6 +180,25 @@ export const readChatClipboardJson = (
   }
 };
 
+export const encodeNativeChatClipboardContent = (
+  content: ChatClipboardContent
+): string =>
+  `${nativeClipboardPrefix}${encodeURIComponent(JSON.stringify(content))}`;
+
+export const readNativeChatClipboardContent = (
+  value: string
+): ChatClipboardContent | null => {
+  if (!value.startsWith(nativeClipboardPrefix) || value.length > 110000)
+    return null;
+  try {
+    return readChatClipboardJson(
+      decodeURIComponent(value.slice(nativeClipboardPrefix.length))
+    );
+  } catch {
+    return null;
+  }
+};
+
 const createClipboardHtml = (
   content: ChatClipboardContent,
   sourceUrl: string,
@@ -203,6 +236,15 @@ export const writeChatClipboardContent = async (
     content.kind === 'sticker'
       ? content.sticker.label
       : content.media.originName;
+
+  if (content.kind !== 'sticker' && usesNativeChatMediaClipboard()) {
+    await Clipboard.write({
+      string: encodeNativeChatClipboardContent(content),
+      label
+    });
+    return;
+  }
+
   const html = createClipboardHtml(content, sourceUrl, previewUrl);
   const preparation = prepared ? Promise.resolve(prepared) : undefined;
   const preparedContent = preparation?.then(data =>
