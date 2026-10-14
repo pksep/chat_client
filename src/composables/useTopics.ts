@@ -263,17 +263,17 @@ const createTopicsApi = () => {
     topic: ITopic,
     lastMessage?: Message
   ): Message | undefined => {
-    const favoriteTopic =
+    const hideSystemMessages =
       isFavoriteTopic(topic, authedUser.value?.id) ||
       hasInquiryTopicMarker(topic);
     const localMessages = getFullMessagesByTopicId(topic.id);
-    const localLastMessage = favoriteTopic
+    const localLastMessage = hideSystemMessages
       ? [...localMessages].reverse().find(message => !message.isSystem)
       : localMessages.at(-1);
     const candidates = [topic.lastMessage, localLastMessage, lastMessage];
 
     return getLatestMessage(
-      favoriteTopic
+      hideSystemMessages
         ? candidates.filter(message => !message?.isSystem)
         : candidates
     );

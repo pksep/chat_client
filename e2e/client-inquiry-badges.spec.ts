@@ -140,3 +140,74 @@ for (const theme of ['light', 'dark']) {
     await expect(badge).toHaveCount(0);
   });
 }
+
+test('настоящий список сообщений скрывает старые события обращения, но не обычной группы', async ({
+  page
+}): Promise<void> => {
+  await page.goto('/');
+  await expect(
+    page.locator('[data-testid$="MenuBottomNav-Clients"]:visible')
+  ).toBeVisible({ timeout: 30000 });
+  await page.evaluate(async (): Promise<void> => {
+    const resources = performance
+      .getEntriesByType('resource')
+      .map(entry => entry.name);
+    const managerUrl = resources.find(
+      url => new URL(url).pathname === '/src/composables/useManagerInquiries.ts'
+    );
+    const vueUrl = resources.find(url =>
+      new URL(url).pathname.endsWith('/deps/vue.js')
+    );
+    if (!managerUrl || !vueUrl)
+      throw new Error('Не загружены зависимости проверки истории');
+
+    const { refreshManagerInquiries } = await import(managerUrl);
+    await refreshManagerInquiries();
+    const { createApp } = await import(vueUrl);
+    const componentUrl = '/src/components/Messages/MessageListUserItems.vue';
+    const { default: MessageList } = await import(componentUrl);
+    const host = document.createElement('div');
+    host.id = 'legacy-inquiry-probe';
+    document.body.append(host);
+    const common = {
+      createdAt: '2026-10-14T05:30:00.000Z',
+      senderUserId: 'guest',
+      senderUser: { id: 'guest', initials: 'Посетитель' },
+      media: [],
+      reactions: [],
+      isReadByMe: true
+    };
+
+    createApp(MessageList, {
+      dataTestid: 'LegacyInquiryProbe',
+      authUserId: 'inquiry-test-user',
+      messages: [
+        {
+          ...common,
+          id: 'legacy-staff-event',
+          topicId: 'inquiry-badge',
+          isSystem: true,
+          text: 'Техническое исключение сотрудника'
+        },
+        {
+          ...common,
+          id: 'guest-visible-message',
+          topicId: 'inquiry-badge',
+          isSystem: false,
+          text: 'Здравствуйте!'
+        },
+        {
+          ...common,
+          id: 'ordinary-group-event',
+          topicId: 'ordinary-group',
+          isSystem: true,
+          text: 'Участник вошёл в обычную группу'
+        }
+      ]
+    }).mount(host);
+  });
+  const history = page.locator('#legacy-inquiry-probe');
+  await expect(history).toContainText('Здравствуйте!');
+  await expect(history).toContainText('Участник вошёл в обычную группу');
+  await expect(history).not.toContainText('Техническое исключение сотрудника');
+});

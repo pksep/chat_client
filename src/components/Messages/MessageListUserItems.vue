@@ -522,7 +522,7 @@ const visibleMessages = computed(() => {
   return visibleInquiryMessages(
     props.messages,
     (topicId: string): boolean =>
-      Boolean(managerInquiriesByTopic.value[topicId]) ||
+      managerInquiriesByTopic.value.has(topicId) ||
       (selectedTopic?.id === topicId && isClientTopic(selectedTopic))
   );
 });
