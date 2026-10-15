@@ -59,6 +59,7 @@ import {
   resolveTopicLastMessage
 } from '../utils/topic-last-message';
 import { compactPersonName } from '../utils/personName';
+import { recordTopicStateTelemetry } from '../services/topic-state-telemetry';
 import {
   applyTopicPinSetting,
   sortTopicsByPinOrder
@@ -311,6 +312,29 @@ const createTopicsApi = () => {
       [normalizedTopic.id]: resolvedUnreadCount
     };
     normalizedTopic.lastMessage = resolveLatestMessage(normalizedTopic);
+    if (
+      existingTopic &&
+      ((topic.lastMessage?.id === normalizedTopic.lastMessage?.id &&
+        topic.lastMessage?.status !== normalizedTopic.lastMessage?.status) ||
+        (topic.unreadMessageCount || 0) !==
+          (existingTopic.unreadMessageCount || 0))
+    ) {
+      recordTopicStateTelemetry(
+        'topic_snapshot_merge',
+        normalizedTopic,
+        localMessages.find(
+          message => message.id === normalizedTopic.lastMessage?.id
+        ),
+        authUserId,
+        {
+          incomingLastMessageId: topic.lastMessage?.id,
+          incomingStatus: topic.lastMessage?.status,
+          incomingUnreadCount: topic.unreadMessageCount,
+          previousUnreadCount: existingTopic.unreadMessageCount,
+          localMessageCount: localMessages.length
+        }
+      );
+    }
     const hasLocalUnreadMessages =
       !!authedUser.value?.id &&
       localMessages.some(
@@ -1034,6 +1058,33 @@ const createTopicsApi = () => {
       (shouldUseComputedUnread
         ? computedUnreadHasTaggedMessage
         : unreadHasTaggedMessage);
+
+    if (
+      baseUnreadCount !== nextUnreadCount ||
+      topic.unreadMessageCount !== nextUnreadCount
+    ) {
+      recordTopicStateTelemetry(
+        'unread_reconciled',
+        topic,
+        messages.find(message => message.id === topic.lastMessage?.id),
+        currentUserId,
+        {
+          serverUnreadCount: baseUnreadCount,
+          effectiveServerUnreadCount,
+          previewReadCount: previewReadIds.size,
+          localMessageCount: messages.length,
+          localUnreadCount: unreadMessageCount,
+          computedUnreadMessageCount,
+          shouldUseComputedUnread,
+          hasLatestRangeCoverage,
+          hasLatestMessageInLocalCache,
+          hasShadowReadBoundary,
+          shadowLastReadMessageId: shadowReadState?.lastReadMessageId,
+          shadowLastReadAt: shadowReadState?.lastReadAt,
+          nextUnreadCount
+        }
+      );
+    }
 
     if (
       topic.unreadMessageCount === nextUnreadCount &&

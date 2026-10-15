@@ -76,6 +76,7 @@ import type { ShadowReadStateValue } from './useShadowChatSync';
 import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { compareMessages, getMessageTimestamp } from '../utils/messageOrder';
 import { parseMessageEx } from '../utils/messageReplyQuote';
+import { recordTopicStateTelemetry } from './topic-state-telemetry';
 
 // Store mutations replace message payloads. Deep Vue proxies make every field
 // of every cached message reactive and multiply the work of bulk merges; a
@@ -3412,6 +3413,18 @@ export const changeMessageStatusLocally = (
   if (updatedMessage) {
     syncLocalLastMessage(topicId, updatedMessage);
   }
+  recordTopicStateTelemetry(
+    'local_message_status',
+    getSelectedTopic(topicId),
+    updatedMessage,
+    authedUser.value?.id,
+    {
+      messageId,
+      previousStatus: currentMessage?.status,
+      nextStatus: status,
+      foundInLocalCache: !!updatedMessage
+    }
+  );
 };
 
 export const setFileUploadPendingStatus = (

@@ -60,5 +60,9 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Сканирование QR-кодов</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Передача координат при отправке сообщений для диагностики, если вы включили геолокацию в профиле.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Передача координат для диагностики только во время использования чата.</string>
 </dict>
 </plist>

@@ -9,6 +9,11 @@ import {
   hydrateTelemetryDeviceContext
 } from './useTelemetryDevice';
 import { getIsVpnActive } from './useVpnStatus';
+import {
+  getTelemetryLocationContext,
+  onTelemetryLocationDisabled,
+  refreshTelemetryLocation
+} from './useTelemetryLocation';
 
 export type TelemetryLevel = 'debug' | 'info' | 'warn' | 'error';
 export type TelemetryCategory =
@@ -55,6 +60,12 @@ const MAX_STRING_LENGTH = 700;
 const MAX_ARRAY_LENGTH = 30;
 const MAX_DEPTH = 5;
 
+const shouldPersistTelemetry = (
+  event: Pick<TelemetryEvent, 'category' | 'name'>
+): boolean =>
+  event.category === 'network' ||
+  (event.category === 'app' && event.name.startsWith('app.update.'));
+
 const getPersistedNetworkTelemetry = (): TelemetryEvent[] => {
   if (typeof localStorage === 'undefined') {
     return [];
@@ -74,10 +85,10 @@ const getPersistedNetworkTelemetry = (): TelemetryEvent[] => {
         (event): event is TelemetryEvent =>
           !!event &&
           typeof event === 'object' &&
-          event.category === 'network' &&
           typeof event.id === 'string' &&
           typeof event.name === 'string' &&
-          typeof event.occurredAt === 'string'
+          typeof event.occurredAt === 'string' &&
+          shouldPersistTelemetry(event)
       )
       .slice(-PERSISTED_NETWORK_TELEMETRY_MAX_SIZE);
   } catch {
@@ -93,8 +104,14 @@ const persistNetworkTelemetry = (events: TelemetryEvent[]): void => {
 
   try {
     const networkEvents = events
-      .filter(event => event.category === 'network')
-      .slice(-PERSISTED_NETWORK_TELEMETRY_MAX_SIZE);
+      .filter(shouldPersistTelemetry)
+      .slice(-PERSISTED_NETWORK_TELEMETRY_MAX_SIZE)
+      .map(event => {
+        const context = { ...event.context };
+        // Координаты остаются только в памяти текущего запуска.
+        delete context.location;
+        return { ...event, context };
+      });
 
     if (networkEvents.length === 0) {
       localStorage.removeItem(PERSISTED_NETWORK_TELEMETRY_KEY);
@@ -208,6 +225,7 @@ const buildDefaultTelemetryContext = (): Record<string, unknown> => {
     isNative: Capacitor.isNativePlatform(),
     installationId: getTelemetryInstallationId(),
     device,
+    location: getTelemetryLocationContext(),
     visibility:
       typeof document !== 'undefined' ? document.visibilityState : undefined,
     network: {
@@ -326,15 +344,46 @@ export const recordTelemetryEvent = (input: TelemetryEventInput): void => {
       : undefined;
   telemetryQueue = [...telemetryQueue, event].slice(-TELEMETRY_MAX_QUEUE_SIZE);
 
-  // Между запусками сохраняем только диагностику сети. Остальные события
-  // обновляют хранилище, только если вытесняют сетевое событие из очереди.
-  if (event.category === 'network' || evictedEvent?.category === 'network') {
+  // Сохраняем диагностику сети и обновления, чтобы установка APK не потеряла её.
+  if (
+    shouldPersistTelemetry(event) ||
+    (evictedEvent && shouldPersistTelemetry(evictedEvent))
+  ) {
     persistNetworkTelemetry(telemetryQueue);
   }
   scheduleTelemetryFlush(
     input.level === 'error' ? 0 : TELEMETRY_FLUSH_DELAY_MS
   );
+
+  if (
+    input.name === 'chat.message_send.start' ||
+    input.name === 'upload.message_send.start'
+  ) {
+    // Получение координат не задерживает отправку сообщения.
+    void refreshTelemetryLocation().then(() => {
+      if (getTelemetryLocationContext().enabled) {
+        recordTelemetryEvent({
+          category: input.category,
+          name: 'chat.message_send.location',
+          traceId: input.traceId,
+          entityType: input.entityType,
+          entityId: input.entityId,
+          payload: {
+            topicId: input.payload?.topicId,
+            sendOccurredAt: event.occurredAt
+          }
+        });
+      }
+    });
+  }
 };
+
+onTelemetryLocationDisabled(() => {
+  telemetryQueue.forEach(event => {
+    if (event.context) delete event.context.location;
+  });
+  persistNetworkTelemetry(telemetryQueue);
+});
 
 export const createTelemetryTraceId = (prefix: string): string =>
   `${prefix}-${Date.now()}-${createUuid().slice(0, 8)}`;
@@ -346,7 +395,20 @@ export const getTelemetryErrorPayload = (
     return {
       errorName: error.name,
       errorMessage: error.message,
-      errorStack: error.stack
+      errorStack: error.stack,
+      errorCode: (error as Error & { code?: string | number }).code
+    };
+  }
+
+  if (error && typeof error === 'object') {
+    const nativeError = error as Record<string, unknown>;
+    return {
+      errorName: nativeError.name,
+      errorMessage:
+        typeof nativeError.message === 'string'
+          ? nativeError.message
+          : String(error),
+      errorCode: nativeError.code
     };
   }
 

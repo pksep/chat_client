@@ -7,6 +7,7 @@ import {
   WebSocketEventPayloads
 } from './websocketEvents';
 import { recordTelemetryEvent } from '../useTelemetry';
+import { parseMessageEx } from '../../utils/messageReplyQuote';
 
 export interface ChatWSInterface {
   subscribeToEvent<T extends WebSocketEventType>(
@@ -110,6 +111,24 @@ export class ChatWS implements ChatWSInterface {
         this.resolveServerEventType(type),
         JSON.stringify(payload)
       );
+      if (type === WebSocketEventType.SEND_MESSAGE) {
+        const message =
+          payload as WebSocketEventPayloads[WebSocketEventType.SEND_MESSAGE];
+        const ex = parseMessageEx(message.ex);
+        recordTelemetryEvent({
+          category: 'chat',
+          name: 'chat.message_send.emitted',
+          entityType: 'topic',
+          entityId: message.topicId,
+          payload: {
+            topicId: message.topicId,
+            clientMessageId:
+              typeof ex?.clientId === 'string' ? ex.clientId : undefined,
+            socketId: this.socket.id,
+            deliveryConfirmed: false
+          }
+        });
+      }
       return true;
     } else {
       recordTelemetryEvent({

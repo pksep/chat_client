@@ -1,15 +1,29 @@
 import { expect, test, type Page } from '@playwright/test';
 
 test.setTimeout(60_000);
+const telemetryByPage = new WeakMap<Page, Array<any>>();
+
+const getUpdateTelemetry = async (page: Page) => {
+  await page.evaluate(async () => {
+    const telemetry = await import('/src/services/useTelemetry.ts');
+    await telemetry.flushTelemetryEvents();
+  });
+  return (telemetryByPage.get(page) || []).filter(event =>
+    event.name.startsWith('app.update.')
+  );
+};
 
 async function openNativeMenu(
   page: Page,
   initialStatus = 0,
   initialAvailability = 2
 ) {
+  const events: any[] = [];
+  telemetryByPage.set(page, events);
   await page.addInitScript(
     ({ initialStatus, initialAvailability }) => {
       (window as any).androidBridge = {};
+      document.cookie = 'authToken=rustore-test;path=/';
       const bridge = ((window as any).ruStoreBridge = {
         info: {
           updateAvailability: initialAvailability,
@@ -21,6 +35,7 @@ async function openNativeMenu(
         failInfo: false,
         failStart: false,
         failComplete: false,
+        startResultCode: -1,
         holdStart: false,
         holdComplete: true,
         releaseStart: () => {},
@@ -65,7 +80,7 @@ async function openNativeMenu(
                 bridge.releaseStart = resolve;
               });
             if (bridge.failStart) throw new Error('Загрузка недоступна');
-            return { resultCode: -1 };
+            return { resultCode: bridge.startResultCode };
           }
           if (method === 'completeFlexibleUpdate') {
             if (bridge.holdComplete)
@@ -100,6 +115,10 @@ async function openNativeMenu(
     if (!['localhost', '127.0.0.1'].includes(url.hostname))
       return route.abort();
     if (url.pathname.startsWith('/rustore-test-api/')) {
+      if (url.pathname.endsWith('/telemetry/events')) {
+        events.push(...(route.request().postDataJSON()?.events || []));
+        return route.fulfill({ json: { accepted: events.length } });
+      }
       if (url.pathname.endsWith('/users/me/access'))
         return route.fulfill({
           json: {
@@ -266,6 +285,13 @@ test('RuStore: отказ запуска загрузки сохраняет в�
   await menuButton(page).click();
   await expect(menuButton(page)).toHaveText('Обновить чат');
   await expect(menuButton(page)).toBeEnabled();
+  const failed = (await getUpdateTelemetry(page)).find(
+    event => event.name === 'app.update.failed'
+  );
+  expect(failed).toMatchObject({
+    payload: { step: 'start', errorMessage: 'Загрузка недоступна' }
+  });
+  expect(failed.traceId).toBeTruthy();
   await page.evaluate(() => {
     const bridge = (window as any).ruStoreBridge;
     bridge.failStart = false;
@@ -308,6 +334,15 @@ test('RuStore: повторная проверка сохраняет кнопк
   expect(
     await page.evaluate(() => (window as any).ruStoreBridge.calls)
   ).not.toContain('startFlexibleUpdate');
+  expect(await getUpdateTelemetry(page)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ name: 'app.update.check.failed' }),
+      expect.objectContaining({
+        name: 'app.update.start.skipped',
+        payload: expect.objectContaining({ reason: 'check_failed' })
+      })
+    ])
+  );
   await page.evaluate(() => {
     const bridge = (window as any).ruStoreBridge;
     bridge.failInfo = false;
@@ -349,3 +384,51 @@ for (const status of [1, 2, 4, 5]) {
     else await expect(menuButton(page)).toBeDisabled();
   });
 }
+
+test('RuStore: сохраняет код отмены и не считает его началом загрузки', async ({
+  page
+}) => {
+  await openNativeMenu(page);
+  await page.evaluate(() => {
+    (window as any).ruStoreBridge.startResultCode = 0;
+  });
+  await menuButton(page).click();
+  await expect(menuButton(page)).toBeEnabled();
+  await expect
+    .poll(() => getUpdateTelemetry(page))
+    .toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'app.update.start.result',
+          level: 'warn',
+          payload: expect.objectContaining({ resultCode: 0 })
+        })
+      ])
+    );
+});
+
+test('RuStore: успешный ответ без прогресса сохраняет диагностический таймаут', async ({
+  page
+}) => {
+  await openNativeMenu(page);
+  await page.clock.install();
+  await menuButton(page).click();
+  await expect(menuButton(page)).toBeEnabled();
+  await page.clock.runFor(60_001);
+  await expect
+    .poll(() => getUpdateTelemetry(page))
+    .toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'app.update.start.result',
+          payload: expect.objectContaining({ resultCode: -1 })
+        }),
+        expect.objectContaining({
+          name: 'app.update.progress_timeout',
+          payload: expect.objectContaining({
+            stage: 'awaiting_download_progress'
+          })
+        })
+      ])
+    );
+});
