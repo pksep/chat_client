@@ -1,9 +1,5 @@
 <template>
-  <Teleport
-    v-if="enabled"
-    :to="modeTarget || 'body'"
-    :disabled="!modeTarget"
-  >
+  <Teleport v-if="enabled" :to="modeTarget || 'body'" :disabled="!modeTarget">
     <div
       v-show="!!modeTarget"
       ref="modeControl"
@@ -782,7 +778,9 @@ const handleModeKey = (event: KeyboardEvent) => {
       '.chat-sticker-picker__mode-button'
     ) || [])
   ];
-  const index = items.indexOf(event.target.closest('button') as HTMLButtonElement);
+  const index = items.indexOf(
+    event.target.closest('button') as HTMLButtonElement
+  );
   if (index < 0) return;
   let target = index;
   if (event.key === 'ArrowRight' || event.key === 'End') target = 1;
