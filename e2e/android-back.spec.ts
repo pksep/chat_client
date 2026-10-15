@@ -351,6 +351,153 @@ test('Назад из мобильных разделов возвращает �
   await expect(page.locator('html')).toHaveAttribute('data-android-exits', '1');
 });
 
+for (const width of [393, 600]) {
+  test(`Назад из топика ИИ возвращает в список ИИ: ${width}px`, async ({
+    page,
+    isMobile
+  }) => {
+    test.skip(!isMobile, 'Мобильное событие Назад');
+    await page.setViewportSize({ width, height: 851 });
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'sep:chat:ai-assistant:v1',
+        JSON.stringify({
+          sessions: [
+            {
+              id: 'android-back-ai',
+              title: 'Тест возврата ИИ',
+              description: '',
+              time: '10:00',
+              messages: []
+            }
+          ],
+          tasks: [],
+          permissionMode: 'ask'
+        })
+      );
+    });
+    await rootFixture(page);
+    const nav = page.locator('.menu-bottom-nav:visible');
+    await nav.locator('[data-testid$="MenuBottomNav-AI"]').click();
+    const session = page
+      .getByTestId('AI-MenuPanel')
+      .getByRole('button', { name: /Тест возврата ИИ/ });
+    await session.click();
+    await expect(page).toHaveURL(/\/ai\/android-back-ai$/);
+    const composer = page.locator('.ai-assistant__composer');
+    await expect(composer.locator('.ProseMirror')).toBeVisible();
+    if (width > 480) {
+      await composer.locator('.smile-button:visible').click();
+      const picker = composer.locator('.emoji-picker--open:visible');
+      await expect(picker).toBeVisible();
+      await androidBack(page);
+      await expect(picker).toHaveCount(0);
+      await expect(page).toHaveURL(/\/ai\/android-back-ai$/);
+      await noExit(page);
+    }
+    await androidBack(page);
+    await expect(page).toHaveURL(/\/assistant$/);
+    await expect(session).toBeVisible();
+    await expect(nav.locator('[data-testid$="MenuBottomNav-AI"]')).toHaveClass(
+      /menu-bottom-nav__button--active/
+    );
+    await noExit(page);
+    await androidBack(page);
+    await expect(
+      nav.locator('[data-testid$="MenuBottomNav-Chats"]')
+    ).toHaveClass(/menu-bottom-nav__button--active/);
+    await noExit(page);
+    await androidBack(page);
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-android-exits',
+      '1'
+    );
+  });
+}
+
+test('Назад из обращения менеджера закрывает эмодзи и возвращает в Клиенты', async ({
+  page,
+  isMobile
+}) => {
+  test.skip(!isMobile, 'Мобильное событие Назад');
+  await rootFixture(page);
+  await page.route('**/manager/inquiries?*', route =>
+    route.fulfill({
+      json: [
+        {
+          id: 'android-back-inquiry',
+          topic_id: 'android-back-client',
+          name: 'Клиент для возврата',
+          contacts: {},
+          source: { channel: 'widget' },
+          manager_ids: [],
+          metadata_version: 1
+        }
+      ]
+    })
+  );
+  await page.route('**/messages/topic/**', route =>
+    route.fulfill({ json: [] })
+  );
+  await page.route('**/manager/inquiries/android-back-inquiry/routes', route =>
+    route.fulfill({ json: [] })
+  );
+  await page.evaluate(async () => {
+    const moduleUrl = (path: string) => {
+      const url = performance
+        .getEntriesByType('resource')
+        .map(entry => entry.name)
+        .find(url => new URL(url).pathname === path);
+      if (!url) throw new Error(`Модуль ${path} ещё не загружен`);
+      return url;
+    };
+    const { setTopics } = await import(
+      moduleUrl('/src/composables/useTopics.ts')
+    );
+    setTopics([
+      {
+        id: 'android-back-client',
+        type: 'GROUP',
+        name: 'Клиент для возврата',
+        group: { id: 'android-back-client', name: 'Клиент для возврата' },
+        info: {},
+        unreadMessageCount: 0
+      }
+    ]);
+    const { refreshManagerInquiries } = await import(
+      moduleUrl('/src/composables/useManagerInquiries.ts')
+    );
+    await refreshManagerInquiries();
+  });
+  const nav = page.locator('.menu-bottom-nav:visible');
+  const clientsButton = nav.locator('[data-testid$="MenuBottomNav-Clients"]');
+  await clientsButton.click();
+  const client = page
+    .getByTestId('ClientsPanel')
+    .getByRole('heading', { name: 'Клиент для возврата', exact: true });
+  await client.click();
+  await expect(page).toHaveURL(/\/group\/android-back-client$/);
+  const composer = page.locator('.chat__input');
+  await expect(composer.locator('.ProseMirror')).toBeVisible();
+  await composer.locator('.smile-button:visible').click();
+  const picker = composer.locator('.emoji-picker--open:visible');
+  await expect(picker).toBeVisible();
+  await androidBack(page);
+  await expect(picker).toHaveCount(0);
+  await expect(page).toHaveURL(/\/group\/android-back-client$/);
+  await noExit(page);
+  await androidBack(page);
+  await expect(page).toHaveURL(/\/group$/);
+  await expect(client).toBeVisible();
+  await expect(clientsButton).toHaveClass(/menu-bottom-nav__button--active/);
+  await noExit(page);
+  await androidBack(page);
+  await expect(nav.locator('[data-testid$="MenuBottomNav-Chats"]')).toHaveClass(
+    /menu-bottom-nav__button--active/
+  );
+  await noExit(page);
+});
+
 test('Назад с ввода пароля возвращает к выбору организации', async ({
   page
 }) => {

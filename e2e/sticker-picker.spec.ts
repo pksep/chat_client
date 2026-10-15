@@ -24,8 +24,12 @@ test('переключатель из макета меняет режим, ра
   const stickers = page.getByRole('button', { name: 'Стикеры', exact: true });
   const mode = page.getByRole('group', { name: 'Выбор эмодзи или стикеров' });
   await expect(emoji).toHaveAttribute('aria-pressed', 'true');
-  expect(await mode.boundingBox()).toMatchObject({ width: 200, height: 30 });
-  expect(await emoji.boundingBox()).toMatchObject({ width: 98, height: 26 });
+  expect(await mode.boundingBox()).toMatchObject({ height: 43 });
+  expect(await emoji.boundingBox()).toMatchObject({ height: 32 });
+  await expect(mode).toHaveCSS('border-top-style', 'solid');
+  await expect(page.locator('.emoji-picker--open .v3-footer')).toBeHidden();
+  const popup = page.locator('.emoji-picker--open .v3-emoji-picker');
+  const emojiPopupBox = (await popup.boundingBox())!;
   const emojiGroups = page.locator(
     '.emoji-picker--open .v3-header > .v3-groups'
   );
@@ -56,13 +60,12 @@ test('переключатель из макета меняет режим, ра
   ).toEqual(nativeRecentIcon);
   const modeBox = (await mode.boundingBox())!;
   const filterBox = (await filters.boundingBox())!;
-  expect(filterBox.y - (modeBox.y + modeBox.height)).toBeCloseTo(15, 1);
+  expect(filterBox.y + filterBox.height).toBeLessThan(modeBox.y);
   const search = page.locator('.v3-search input:visible');
   const searchBox = (await search.boundingBox())!;
   expect(searchBox.y - (filterBox.y + filterBox.height)).toBeCloseTo(15, 1);
-  const popup = page.locator('.emoji-picker--open .v3-emoji-picker');
   expect((await popup.boundingBox())!.width).toBeLessThanOrEqual(359);
-  expect((await popup.boundingBox())!.height).toBeLessThanOrEqual(375);
+  expect(await popup.boundingBox()).toEqual(emojiPopupBox);
   for (const theme of ['light', 'dark']) {
     await smile.click();
     await page
@@ -72,10 +75,12 @@ test('переключатель из макета меняет режим, ра
       })
       .click();
     await smile.click();
+    await expect(emoji).toHaveAttribute('aria-pressed', 'true');
+    const reopenedEmojiBox = (await popup.boundingBox())!;
     await stickers.click();
     await expect(page.locator('.chat-sticker-picker__item')).toHaveCount(15);
-    expect(await mode.boundingBox()).toMatchObject({ width: 200, height: 30 });
-    expect((await popup.boundingBox())!.height).toBeLessThanOrEqual(375);
+    expect(await mode.boundingBox()).toMatchObject({ height: 43 });
+    expect(await popup.boundingBox()).toEqual(reopenedEmojiBox);
     await popup.screenshot({
       path: testInfo.outputPath(`sticker-mode-${theme}.png`)
     });
@@ -120,7 +125,7 @@ test('фильтры прокручиваются мышью и колёсико
     .toBe(0);
   const dragBounds = (await filters
     .getByRole('button', { name: 'Коты', exact: true })
-    .locator('img')
+    .locator('.chat-sticker-picker__pack-preview')
     .boundingBox())!;
   const startX = dragBounds.x + dragBounds.width / 2;
   const startY = dragBounds.y + dragBounds.height / 2;
@@ -138,7 +143,7 @@ test('фильтры прокручиваются мышью и колёсико
   await expect(page.getByTestId('SendCount')).toHaveText('Отправлено: 0');
   await filters
     .getByRole('button', { name: 'Коты', exact: true })
-    .locator('img')
+    .locator('.chat-sticker-picker__pack-preview')
     .click();
   await expect(selectedPack()).toHaveAttribute('aria-label', 'Коты');
   await expect(

@@ -5,6 +5,7 @@ import { BackButtonPriority, useBackButtonHandler } from './useBackButton';
 // Фокус, нужный редактору для вставки эмодзи, не должен открывать клавиатуру.
 export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
   const keyboardVisible = ref(false);
+  const pickerOpen = ref(false);
   let mode: 'closed' | 'editor' | 'search' = 'closed';
   let editor: HTMLElement | null = null;
   let originalInputMode: string | null = null;
@@ -36,6 +37,7 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
     if (isMobile() && mode !== 'editor')
       editor?.setAttribute('inputmode', 'none');
     else restoreInputMode();
+    pickerOpen.value = !!picker();
   };
   const closeKeyboard = () => {
     mode = 'closed';
@@ -134,12 +136,25 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
     closeKeyboard,
     BackButtonPriority.keyboard
   );
+  useBackButtonHandler(
+    pickerOpen,
+    () => {
+      picker()?.closest<HTMLButtonElement>('.smile-button')?.click();
+      closeKeyboard();
+    },
+    BackButtonPriority.overlay
+  );
   watch(
     host,
     (element, _previous, onCleanup) => {
       if (!element) return;
       observer = new MutationObserver(sync);
-      observer.observe(element, { childList: true, subtree: true });
+      observer.observe(element, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class']
+      });
       element.addEventListener('focusin', handleFocus);
       document.addEventListener('pointerdown', preserveFocus, true);
       document.addEventListener('click', preserveSearchPicker);
@@ -156,6 +171,7 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
         editor = null;
         mode = 'closed';
         keyboardVisible.value = false;
+        pickerOpen.value = false;
       });
     },
     { flush: 'post' }

@@ -1,5 +1,6 @@
 <template>
   <section
+    ref="assistantRoot"
     :class="[
       'ai-assistant',
       {
@@ -617,7 +618,11 @@ import {
   type AiResponseMode,
   useAiAssistant
 } from '../../composables/useAiAssistant';
-import { navigateToAI, useUrlWatcher } from '../../composables/navigation';
+import {
+  navigateBackFromChat,
+  navigateToAI,
+  useUrlWatcher
+} from '../../composables/navigation';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { showErrorNotification } from '../../composables/useNotifications';
 import { useContextMenu } from '../../composables/useContextMenu';
@@ -750,6 +755,7 @@ const route = useUrlWatcher();
 const { activeTarget: activeSearchTarget } = useAiMessageSearch();
 const { pendingAiForwardDraft } = useAiForwardDraft();
 const draft = ref('');
+const assistantRoot = ref<HTMLElement | null>(null);
 const contentEditorRef = ref<InstanceType<typeof ContentEditor> | null>(null);
 const scrollRef = ref<HTMLElement | null>(null);
 const isShowScrollToBottomButton = ref(false);
@@ -1230,18 +1236,15 @@ const runMenuSync = (action: () => void): void => {
   }
 };
 
-const closeEmojiPicker = (root: HTMLElement): void => {
+const closeEmojiPicker = (root: HTMLElement): boolean => {
   const openPicker = Array.from(
-    root.querySelectorAll<HTMLElement>('.smile-button .emoji-picker')
-  ).find(picker => {
-    const trigger = picker.closest<HTMLElement>('.smile-button');
-    return (
-      picker.style.display !== 'none' && !!trigger?.getClientRects().length
-    );
-  });
+    root.querySelectorAll<HTMLElement>('.smile-button .emoji-picker--open')
+  ).find(picker => picker.getClientRects().length > 0);
 
   const trigger = openPicker?.closest<HTMLButtonElement>('.smile-button');
-  if (trigger) runMenuSync(() => trigger.click());
+  if (!trigger) return false;
+  runMenuSync(() => trigger.click());
+  return true;
 };
 
 const closeAttachmentPopover = (root: HTMLElement): void => {
@@ -1495,6 +1498,16 @@ const clearMessageSelection = (): void => {
   selectedMessageIds.value = new Set();
   focusComposer();
 };
+
+useBackButtonHandler(
+  () => route.value.type === RouteTypes.AI,
+  () => {
+    if (assistantRoot.value && closeEmojiPicker(assistantRoot.value)) return;
+    if (isSelectionMode.value) clearMessageSelection();
+    else navigateBackFromChat(route.value);
+  },
+  BackButtonPriority.navigation
+);
 
 /** Подготавливает ответ на сообщение или выделенный фрагмент. */
 const startMessageReply = (message: AiAssistantMessage): void => {
