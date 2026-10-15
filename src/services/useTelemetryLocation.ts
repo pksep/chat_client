@@ -1,87 +1,122 @@
 import { Capacitor } from '@capacitor/core';
-import { Geolocation, type PermissionStatus } from '@capacitor/geolocation';
-import { readonly, ref } from 'vue';
+import {
+  Geolocation,
+  type PermissionStatus as NativePermissionStatus
+} from '@capacitor/geolocation';
 
-const STORAGE_KEY = 'chat.telemetry.location.enabled.v1';
 const MAX_AGE_MS = 60_000;
-const readEnabled = (): boolean => {
-  try {
-    return (
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem(STORAGE_KEY) === 'true'
-    );
-  } catch {
-    return false;
-  }
+let deviceLocation: Record<string, unknown> | null = null;
+let sampledAt = 0;
+let lastAttemptAt = 0;
+let status = 'not_sampled';
+let generation = 0;
+let permissionRequested = false;
+let browserPermission: PermissionStatus | null = null;
+let inFlight: Promise<void> | null = null;
+const unavailableListeners = new Set<() => void>();
+
+export const onTelemetryLocationUnavailable = (listener: () => void): void => {
+  unavailableListeners.add(listener);
 };
 
-const enabled = ref(readEnabled());
-const pending = ref(false);
-const errorMessage = ref('');
-let generation = 0;
-let deviceLocation: Record<string, unknown> | null = null;
-let status = 'not_sampled';
-let sampledAt = 0;
-let inFlight: Promise<void> | null = null;
-const disableListeners = new Set<() => void>();
-
-export const onTelemetryLocationDisabled = (listener: () => void): void => {
-  disableListeners.add(listener);
+const clearLocation = (nextStatus: string): void => {
+  generation += 1;
+  deviceLocation = null;
+  sampledAt = 0;
+  status = nextStatus;
+  unavailableListeners.forEach(listener => listener());
 };
 
 export const getTelemetryLocationContext = (): Record<string, unknown> => ({
-  enabled: enabled.value,
   device:
-    enabled.value && Date.now() - sampledAt <= MAX_AGE_MS
-      ? deviceLocation || { status }
-      : { status: enabled.value ? 'not_sampled' : 'disabled' }
+    deviceLocation && Date.now() - sampledAt <= MAX_AGE_MS
+      ? deviceLocation
+      : { status: status === 'resolved' ? 'not_sampled' : status }
 });
+
+const isGranted = (permission: Partial<NativePermissionStatus>): boolean =>
+  permission.location === 'granted' || permission.coarseLocation === 'granted';
+
+const getBrowserPermission = async (): Promise<PermissionState | undefined> => {
+  if (!navigator.permissions?.query) return;
+  try {
+    const permission = await navigator.permissions.query({
+      name: 'geolocation'
+    });
+    if (browserPermission !== permission) {
+      if (browserPermission) browserPermission.onchange = null;
+      browserPermission = permission;
+      permission.onchange = () => {
+        if (permission.state !== 'granted') {
+          clearLocation(
+            permission.state === 'denied' ? 'denied' : 'permission_required'
+          );
+        }
+      };
+    }
+    return permission.state;
+  } catch {
+    return;
+  }
+};
 
 export const refreshTelemetryLocation = (
   requestPermission = false
 ): Promise<void> => {
   if (
-    !enabled.value ||
-    (typeof document !== 'undefined' && document.visibilityState === 'hidden')
+    typeof document !== 'undefined' &&
+    document.visibilityState === 'hidden'
   ) {
     return Promise.resolve();
   }
   if (inFlight) return inFlight;
-  if (!requestPermission && Date.now() - sampledAt < MAX_AGE_MS)
-    return Promise.resolve();
-  const currentGeneration = generation;
   inFlight = (async () => {
     try {
-      let permission: Partial<PermissionStatus> | undefined;
+      let permission: Partial<NativePermissionStatus>;
       if (Capacitor.isNativePlatform()) {
         permission = await Geolocation.checkPermissions();
-        if (requestPermission && permission.location !== 'granted') {
+        if (
+          !isGranted(permission) &&
+          permission.location !== 'denied' &&
+          requestPermission &&
+          !permissionRequested
+        ) {
+          permissionRequested = true;
           permission = await Geolocation.requestPermissions({
             permissions: ['location']
           });
         }
-      } else if (!requestPermission) {
-        // Без явного действия пользователя не открываем системный запрос.
-        const state = await navigator.permissions?.query({
-          name: 'geolocation'
-        });
-        permission = { location: state?.state };
+      } else {
+        const state = await getBrowserPermission();
+        permission = { location: state };
+        if (!state && deviceLocation) permission.location = 'granted';
+        if (
+          state !== 'denied' &&
+          !isGranted(permission) &&
+          requestPermission &&
+          !permissionRequested
+        ) {
+          // В браузере системный запрос открывает сам getCurrentPosition.
+          permissionRequested = true;
+          permission.location = 'granted';
+        }
       }
-      if (
-        permission &&
-        permission.location !== 'granted' &&
-        permission.coarseLocation !== 'granted'
-      ) {
-        throw new Error(
-          'Разрешение на геолокацию не предоставлено. Проверьте настройки устройства.'
+      if (!isGranted(permission)) {
+        clearLocation(
+          permission.location === 'denied' ? 'denied' : 'permission_required'
         );
+        return;
       }
+      // Разрешение проверяется до кэша, чтобы отзыв убирал сохранённую позицию.
+      if (Date.now() - lastAttemptAt < MAX_AGE_MS) return;
+      lastAttemptAt = Date.now();
+      const currentGeneration = generation;
       const position = await Geolocation.getCurrentPosition({
         enableHighAccuracy: true,
         timeout: 10_000,
         maximumAge: MAX_AGE_MS
       });
-      if (!enabled.value || currentGeneration !== generation) return;
+      if (currentGeneration !== generation) return;
       const { latitude, longitude, accuracy } = position.coords;
       if (
         !Number.isFinite(latitude) ||
@@ -105,48 +140,11 @@ export const refreshTelemetryLocation = (
         accuracyMeters: accuracy,
         observedAt: new Date(position.timestamp).toISOString()
       };
-      errorMessage.value = '';
-    } catch (error) {
-      if (currentGeneration !== generation) return;
-      deviceLocation = null;
-      sampledAt = Date.now();
-      status = 'unavailable';
-      errorMessage.value =
-        error instanceof Error ? error.message : 'Геолокация недоступна.';
+    } catch {
+      clearLocation('unavailable');
     }
   })().finally(() => {
     inFlight = null;
   });
   return inFlight;
 };
-
-const setEnabled = async (value: boolean): Promise<void> => {
-  generation += 1;
-  enabled.value = value;
-  deviceLocation = null;
-  sampledAt = 0;
-  errorMessage.value = '';
-  try {
-    localStorage.setItem(STORAGE_KEY, String(value));
-  } catch {
-    /* WebView может запретить хранилище. */
-  }
-  if (!value) {
-    disableListeners.forEach(listener => listener());
-    return;
-  }
-  pending.value = true;
-  try {
-    await inFlight;
-    await refreshTelemetryLocation(true);
-  } finally {
-    pending.value = false;
-  }
-};
-
-export const useTelemetryLocation = () => ({
-  enabled: readonly(enabled),
-  pending: readonly(pending),
-  errorMessage: readonly(errorMessage),
-  setEnabled
-});

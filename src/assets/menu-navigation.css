@@ -263,21 +263,6 @@
   color: var(--text-secondary);
 }
 
-.menu-profile__location .menu-profile__row {
-  justify-content: space-between;
-  height: auto;
-  min-height: 44px;
-  gap: 12px;
-  cursor: pointer;
-}
-
-.menu-profile__location-description {
-  margin: 8px 0 0;
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 18px;
-}
-
 .menu-profile__status {
   display: grid;
   gap: 10px;

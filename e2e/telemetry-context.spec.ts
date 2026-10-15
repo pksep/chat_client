@@ -1,13 +1,13 @@
 import { expect, test } from '@playwright/test';
 
-test('телеметрия отправляет координаты с trace сообщения и очищает очередь при отключении', async ({
+test('телеметрия собирает координаты по умолчанию и очищает очередь при отзыве разрешения', async ({
   page
 }) => {
   const events: any[] = [];
   await page.route('**/__telemetry-context', route =>
     route.fulfill({
       contentType: 'text/html',
-      body: '<!doctype html><div id="app"></div>'
+      body: '<!doctype html><script type="module" src="/@vite/client"></script><div id="app"></div>'
     })
   );
   await page.route('**/telemetry-test-api/telemetry/events', route => {
@@ -17,7 +17,11 @@ test('телеметрия отправляет координаты с trace с
   await page.goto('/__telemetry-context');
   const persisted = await page.evaluate(async () => {
     document.cookie = 'authToken=telemetry-test;path=/';
-    const { setConfig } = await import('/src/services/useConfig.ts');
+    const {
+      setConfig,
+      telemetry,
+      telemetryLocation: geo
+    } = await import('/e2e/fixtures/telemetry-storage-harness.ts');
     setConfig({ CHAT_API_DOMAIN: `${location.origin}/telemetry-test-api` });
     Object.defineProperty(navigator.geolocation, 'getCurrentPosition', {
       value: (resolve: PositionCallback) =>
@@ -26,15 +30,20 @@ test('телеметрия отправляет координаты с trace с
           coords: { latitude: 40.18, longitude: 44.51, accuracy: 25 }
         } as GeolocationPosition)
     });
-    const geo = await import('/src/services/useTelemetryLocation.ts');
-    await geo.useTelemetryLocation().setEnabled(true);
-    const telemetry = await import('/src/services/useTelemetry.ts');
+    const permission = {
+      state: 'granted',
+      onchange: null as null | (() => void)
+    };
+    Object.defineProperty(navigator.permissions, 'query', {
+      value: async () => permission
+    });
     telemetry.recordTelemetryEvent({
       category: 'chat',
       name: 'chat.message_send.start',
       traceId: 'message-location-trace',
       payload: { topicId: 'topic' }
     });
+    await geo.refreshTelemetryLocation();
     await Promise.resolve();
     await telemetry.flushTelemetryEvents();
     telemetry.recordTelemetryEvent({
@@ -46,9 +55,11 @@ test('телеметрия отправляет координаты с trace с
     );
     telemetry.recordTelemetryEvent({
       category: 'chat',
-      name: 'chat.queued_before_location_disabled'
+      name: 'chat.queued_before_location_revoked'
     });
-    await geo.useTelemetryLocation().setEnabled(false);
+    permission.state = 'denied';
+    permission.onchange?.();
+    await geo.refreshTelemetryLocation();
     await telemetry.flushTelemetryEvents();
     return persisted;
   });
@@ -75,7 +86,7 @@ test('телеметрия отправляет координаты с trace с
   expect(persisted.length).toBeGreaterThan(0);
   expect(persisted[0].context.location).toBeUndefined();
   expect(
-    events.find(event => event.name === 'chat.queued_before_location_disabled')
+    events.find(event => event.name === 'chat.queued_before_location_revoked')
       .context.location
   ).toBeUndefined();
 });
@@ -87,7 +98,7 @@ test('список топиков записывает расхождение с
   await page.route('**/__topic-telemetry', route =>
     route.fulfill({
       contentType: 'text/html',
-      body: '<!doctype html><div id="app"></div>'
+      body: '<!doctype html><script type="module" src="/@vite/client"></script><div id="app"></div>'
     })
   );
   await page.route('**/telemetry-test-api/telemetry/events', route => {
@@ -98,14 +109,17 @@ test('список топиков записывает расхождение с
   await page.evaluate(async () => {
     await import('/src/assets/chat-container.css');
     document.cookie = 'authToken=telemetry-test;path=/';
-    const { setConfig } = await import('/src/services/useConfig.ts');
+    const {
+      createApp,
+      h,
+      reactive,
+      setConfig,
+      authedUser,
+      messages,
+      TopicListContent: Content
+    } = await import('/e2e/fixtures/telemetry-storage-harness.ts');
     setConfig({ CHAT_API_DOMAIN: `${location.origin}/telemetry-test-api` });
-    const { createApp, h, reactive } = await import(
-      '/node_modules/.vite/deps/vue.js'
-    );
-    const { authedUser } = await import('/src/composables/useAuth.ts');
     authedUser.value = { id: 'self', initials: 'Т' };
-    const messages = await import('/src/services/useMessages.ts');
     messages.saveMessagesToLocal('topic', [
       {
         id: 'message',
@@ -115,9 +129,6 @@ test('список топиков записывает расхождение с
         createdAt: new Date().toISOString()
       }
     ]);
-    const { default: Content } = await import(
-      '/src/components/ContactList/TopicListItemContent.vue'
-    );
     const topic = reactive({
       id: 'topic',
       name: 'Тест',
@@ -138,7 +149,9 @@ test('список топиков записывает расхождение с
   await expect(page.locator('.is-read')).toBeVisible();
   await expect(page.locator('.contact-list__notification')).toBeVisible();
   await page.evaluate(async () => {
-    const t = await import('/src/services/useTelemetry.ts');
+    const { telemetry: t } = await import(
+      '/e2e/fixtures/telemetry-storage-harness.ts'
+    );
     await t.flushTelemetryEvents();
   });
   expect(events).toEqual(
@@ -172,7 +185,9 @@ test('список топиков записывает расхождение с
   });
   await page.clock.runFor(15_001);
   await page.evaluate(async () => {
-    const t = await import('/src/services/useTelemetry.ts');
+    const { telemetry: t } = await import(
+      '/e2e/fixtures/telemetry-storage-harness.ts'
+    );
     await t.flushTelemetryEvents();
   });
   await expect

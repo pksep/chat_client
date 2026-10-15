@@ -86,36 +86,6 @@
           />
         </div>
 
-        <div class="menu-profile__location">
-          <label class="menu-profile__row">
-            <span class="menu-profile__row-label"
-              >Геолокация для диагностики</span
-            >
-            <input
-              type="checkbox"
-              :checked="locationEnabled"
-              :disabled="locationPending"
-              :data-testid="`${props.dataTestid}-MenuProfilePanel-Location`"
-              @change="
-                setLocationEnabled(($event.target as HTMLInputElement).checked)
-              "
-            />
-          </label>
-          <p class="menu-profile__location-description">
-            Передавать координаты устройства при отправке сообщений для
-            диагностики. Потребуется разрешение на геолокацию. Можно отключить в
-            любой момент. Город и страна по IP определяются приблизительно; при
-            VPN — по адресу VPN.
-          </p>
-          <p
-            v-if="locationError"
-            class="menu-profile__status-error"
-            role="status"
-          >
-            {{ locationError }}
-          </p>
-        </div>
-
         <div class="menu-profile__status">
           <div
             v-if="!currentStatusLabel"
@@ -960,7 +930,6 @@ import ConfirmModal from '../UI/ConfirmModal.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import FileIcon from '../UI/FileIcon.vue';
 import { useMobileApp } from '../../composables/useMobileApp';
-import { useTelemetryLocation } from '../../services/useTelemetryLocation';
 import { useThemeStore } from '../../stores/theme';
 import {
   isStatusPresetDesignPreview,
@@ -998,12 +967,6 @@ type BackgroundDeleteTarget = {
 const themeStore = useThemeStore();
 const { isDarkTheme } = storeToRefs(themeStore);
 const authUser = computed(() => getAuthUser() as IUser | null);
-const {
-  enabled: locationEnabled,
-  pending: locationPending,
-  errorMessage: locationError,
-  setEnabled: setLocationEnabled
-} = useTelemetryLocation();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const statusPresets = computed(() => [
   ...USER_STATUS_PRESETS.map(status => ({ ...status, custom: false })),
