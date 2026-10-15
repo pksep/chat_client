@@ -1,26 +1,52 @@
 <template>
-  <Teleport
-    v-if="enabled"
-    :to="headerTarget || 'body'"
-    :disabled="!headerTarget"
-  >
+  <Teleport v-if="enabled" :to="modeTarget || 'body'" :disabled="!modeTarget">
     <div
-      v-show="!!headerTarget"
+      v-show="!!modeTarget"
       ref="modeControl"
       class="chat-sticker-picker__mode"
+      data-testid="StickerPickerMode"
       role="group"
       aria-label="Выбор эмодзи или стикеров"
       @click.stop
       @pointerdown.stop
       @keydown="handleModeKey"
     >
-      <Switch
-        :items="modeItems"
-        :default-value="active ? 'stickers' : 'emoji'"
-        theme="minor"
-        data-testid="StickerPickerMode"
-        @change="chooseMode($event.value)"
-      />
+      <button
+        v-for="(mode, index) in modeItems"
+        :key="mode.value"
+        type="button"
+        class="chat-sticker-picker__mode-button"
+        :aria-pressed="active === (index === 1)"
+        @click="chooseMode(mode.value)"
+      >
+        <Icon
+          v-if="mode.value === 'emoji'"
+          :name="IconNameEnum.smile"
+          :width="16"
+          :height="16"
+          aria-hidden="true"
+        />
+        <svg
+          v-else
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M9.5 14H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v5.5L9.5 14Z"
+            stroke="currentColor"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M9.5 14v-3a1.5 1.5 0 0 1 1.5-1.5h3"
+            stroke="currentColor"
+            stroke-linejoin="round"
+          />
+        </svg>
+        {{ mode.label }}
+      </button>
     </div>
   </Teleport>
   <Teleport
@@ -154,7 +180,7 @@ import {
   shallowRef,
   watch
 } from 'vue';
-import { Switch } from '@pksep/yui';
+import { Icon, IconNameEnum } from '@pksep/yui';
 import {
   loadStickerPacks,
   loadStickerPage,
@@ -184,6 +210,7 @@ const active = ref(false);
 const prepared = ref(false);
 const bodyTarget = shallowRef<HTMLElement | null>(null);
 const headerTarget = shallowRef<HTMLElement | null>(null);
+const modeTarget = shallowRef<HTMLElement | null>(null);
 const modeControl = ref<HTMLElement | null>(null);
 const packRail = ref<HTMLElement | null>(null);
 const packRailStyle = ref<Record<string, string>>({});
@@ -457,6 +484,14 @@ const loadFirstPage = async () => {
       query.value,
       excludedPacks.value
     ]);
+  const clearPage = () => {
+    items.value = [];
+    nextCursor.value = null;
+    loadedPageKey = '';
+    loadedPageTotal = 0;
+    scrollTop.value = 0;
+    if (scroller.value) scroller.value.scrollTop = 0;
+  };
   if (loadedPageKey !== pageKey()) {
     items.value = [];
     nextCursor.value = null;
@@ -471,6 +506,7 @@ const loadFirstPage = async () => {
           .then(result => {
             if (id !== requestId) return;
             packs.value = result.packs.filter(pack => pack.count > 0);
+            if (!enabledPacks.value.length) clearPage();
             refreshPacks = false;
             return result;
           })
@@ -486,7 +522,10 @@ const loadFirstPage = async () => {
     // Обновление каталога не убирает уже готовые обложки и кадры.
     if (!packs.value.length) await refresh;
     if (id !== requestId) return;
-    if (!enabledPacks.value.length) return;
+    if (!enabledPacks.value.length) {
+      clearPage();
+      return;
+    }
     if (
       selectedPack.value !== 'recent' &&
       !enabledPacks.value.some(pack => pack.id === selectedPack.value)
@@ -516,6 +555,10 @@ const loadFirstPage = async () => {
           );
     const page = await pageRequest;
     if (id !== requestId) return;
+    if (!enabledPacks.value.length) {
+      clearPage();
+      return;
+    }
     const unchanged =
       loadedPageKey === key &&
       loadedPageTotal === page.total &&
@@ -660,6 +703,7 @@ const detachWrapper = () => {
   wrapper = null;
   bodyTarget.value = null;
   headerTarget.value = null;
+  modeTarget.value = null;
 };
 const syncWrapper = () => {
   const open = props.enabled
@@ -699,6 +743,8 @@ const syncWrapper = () => {
   bodyTarget.value = wrapper?.querySelector<HTMLElement>('.v3-body') || null;
   headerTarget.value =
     wrapper?.querySelector<HTMLElement>('.v3-header') || null;
+  modeTarget.value =
+    wrapper?.querySelector<HTMLElement>('.v3-emoji-picker') || null;
   recentIconSrc.value =
     wrapper?.querySelector<HTMLImageElement>(
       '.v3-header .v3-groups .v3-group:first-child img'
@@ -728,11 +774,13 @@ const chooseMode = (mode: string) => {
 const handleModeKey = (event: KeyboardEvent) => {
   if (!(event.target instanceof HTMLElement)) return;
   const items = [
-    ...(modeControl.value?.querySelectorAll<HTMLElement>(
-      '.switch-yui-kit-item'
+    ...(modeControl.value?.querySelectorAll<HTMLButtonElement>(
+      '.chat-sticker-picker__mode-button'
     ) || [])
   ];
-  const index = items.indexOf(event.target);
+  const index = items.indexOf(
+    event.target.closest('button') as HTMLButtonElement
+  );
   if (index < 0) return;
   let target = index;
   if (event.key === 'ArrowRight' || event.key === 'End') target = 1;
@@ -743,17 +791,6 @@ const handleModeKey = (event: KeyboardEvent) => {
   chooseMode(modeItems[target].value);
   items[target].focus({ preventScroll: true });
 };
-watch([modeControl, active], async () => {
-  await nextTick();
-  modeControl.value
-    ?.querySelectorAll<HTMLElement>('.switch-yui-kit-item')
-    .forEach((item, index) => {
-      item.setAttribute('role', 'button');
-      item.setAttribute('tabindex', '0');
-      item.setAttribute('aria-label', modeItems[index].label);
-      item.setAttribute('aria-pressed', String(active.value === (index === 1)));
-    });
-});
 const click = (event: Event) => {
   if (!props.enabled || !(event.target instanceof Element)) return;
   syncWrapper();
@@ -949,18 +986,14 @@ onBeforeUnmount(() => {
 
 <style>
 [data-chat-stickers-enabled]
-  .v3-header:not(:has(> .chat-sticker-picker__mode))::before {
+  .v3-emoji-picker:not(:has(> .chat-sticker-picker__mode))::after {
   content: '';
-  flex: 0 0 30px;
-  height: 30px;
-  order: -1;
+  flex: 0 0 43px;
+  height: 43px;
 }
 .chat-stickers--available {
   position: relative;
-  --chat-picker-height: 427px;
-}
-.chat-stickers--active {
-  --chat-picker-height: 375px;
+  --chat-picker-height: 382px;
 }
 .emoji-picker.chat-stickers--available .v3-emoji-picker {
   height: min(
@@ -970,38 +1003,54 @@ onBeforeUnmount(() => {
   );
 }
 .chat-sticker-picker__mode {
-  order: -1;
-  flex: 0 0 30px;
-  align-self: flex-start;
-  width: 200px;
-}
-.chat-stickers--available .chat-sticker-picker__mode .switch-yui-kit-list {
-  width: 200px;
-  height: 30px;
-  padding: 2px;
-  gap: 0;
+  display: flex;
+  order: 1;
+  flex: 0 0 43px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  height: 43px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--border-table, #e7e7e7);
   box-sizing: border-box;
-  transition: none;
 }
-.chat-stickers--available .chat-sticker-picker__mode .switch-yui-kit-item {
-  width: 98px;
-  height: 26px;
-  padding: 0;
+.chat-sticker-picker__mode-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-table, #e7e7e7);
+  border-radius: 100px;
+  background: transparent;
+  color: var(--text-primary, #181818);
   box-sizing: border-box;
+  font: inherit;
+  font-size: 14px;
   line-height: 17px;
+  cursor: pointer;
   transition:
     background-color 0.15s ease,
+    border-color 0.15s ease,
     color 0.15s ease;
 }
-.chat-sticker-picker__mode .switch-yui-kit-item:focus-visible {
+.chat-sticker-picker__mode-button[aria-pressed='true'] {
+  border-color: var(--action-primary-bg, #77a6ff);
+  color: var(--action-primary-bg, #77a6ff);
+}
+.chat-sticker-picker__mode-button:hover {
+  background: var(--action-secondary-hover-bg, #f2f7ff);
+}
+.chat-sticker-picker__mode-button:focus-visible {
   outline: 2px solid var(--border-hover, #9cbeff);
   outline-offset: -2px;
 }
 .chat-stickers--active .v3-header > .v3-groups {
   visibility: hidden;
 }
-.chat-stickers--active .v3-body-inner,
-.chat-stickers--active .v3-footer {
+.chat-stickers--active .v3-body-inner {
   display: none !important;
 }
 .chat-sticker-picker {

@@ -211,7 +211,7 @@ for (const status of [200, 404, 500]) {
         'Не удалось загрузить стикеры'
       );
     await expect(page.locator('.chat-sticker-picker__packs')).toHaveCount(0);
-    await expect(page.locator('.sticker-picker__item')).toHaveCount(0);
+    await expect(page.locator('.chat-sticker-picker__item')).toHaveCount(0);
     if (status !== 200) {
       state.status = 200;
       state.packs = availablePacks;
@@ -244,6 +244,6 @@ test('попап всегда открывается на эмодзи и очи
   await expect(
     page.getByText('Пока нет наборов стикеров', { exact: true })
   ).toBeVisible();
-  await expect(page.locator('.sticker-picker__item')).toHaveCount(0);
+  await expect(page.locator('.chat-sticker-picker__item')).toHaveCount(0);
   await expect(page.locator('.chat-sticker-picker__packs')).toHaveCount(0);
 });
