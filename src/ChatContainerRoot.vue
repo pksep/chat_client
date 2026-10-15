@@ -6,7 +6,6 @@
 </template>
 
 <script setup lang="ts">
-import { Capacitor } from '@capacitor/core';
 import { nextTick, onBeforeMount, onUnmounted, watch } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 
@@ -47,6 +46,7 @@ import { getGroupById } from './composables/useGroup';
 import { useUrlWatcher } from './composables/navigation';
 import { fetchPinnedMessagesForTopic } from './services/useMessages';
 import { initPushNotifications } from './services/usePushNotifications';
+import { initTelemetryLocation } from './services/useTelemetryLocation';
 import {
   clearTopicNotifications,
   notificationTopicRefreshRequest,
@@ -630,12 +630,12 @@ const runAppInitialization = async () => {
     setAuthToken(authData.token);
     // Навигация из push уже подключена в main.ts. Регистрация токена и
     // запрос разрешения не должны занимать мост перед свежей историей.
-    const pushReady = Capacitor.isNativePlatform()
-      ? waitForStartupPaint()
-      : Promise.resolve();
-    void pushReady.then(initPushNotifications).catch(error => {
-      console.warn('Не удалось инициализировать push-уведомления:', error);
-    });
+    void waitForStartupPaint()
+      .then(initTelemetryLocation)
+      .then(initPushNotifications)
+      .catch(error => {
+        console.warn('Не удалось инициализировать push-уведомления:', error);
+      });
 
     const authUserId =
       authData.user?.id ||

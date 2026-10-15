@@ -62,6 +62,7 @@ import {
 } from './composables/useAuth';
 import { fetchUsersForAuth } from './composables/useUsers';
 import { initShareIntentHandling } from './services/useShareIntent';
+import { initTelemetryLocation } from './services/useTelemetryLocation';
 import {
   dispatchNativeStartupReady,
   NOTIFICATION_TOPIC_SHELL_READY_EVENT
@@ -164,6 +165,7 @@ const dispatchNativeStartupReadyOnce = () => {
 
   isNativeStartupReadyDispatched = true;
   dispatchNativeStartupReady();
+  void initTelemetryLocation();
 };
 
 const removeStartupShell = () => {
