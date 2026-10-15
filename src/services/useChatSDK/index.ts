@@ -51,10 +51,7 @@ import { ChatMedia, ChatMediaInterface } from './media';
 import { ChatWS, ChatWSInterface } from './ws';
 import { ChatUtils, ChatUtilsInterface } from './utils';
 import { ITopic } from '../../components/interfaces/interfaces';
-import {
-  getAuthToken,
-  subscribeAuthToken
-} from '../../composables/useLogin';
+import { getAuthToken, subscribeAuthToken } from '../../composables/useLogin';
 import {
   isAuthError,
   redirectToAuthorization,
@@ -762,9 +759,7 @@ export class ChatSDK {
             }
 
             if (authError?.status === 503) {
-              console.warn(
-                'Socket.IO: Сервис авторизации временно недоступен'
-              );
+              console.warn('Socket.IO: Сервис авторизации временно недоступен');
             }
           }
         );
