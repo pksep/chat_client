@@ -3,10 +3,10 @@
   cycles: 1
   deleted: 8
   inserted: 8
-  seconds: 316.935572964
+  seconds: 352.142055993
   version: 0.60.0
   what: judges-summary
-  when: 2026-10-15 20:37:54.523630640 Z
+  when: 2026-10-15 23:23:47.351314193 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -24061,6 +24061,7 @@
   is_human: 1
   issue: 437
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -24085,6 +24086,7 @@
   is_human: 1
   issue: 438
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -24109,6 +24111,7 @@
   is_human: 1
   issue: 439
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -24133,6 +24136,7 @@
   is_human: 1
   issue: 440
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -24157,6 +24161,7 @@
   is_human: 1
   issue: 441
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -24181,6 +24186,7 @@
   is_human: 1
   issue: 442
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -24205,6 +24211,7 @@
   is_human: 1
   issue: 443
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -24229,6 +24236,7 @@
   is_human: 1
   issue: 444
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -24253,6 +24261,7 @@
   is_human: 1
   issue: 445
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -24277,6 +24286,7 @@
   is_human: 1
   issue: 446
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -24301,6 +24311,7 @@
   is_human: 1
   issue: 448
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -24308,13 +24319,13 @@
   where: github
   who: 93074025
 - _id: 1370
-  _job: 38802587065
-  _time: 2026-10-15 20:33:55.178645584 Z
+  _job: 38822561463
+  _time: 2026-10-15 23:19:12.001223958 Z
   _version: 0.19.6/0.60.0/0.17.11
   earliest_issue_was_found: 1
-  events_were_scanned: 22137577109
+  events_were_scanned: 24132990883
   latest_issue_was_found: 72
-  min_pull_was_found: 450
+  min_pull_was_found: 451
   repository: 1053332035
   what: iterate
   where: github
