@@ -51,7 +51,10 @@ import { ChatMedia, ChatMediaInterface } from './media';
 import { ChatWS, ChatWSInterface } from './ws';
 import { ChatUtils, ChatUtilsInterface } from './utils';
 import { ITopic } from '../../components/interfaces/interfaces';
-import { getAuthToken } from '../../composables/useLogin';
+import {
+  getAuthToken,
+  subscribeAuthToken
+} from '../../composables/useLogin';
 import {
   isAuthError,
   redirectToAuthorization,
@@ -132,6 +135,7 @@ export class ChatSDK {
   private token?: string;
   private socket: Socket | null = null;
   private removeIncomingChatEvents: (() => void) | null = null;
+  private removeAuthTokenListener: (() => void) | null = null;
   private readonly multipartUploadAbortControllers = new Map<
     string,
     AbortController
@@ -167,6 +171,14 @@ export class ChatSDK {
     this.group = new ChatGroup(this.reqi);
     this.media = new ChatMedia(this.reqi);
     this.utils = new ChatUtils(this.reqi);
+    this.removeAuthTokenListener = subscribeAuthToken(token => {
+      if (!token) {
+        this.disconnect();
+        return;
+      }
+
+      void this.updateAccessToken(token);
+    });
   }
 
   setConnectionStateListener(listener?: (connected: boolean) => void): void {
@@ -741,6 +753,21 @@ export class ChatSDK {
         this.socket.on('userAccessUpdated', () => {
           void refreshChatAccess();
         });
+        this.socket.on(
+          'authError',
+          (authError: { status?: number; code?: string; message?: string }) => {
+            if (authError?.status === 401) {
+              redirectToAuthorization();
+              return;
+            }
+
+            if (authError?.status === 503) {
+              console.warn(
+                'Socket.IO: Сервис авторизации временно недоступен'
+              );
+            }
+          }
+        );
         this.socket.on('connect', () => {
           void refreshChatAccess();
           authReconnectAttempted = false;
@@ -764,6 +791,18 @@ export class ChatSDK {
         });
 
         this.socket.on('connect_error', async error => {
+          const authStatus = (error as { data?: { status?: number } })?.data
+            ?.status;
+
+          if (authStatus === 503) {
+            console.warn(
+              'Socket.IO: Сервис авторизации временно недоступен, сессия сохранена'
+            );
+            this.emitConnectionState(false);
+            rejectOnce(error);
+            return;
+          }
+
           if (!authReconnectAttempted && isAuthError(error)) {
             authReconnectAttempted = true;
 
@@ -938,6 +977,8 @@ export class ChatSDK {
   disconnect(): void {
     this.removeIncomingChatEvents?.();
     this.removeIncomingChatEvents = null;
+    this.removeAuthTokenListener?.();
+    this.removeAuthTokenListener = null;
     if (this.socket) {
       this.emitConnectionState(false);
       this.socket.disconnect();
@@ -945,9 +986,31 @@ export class ChatSDK {
     }
   }
 
-  private authenticate(token: string): void {
-    if (this.socket && this.socket.connected) {
-      this.socket.emit('authenticate', { token });
+  async updateAccessToken(token: string): Promise<boolean> {
+    this.token = token;
+
+    if (!this.socket) {
+      return true;
+    }
+
+    this.socket.auth = { token };
+
+    if (!this.socket.connected) {
+      return true;
+    }
+
+    try {
+      const response = (await this.socket
+        .timeout(5000)
+        .emitWithAck('authenticate', { token })) as {
+        success?: boolean;
+        status?: number;
+      };
+
+      return response?.success === true;
+    } catch (error) {
+      console.warn('Socket.IO: Не удалось обновить токен соединения', error);
+      return false;
     }
   }
 

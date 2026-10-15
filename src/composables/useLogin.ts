@@ -10,6 +10,14 @@ interface RegisterParams {
   users: RegisterUser[];
 }
 
+type AuthTokenListener = (token: string | null) => void;
+
+const authTokenListeners = new Set<AuthTokenListener>();
+
+const notifyAuthTokenChanged = (token: string | null): void => {
+  authTokenListeners.forEach(listener => listener(token));
+};
+
 const setCookie = (name: string, value: string, expiresIn: number): void => {
   const date = new Date();
   date.setTime(date.getTime() + expiresIn * 1000);
@@ -46,6 +54,7 @@ export const useRegister = async (
 
 export const useLogout = (): void => {
   removeCookie('authToken');
+  notifyAuthTokenChanged(null);
 
   sessionStorage.removeItem('chat_user');
 };
@@ -56,9 +65,18 @@ export const setAuthToken = (
 ): void => {
   if (!expireTimeSeconds) {
     document.cookie = `authToken=${token};path=/;SameSite=Strict`;
+    notifyAuthTokenChanged(token);
     return;
   }
   setCookie('authToken', token, expireTimeSeconds);
+  notifyAuthTokenChanged(token);
+};
+
+export const subscribeAuthToken = (
+  listener: AuthTokenListener
+): (() => void) => {
+  authTokenListeners.add(listener);
+  return () => authTokenListeners.delete(listener);
 };
 
 export const getAuthToken = (): string | null => {

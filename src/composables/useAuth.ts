@@ -3,7 +3,7 @@ import type {
   IUser
 } from '../components/interfaces/interfaces';
 import { ref, Ref } from 'vue';
-import { setAuthToken } from './useLogin';
+import { setAuthToken, useLogout } from './useLogin';
 import { getConfig } from '../services/useConfig';
 import { configureCustomBackgroundSync } from '../services/useCustomBackgroundSync';
 import {
@@ -43,6 +43,14 @@ interface StoredBootstrapErpSession {
 }
 
 const getAccessTokenFromResponse = (data: Record<string, unknown>): string => {
+  const sharedAccessTokenCandidate = data.erpToken;
+  if (
+    typeof sharedAccessTokenCandidate === 'string' &&
+    sharedAccessTokenCandidate
+  ) {
+    return sharedAccessTokenCandidate;
+  }
+
   const accessTokenCandidate = data.accessToken;
   if (typeof accessTokenCandidate === 'string' && accessTokenCandidate) {
     return accessTokenCandidate;
@@ -86,48 +94,25 @@ const normalizeAuthResponse = (data: Record<string, unknown>): AuthResponse => {
   };
 };
 
-const isLoopbackUrl = (value?: string): boolean => {
-  const url = value?.trim();
-
-  if (!url) {
-    return false;
-  }
-
-  try {
-    const hostname = new URL(url).hostname;
-
-    return ['localhost', '127.0.0.1', '[::1]', '::1'].includes(hostname);
-  } catch {
-    return false;
-  }
-};
-
 const getCredentialsLoginUrl = (config: IChatContainerConfig): string => {
   const chatApi = config.CHAT_API_DOMAIN?.trim();
 
-  if (chatApi && isLoopbackUrl(chatApi)) {
+  if (chatApi) {
     return `${chatApi.replace(/\/+$/, '')}/auth/credentials-login`;
   }
 
-  const authApi = config.CHAT_AUTH_API?.trim();
-
-  if (!authApi) {
-    throw new Error('Chat auth API is not configured');
-  }
-
-  return `${authApi.replace(/\/+$/, '')}/chat/credentials-login`;
+  throw new Error('Chat API is not configured');
 };
 
 export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
   const config = getConfig();
   return withNetworkTimeout(async signal => {
-    const response = await fetch(`${config.CHAT_AUTH_API}/chat/token`, {
-      method: 'POST',
+    const response = await fetch(`${config.CHAT_API_DOMAIN}/auth/session`, {
+      method: 'GET',
       signal,
       headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ erpToken })
+        Authorization: `Bearer ${erpToken}`
+      }
     });
     const data = await response.json();
 
@@ -141,7 +126,12 @@ export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
     if (signal.aborted) {
       throw new DOMException('Сервер не ответил вовремя', 'TimeoutError');
     }
-    return normalizeAuthResponse(data);
+    return normalizeAuthResponse({
+      token: erpToken,
+      accessToken: erpToken,
+      erpToken,
+      user: data
+    });
   });
 };
 
@@ -151,6 +141,7 @@ export const loginWithCredentials = async (
   const config = getConfig();
   const response = await fetch(getCredentialsLoginUrl(config), {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json'
     },
@@ -165,9 +156,7 @@ export const loginWithCredentials = async (
 
   const authResponse = normalizeAuthResponse(data);
 
-  return isLoopbackUrl(config.CHAT_API_DOMAIN)
-    ? { ...authResponse, erpToken: undefined }
-    : authResponse;
+  return { ...authResponse, erpToken: undefined };
 };
 
 export const saveChatAuthSession = (
@@ -263,6 +252,7 @@ export const redirectToAuthorization = (): void => {
     window.location.href
   );
   clearErpAuthSession();
+  useLogout();
   authedUser.value = null;
   skipStartupShellOnNextAuthScreen();
   window.location.replace(authorizationUrl);
@@ -291,14 +281,21 @@ const getAuthErrorStatus = (error: unknown): number | null => {
 
   const candidate = error as {
     status?: number;
+    data?: { status?: number };
     response?: { status?: number };
-    cause?: { status?: number; response?: { status?: number } };
+    cause?: {
+      status?: number;
+      data?: { status?: number };
+      response?: { status?: number };
+    };
   };
 
   return (
     candidate.status ??
+    candidate.data?.status ??
     candidate.response?.status ??
     candidate.cause?.status ??
+    candidate.cause?.data?.status ??
     candidate.cause?.response?.status ??
     null
   );
@@ -323,8 +320,66 @@ export const isAuthError = (error: unknown): boolean => {
   );
 };
 
-export const tryRefreshErpSession = async (): Promise<AuthResponse | null> => {
-  return null;
+let sessionRefreshPromise: Promise<AuthResponse | null> | null = null;
+
+export const tryRefreshErpSession = (): Promise<AuthResponse | null> => {
+  if (sessionRefreshPromise) {
+    return sessionRefreshPromise;
+  }
+
+  sessionRefreshPromise = refreshErpSession().finally(() => {
+    sessionRefreshPromise = null;
+  });
+
+  return sessionRefreshPromise;
+};
+
+export const logoutChatSession = async (): Promise<void> => {
+  const config = getConfig();
+
+  try {
+    await fetch(`${config.CHAT_API_DOMAIN.replace(/\/+$/, '')}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include'
+    });
+  } catch (error) {
+    console.warn('Не удалось очистить refresh-сессию чата:', error);
+  }
+};
+
+const refreshErpSession = async (): Promise<AuthResponse | null> => {
+  const config = getConfig();
+
+  try {
+    const response = await fetch(
+      `${config.CHAT_API_DOMAIN.replace(/\/+$/, '')}/auth/refresh`,
+      {
+        method: 'POST',
+        credentials: 'include'
+      }
+    );
+
+    if (response.status === 401) {
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw Object.assign(
+        new Error(data?.message || 'Сервис авторизации временно недоступен'),
+        { status: response.status }
+      );
+    }
+
+    return normalizeAuthResponse(data);
+  } catch (error) {
+    if (isAuthError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
 };
 
 export const withErpRefreshOnAuthError = async <T>(
@@ -334,6 +389,12 @@ export const withErpRefreshOnAuthError = async <T>(
     return await operation();
   } catch (error) {
     if (isAuthError(error)) {
+      const refreshed = await tryRefreshErpSession();
+
+      if (refreshed?.token) {
+        return operation();
+      }
+
       redirectToAuthorization();
     }
 

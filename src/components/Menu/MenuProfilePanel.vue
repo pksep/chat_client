@@ -902,9 +902,9 @@ import EmojiIcon from '../UI/EmojiIcon.vue';
 import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
 import {
   getAuthUser,
+  logoutChatSession,
   redirectToAuthorization
 } from '../../composables/useAuth';
-import { useLogout } from '../../composables/useLogin';
 import { clearAnyChatBackgroundSyncSession } from '../../services/useChatBackgroundSync';
 import { cleanupPushNotificationsOnLogout } from '../../services/usePushNotifications';
 import {
@@ -1635,7 +1635,7 @@ const runLogoutCleanup = async (): Promise<void> => {
 
 const handleLogout = async (): Promise<void> => {
   await runLogoutCleanup();
-  useLogout();
+  await logoutChatSession();
   redirectToAuthorization();
 };
 
