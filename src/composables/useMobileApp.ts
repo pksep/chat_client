@@ -15,6 +15,12 @@ import {
   type RuStoreInstallState
 } from '../services/useRuStoreUpdate';
 import { markLiveKitPageReloadIntent } from '../services/live-kit-page-reload-intent';
+import {
+  createTelemetryTraceId,
+  flushTelemetryEvents,
+  getTelemetryErrorPayload,
+  recordTelemetryEvent
+} from '../services/useTelemetry';
 
 const RUSTORE_APP_URL = 'https://www.rustore.ru/catalog/app/sep.pksep.app';
 const WEB_UPDATE_INFO_URL = '/web-update.json';
@@ -50,6 +56,57 @@ let lastWebUpdateCheckAt = 0;
 let webUpdateGeneration = 0;
 let removeWebUpdateListeners: (() => void) | null = null;
 let nativeUpdateSubscriptionPromise: Promise<void> | null = null;
+let nativeUpdateTraceId: string | null = null;
+let nativeUpdateStartedAt = 0;
+let updateWatchdog: ReturnType<typeof setTimeout> | null = null;
+let lastUpdateProgressBucket = -1;
+let lastTelemetryInstallStatus = -1;
+let lastDownloadedBytes = 0;
+
+const recordUpdateTelemetry = (
+  name: string,
+  payload: Record<string, unknown> = {},
+  level: 'info' | 'warn' | 'error' = 'info'
+) => {
+  recordTelemetryEvent({
+    category: 'app',
+    name: `app.update.${name}`,
+    level,
+    traceId: nativeUpdateTraceId,
+    entityType: 'app_update',
+    payload: {
+      installStatus: updateInstallStatus.value,
+      updateAvailability: nativeAppUpdateInfo.value?.updateAvailability,
+      availableVersionCode: nativeAppUpdateInfo.value?.availableVersionCode,
+      currentAppVersion: currentAppVersion.value,
+      downloadPercent: updateDownloadPercent.value,
+      flowPending: isUpdateFlowPending.value,
+      showBanner: showUpdateBanner.value,
+      elapsedMs: nativeUpdateStartedAt
+        ? Date.now() - nativeUpdateStartedAt
+        : undefined,
+      ...payload
+    }
+  });
+};
+
+const clearUpdateWatchdog = () => {
+  if (updateWatchdog) clearTimeout(updateWatchdog);
+  updateWatchdog = null;
+};
+
+const watchUpdateProgress = (stage: string) => {
+  clearUpdateWatchdog();
+  updateWatchdog = setTimeout(() => {
+    updateWatchdog = null;
+    recordUpdateTelemetry(
+      'progress_timeout',
+      { stage, timeoutMs: 60_000 },
+      'warn'
+    );
+    void flushTelemetryEvents();
+  }, 60_000);
+};
 
 const shouldShowNativeUpdateBanner = (
   appUpdateInfo: RuStoreAppUpdateInfo | null
@@ -130,6 +187,44 @@ export function useMobileApp() {
     showUpdateBanner.value = shouldShowNativeUpdateBanner(
       nativeAppUpdateInfo.value
     );
+    const statusChanged =
+      lastTelemetryInstallStatus !== updateInstallStatus.value;
+    if (
+      statusChanged ||
+      (Number.isFinite(bytesDownloaded) &&
+        bytesDownloaded > lastDownloadedBytes)
+    ) {
+      if (
+        [
+          RuStoreInstallStatus.PENDING,
+          RuStoreInstallStatus.DOWNLOADING,
+          RuStoreInstallStatus.INSTALLING
+        ].includes(updateInstallStatus.value)
+      ) {
+        watchUpdateProgress('install_state');
+      } else {
+        clearUpdateWatchdog();
+      }
+    }
+    if (Number.isFinite(bytesDownloaded)) lastDownloadedBytes = bytesDownloaded;
+    const progressBucket = Math.floor((updateDownloadPercent.value ?? 0) / 10);
+    if (
+      lastTelemetryInstallStatus !== updateInstallStatus.value ||
+      lastUpdateProgressBucket !== progressBucket
+    ) {
+      recordUpdateTelemetry(
+        'state_changed',
+        { ...installState },
+        [
+          RuStoreInstallStatus.FAILED,
+          RuStoreInstallStatus.DOWNLOAD_INTERRUPTED
+        ].includes(updateInstallStatus.value)
+          ? 'error'
+          : 'info'
+      );
+      lastTelemetryInstallStatus = updateInstallStatus.value;
+      lastUpdateProgressBucket = progressBucket;
+    }
   };
 
   const refreshNativeUpdateInfo = async (): Promise<boolean> => {
@@ -139,10 +234,17 @@ export function useMobileApp() {
     }
 
     try {
+      recordUpdateTelemetry('check.started');
       const appUpdateInfo = await getRuStoreAppUpdateInfo();
       applyNativeUpdateInfo(appUpdateInfo);
+      recordUpdateTelemetry('check.completed', { ...appUpdateInfo });
       return !!appUpdateInfo;
     } catch (error) {
+      recordUpdateTelemetry(
+        'check.failed',
+        getTelemetryErrorPayload(error),
+        'error'
+      );
       console.warn('Failed to get RuStore update info:', error);
       return false;
     }
@@ -162,6 +264,11 @@ export function useMobileApp() {
         .then(() => undefined)
         .catch(error => {
           nativeUpdateSubscriptionPromise = null;
+          recordUpdateTelemetry(
+            'subscription.failed',
+            getTelemetryErrorPayload(error),
+            'error'
+          );
           console.warn('Failed to subscribe to RuStore update state:', error);
         });
     }
@@ -381,20 +488,40 @@ export function useMobileApp() {
       updateInstallStatus.value === RuStoreInstallStatus.INSTALLING ||
       isUpdateFlowPending.value
     ) {
+      recordUpdateTelemetry(
+        'click.ignored',
+        { reason: 'update_in_progress' },
+        'warn'
+      );
       return;
     }
 
+    nativeUpdateTraceId = createTelemetryTraceId('app-update');
+    nativeUpdateStartedAt = Date.now();
+    lastUpdateProgressBucket = -1;
+    lastTelemetryInstallStatus = -1;
+    lastDownloadedBytes = 0;
+    recordUpdateTelemetry('click');
     isUpdateFlowPending.value = true;
+    watchUpdateProgress('checking');
+    let step = 'check';
 
     const completeUpdate = async () => {
+      step = 'complete';
       updateInstallStatus.value = RuStoreInstallStatus.INSTALLING;
+      recordUpdateTelemetry('complete.started');
+      watchUpdateProgress('complete');
       try {
+        void flushTelemetryEvents();
         await completeRuStoreFlexibleUpdate();
+        recordUpdateTelemetry('complete.completed');
+        clearUpdateWatchdog();
         applyNativeUpdateInfo({
           updateAvailability: RuStoreUpdateAvailability.UPDATE_NOT_AVAILABLE,
           installStatus: RuStoreInstallStatus.UNKNOWN
         });
       } catch (error) {
+        clearUpdateWatchdog();
         if (updateInstallStatus.value === RuStoreInstallStatus.INSTALLING) {
           updateInstallStatus.value = RuStoreInstallStatus.DOWNLOADED;
         }
@@ -404,7 +531,15 @@ export function useMobileApp() {
 
     try {
       if (updateInstallStatus.value !== RuStoreInstallStatus.DOWNLOADED) {
-        if (!(await refreshNativeUpdateInfo())) return;
+        if (!(await refreshNativeUpdateInfo())) {
+          clearUpdateWatchdog();
+          recordUpdateTelemetry(
+            'start.skipped',
+            { reason: 'check_failed' },
+            'warn'
+          );
+          return;
+        }
       }
 
       if (updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADED) {
@@ -416,13 +551,50 @@ export function useMobileApp() {
         isActiveNativeInstallStatus(updateInstallStatus.value) ||
         !showUpdateBanner.value
       ) {
+        recordUpdateTelemetry('start.skipped', {
+          reason: isActiveNativeInstallStatus(updateInstallStatus.value)
+            ? 'active_install_state'
+            : 'update_not_available'
+        });
+        if (isActiveNativeInstallStatus(updateInstallStatus.value))
+          watchUpdateProgress('existing_update');
+        else clearUpdateWatchdog();
         return;
       }
-      await startRuStoreFlexibleUpdate();
+      step = 'start';
+      recordUpdateTelemetry('start.requested');
+      watchUpdateProgress('start_response');
+      const result = await startRuStoreFlexibleUpdate();
+      recordUpdateTelemetry(
+        'start.result',
+        { resultCode: result?.resultCode },
+        result?.resultCode === -1 ? 'info' : 'warn'
+      );
+      if (result?.resultCode === -1) {
+        if (
+          ![
+            RuStoreInstallStatus.DOWNLOADED,
+            RuStoreInstallStatus.FAILED,
+            RuStoreInstallStatus.DOWNLOAD_INTERRUPTED
+          ].includes(updateInstallStatus.value)
+        ) {
+          watchUpdateProgress('awaiting_download_progress');
+        }
+      } else {
+        clearUpdateWatchdog();
+      }
     } catch (error) {
+      clearUpdateWatchdog();
+      recordUpdateTelemetry(
+        'failed',
+        { step, ...getTelemetryErrorPayload(error) },
+        'error'
+      );
       console.warn('Failed to start RuStore update flow:', error);
     } finally {
       isUpdateFlowPending.value = false;
+      recordUpdateTelemetry('attempt.finished');
+      void flushTelemetryEvents();
     }
   };
 

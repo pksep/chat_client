@@ -1378,6 +1378,24 @@ export class ChatSDK {
     messageIds: string[],
     reachedEnd = false
   ): Promise<void> {
+    recordTelemetryEvent({
+      category: 'chat',
+      name: 'chat.read_receipt.emitted',
+      entityType: 'topic',
+      entityId: topicId,
+      level: this.socket?.connected ? 'info' : 'warn',
+      payload: {
+        topicId,
+        messageIds,
+        messageCount: messageIds.length,
+        lastReadMessageId: messageIds.at(-1),
+        reachedEnd,
+        socketConnected: !!this.socket?.connected,
+        socketId: this.socket?.id,
+        bufferedEventCount: this.socket?.sendBuffer?.length,
+        deliveryConfirmed: false
+      }
+    });
     this.socket.emit(WebSocketEventType.READ_MESSAGE, {
       messageIds,
       topicId,

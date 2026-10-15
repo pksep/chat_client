@@ -124,6 +124,8 @@ import {
   saveAnyChatBackgroundSyncSession
 } from './useChatBackgroundSync';
 import { getTelemetryErrorPayload, recordTelemetryEvent } from './useTelemetry';
+import { recordTopicStateTelemetry } from './topic-state-telemetry';
+import { parseMessageEx } from '../utils/messageReplyQuote';
 import {
   addNativeNetworkStatusListener,
   getNativeNetworkStatus,
@@ -465,6 +467,23 @@ const setupChatListeners = (): void => {
 
     updateLocalLastMessageTopic(message.topicId, message);
     updateLocalLastMessageGroup(message.topicId);
+    if (message.senderUserId === currentUserId.value) {
+      const clientMessageId = parseMessageEx(message.ex)?.clientId;
+      recordTopicStateTelemetry(
+        'outgoing_server_echo',
+        getSelectedTopic(message.topicId),
+        getFullMessagesByTopicId(message.topicId).find(
+          item => item.id === message.id
+        ),
+        currentUserId.value,
+        {
+          receivedMessageId: message.id,
+          receivedStatus: message.status,
+          clientMessageId:
+            typeof clientMessageId === 'string' ? clientMessageId : undefined
+        }
+      );
+    }
   };
 
   const handleTopicChangePayload = (payload: {
@@ -612,7 +631,25 @@ const setupChatListeners = (): void => {
     userId?: string;
     ptsMeta?: PtsMeta;
   }): void => {
-    if (!shouldProcessPtsMeta(payload.ptsMeta)) {
+    const accepted = shouldProcessPtsMeta(payload.ptsMeta);
+    recordTelemetryEvent({
+      category: 'chat',
+      name: 'chat.read_receipt.received',
+      entityType: 'topic',
+      entityId: payload.topicId,
+      payload: {
+        topicId: payload.topicId,
+        messageIds: payload.messageIds,
+        messageCount: payload.messageIds.length,
+        lastReadMessageId: payload.messageIds.at(-1),
+        readerIsSelf: payload.userId === currentUserId.value,
+        readerIdPresent: !!payload.userId,
+        accepted,
+        pts: payload.ptsMeta?.pts,
+        eventId: payload.ptsMeta?.eventId
+      }
+    });
+    if (!accepted) {
       return;
     }
 
@@ -645,6 +682,22 @@ const setupChatListeners = (): void => {
     }
 
     changeLocalReadStatus(payload.topicId, payload.messageIds, payload.userId);
+    const readTopic = useTopics().getSelectedTopic(payload.topicId);
+    recordTopicStateTelemetry(
+      'read_receipt_applied',
+      readTopic,
+      getFullMessagesByTopicId(payload.topicId).find(
+        message => message.id === readTopic?.lastMessage?.id
+      ),
+      currentUserId.value,
+      {
+        readMessageCount: payload.messageIds.length,
+        lastMessageIncluded:
+          !!readTopic?.lastMessage?.id &&
+          payload.messageIds.includes(readTopic.lastMessage.id),
+        readerIsSelf: payload.userId === currentUserId.value
+      }
+    );
 
     if (payload.userId === currentUserId.value) {
       void clearTopicNotifications(payload.topicId);
