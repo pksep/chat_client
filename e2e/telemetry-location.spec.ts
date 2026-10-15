@@ -36,8 +36,11 @@ test('локация работает по умолчанию с системн�
     const geo = await import('/src/services/useTelemetryLocation.ts');
     await geo.refreshTelemetryLocation();
     const before = { calls, context: geo.getTelemetryLocationContext() };
-    await geo.refreshTelemetryLocation(true);
-    await geo.refreshTelemetryLocation(true);
+    await Promise.all([
+      geo.initTelemetryLocation(),
+      geo.initTelemetryLocation()
+    ]);
+    await geo.refreshTelemetryLocation();
     return {
       before,
       context: geo.getTelemetryLocationContext(),
@@ -77,12 +80,42 @@ test('отклонённый или закрытый системный запр
       }
     });
     const geo = await import('/src/services/useTelemetryLocation.ts');
-    await geo.refreshTelemetryLocation(true);
-    await geo.refreshTelemetryLocation(true);
+    await geo.initTelemetryLocation();
+    await geo.initTelemetryLocation();
+    await geo.refreshTelemetryLocation();
     return { calls, context: geo.getTelemetryLocationContext() };
   });
   expect(result.calls).toBe(1);
   expect(result.context.device.latitude).toBeUndefined();
+});
+
+test('отправка текста и вложения без разрешения не открывает системный запрос', async ({
+  page
+}) => {
+  const result = await page.evaluate(async () => {
+    let requests = 0;
+    Object.defineProperty(navigator.permissions, 'query', {
+      value: async () => ({ state: 'prompt' })
+    });
+    Object.defineProperty(navigator.geolocation, 'getCurrentPosition', {
+      value: () => {
+        requests += 1;
+      }
+    });
+    const { telemetry, telemetryLocation: geo } = await import(
+      '/e2e/fixtures/telemetry-storage-harness.ts'
+    );
+    for (const name of [
+      'chat.message_send.start',
+      'upload.message_send.start'
+    ]) {
+      telemetry.recordTelemetryEvent({ category: 'chat', name });
+      await geo.refreshTelemetryLocation();
+    }
+    return { requests, context: geo.getTelemetryLocationContext() };
+  });
+  expect(result.requests).toBe(0);
+  expect(result.context.device).toEqual({ status: 'permission_required' });
 });
 
 test('отзыв системного разрешения во время запроса не возвращает координаты в контекст', async ({
@@ -108,7 +141,7 @@ test('отзыв системного разрешения во время за�
       }
     });
     const geo = await import('/src/services/useTelemetryLocation.ts');
-    const refresh = geo.refreshTelemetryLocation(true);
+    const refresh = geo.initTelemetryLocation();
     await started;
     permission.state = 'denied';
     permission.onchange?.();
@@ -137,7 +170,7 @@ test('ошибка GPS оставляет диагностику без коор
         } as GeolocationPositionError)
     });
     const geo = await import('/src/services/useTelemetryLocation.ts');
-    await geo.refreshTelemetryLocation(true);
+    await geo.initTelemetryLocation();
     return geo.getTelemetryLocationContext();
   });
   expect(result.device).toEqual({ status: 'unavailable' });
@@ -148,9 +181,14 @@ test('Android использует приблизительное разреше
 }) => {
   const result = await page.evaluate(async () => {
     const calls: string[] = [];
+    let highAccuracy: boolean | undefined;
     (window as any).androidBridge = {};
     (window as any).Capacitor = {
       PluginHeaders: [
+        {
+          name: 'LaunchStartup',
+          methods: [{ name: 'waitForPermissions', rtype: 'promise' }]
+        },
         {
           name: 'Geolocation',
           methods: [
@@ -160,26 +198,108 @@ test('Android использует приблизительное разреше
           ]
         }
       ],
-      async nativePromise(_: string, method: string) {
+      async nativePromise(
+        _: string,
+        method: string,
+        options?: { enableHighAccuracy?: boolean }
+      ) {
         calls.push(method);
+        if (method === 'waitForPermissions') return;
         if (method === 'checkPermissions')
           return { location: 'prompt', coarseLocation: 'granted' };
-        if (method === 'getCurrentPosition')
+        if (method === 'getCurrentPosition') {
+          highAccuracy = options?.enableHighAccuracy;
           return {
             timestamp: Date.now(),
             coords: { latitude: 40, longitude: 44, accuracy: 1000 }
           };
+        }
         throw new Error('Повторный запрос разрешения');
       }
     };
     const geo = await import('/src/services/useTelemetryLocation.ts');
-    await geo.refreshTelemetryLocation(true);
-    return { calls, context: geo.getTelemetryLocationContext() };
+    await geo.initTelemetryLocation();
+    return { calls, highAccuracy, context: geo.getTelemetryLocationContext() };
   });
-  expect(result.calls).toEqual(['checkPermissions', 'getCurrentPosition']);
+  expect(result.calls).toEqual([
+    'waitForPermissions',
+    'checkPermissions',
+    'getCurrentPosition'
+  ]);
+  expect(result.highAccuracy).toBe(false);
   expect(result.context.device).toMatchObject({
     latitude: 40,
     longitude: 44,
     accuracyMeters: 1000
   });
 });
+
+for (const permission of ['granted', 'denied'] as const) {
+  test(`Android ждёт завершения нативного запроса: ${permission}`, async ({
+    page
+  }) => {
+    const result = await page.evaluate(async permission => {
+      const calls: string[] = [];
+      let finishPermissions!: () => void;
+      let started!: () => void;
+      const waiting = new Promise<void>(resolve => {
+        started = resolve;
+      });
+      (window as any).androidBridge = {};
+      (window as any).Capacitor = {
+        PluginHeaders: [
+          {
+            name: 'LaunchStartup',
+            methods: [{ name: 'waitForPermissions', rtype: 'promise' }]
+          },
+          {
+            name: 'Geolocation',
+            methods: [
+              { name: 'checkPermissions', rtype: 'promise' },
+              { name: 'requestPermissions', rtype: 'promise' },
+              { name: 'getCurrentPosition', rtype: 'promise' }
+            ]
+          }
+        ],
+        async nativePromise(_: string, method: string) {
+          calls.push(method);
+          if (method === 'waitForPermissions') {
+            started();
+            return new Promise<void>(resolve => {
+              finishPermissions = resolve;
+            });
+          }
+          if (method === 'checkPermissions')
+            return { location: permission, coarseLocation: permission };
+          if (method === 'getCurrentPosition')
+            return {
+              timestamp: Date.now(),
+              coords: { latitude: 40, longitude: 44, accuracy: 20 }
+            };
+          throw new Error('Повторный системный запрос через плагин');
+        }
+      };
+      const geo = await import('/src/services/useTelemetryLocation.ts');
+      const initialization = geo.initTelemetryLocation();
+      await waiting;
+      const beforePermission = [...calls];
+      finishPermissions();
+      await initialization;
+      await geo.initTelemetryLocation();
+      return {
+        beforePermission,
+        calls,
+        context: geo.getTelemetryLocationContext()
+      };
+    }, permission);
+    expect(result.beforePermission).toEqual(['waitForPermissions']);
+    expect(result.calls).toEqual([
+      'waitForPermissions',
+      'checkPermissions',
+      ...(permission === 'granted' ? ['getCurrentPosition'] : [])
+    ]);
+    expect(result.context.device.status).toBe(
+      permission === 'granted' ? 'resolved' : 'denied'
+    );
+  });
+}

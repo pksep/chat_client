@@ -360,7 +360,7 @@ export const recordTelemetryEvent = (input: TelemetryEventInput): void => {
     input.name === 'upload.message_send.start'
   ) {
     // Получение координат не задерживает отправку сообщения.
-    void refreshTelemetryLocation(true).then(() => {
+    void refreshTelemetryLocation().then(() => {
       recordTelemetryEvent({
         category: input.category,
         name: 'chat.message_send.location',

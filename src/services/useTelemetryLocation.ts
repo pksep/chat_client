@@ -3,6 +3,7 @@ import {
   Geolocation,
   type PermissionStatus as NativePermissionStatus
 } from '@capacitor/geolocation';
+import { LaunchStartup } from './launchStartup';
 
 const MAX_AGE_MS = 60_000;
 let deviceLocation: Record<string, unknown> | null = null;
@@ -13,6 +14,7 @@ let generation = 0;
 let permissionRequested = false;
 let browserPermission: PermissionStatus | null = null;
 let inFlight: Promise<void> | null = null;
+let initialization: Promise<void> | null = null;
 const unavailableListeners = new Set<() => void>();
 
 export const onTelemetryLocationUnavailable = (listener: () => void): void => {
@@ -60,9 +62,7 @@ const getBrowserPermission = async (): Promise<PermissionState | undefined> => {
   }
 };
 
-export const refreshTelemetryLocation = (
-  requestPermission = false
-): Promise<void> => {
+const refreshLocation = (requestPermission: boolean): Promise<void> => {
   if (
     typeof document !== 'undefined' &&
     document.visibilityState === 'hidden'
@@ -74,8 +74,14 @@ export const refreshTelemetryLocation = (
     try {
       let permission: Partial<NativePermissionStatus>;
       if (Capacitor.isNativePlatform()) {
+        const isAndroid = Capacitor.getPlatform() === 'android';
+        if (isAndroid && requestPermission) {
+          // Android запрашивает доступ вместе с остальными разрешениями Activity.
+          await LaunchStartup.waitForPermissions();
+        }
         permission = await Geolocation.checkPermissions();
         if (
+          !isAndroid &&
           !isGranted(permission) &&
           permission.location !== 'denied' &&
           requestPermission &&
@@ -112,7 +118,7 @@ export const refreshTelemetryLocation = (
       lastAttemptAt = Date.now();
       const currentGeneration = generation;
       const position = await Geolocation.getCurrentPosition({
-        enableHighAccuracy: true,
+        enableHighAccuracy: permission.location === 'granted',
         timeout: 10_000,
         maximumAge: MAX_AGE_MS
       });
@@ -147,4 +153,26 @@ export const refreshTelemetryLocation = (
     inFlight = null;
   });
   return inFlight;
+};
+
+export const refreshTelemetryLocation = (): Promise<void> =>
+  refreshLocation(false);
+
+export const initTelemetryLocation = (): Promise<void> => {
+  initialization ??= (async () => {
+    if (document.visibilityState === 'hidden') {
+      await new Promise<void>(resolve => {
+        const onVisible = () => {
+          if (document.visibilityState === 'hidden') return;
+          document.removeEventListener('visibilitychange', onVisible);
+          resolve();
+        };
+        document.addEventListener('visibilitychange', onVisible);
+      });
+    }
+    // Пассивное обновление не должно поглотить первый запрос разрешения.
+    await inFlight;
+    await refreshLocation(true);
+  })();
+  return initialization;
 };

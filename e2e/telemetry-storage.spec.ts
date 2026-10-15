@@ -74,6 +74,8 @@ test('сохраняет IP и координаты по умолчанию; о�
       name: 'chat.telemetry_local.location_default',
       traceId: 'local-location-default'
     });
+    const geo = await import('/src/services/useTelemetryLocation.ts');
+    await geo.initTelemetryLocation();
     telemetry.recordTelemetryEvent({
       category: 'chat',
       name: 'chat.message_send.start',

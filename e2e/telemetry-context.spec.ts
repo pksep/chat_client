@@ -37,6 +37,7 @@ test('телеметрия собирает координаты по умолч
     Object.defineProperty(navigator.permissions, 'query', {
       value: async () => permission
     });
+    await geo.initTelemetryLocation();
     telemetry.recordTelemetryEvent({
       category: 'chat',
       name: 'chat.message_send.start',
