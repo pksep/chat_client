@@ -62,8 +62,9 @@ async function openFixture(page: Page) {
   }, apiUrl);
 }
 
-test('сохраняет IP и координаты сообщения; отключение удаляет координаты из очереди', async ({
-  page
+test('сохраняет IP и координаты по умолчанию; отзыв разрешения удаляет координаты из очереди', async ({
+  page,
+  context
 }) => {
   await openFixture(page);
   await page.evaluate(async () => {
@@ -73,8 +74,6 @@ test('сохраняет IP и координаты сообщения; откл
       name: 'chat.telemetry_local.location_default',
       traceId: 'local-location-default'
     });
-    const geo = await import('/src/services/useTelemetryLocation.ts');
-    await geo.useTelemetryLocation().setEnabled(true);
     telemetry.recordTelemetryEvent({
       category: 'chat',
       name: 'chat.message_send.start',
@@ -115,21 +114,24 @@ test('сохраняет IP и координаты сообщения; откл
     const telemetry = await import('/src/services/useTelemetry.ts');
     telemetry.recordTelemetryEvent({
       category: 'chat',
-      name: 'chat.telemetry_local.location_disabled',
-      traceId: 'local-location-disabled'
+      name: 'chat.telemetry_local.location_revoked',
+      traceId: 'local-location-revoked'
     });
+  });
+  await context.clearPermissions();
+  await page.evaluate(async () => {
     const geo = await import('/src/services/useTelemetryLocation.ts');
-    await geo.useTelemetryLocation().setEnabled(false);
+    await geo.refreshTelemetryLocation();
   });
   await expect
     .poll(() => savedEvents(page))
     .toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ trace_id: 'local-location-disabled' })
+        expect.objectContaining({ trace_id: 'local-location-revoked' })
       ])
     );
   const events = await readEvents();
-  for (const trace of ['local-location-default', 'local-location-disabled']) {
+  for (const trace of ['local-location-default', 'local-location-revoked']) {
     const event = events.find(item => item.trace_id === trace);
     expect(event.context.location.ip.status).toBe('resolved');
     expect(event.context.location.device?.latitude).toBeUndefined();

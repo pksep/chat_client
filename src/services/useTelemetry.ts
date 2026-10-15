@@ -11,7 +11,7 @@ import {
 import { getIsVpnActive } from './useVpnStatus';
 import {
   getTelemetryLocationContext,
-  onTelemetryLocationDisabled,
+  onTelemetryLocationUnavailable,
   refreshTelemetryLocation
 } from './useTelemetryLocation';
 
@@ -360,25 +360,23 @@ export const recordTelemetryEvent = (input: TelemetryEventInput): void => {
     input.name === 'upload.message_send.start'
   ) {
     // Получение координат не задерживает отправку сообщения.
-    void refreshTelemetryLocation().then(() => {
-      if (getTelemetryLocationContext().enabled) {
-        recordTelemetryEvent({
-          category: input.category,
-          name: 'chat.message_send.location',
-          traceId: input.traceId,
-          entityType: input.entityType,
-          entityId: input.entityId,
-          payload: {
-            topicId: input.payload?.topicId,
-            sendOccurredAt: event.occurredAt
-          }
-        });
-      }
+    void refreshTelemetryLocation(true).then(() => {
+      recordTelemetryEvent({
+        category: input.category,
+        name: 'chat.message_send.location',
+        traceId: input.traceId,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        payload: {
+          topicId: input.payload?.topicId,
+          sendOccurredAt: event.occurredAt
+        }
+      });
     });
   }
 };
 
-onTelemetryLocationDisabled(() => {
+onTelemetryLocationUnavailable(() => {
   telemetryQueue.forEach(event => {
     if (event.context) delete event.context.location;
   });
