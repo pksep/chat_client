@@ -1634,8 +1634,14 @@ const runLogoutCleanup = async (): Promise<void> => {
 };
 
 const handleLogout = async (): Promise<void> => {
+  try {
+    await logoutChatSession();
+  } catch (error) {
+    console.warn('Failed to end the shared chat session:', error);
+    return;
+  }
+
   await runLogoutCleanup();
-  await logoutChatSession();
   redirectToAuthorization();
 };
 

@@ -336,14 +336,25 @@ export const tryRefreshErpSession = (): Promise<AuthResponse | null> => {
 
 export const logoutChatSession = async (): Promise<void> => {
   const config = getConfig();
-
-  try {
-    await fetch(`${config.CHAT_API_DOMAIN.replace(/\/+$/, '')}/auth/logout`, {
+  const response = await fetch(
+    `${config.CHAT_API_DOMAIN.replace(/\/+$/, '')}/auth/logout`,
+    {
       method: 'POST',
       credentials: 'include'
-    });
-  } catch (error) {
-    console.warn('Не удалось очистить refresh-сессию чата:', error);
+    }
+  );
+
+  if (!response.ok) {
+    let message = 'Не удалось завершить сессию чата';
+
+    try {
+      const data = await response.json();
+      message = data?.message || data?.error || message;
+    } catch {
+      // HTTP status is enough when the error body is not JSON.
+    }
+
+    throw Object.assign(new Error(message), { status: response.status });
   }
 };
 
