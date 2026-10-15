@@ -193,6 +193,12 @@ export const lazyUiKitEmojiRuntime = (): Plugin => {
               },`
           );
       }
+      // Редактор заранее загружает модуль панели, сохраняя её закрытой.
+      editorWithReady = editorWithReady.replace(
+        new RegExp(`preloadEmojiPicker: (${identifier})`),
+        (_match, preload: string) =>
+          `preloadEmojiPicker: () => { void import(${JSON.stringify(runtimeId)}).catch(() => undefined); return ${preload}(); }`
+      );
       const panelWithReady = panel.replace(
         panelPickerUse,
         match => `${match} onVnodeMounted: ${panelReadyName},`

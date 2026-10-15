@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type CDPSession } from '@playwright/test';
 import { mockStickerCatalog } from './fixtures/sticker-catalog';
 
 async function setup(page: Page, missingLapenkoPreview = false) {
@@ -20,6 +20,7 @@ async function setup(page: Page, missingLapenkoPreview = false) {
   };
   const changes: unknown[] = [];
   let failSave = false;
+  let saveDelay = 0;
   await page.route('**/e2e/sticker-preferences-api/**', async route => {
     const path = new URL(route.request().url()).pathname;
     if (path.includes('/stickers')) return route.fallback();
@@ -27,6 +28,8 @@ async function setup(page: Page, missingLapenkoPreview = false) {
     if (path.endsWith('/users') && route.request().method() === 'PATCH') {
       const patch = route.request().postDataJSON();
       changes.push(patch);
+      if (saveDelay)
+        await new Promise(resolve => setTimeout(resolve, saveDelay));
       if (failSave)
         return route.fulfill({
           status: 500,
@@ -52,9 +55,246 @@ async function setup(page: Page, missingLapenkoPreview = false) {
     changes,
     fail: (value: boolean) => {
       failSave = value;
+    },
+    delay: (value: number) => {
+      saveDelay = value;
     }
   };
 }
+
+async function beginPackDrag(page: Page, label: string, isMobile: boolean) {
+  const row = page
+    .locator('.menu-profile__sticker-option')
+    .filter({ has: page.getByRole('checkbox', { name: label, exact: true }) });
+  const bounds = (await row.boundingBox())!;
+  const x = bounds.x + bounds.width / 2;
+  const y = bounds.y + bounds.height / 2;
+  const touch: CDPSession | null = isMobile
+    ? await page.context().newCDPSession(page)
+    : null;
+  if (touch)
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x, y }]
+    });
+  else {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+  }
+  if (touch)
+    await expect(
+      page.locator('.menu-profile__sticker-drag-preview')
+    ).toBeVisible();
+  return {
+    left: bounds.x,
+    async move(targetY: number, offsetX = 0) {
+      if (touch)
+        await touch.send('Input.dispatchTouchEvent', {
+          type: 'touchMove',
+          touchPoints: [{ x: x + offsetX, y: targetY }]
+        });
+      else await page.mouse.move(x + offsetX, targetY, { steps: 8 });
+    },
+    async end(cancel = false) {
+      if (touch)
+        await touch.send('Input.dispatchTouchEvent', {
+          type: cancel ? 'touchCancel' : 'touchEnd',
+          touchPoints: []
+        });
+      else {
+        if (cancel) await page.keyboard.press('Escape');
+        await page.mouse.up();
+      }
+      await touch?.detach();
+    }
+  };
+}
+
+const packIds = (page: Page) =>
+  page
+    .locator('.menu-profile__sticker-option')
+    .evaluateAll(rows => rows.map(row => row.getAttribute('data-pack-id')));
+
+test('перетаскивание сохраняет порядок после перезагрузки и в пикере, не меняя чекбоксы', async ({
+  page,
+  isMobile
+}) => {
+  const state = await setup(page);
+  const sep = page.getByRole('checkbox', { name: 'SEP', exact: true });
+  state.delay(250);
+  await sep.uncheck();
+  const first = (await page
+    .locator('.menu-profile__sticker-option')
+    .first()
+    .boundingBox())!;
+  const drag = await beginPackDrag(page, 'Рыба Прометей', isMobile);
+  await drag.move(first.y + 8, 60);
+  await expect(
+    page.locator('.menu-profile__sticker-drag-preview')
+  ).toBeVisible();
+  expect(
+    (await page.locator('.menu-profile__sticker-drag-preview').boundingBox())!.x
+  ).toBeCloseTo(drag.left, 1);
+  await drag.end();
+  await expect(page.locator('.menu-profile__sticker-drag-preview')).toHaveCount(
+    0
+  );
+  await expect
+    .poll(() => packIds(page))
+    .toEqual([
+      'fishprometheus',
+      'sep-robots',
+      'ccccccccccaaaaaaaaaatss',
+      'hamster',
+      'all-lapenko',
+      'flowers',
+      'unicorn'
+    ]);
+  await expect
+    .poll(() =>
+      state.changes.some(
+        (patch: any) => patch.ex.stickerPackOrder?.[0] === 'fishprometheus'
+      )
+    )
+    .toBe(true);
+  await expect(
+    page.getByRole('group', { name: 'Отображение наборов стикеров' })
+  ).toHaveAttribute('aria-busy', 'false');
+  await expect(sep).not.toBeChecked();
+  await page.reload();
+  await page
+    .getByRole('button', { name: 'Отображение стикеров', exact: true })
+    .click();
+  await expect
+    .poll(() => packIds(page))
+    .toEqual([
+      'fishprometheus',
+      'sep-robots',
+      'ccccccccccaaaaaaaaaatss',
+      'hamster',
+      'all-lapenko',
+      'flowers',
+      'unicorn'
+    ]);
+  await expect(sep).not.toBeChecked();
+  await page.locator('.smile-button:visible').click();
+  await page.getByRole('button', { name: 'Стикеры', exact: true }).click();
+  expect(
+    await page
+      .locator('.chat-sticker-picker__packs button')
+      .evaluateAll(buttons =>
+        buttons.map(button => button.getAttribute('aria-label'))
+      )
+  ).toEqual([
+    'Недавние',
+    'Рыба Прометей',
+    'Коты',
+    'Хомяк',
+    'Лапенко',
+    'Цветы',
+    'Радужный единорог'
+  ]);
+  await expect(page.getByTestId('SendCount')).toHaveText('Отправлено: 0');
+});
+
+test('перетаскивание прокручивает список у края, а отмена возвращает порядок без сохранения', async ({
+  page,
+  isMobile
+}) => {
+  const state = await setup(page);
+  const before = await packIds(page);
+  const list = page.getByRole('group', {
+    name: 'Отображение наборов стикеров'
+  });
+  const bounds = (await list.boundingBox())!;
+  const drag = await beginPackDrag(page, 'SEP', isMobile);
+  await drag.move(bounds.y + bounds.height - 5);
+  await expect
+    .poll(() => list.evaluate(element => element.scrollTop))
+    .toBeGreaterThan(0);
+  await expect
+    .poll(async () => (await packIds(page)).at(-1))
+    .toBe('sep-robots');
+  await drag.end(true);
+  await expect.poll(() => packIds(page)).toEqual(before);
+  expect(state.changes).toHaveLength(0);
+  await expect(
+    page.getByRole('checkbox', { name: 'SEP', exact: true })
+  ).toBeChecked();
+});
+
+test('ошибка сохранения порядка возвращает список; порядок можно изменить с клавиатуры', async ({
+  page
+}) => {
+  const state = await setup(page);
+  const before = await packIds(page);
+  const row = page
+    .locator('.menu-profile__sticker-option')
+    .filter({ has: page.getByRole('checkbox', { name: 'Коты', exact: true }) });
+  state.fail(true);
+  await row.press('Alt+ArrowUp');
+  await expect(page.getByRole('alert')).toHaveText(
+    'Не удалось сохранить выбор стикеров. Попробуйте ещё раз'
+  );
+  await expect.poll(() => packIds(page)).toEqual(before);
+  state.fail(false);
+  await row.press('Alt+ArrowUp');
+  await expect
+    .poll(() => packIds(page))
+    .toEqual([
+      'ccccccccccaaaaaaaaaatss',
+      'sep-robots',
+      'hamster',
+      'fishprometheus',
+      'all-lapenko',
+      'flowers',
+      'unicorn'
+    ]);
+  await expect(
+    page.getByRole('group', { name: 'Отображение наборов стикеров' })
+  ).toHaveAttribute('aria-busy', 'false');
+  await expect(
+    page.getByRole('checkbox', { name: 'Коты', exact: true })
+  ).toBeChecked();
+});
+
+test('обычный свайп телефона прокручивает список без перестановки наборов', async ({
+  page,
+  isMobile
+}) => {
+  test.skip(!isMobile, 'Проверка нативной сенсорной прокрутки');
+  const state = await setup(page);
+  const before = await packIds(page);
+  const list = page.getByRole('group', {
+    name: 'Отображение наборов стикеров'
+  });
+  const bounds = (await list.boundingBox())!;
+  const x = bounds.x + bounds.width / 2;
+  const y = bounds.y + bounds.height - 30;
+  const touch = await page.context().newCDPSession(page);
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x, y }]
+  });
+  for (const distance of [15, 35, 60, 90])
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x, y: y - distance }]
+    });
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: []
+  });
+  await touch.detach();
+  await expect
+    .poll(() => list.evaluate(element => element.scrollTop))
+    .toBeGreaterThan(0);
+  await expect(page.locator('.menu-profile__sticker-drag-preview')).toHaveCount(
+    0
+  );
+  expect(await packIds(page)).toEqual(before);
+  expect(state.changes).toHaveLength(0);
+});
 
 test('выбор сохраняется в профиле, убирает набор из пикера, поиска и недавних, сохраняя сообщения', async ({
   page

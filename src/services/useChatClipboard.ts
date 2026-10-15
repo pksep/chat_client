@@ -1,3 +1,4 @@
+import { Clipboard } from '@capacitor/clipboard';
 import { MediaType } from '@pksep/zod-shared-chat';
 import { showErrorNotification } from '../composables/useNotifications';
 import { loadChatClipboardMedia } from './chat-clipboard-media';
@@ -7,6 +8,8 @@ import {
   MAX_CHAT_CLIPBOARD_BYTES,
   readChatClipboardContent,
   readChatClipboardJson,
+  readNativeChatClipboardContent,
+  usesNativeChatMediaClipboard,
   type ChatClipboardContent
 } from '../utils/chat-clipboard';
 import type { CopiedSticker } from '../utils/stickers';
@@ -38,6 +41,13 @@ const readClipboardAttachment = async (
   }
   return null;
 };
+
+const readNativeClipboardAttachment =
+  async (): Promise<ChatClipboardContent | null> => {
+    if (!usesNativeChatMediaClipboard()) return null;
+    const { value } = await Clipboard.read();
+    return readNativeChatClipboardContent(value || '');
+  };
 
 export const bindChatClipboardPaste = (options: {
   getTargetElement: () => HTMLElement | null;
@@ -132,9 +142,13 @@ export const bindChatClipboardPaste = (options: {
         )
     )
       return;
-    const content = readChatClipboardContent(
-      event.clipboardData?.getData('text/html') || ''
-    );
+    const content =
+      readChatClipboardContent(
+        event.clipboardData?.getData('text/html') || ''
+      ) ||
+      readNativeChatClipboardContent(
+        event.clipboardData?.getData('text/plain') || ''
+      );
     if (!content) return;
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -143,8 +157,22 @@ export const bindChatClipboardPaste = (options: {
   const pasteFromClipboard = async (): Promise<boolean> => {
     const root = options.getTargetElement();
     const topicId = options.getTopicId();
-    if (disposed || !root?.isConnected || !navigator.clipboard?.read)
-      return false;
+    if (disposed || !root?.isConnected) return false;
+    try {
+      const nativeContent = await readNativeClipboardAttachment();
+      if (nativeContent) {
+        if (
+          !disposed &&
+          root === options.getTargetElement() &&
+          topicId === options.getTopicId()
+        )
+          sendContent(nativeContent);
+        return true;
+      }
+    } catch {
+      // A normal text clipboard is not a chat-media reference.
+    }
+    if (!navigator.clipboard?.read) return false;
     try {
       const items = await navigator.clipboard.read();
       const copied = await readClipboardAttachment(items);

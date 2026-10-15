@@ -6,6 +6,8 @@ import {
   getMessageSticker,
   getStickerById,
   registerCatalogStickers,
+  findStickerEmoji,
+  getStickerMessagePreview,
   type CatalogSticker
 } from '../src/utils/stickers';
 
@@ -88,13 +90,77 @@ describe('стикеры', () => {
 
   test('сообщение содержит только идентификатор и доступный текст для старых клиентов', () => {
     const message = createStickerMessage('sep-robot-heart');
-    expect(message?.text).toBe('Стикер: Любовь');
+    expect(message?.text).toBe('Стикер');
     expect(message?.metadata.sticker).toEqual({
       id: 'sep-robot-heart',
       pack: 'sep-robots',
       version: 1
     });
     expect(createStickerMessage('unknown')).toBeNull();
+  });
+
+  test('в превью и тексте уведомления сохраняется эмодзи Telegram, включая составные эмодзи', () => {
+    const sticker: CatalogSticker = {
+      id: 'preview-emoji',
+      pack: 'test-preview',
+      version: 1,
+      label: 'Набор 2',
+      keywords: ['test', 'sad', '😢', '😥'],
+      emoji: '😎',
+      path: `objects/${'7'.repeat(64)}.webp`,
+      previewPath: `objects/${'8'.repeat(64)}.webp`,
+      messagePreviewPath: `objects/${'8'.repeat(64)}.webp`,
+      width: 233,
+      height: 512,
+      format: 'webp',
+      animationDurationMs: 0
+    };
+    registerCatalogStickers([sticker]);
+    const sent = createStickerMessage(sticker.id)!;
+    expect(sent.text).toBe('😎 Стикер');
+    expect(sent.metadata).toMatchObject({ stickerEmoji: '😎' });
+    expect(getMessageSticker(sent.metadata)?.pack).toBe(sticker.pack);
+    expect(getStickerMessagePreview(sent.metadata, sent.text)).toBe(
+      '😎 Стикер'
+    );
+    expect(
+      getStickerMessagePreview({ kind: 'sticker', sticker }, 'Стикер: Набор 2')
+    ).toBe('😎 Стикер');
+    expect(
+      createStickerMessage({
+        ...sent.metadata.sticker,
+        label: 'Набор 2',
+        emoji: '😢'
+      })?.text
+    ).toBe('😎 Стикер');
+    expect(
+      getStickerMessagePreview(
+        { kind: 'sticker', sticker: { id: 'unknown' } },
+        'Стикер: Набор 99'
+      )
+    ).toBe('Стикер');
+    expect(getStickerMessagePreview({}, 'Обычный текст 😢')).toBeNull();
+    for (const emoji of ['👍🏽', '👨‍👩‍👧‍👦', '🇦🇲', '1️⃣'])
+      expect(findStickerEmoji('не эмодзи', emoji, '😢')).toBe(emoji);
+    expect(
+      findStickerEmoji('🐟 😎', '🐟', '❤', '❤️', '👍🏽', '👨‍👩‍👧‍👦', '🇦🇲', '1️⃣')
+    ).toBe('🐟');
+    expect(
+      getStickerMessagePreview({ ...sent.metadata, stickerEmoji: '🐟' })
+    ).toBe('😎 Стикер');
+    expect(getMessageSticker(sent.metadata)?.emoji).toBe('😎');
+    expect(getStickerById(sticker.id)).toMatchObject({ emoji: '😎' });
+    expect(
+      getStickerMessagePreview({
+        kind: 'sticker',
+        sticker: { id: 'not-loaded' },
+        stickerEmoji: '🇦🇲'
+      })
+    ).toBe('🇦🇲 Стикер');
+    registerCatalogStickers([
+      { ...sticker, id: 'no-primary', emoji: undefined }
+    ]);
+    expect(createStickerMessage('no-primary')?.text).toBe('😢 Стикер');
   });
 
   test('показывают тот же стикер после сериализации и пересылки', () => {

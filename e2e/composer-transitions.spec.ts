@@ -112,7 +112,9 @@ test('категории эмодзи сохраняют позиции и вк�
   const smile = page.locator('.chat__input .smile-button:visible');
   await smile.click();
   const groups = page.locator('.emoji-picker--open .v3-groups');
-  await expect(groups.locator('.sticker-picker__tab')).toBeVisible();
+  await expect(
+    page.locator('.emoji-picker--open .chat-sticker-picker__mode')
+  ).toBeVisible();
   const positions = await groups.evaluate(element => {
     const origin = element.getBoundingClientRect().x;
     return [...element.querySelectorAll('button')].map(button => ({
@@ -126,11 +128,11 @@ test('категории эмодзи сохраняют позиции и вк�
     (first, second) => first.x - second.x
   );
   expect(visualOrder[0].label).toBe('Недавние');
-  expect(visualOrder[1].label).toBe('Стикеры');
+  expect(visualOrder.map(item => item.label)).not.toContain('Стикеры');
   await smile.click();
-  await expect(page.locator('.chat__input .sticker-picker__tab')).toHaveCount(
-    1
-  );
+  await expect(
+    page.locator('.chat__input .chat-sticker-picker__mode')
+  ).toHaveCount(1);
   for (let index = 0; index < 3; index++) {
     await smile.click();
     await expect(groups).toBeVisible();

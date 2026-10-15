@@ -179,6 +179,7 @@
       </ContentEditor>
     </div>
     <ChatStickerPicker
+      ref="stickerPickerRef"
       :host="inputContainerRef"
       :enabled="canUseStickers"
       @select="emit('sendSticker', $event)"
@@ -255,6 +256,8 @@ import {
   normalizeAtSearchQuery
 } from '../../utils/searchMatch';
 import { useManagerRouteSubscription } from '../../composables/useManagerRoutes';
+import { useComposerKeyboard } from '../../composables/useComposerKeyboard';
+import { getStickerReference } from '../../utils/stickers';
 
 interface Props {
   topicId?: string;
@@ -509,12 +512,20 @@ const botCommands = computed(() => {
 const contentEditorRef =
   useTemplateRef<typeof ContentEditor>('contentEditorRef');
 const inputContainerRef = useTemplateRef<HTMLElement>('inputContainerRef');
+const composerKeyboard = useComposerKeyboard(inputContainerRef);
 const isTauriFileDragging = ref(false);
 const isEditorReady = ref(false);
 let shouldFocusEditorWhenReady = false;
 
 const handleEditorMounted = async (): Promise<void> => {
   await nextTick();
+  (
+    contentEditorRef.value as { preloadEmojiPicker?: () => void } | null
+  )?.preloadEmojiPicker?.();
+  if (canUseStickers.value)
+    stickerPickerRef.value?.prepare(
+      getStickerReference(activeTopic.value?.lastMessage?.ex)?.pack
+    );
   // EditorContent переносит DOM редактора в собственном nextTick после mounted.
   // Перед кадром все дочерние обновления закончены и высота композера известна.
   requestAnimationFrame(reportInputHeight);
@@ -526,6 +537,7 @@ const handleInputSkeletonPointerDown = (): void => {
 };
 
 const handleContentEditorPointerDown = (event: PointerEvent): void => {
+  if (composerKeyboard.handlePointerDown(event)) return;
   const target = event.target;
 
   if (
@@ -540,6 +552,7 @@ const handleContentEditorPointerDown = (event: PointerEvent): void => {
 };
 
 const handleContentEditorPopoverClick = (event: MouseEvent): void => {
+  composerKeyboard.handleClick(event);
   const root = inputContainerRef.value;
   const target = event.target;
 
@@ -575,6 +588,9 @@ let lastTypingPingAt = 0;
 let unlistenTauriFileDrop: (() => void) | null = null;
 let unlistenKeyboardMedia: (() => void) | null = null;
 let chatClipboard: ReturnType<typeof bindChatClipboardPaste> | null = null;
+const stickerPickerRef = ref<InstanceType<typeof ChatStickerPicker> | null>(
+  null
+);
 let keyboardMediaDisposed = false;
 let inputResizeObserver: ResizeObserver | null = null;
 let inputMutationObserver: MutationObserver | null = null;
@@ -725,6 +741,7 @@ const handleTauriFilesDropped = (files: File[]): void => {
 };
 
 defineExpose({
+  openStickerPack: (pack: string) => stickerPickerRef.value?.openPack(pack),
   focus: () => contentEditorRef.value?.focus(),
   pasteCopiedContent: () =>
     chatClipboard?.pasteFromClipboard() ?? Promise.resolve(false),
@@ -737,6 +754,21 @@ defineExpose({
     }),
   getRootElement: () => inputContainerRef.value
 });
+
+watch(
+  () =>
+    [
+      isEditorReady.value && canUseStickers.value,
+      activeTopic.value?.lastMessage?.ex
+    ] as const,
+  ([ready, ex]) => {
+    if (ready) {
+      const pack = getStickerReference(ex)?.pack;
+      stickerPickerRef.value?.prepare(pack);
+    }
+  },
+  { flush: 'post' }
+);
 
 watch(
   () => internalInputText.value,

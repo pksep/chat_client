@@ -102,7 +102,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { Search } from '@pksep/yui';
 import { MediaType } from '@pksep/zod-shared-chat';
 import { ITopic, ITopicSelectorProps, IUser } from './interfaces/interfaces';
@@ -123,6 +123,8 @@ import { isFavoriteTopic } from '../utils/favorite-topic';
 import { isCallTopic } from '../utils/call-topic';
 import { isBotTopic, isBotUser, isCallBotUser } from '../utils/bot';
 import { stripHtml } from '../utils/stripHtml';
+import { getStickerMessagePreview } from '../utils/stickers';
+import { ensureStickerMessageMetadata } from '../services/sticker-catalog';
 import { getFullMessagesByTopicId } from '../services/useMessages';
 import { resolveTopicLastMessage } from '../utils/topic-last-message';
 import { getTopicsByChatsToolbarFilter } from '../utils/chats-toolbar-filter';
@@ -198,7 +200,18 @@ const topicsWithLatestMessages = computed(() =>
   })
 );
 
+watch(
+  () => topicsWithLatestMessages.value.map(topic => topic.lastMessage?.ex),
+  messages => messages.forEach(ex => void ensureStickerMessageMetadata(ex)),
+  { immediate: true }
+);
+
 const getTopicLastMessagePreview = (topic: ITopic): string | undefined => {
+  const sticker = getStickerMessagePreview(
+    topic.lastMessage?.ex,
+    topic.lastMessage?.text
+  );
+  if (sticker) return sticker;
   const text = stripHtml(topic.lastMessage?.text);
 
   if (text) {
