@@ -40,7 +40,7 @@ test('канал ответа определяется сообщением кл
 
 test('названия и значки ботов видимы на широком и узком экране', async ({
   page
-}) => {
+}, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/e2e/fixtures/manager-reuse.html', {
@@ -54,8 +54,22 @@ test('названия и значки ботов видимы на широко
       const row = page.getByTestId(`bot-channel-${channel}`);
       await expect(row).toBeVisible();
       await expect(row).toContainText(channel);
-      await expect(row.locator('svg')).toBeVisible();
+      await expect(row.locator('svg, img')).toBeVisible();
+
+      if (channel === 'MAX') {
+        const icon = row.locator('img');
+
+        await expect(icon).toHaveAttribute('src', /max-icon.*\.svg/);
+        await expect(icon).toHaveJSProperty('complete', true);
+        await expect(icon).toHaveJSProperty('naturalWidth', 100);
+        await expect(icon).toHaveCSS('width', '24px');
+        await expect(icon).toHaveCSS('height', '24px');
+      }
     }
+
+    await page.getByTestId('bot-channels').screenshot({
+      path: testInfo.outputPath(`bot-channel-icons-${width}.png`)
+    });
   }
 
   expect(errors).toEqual([]);
