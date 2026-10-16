@@ -3,10 +3,10 @@
   cycles: 1
   deleted: 8
   inserted: 8
-  seconds: 232.416777058
+  seconds: 304.160716497
   version: 0.60.0
   what: judges-summary
-  when: 2026-10-16 01:42:38.575785189 Z
+  when: 2026-10-16 06:26:28.748057539 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -24319,11 +24319,11 @@
   where: github
   who: 93074025
 - _id: 1370
-  _job: 38822561463
-  _time: 2026-10-15 23:19:12.001223958 Z
+  _job: 38860578224
+  _time: 2026-10-16 06:21:29.469703969 Z
   _version: 0.19.6/0.60.0/0.17.11
   earliest_issue_was_found: 1
-  events_were_scanned: 24132990883
+  events_were_scanned: 17364799588
   latest_issue_was_found: 72
   min_pull_was_found: 451
   repository: 1053332035
