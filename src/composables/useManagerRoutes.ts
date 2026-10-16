@@ -13,7 +13,7 @@ import { showErrorNotification } from './useNotifications';
 
 export interface ManagerRoute {
   id: string;
-  channel: 'widget' | 'vk' | 'avito';
+  channel: 'widget' | 'vk' | 'avito' | 'telegram' | 'max';
   name: string;
   title: string;
   pageUrl: string;
@@ -31,7 +31,13 @@ export const managerRoutes = reactive<Record<string, ManagerRoute[]>>({});
 let generation = 0;
 
 export const channelLabel = (channel: string): string =>
-  ({ widget: 'Сайт', vk: 'ВКонтакте', avito: 'Авито' })[channel] || 'Канал';
+  ({
+    widget: 'Сайт',
+    vk: 'ВКонтакте',
+    avito: 'Авито',
+    telegram: 'Telegram',
+    max: 'MAX'
+  })[channel] || 'Канал';
 
 /** Сбрасывает приватные маршруты при смене сотрудника или отзыве права. */
 export function clearManagerRoutes(): void {

@@ -8,6 +8,7 @@ import MessageBubbleText from '../../src/components/Messages/MessageBubbleText.v
 import MessageBubbleFiles from '../../src/components/Messages/MessageBubbleFiles.vue';
 import MessageBubbleMedia from '../../src/components/Messages/MessageBubbleMedia.vue';
 import type { IMedia } from '../../src/components/interfaces/interfaces';
+import ClientPlatformIcon from '../../src/components/Clients/ClientPlatformIcon.vue';
 
 const pixel =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="240" height="180"%3E%3Crect width="240" height="180" fill="%2377a6ff"/%3E%3C/svg%3E';
@@ -79,7 +80,21 @@ createApp({
               'onUnmount-send': () => sent.value++
             })
           ]),
-          h('output', { 'data-testid': 'send-count' }, String(sent.value))
+          h('output', { 'data-testid': 'send-count' }, String(sent.value)),
+          h(
+            'section',
+            { 'data-testid': 'bot-channels' },
+            ['Telegram', 'MAX'].map(platform =>
+              h(
+                'div',
+                {
+                  'data-testid': `bot-channel-${platform}`,
+                  style: 'display:flex;align-items:center;gap:8px;padding:8px'
+                },
+                [h(ClientPlatformIcon, { platform }), platform]
+              )
+            )
+          )
         ]
       );
   }
