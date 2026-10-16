@@ -1,6 +1,11 @@
 import { parseMessageEx } from './messageReplyQuote';
 
-export type ManagerMessageChannel = 'widget' | 'vk' | 'avito';
+export type ManagerMessageChannel =
+  | 'widget'
+  | 'vk'
+  | 'avito'
+  | 'telegram'
+  | 'max';
 
 export interface ManagerRoutedMessage {
   senderUserId?: string | null;
@@ -16,7 +21,11 @@ export interface ManagerReplyContext {
 export function managerMessageChannel(ex: unknown): ManagerMessageChannel | '' {
   const channel = parseMessageEx(ex).managerChannel;
 
-  return channel === 'widget' || channel === 'vk' || channel === 'avito'
+  return channel === 'widget' ||
+    channel === 'vk' ||
+    channel === 'avito' ||
+    channel === 'telegram' ||
+    channel === 'max'
     ? channel
     : '';
 }
@@ -57,5 +66,5 @@ export function latestManagerReplyContext(
 }
 
 export function hasExternalMessageChannel(ex: unknown): boolean {
-  return ['vk', 'avito'].includes(managerMessageChannel(ex));
+  return ['vk', 'avito', 'telegram', 'max'].includes(managerMessageChannel(ex));
 }

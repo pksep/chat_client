@@ -1,5 +1,10 @@
 <template>
   <Icon v-if="platform === 'ВКонтакте'" :name="IconNameEnum.socialVk" />
+  <Icon
+    v-else-if="platform === 'Telegram'"
+    :name="IconNameEnum.socialTelegram"
+  />
+  <Icon v-else-if="platform === 'MAX'" :name="IconNameEnum.chat" />
   <svg
     v-else-if="platform === 'Авито'"
     width="24"

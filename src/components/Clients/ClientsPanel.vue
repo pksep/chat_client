@@ -170,14 +170,18 @@ const filters = [
   { value: 'new', label: 'Новые заявки' },
   { value: 'mine', label: 'Мои заявки' }
 ];
-const platforms = ['Сайт', 'Авито', 'ВКонтакте'].map(platform => ({
-  value: platform,
-  label: platform
-}));
+const platforms = ['Сайт', 'Авито', 'ВКонтакте', 'Telegram', 'MAX'].map(
+  platform => ({
+    value: platform,
+    label: platform
+  })
+);
 const mobileSystemFolders = [
   { id: 'site', label: 'Сайт', platform: 'Сайт', icon: IconNameEnum.settings },
   { id: 'avito', label: 'Авито', platform: 'Авито', icon: null },
   { id: 'vk', label: 'ВК', platform: 'ВКонтакте', icon: null },
+  { id: 'telegram', label: 'Telegram', platform: 'Telegram', icon: null },
+  { id: 'max', label: 'MAX', platform: 'MAX', icon: null },
   { id: 'new', label: 'Новые заявки', platform: '', icon: IconNameEnum.info },
   {
     id: 'support',
