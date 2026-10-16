@@ -101,14 +101,16 @@ export class ChatMessage implements ChatMessageInterface {
   async deleteMessage(topicId: string, messageId: string): Promise<void> {
     try {
       const response = await this.reqi.delete(
-        `/topics/${topicId}/messages/${messageId}`,
+        `/messages/topic/${topicId}/${messageId}`,
         {
           parsed: false
         }
       );
       await response.json();
     } catch (error) {
-      throw new Error(`Failed to delete message: ${(error as Error).message}`);
+      throw new Error(`Failed to delete message: ${(error as Error).message}`, {
+        cause: error
+      });
     }
   }
 

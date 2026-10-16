@@ -6,6 +6,7 @@ import {
 import { reviveCachedDates } from '../utils/revive-cached-dates';
 import type { IMessage } from '../components/interfaces/interfaces';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
+import { recordMessageDeletionTelemetry } from './message-deletion-telemetry';
 
 const DB_NAME = 'chat-sync-shadow-db';
 const EVENT_LOG_STORE = 'eventLog';
@@ -77,6 +78,7 @@ const shadowReadStateLoads = new Map<
   Promise<ShadowReadStateValue | null>
 >();
 const shadowSyncMetaLoads = new Map<string, Promise<unknown>>();
+const deletedMessageWrites = new Map<string, Promise<void>>();
 const scheduledEventLogPrunes = new Set<string>();
 
 export type ShadowSyncSource = 'http' | 'ws' | 'local';
@@ -627,9 +629,9 @@ export const saveShadowSyncMeta = async (
   key: string,
   value: unknown,
   userId = getResolvedUserId()
-): Promise<void> => {
+): Promise<boolean> => {
   if (!getShadowSyncEnabled() || !key || !userId) {
-    return;
+    return false;
   }
 
   try {
@@ -641,9 +643,10 @@ export const saveShadowSyncMeta = async (
       updatedAt: new Date().toISOString()
     };
 
-    await putRecord(SYNC_META_STORE, payload);
+    return await putRecord(SYNC_META_STORE, payload);
   } catch (error) {
     console.warn('Failed to save shadow sync meta:', error);
+    return false;
   }
 };
 
@@ -672,6 +675,9 @@ export const loadShadowDeletedMessageIds = async (
   topicId: string,
   userId = getResolvedUserId()
 ): Promise<Set<string>> => {
+  await deletedMessageWrites.get(
+    getMetaKey(getDeletedMessagesMetaKey(topicId), userId)
+  );
   const deletedMessages =
     (await loadShadowSyncMeta<Record<string, string>>(
       getDeletedMessagesMetaKey(topicId),
@@ -701,21 +707,40 @@ export const markShadowTopicMessageDeleted = async (
   }
 
   const key = getDeletedMessagesMetaKey(topicId);
-  const existing =
-    (await loadShadowSyncMeta<Record<string, string>>(key, userId)) || {};
-  const now = new Date().toISOString();
-  const cutoff = Date.now() - DELETED_MESSAGE_TOMBSTONE_TTL_MS;
-  const next = Object.fromEntries(
-    Object.entries({
-      ...existing,
-      [messageId]: now
-    }).filter(([, deletedAt]) => {
-      const deletedTimestamp = new Date(deletedAt).getTime();
-      return !Number.isNaN(deletedTimestamp) && deletedTimestamp >= cutoff;
-    })
-  );
+  const cacheKey = getMetaKey(key, userId);
+  // Параллельные удаления должны дополнять список, а не затирать друг друга.
+  const writing = (deletedMessageWrites.get(cacheKey) || Promise.resolve())
+    .catch(() => undefined)
+    .then(async () => {
+      const existing =
+        (await loadShadowSyncMeta<Record<string, string>>(key, userId)) || {};
+      const now = new Date().toISOString();
+      const cutoff = Date.now() - DELETED_MESSAGE_TOMBSTONE_TTL_MS;
+      const next = Object.fromEntries(
+        Object.entries({ ...existing, [messageId]: now }).filter(
+          ([, deletedAt]) => {
+            const deletedTimestamp = new Date(deletedAt).getTime();
+            return (
+              !Number.isNaN(deletedTimestamp) && deletedTimestamp >= cutoff
+            );
+          }
+        )
+      );
 
-  await saveShadowSyncMeta(key, next, userId);
+      if (!(await saveShadowSyncMeta(key, next, userId))) {
+        recordMessageDeletionTelemetry('cache_failed', topicId, messageId, {
+          source: 'shadow',
+          reason: 'tombstone_write_failed'
+        });
+      }
+    });
+  deletedMessageWrites.set(cacheKey, writing);
+  try {
+    await writing;
+  } finally {
+    if (deletedMessageWrites.get(cacheKey) === writing)
+      deletedMessageWrites.delete(cacheKey);
+  }
 };
 
 const filterShadowDeletedMessages = async (
@@ -733,7 +758,14 @@ const filterShadowDeletedMessages = async (
     return messages;
   }
 
-  return messages.filter(message => !deletedMessageIds.has(message.id));
+  return messages.filter(message => {
+    if (!deletedMessageIds.has(message.id)) return true;
+    recordMessageDeletionTelemetry('stale_filtered', topicId, message.id, {
+      source: 'shadow',
+      blocked: true
+    });
+    return false;
+  });
 };
 
 const mergeShadowLoadedRanges = (

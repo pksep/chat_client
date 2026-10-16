@@ -61,10 +61,15 @@ const MAX_ARRAY_LENGTH = 30;
 const MAX_DEPTH = 5;
 
 const shouldPersistTelemetry = (
-  event: Pick<TelemetryEvent, 'category' | 'name'>
+  event: Pick<TelemetryEvent, 'category' | 'name'> &
+    Partial<Pick<TelemetryEvent, 'level'>>
 ): boolean =>
   event.category === 'network' ||
-  (event.category === 'app' && event.name.startsWith('app.update.'));
+  (event.category === 'app' && event.name.startsWith('app.update.')) ||
+  (event.category === 'chat' &&
+    (event.name.startsWith('chat.message_delete.') ||
+      event.level === 'warn' ||
+      event.level === 'error'));
 
 const getPersistedNetworkTelemetry = (): TelemetryEvent[] => {
   if (typeof localStorage === 'undefined') {
@@ -344,7 +349,7 @@ export const recordTelemetryEvent = (input: TelemetryEventInput): void => {
       : undefined;
   telemetryQueue = [...telemetryQueue, event].slice(-TELEMETRY_MAX_QUEUE_SIZE);
 
-  // Сохраняем диагностику сети и обновления, чтобы установка APK не потеряла её.
+  // Сохраняем диагностику сети, обновлений и сбоев чата до перезапуска APK.
   if (
     shouldPersistTelemetry(event) ||
     (evictedEvent && shouldPersistTelemetry(evictedEvent))
