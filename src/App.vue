@@ -304,6 +304,7 @@ const parseRuntimeConfig = (
     CHAT_API_DOMAIN: envMap.VITE_CHAT_API_DOMAIN,
     CHAT_WS_DOMAIN: envMap.VITE_CHAT_WS_DOMAIN,
     CHAT_ERP_URL: envMap.VITE_ERP_URL,
+    CHAT_ERP_AUTH_URL: envMap.VITE_ERP_AUTH_URL,
     CHAT_PATH_TO_FILE_CDN: envMap.VITE_PATH_TO_FILE_CDN,
     CHAT_LIVEKIT_URL: envMap.VITE_LIVEKIT_URL,
     CHAT_BOT_GATEWAY: envMap.VITE_BOT_GATEWAY_URL,
@@ -643,7 +644,8 @@ const submitCredentialsLogin = async () => {
     saveChatAuthSession(
       {
         token: authData.token,
-        user: authData.user
+        user: authData.user,
+        source: authData.source
       },
       rememberAccount.value
     );
