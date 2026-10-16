@@ -313,6 +313,15 @@ const createTopicsApi = () => {
     };
     normalizedTopic.lastMessage = resolveLatestMessage(normalizedTopic);
     if (
+      normalizedTopic.lastMessage &&
+      existingTopic?.lastMessage?.id === normalizedTopic.lastMessage.id
+    ) {
+      normalizedTopic.lastMessage = resolveTopicLastMessage(
+        existingTopic.lastMessage,
+        normalizedTopic.lastMessage
+      );
+    }
+    if (
       existingTopic &&
       ((topic.lastMessage?.id === normalizedTopic.lastMessage?.id &&
         topic.lastMessage?.status !== normalizedTopic.lastMessage?.status) ||
@@ -331,8 +340,13 @@ const createTopicsApi = () => {
           incomingStatus: topic.lastMessage?.status,
           incomingUnreadCount: topic.unreadMessageCount,
           previousUnreadCount: existingTopic.unreadMessageCount,
-          localMessageCount: localMessages.length
-        }
+          localMessageCount: localMessages.length,
+          statusReconciled:
+            topic.lastMessage?.id === normalizedTopic.lastMessage?.id &&
+            topic.lastMessage?.status !== normalizedTopic.lastMessage?.status
+        },
+        topic.lastMessage?.id === normalizedTopic.lastMessage?.id &&
+          topic.lastMessage?.status !== normalizedTopic.lastMessage?.status
       );
     }
     const hasLocalUnreadMessages =
@@ -795,13 +809,31 @@ const createTopicsApi = () => {
   ): void => {
     const topic = topics.value.find(topic => topic.id === topicId);
     if (topic) {
+      const incomingMessage = lastMessage || getLocalLastMessage(topic);
       if (lastMessage) {
         topic.lastMessage = resolveLatestMessage(topic, lastMessage);
       } else {
         topic.lastMessage = resolveLastMessageAfterLocalSync(
           topic.lastMessage,
-          getLocalLastMessage(topic),
+          incomingMessage,
           hasKnownTopicMessagesState(topicId)
+        );
+      }
+
+      if (
+        incomingMessage?.id === topic.lastMessage?.id &&
+        incomingMessage?.status !== topic.lastMessage?.status
+      ) {
+        recordTopicStateTelemetry(
+          'local_snapshot_merge',
+          topic,
+          incomingMessage,
+          authedUser.value?.id,
+          {
+            incomingStatus: incomingMessage?.status,
+            statusReconciled: true
+          },
+          true
         );
       }
 

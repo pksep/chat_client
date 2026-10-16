@@ -59,6 +59,7 @@ import {
   fetchMessagesForTopic,
   fetchPinnedMessagesForTopic,
   getFullMessagesByTopicId,
+  getClientMessageById,
   getTopicIdsWithMessages,
   mergeMessagesForTopic
 } from './useMessages';
@@ -123,7 +124,12 @@ import {
   requestAnyChatBackgroundSync,
   saveAnyChatBackgroundSyncSession
 } from './useChatBackgroundSync';
-import { getTelemetryErrorPayload, recordTelemetryEvent } from './useTelemetry';
+import {
+  createTelemetryTraceId,
+  getTelemetryErrorPayload,
+  recordTelemetryEvent
+} from './useTelemetry';
+import { recordMessageDeletionTelemetry } from './message-deletion-telemetry';
 import { recordTopicStateTelemetry } from './topic-state-telemetry';
 import { parseMessageEx } from '../utils/messageReplyQuote';
 import {
@@ -191,6 +197,7 @@ const processedPts = new Set<number>();
 
 type MessageHandlingOptions = {
   silent?: boolean;
+  source?: string;
 };
 
 type ReconnectRefreshReason =
@@ -301,8 +308,14 @@ const syncPtsStateToServer = async (): Promise<void> => {
     processedPts.add(latestProcessedPts);
   }
 
-  chatSDK.sendWebSocketEvent(WebSocketEventType.SYNC_STATE, {
+  const sent = chatSDK.sendWebSocketEvent(WebSocketEventType.SYNC_STATE, {
     pts: lastPtsMeta.pts
+  });
+  recordTelemetryEvent({
+    category: 'chat',
+    name: 'chat.sync.replay_requested',
+    level: sent ? 'info' : 'warn',
+    payload: { fromPts: lastPtsMeta.pts, sent }
   });
 };
 
@@ -596,7 +609,16 @@ const setupChatListeners = (): void => {
       });
       void removeCallHistoryMessage(deletedMessageId);
       clearDeletedReactionTarget(payload.data.topicId, deletedMessageId);
-      deleteMessageFromLocal(payload.data.topicId, deletedMessageId);
+      void deleteMessageFromLocal(
+        payload.data.topicId,
+        deletedMessageId,
+        undefined,
+        {
+          source: opts?.source || 'ws',
+          eventId: payload.ptsMeta?.eventId,
+          pts: payload.ptsMeta?.pts
+        }
+      );
       if (deletedLastMessage) {
         void reconcileLastMessageAfterDelete(
           payload.data.topicId,
@@ -968,7 +990,7 @@ const setupChatListeners = (): void => {
               ...(event.payload as any),
               ptsMeta
             },
-            { silent: true }
+            { silent: true, source: 'replay' }
           );
           break;
         case 'message.read':
@@ -1008,6 +1030,34 @@ const setupChatListeners = (): void => {
             persistPtsMeta(ptsMeta);
           }
           break;
+      }
+    });
+    const hasMore = payload.hasMore ?? payload.events.length >= 200;
+    let continuationSent: boolean | undefined;
+    if (
+      hasMore &&
+      normalizePts(payload.toPts) > normalizePts(payload.fromPts)
+    ) {
+      continuationSent = chatSDK?.sendWebSocketEvent(
+        WebSocketEventType.SYNC_STATE,
+        {
+          pts: payload.toPts
+        }
+      );
+    }
+    recordTelemetryEvent({
+      category: 'chat',
+      name: 'chat.sync.replay_page',
+      level: hasMore && !continuationSent ? 'warn' : 'info',
+      payload: {
+        fromPts: payload.fromPts,
+        toPts: payload.toPts,
+        eventCount: payload.events.length,
+        deletionCount: payload.events.filter(
+          event => event.eventType === 'message.delete'
+        ).length,
+        hasMore,
+        continuationSent
       }
     });
   });
@@ -2677,18 +2727,59 @@ export const deleteMessageChat = async (params: {
   topicId: string;
 }): Promise<void> => {
   const sdk = getChatSDK();
+  const traceId = createTelemetryTraceId('message-delete');
+  const startedAt = Date.now();
+  let confirmed = false;
+  let slowTimer: ReturnType<typeof setTimeout> | undefined;
+  const record = (
+    stage: 'requested' | 'confirmed' | 'failed' | 'slow',
+    details: Record<string, unknown> = {}
+  ) =>
+    recordMessageDeletionTelemetry(
+      stage,
+      params.topicId,
+      params.messageId,
+      {
+        source: 'http',
+        activeTopicId: route.value.id,
+        elapsedMs: Date.now() - startedAt,
+        serverConfirmed: confirmed,
+        ...details
+      },
+      traceId
+    );
 
   try {
-    const sent = sdk.sendWebSocketEvent(WebSocketEventType.DELETE_MESSAGE, {
-      messageId: params.messageId,
-      topicId: params.topicId
+    const localMessage = getClientMessageById(params.topicId, params.messageId);
+    if (
+      localMessage?.senderUserId === authedUser.value?.id &&
+      parseMessageEx(localMessage?.ex)?.clientId === params.messageId
+    ) {
+      await deleteMessageFromLocal(params.topicId, params.messageId);
+      return;
+    }
+    record('requested', { socketConnected: hasLiveSocketConnection() });
+    slowTimer = setTimeout(() => record('slow'), 15_000);
+    await sdk.deleteMessage(params.topicId, params.messageId);
+    confirmed = true;
+    clearTimeout(slowTimer);
+    record('confirmed');
+    // Подтверждение HTTP не зависит от комнаты, открытой к моменту ответа.
+    await deleteMessageFromLocal(params.topicId, params.messageId, undefined, {
+      source: 'http',
+      traceId
     });
-    if (!sent) await sdk.deleteMessage(params.topicId, params.messageId);
-    // При выходе из комнаты событие удаления может не прийти; старую историю фильтруем сразу.
-    deleteMessageFromLocal(params.topicId, params.messageId);
   } catch (error) {
+    const cause = error instanceof Error && error.cause ? error.cause : error;
+    const httpStatus = (cause as { status?: unknown } | null)?.status;
+    record('failed', {
+      errorName: cause instanceof Error ? cause.name : 'UnknownError',
+      httpStatus: typeof httpStatus === 'number' ? httpStatus : undefined
+    });
     console.error('[ChatSDK] Не удалось удалить сообщение:', error);
     showErrorNotification('Не удалось удалить сообщение');
+  } finally {
+    clearTimeout(slowTimer);
   }
 };
 

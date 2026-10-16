@@ -14,20 +14,23 @@ async function prepareOwnMessage(page: Page, connected = true) {
   const rows = makeMessages('performance-0', 2);
   rows[0].senderUserId = 'performance-user';
   rows[0].senderUser = { id: 'performance-user', name: 'Тест' };
+  const deleteRequests: { topicId: string; messageId: string }[] = [];
+  page.on('request', request => {
+    const match = new URL(request.url()).pathname.match(
+      /\/messages\/topic\/([^/]+)\/([^/]+)$/
+    );
+    if (request.method() === 'DELETE' && match)
+      deleteRequests.push({ topicId: match[1], messageId: match[2] });
+  });
   await page.evaluate(
     ({ rows, connected }) => {
       const fixture = (window as any).topicPerformance;
       fixture.seed('performance-0', rows);
-      (window as any).deleteRequests = [];
-      fixture.sdk.sendWebSocketEvent = (type: string, payload: unknown) => {
-        if (type === 'deleteMessage')
-          (window as any).deleteRequests.push(payload);
-        return connected;
-      };
+      fixture.sdk.sendWebSocketEvent = () => connected;
     },
     { rows, connected }
   );
-  return { state, rows };
+  return { state, rows, deleteRequests };
 }
 
 async function confirmDelete(page: Page) {
@@ -35,14 +38,17 @@ async function confirmDelete(page: Page) {
     .locator('[data-message-id="performance-0-message-0"]')
     .first()
     .click({ button: 'right' });
-  await page.getByRole('button', { name: 'Удалить', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Удалить', exact: true })
+    .last()
+    .click();
   await page.getByRole('button', { name: 'Да', exact: true }).click();
 }
 
 test('удалённое сообщение не возвращается после быстрого перехода и устаревшей истории без события сервера', async ({
   page
 }) => {
-  const { state, rows } = await prepareOwnMessage(page);
+  const { state, rows, deleteRequests } = await prepareOwnMessage(page);
   await confirmDelete(page);
   await openTopic(page, 1);
   await openTopic(page, 0);
@@ -59,7 +65,7 @@ test('удалённое сообщение не возвращается пос
   await expect(
     page.locator('[data-message-id="performance-0-message-0"]')
   ).toHaveCount(0);
-  expect(await page.evaluate(() => (window as any).deleteRequests)).toEqual([
+  expect(deleteRequests).toEqual([
     { topicId: 'performance-0', messageId: 'performance-0-message-0' }
   ]);
   expect(state.errors).toEqual([]);
@@ -74,7 +80,7 @@ test('при отсутствии сокета удаление завершае
     release = resolve;
   });
   await page.route(
-    '**/performance-api/topics/performance-0/messages/performance-0-message-0',
+    '**/performance-api/messages/topic/performance-0/performance-0-message-0',
     async route => {
       await gate;
       await route.fulfill({ json: { deleted: true } });
@@ -85,7 +91,7 @@ test('при отсутствии сокета удаление завершае
       req.method() === 'DELETE' &&
       req
         .url()
-        .includes('/topics/performance-0/messages/performance-0-message-0')
+        .includes('/messages/topic/performance-0/performance-0-message-0')
   );
   try {
     await confirmDelete(page);
@@ -116,9 +122,9 @@ test('при отсутствии сокета удаление завершае
 test('неуспешное HTTP-удаление сохраняет сообщение после возврата в топик', async ({
   page
 }) => {
-  await prepareOwnMessage(page, false);
+  await prepareOwnMessage(page);
   await page.route(
-    '**/performance-api/topics/performance-0/messages/performance-0-message-0',
+    '**/performance-api/messages/topic/performance-0/performance-0-message-0',
     route =>
       route.fulfill({ status: 500, json: { message: 'Ошибка удаления' } })
   );
@@ -142,11 +148,46 @@ test('неуспешное HTTP-удаление сохраняет сообще
   ).toBeVisible();
 });
 
+test('при групповом удалении сообщение с ошибкой сервера остаётся видимым', async ({
+  page
+}) => {
+  const { rows, deleteRequests } = await prepareOwnMessage(page);
+  rows[1].senderUserId = 'performance-user';
+  rows[1].senderUser = { id: 'performance-user', name: 'Тест' };
+  await page.route(
+    '**/performance-api/messages/topic/performance-0/performance-0-message-0',
+    route =>
+      route.fulfill({ status: 500, json: { message: 'Ошибка удаления' } })
+  );
+  await page.evaluate(rows => {
+    const fixture = (window as any).topicPerformance;
+    fixture.seed('performance-0', rows);
+    for (const row of rows)
+      fixture.selection.enterMessageSelection('performance-0', row);
+  }, rows);
+  await confirmDelete(page);
+  await expect.poll(() => deleteRequests.length).toBe(2);
+  await expect(
+    page.locator('[data-message-id="performance-0-message-0"]').first()
+  ).toBeVisible();
+  await expect(
+    page.locator('[data-message-id="performance-0-message-1"]')
+  ).toHaveCount(0);
+  await openTopic(page, 1);
+  await openTopic(page, 0);
+  await expect(
+    page.locator('[data-message-id="performance-0-message-0"]').first()
+  ).toBeVisible();
+  await expect(
+    page.locator('[data-message-id="performance-0-message-1"]')
+  ).toHaveCount(0);
+});
+
 for (const source of ['socket', 'history']) {
   test(`удаление до подтверждения отправки учитывает новый ID сервера из ${source} после смены топика`, async ({
     page
   }) => {
-    const { rows } = await prepareOwnMessage(page);
+    const { rows, deleteRequests } = await prepareOwnMessage(page);
     const pending = {
       ...rows[0],
       status: 'WAIT',
@@ -194,7 +235,7 @@ for (const source of ['socket', 'history']) {
     await expect(
       page.locator('[data-message-id="confirmed-message"]')
     ).toHaveCount(0);
-    expect(await page.evaluate(() => (window as any).deleteRequests)).toEqual([
+    expect(deleteRequests).toEqual([
       { topicId: 'performance-0', messageId: 'confirmed-message' }
     ]);
   });
@@ -203,7 +244,7 @@ for (const source of ['socket', 'history']) {
 test('картинка с ID сервера удаляется на сервере даже при устаревшем статусе отправки после перехода', async ({
   page
 }) => {
-  const { rows } = await prepareOwnMessage(page);
+  const { rows, deleteRequests } = await prepareOwnMessage(page);
   const image = {
     ...rows[0],
     text: '',
@@ -228,9 +269,9 @@ test('картинка с ID сервера удаляется на сервер
   await openTopic(page, 1);
   await openTopic(page, 0);
   await confirmDelete(page);
-  expect(await page.evaluate(() => (window as any).deleteRequests)).toEqual([
-    { topicId: 'performance-0', messageId: rows[0].id }
-  ]);
+  await expect
+    .poll(() => deleteRequests)
+    .toEqual([{ topicId: 'performance-0', messageId: rows[0].id }]);
   await openTopic(page, 1);
   await openTopic(page, 0);
   await page.evaluate(
