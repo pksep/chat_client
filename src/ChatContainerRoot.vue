@@ -602,7 +602,8 @@ const runAppInitialization = async () => {
     const storedAuthData = hasStoredChatSession
       ? {
           token: directAuthSession?.token || storedChatToken || '',
-          user: directAuthSession?.user
+          user: directAuthSession?.user,
+          source: directAuthSession?.source
         }
       : null;
     let usedBootstrapToken = false;
@@ -649,7 +650,8 @@ const runAppInitialization = async () => {
     saveChatAuthSession(
       {
         token: authData.token,
-        user: authData.user
+        user: authData.user,
+        source: authData.source || directAuthSession?.source
       },
       persistSession
     );

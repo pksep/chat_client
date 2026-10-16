@@ -8,6 +8,7 @@ const CONFIG_KEYS: Array<keyof IChatContainerConfig> = [
   'CHAT_API_DOMAIN',
   'CHAT_WS_DOMAIN',
   'CHAT_ERP_URL',
+  'CHAT_ERP_AUTH_URL',
   'CHAT_PATH_TO_FILE_CDN',
   'CHAT_LIVEKIT_URL',
   'CHAT_URL',

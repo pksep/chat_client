@@ -53,8 +53,8 @@ import { ChatUtils, ChatUtilsInterface } from './utils';
 import { ITopic } from '../../components/interfaces/interfaces';
 import { getAuthToken, subscribeAuthToken } from '../../composables/useLogin';
 import {
+  handleConfirmedInactiveSession,
   isAuthError,
-  redirectToAuthorization,
   tryRefreshErpSession,
   withErpRefreshOnAuthError
 } from '../../composables/useAuth';
@@ -752,9 +752,28 @@ export class ChatSDK {
         });
         this.socket.on(
           'authError',
-          (authError: { status?: number; code?: string; message?: string }) => {
+          async (authError: {
+            status?: number;
+            code?: string;
+            message?: string;
+          }) => {
             if (authError?.status === 401) {
-              redirectToAuthorization();
+              try {
+                const refreshed = await tryRefreshErpSession();
+
+                if (refreshed?.token) {
+                  await this.updateAccessToken(refreshed.token);
+                  return;
+                }
+
+                await handleConfirmedInactiveSession();
+              } catch (error) {
+                console.warn(
+                  'Socket.IO: Не удалось обновить токен, сессия сохранена',
+                  error
+                );
+                this.socket?.connect();
+              }
               return;
             }
 
@@ -801,19 +820,30 @@ export class ChatSDK {
           if (!authReconnectAttempted && isAuthError(error)) {
             authReconnectAttempted = true;
 
-            const refreshed = await tryRefreshErpSession();
+            try {
+              const refreshed = await tryRefreshErpSession();
 
-            if (refreshed?.token && this.socket) {
-              this.token = refreshed.token;
+              if (refreshed?.token && this.socket) {
+                this.token = refreshed.token;
+                this.socket.auth = { token: refreshed.token };
+                console.warn(
+                  'Socket.IO: Retrying initial connection after token refresh'
+                );
+                this.socket.connect();
+                return;
+              }
+
+              await handleConfirmedInactiveSession();
+              rejectOnce(error);
+            } catch (refreshError) {
+              authReconnectAttempted = false;
               console.warn(
-                'Socket.IO: Retrying initial connection after token refresh'
+                'Socket.IO: Сервис обновления токена недоступен, сессия сохранена',
+                refreshError
               );
-              this.socket.connect();
-              return;
+              this.emitConnectionState(false);
+              rejectOnce(error);
             }
-
-            redirectToAuthorization();
-            rejectOnce(error);
             return;
           }
 
@@ -991,6 +1021,7 @@ export class ChatSDK {
     this.socket.auth = { token };
 
     if (!this.socket.connected) {
+      this.socket.connect();
       return true;
     }
 
