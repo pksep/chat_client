@@ -9,6 +9,8 @@
         ref="filesSurfaceRef"
         :class="messageArticleStyles"
         :data-testid="`${props.dataTestid}-Article`"
+        @click="handleFileSurfaceClick"
+        @dblclick.stop
       >
         <MessageBubbleTail
           v-if="!props.continuesWithNext"
@@ -37,19 +39,23 @@
           :data-message-media-id="media.id"
           class="message-content"
           :data-testid="`${props.dataTestid}-Content`"
+          role="button"
+          tabindex="0"
+          :aria-label="`Открыть файл ${media.originName || ''}`"
+          @click="handleFileClick(media, i)"
+          @keydown.enter.stop.prevent="handleFileClick(media, i)"
+          @keydown.space.stop.prevent="handleFileClick(media, i)"
         >
           <div
-            @click="handleFileClick(media, i)"
             :draggable="!props.isMobile && canDragMedia(media)"
             @dragstart.stop="handleDragStart($event, media)"
             @contextmenu.prevent
             class="message-content__file"
+            :aria-busy="isNativeFileBusy(media)"
+            @dblclick.stop
             :data-testid="`${props.dataTestid}-FileContainer`"
           >
-            <span
-              class="message-content__file-icon"
-              @click.stop="handleFileClick(media, i)"
-            >
+            <span class="message-content__file-icon">
               <FileIcon
                 :is-me-sender="props.isMeSender"
                 :dataTestid="`${props.dataTestid}-FileIcon`"
@@ -77,7 +83,12 @@
                   </span>
                 </template>
                 <template v-else>
-                  {{ getFileFormattedSize(media) }}
+                  <span
+                    v-if="getNativeFileDownloadState(media).phase === 'opening'"
+                    role="status"
+                    >Открываем…</span
+                  >
+                  <template v-else>{{ getFileFormattedSize(media) }}</template>
                 </template>
               </template>
             </ChatFileDetails>
@@ -321,8 +332,14 @@ const isNativeFileDownloading = (media: IMedia): boolean =>
   shouldUseNativeFileState(media) &&
   getNativeFileDownloadState(media).phase === 'downloading';
 
+const isNativeFileBusy = (media: IMedia): boolean =>
+  shouldUseNativeFileState(media) &&
+  ['checking', 'downloading', 'opening'].includes(
+    getNativeFileDownloadState(media).phase
+  );
+
 const isFileIconLoaded = (media: IMedia): boolean =>
-  !shouldShowFileLoading(media) && !isNativeFileDownloading(media);
+  !shouldShowFileLoading(media) && !isNativeFileBusy(media);
 
 const getFileIconPercent = (media: IMedia): number | null => {
   if (isNativeFileDownloading(media)) {
@@ -375,11 +392,26 @@ const handleFileClick = (media: IMedia, index: number) => {
   emits('set-slider', docFiles.value, index);
 };
 
+const handleFileSurfaceClick = (event: MouseEvent): void => {
+  if (docFiles.value.length !== 1) return;
+  const target = event.target;
+  if (
+    target instanceof Element &&
+    target.closest(
+      '.message-content, .message-file__caption, .message-reference-block, .message__author-meta, .message-footer-row, button, a, input, textarea, select, [role="button"]'
+    )
+  ) {
+    return;
+  }
+  handleFileClick(docFiles.value[0], 0);
+};
+
 const messageArticleStyles = computed(() => [
   'message__article',
   {
     'message__no-author': props.isMeSender,
     message__article__file: true,
+    'message__article__file--single': docFiles.value.length === 1,
     'message__article__file--caption': hasInlineCaption.value
   }
 ]);

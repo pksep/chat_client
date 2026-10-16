@@ -12,6 +12,33 @@ interface NativeFileDownloadProgress {
 }
 
 export interface NativeFilePlugin {
+  getMessageUploadCapabilities(): Promise<{ version: number }>;
+  prepareMessageUpload(
+    options: Record<string, unknown>
+  ): Promise<{ status: string }>;
+  stageMessageUploadChunk(options: {
+    id: string;
+    index: number;
+    offset: number;
+    base64: string;
+  }): Promise<void>;
+  enqueueMessageUpload(options: { id: string }): Promise<void>;
+  cancelMessageUpload(options: { id: string }): Promise<void>;
+  retryMessageUpload(options: { id: string }): Promise<void>;
+  getMessageUpload(options: { id: string }): Promise<{
+    status:
+      | 'missing'
+      | 'staging'
+      | 'queued'
+      | 'uploading'
+      | 'completed'
+      | 'failed'
+      | 'cancelled';
+    fileIndex?: number;
+    percent?: number;
+    message?: unknown;
+    error?: string;
+  }>;
   addListener(
     eventName: 'fileDownloadProgress',
     listenerFunc: (payload: NativeFileDownloadProgress) => void
@@ -27,7 +54,11 @@ export interface NativeFilePlugin {
     mimeType?: string;
     size?: number;
     localUri?: string;
-  }): Promise<{ path: string; mimeType: string }>;
+  }): Promise<{
+    path: string;
+    mimeType: string;
+    timings?: { queueMs: number; lookupMs: number; launchMs: number };
+  }>;
   getFileStatus(options: {
     url: string;
     fileName?: string;

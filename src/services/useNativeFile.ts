@@ -4,9 +4,12 @@ import type { IMedia } from '../components/interfaces/interfaces';
 import { isAndroidNativePlatform, NativeFile } from './native-file-bridge';
 import { getConfig } from './useConfig';
 import { buildMediaObjectUrl } from '../utils/media-url';
+import { createTelemetryTraceId, recordTelemetryEvent } from './useTelemetry';
 
 type NativeDownloadPhase =
   | 'unknown'
+  | 'checking'
+  | 'opening'
   | 'not-downloaded'
   | 'downloading'
   | 'downloaded'
@@ -24,6 +27,10 @@ const nativeFileDownloadStates = reactive<
   Record<string, NativeFileDownloadState>
 >({});
 const pendingNativeDownloads = new Map<string, Promise<boolean>>();
+const pendingNativeChecks = new Map<string, Promise<boolean>>();
+const pendingNativeOpens = new Map<string, Promise<boolean>>();
+const pendingNativeClicks = new Map<string, Promise<boolean>>();
+const nativeStatusCheckedAt = new Map<string, number>();
 let nativeProgressListenerPromise: Promise<PluginListenerHandle | null> | null =
   null;
 
@@ -130,7 +137,8 @@ export const getNativeFileDownloadState = (
 };
 
 export const refreshNativeFileDownloadStatus = async (
-  media: IMedia
+  media: IMedia,
+  force = false
 ): Promise<boolean> => {
   const key = getNativeFileKey(media);
 
@@ -138,24 +146,51 @@ export const refreshNativeFileDownloadStatus = async (
     return false;
   }
 
-  if (nativeFileDownloadStates[key]?.phase === 'downloading') {
-    return false;
-  }
+  const current = nativeFileDownloadStates[key];
+  if (current?.phase === 'downloading' || current?.phase === 'opening')
+    return Boolean(current.localUri);
+  const pending = pendingNativeChecks.get(key);
+  if (pending) return pending;
+  if (!force && Date.now() - (nativeStatusCheckedAt.get(key) || 0) < 30_000)
+    return current?.phase === 'downloaded';
 
-  try {
-    const status = await NativeFile.getFileStatus(getNativeFileOptions(media));
-
-    nativeFileDownloadStates[key] = {
-      phase: status.downloaded ? 'downloaded' : 'not-downloaded',
-      percent: null
-    };
-
-    return status.downloaded;
-  } catch (error) {
-    console.warn('Failed to check native file status:', error);
-    nativeFileDownloadStates[key] = { phase: 'unknown', percent: null };
-    return false;
-  }
+  const checking: NativeFileDownloadState = {
+    ...current,
+    phase: 'checking',
+    percent: null
+  };
+  nativeFileDownloadStates[key] = checking;
+  const check = (async () => {
+    try {
+      const status = await NativeFile.getFileStatus(
+        getNativeFileOptions(media)
+      );
+      // Ответ старой проверки не должен затереть завершившуюся загрузку.
+      if (
+        nativeFileDownloadStates[key] === checking ||
+        nativeFileDownloadStates[key]?.phase === 'checking'
+      ) {
+        nativeFileDownloadStates[key] = {
+          phase: status.downloaded ? 'downloaded' : 'not-downloaded',
+          percent: null,
+          localUri: status.downloaded ? status.path : undefined,
+          fileName: status.fileName,
+          mimeType: status.mimeType
+        };
+        nativeStatusCheckedAt.set(key, Date.now());
+      }
+      return status.downloaded;
+    } catch (error) {
+      console.warn('Failed to check native file status:', error);
+      if (nativeFileDownloadStates[key]?.phase === 'checking')
+        nativeFileDownloadStates[key] = { phase: 'unknown', percent: null };
+      return false;
+    } finally {
+      pendingNativeChecks.delete(key);
+    }
+  })();
+  pendingNativeChecks.set(key, check);
+  return check;
 };
 
 export const downloadNativeFileToDownloads = async (
@@ -193,6 +228,7 @@ export const downloadNativeFileToDownloads = async (
         fileName: downloadedFile.fileName,
         mimeType: downloadedFile.mimeType
       };
+      nativeStatusCheckedAt.set(key, Date.now());
 
       return true;
     } catch (error) {
@@ -212,7 +248,8 @@ export const downloadNativeFileToDownloads = async (
 };
 
 export const openDownloadedNativeFile = async (
-  media: IMedia
+  media: IMedia,
+  clickTiming?: { startedAt: number; traceId: string; statusCheckMs: number }
 ): Promise<boolean> => {
   const key = getNativeFileKey(media);
 
@@ -220,21 +257,68 @@ export const openDownloadedNativeFile = async (
     return false;
   }
 
+  const pending = pendingNativeOpens.get(key);
+  if (pending) return pending;
   const currentState = nativeFileDownloadStates[key];
-
-  await NativeFile.openDownloadedFile({
-    ...getNativeFileOptions(media),
-    localUri: currentState?.localUri,
-    fileName: currentState?.fileName || getNativeFileOptions(media).fileName,
-    mimeType: currentState?.mimeType || getNativeFileOptions(media).mimeType
-  });
   nativeFileDownloadStates[key] = {
     ...currentState,
-    phase: 'downloaded',
+    phase: 'opening',
     percent: null
   };
-
-  return true;
+  const startedAt = clickTiming?.startedAt ?? performance.now();
+  const traceId = clickTiming?.traceId || createTelemetryTraceId('file-open');
+  const record = (stage: string, payload: Record<string, unknown> = {}) =>
+    recordTelemetryEvent({
+      category: 'chat',
+      name: `chat.file_open.${stage}`,
+      traceId,
+      entityType: 'media',
+      entityId: media.id,
+      level: stage === 'failed' ? 'error' : 'info',
+      payload: {
+        extension: getFileExtension(media.originName),
+        size: media.size,
+        hasLocalUri: Boolean(currentState?.localUri),
+        statusCheckMs: clickTiming?.statusCheckMs ?? 0,
+        elapsedMs: Math.round(performance.now() - startedAt),
+        ...payload
+      }
+    });
+  record('requested');
+  const open = (async () => {
+    try {
+      const result = await NativeFile.openDownloadedFile({
+        ...getNativeFileOptions(media),
+        localUri: currentState?.localUri,
+        fileName:
+          currentState?.fileName || getNativeFileOptions(media).fileName,
+        mimeType: currentState?.mimeType || getNativeFileOptions(media).mimeType
+      });
+      nativeFileDownloadStates[key] = {
+        ...currentState,
+        localUri: result.path,
+        mimeType: result.mimeType,
+        phase: 'downloaded',
+        percent: null
+      };
+      record('viewer_launched', { nativeTimings: result.timings });
+      return true;
+    } catch (error) {
+      const missing = (error as { code?: string })?.code === 'FILE_NOT_FOUND';
+      nativeFileDownloadStates[key] = missing
+        ? { phase: 'not-downloaded', percent: null }
+        : { ...currentState, phase: 'downloaded', percent: null };
+      if (missing) nativeStatusCheckedAt.delete(key);
+      record('failed', {
+        code: (error as { code?: string })?.code || 'UNKNOWN'
+      });
+      throw error;
+    } finally {
+      pendingNativeOpens.delete(key);
+    }
+  })();
+  pendingNativeOpens.set(key, open);
+  return open;
 };
 
 export const handleNativeFileClick = async (
@@ -246,61 +330,56 @@ export const handleNativeFileClick = async (
     return false;
   }
 
-  const state = getNativeFileDownloadState(media);
-
-  if (state.phase === 'downloading') {
-    return true;
-  }
-
-  if (state.phase === 'downloaded') {
-    try {
-      await openDownloadedNativeFile(media);
-    } catch (error) {
-      console.warn('Failed to open downloaded native file:', error);
-      nativeFileDownloadStates[key] = {
-        ...state,
-        phase: 'error',
-        percent: null
-      };
+  const pending = pendingNativeClicks.get(key);
+  if (pending) return pending;
+  const click = (async () => {
+    let state = getNativeFileDownloadState(media);
+    if (state.phase === 'downloading' || state.phase === 'opening') return true;
+    const startedAt = performance.now();
+    const traceId = createTelemetryTraceId('file-open');
+    recordTelemetryEvent({
+      category: 'chat',
+      name: 'chat.file_open.clicked',
+      traceId,
+      entityType: 'media',
+      entityId: media.id,
+      payload: {
+        extension: getFileExtension(media.originName),
+        size: media.size,
+        phase: state.phase
+      }
+    });
+    let statusCheckMs = 0;
+    if (
+      state.phase === 'unknown' ||
+      state.phase === 'checking' ||
+      state.phase === 'error'
+    ) {
+      await refreshNativeFileDownloadStatus(media);
+      statusCheckMs = Math.round(performance.now() - startedAt);
+      state = getNativeFileDownloadState(media);
+    }
+    if (state.phase === 'downloaded') {
+      try {
+        await openDownloadedNativeFile(media, {
+          startedAt,
+          traceId,
+          statusCheckMs
+        });
+      } catch (error) {
+        console.warn('Failed to open downloaded native file:', error);
+      }
+    } else {
+      await downloadNativeFileToDownloads(media);
     }
     return true;
-  }
-
-  if (state.phase === 'not-downloaded') {
-    await downloadNativeFileToDownloads(media);
-    return true;
-  }
-
-  nativeFileDownloadStates[key] = {
-    phase: 'downloading',
-    percent: null
-  };
-
-  let isDownloaded = false;
-
+  })();
+  pendingNativeClicks.set(key, click);
   try {
-    const status = await NativeFile.getFileStatus(getNativeFileOptions(media));
-    isDownloaded = status.downloaded;
-  } catch (error) {
-    console.warn('Failed to check native file before download:', error);
+    return await click;
+  } finally {
+    pendingNativeClicks.delete(key);
   }
-
-  if (isDownloaded) {
-    try {
-      await openDownloadedNativeFile(media);
-    } catch (error) {
-      console.warn('Failed to open downloaded native file:', error);
-      nativeFileDownloadStates[key] = {
-        ...nativeFileDownloadStates[key],
-        phase: 'error',
-        percent: null
-      };
-    }
-    return true;
-  }
-
-  await downloadNativeFileToDownloads(media);
-  return true;
 };
 
 export const openNativeFile = async (media: IMedia): Promise<boolean> => {
