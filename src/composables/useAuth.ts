@@ -387,7 +387,9 @@ export const redirectToAuthorization = (): void => {
   redirectToAuthorizationInternal(true);
 };
 
-const readAuthErrorBody = async (response: Response): Promise<AuthErrorBody> => {
+const readAuthErrorBody = async (
+  response: Response
+): Promise<AuthErrorBody> => {
   try {
     return (await response.json()) as AuthErrorBody;
   } catch {
@@ -395,10 +397,7 @@ const readAuthErrorBody = async (response: Response): Promise<AuthErrorBody> => 
   }
 };
 
-const getAuthErrorMessage = (
-  body: AuthErrorBody,
-  fallback: string
-): string => {
+const getAuthErrorMessage = (body: AuthErrorBody, fallback: string): string => {
   if (Array.isArray(body.message)) {
     return body.message.filter(Boolean).join(', ') || fallback;
   }
@@ -532,9 +531,7 @@ export const tryRefreshErpSession = (): Promise<AuthResponse | null> => {
         ).locks;
 
   sessionRefreshPromise = (
-    locks
-      ? locks.request(AUTH_REFRESH_LOCK_NAME, runRefresh)
-      : runRefresh()
+    locks ? locks.request(AUTH_REFRESH_LOCK_NAME, runRefresh) : runRefresh()
   ).finally(() => {
     sessionRefreshPromise = null;
   });
@@ -582,9 +579,7 @@ const requestChatLogout = (): Promise<Response> => {
   );
 };
 
-const validateChatToken = async (
-  token: string
-): Promise<AuthUser | null> => {
+const validateChatToken = async (token: string): Promise<AuthUser | null> => {
   const config = getConfig();
   const response = await withNetworkTimeout(signal =>
     fetch(`${config.CHAT_API_DOMAIN.replace(/\/+$/, '')}/auth/session`, {
@@ -741,10 +736,7 @@ const saveRefreshedBackgroundSession = (
       })
     )
     .catch(error => {
-      console.warn(
-        'Не удалось обновить токен фоновой синхронизации:',
-        error
-      );
+      console.warn('Не удалось обновить токен фоновой синхронизации:', error);
     });
 };
 
@@ -859,7 +851,8 @@ const handleAuthRefreshBroadcast = async (
   if (!message || typeof message !== 'object') return;
 
   if (message.type === 'cleared') {
-    const currentUserId = getChatAuthSession()?.user?.id || authedUser.value?.id;
+    const currentUserId =
+      getChatAuthSession()?.user?.id || authedUser.value?.id;
     if (message.userId && currentUserId && message.userId !== currentUserId) {
       return;
     }
@@ -871,7 +864,11 @@ const handleAuthRefreshBroadcast = async (
   if (!message.token || !isSharedAccessToken(message.token)) return;
 
   const expectedUserId = getChatAuthSession()?.user?.id || authedUser.value?.id;
-  if (expectedUserId && message.user?.id && expectedUserId !== message.user.id) {
+  if (
+    expectedUserId &&
+    message.user?.id &&
+    expectedUserId !== message.user.id
+  ) {
     return;
   }
 
@@ -914,10 +911,7 @@ const scheduleSharedTokenRefresh = (
     : lifetimeSeconds <= 30
       ? Math.max(2, Math.min(3, lifetimeSeconds * 0.2))
       : Math.min(60, Math.max(10, lifetimeSeconds * 0.1));
-  const delayMs = Math.max(
-    250,
-    (exp - Date.now() / 1000 - leadSeconds) * 1000
-  );
+  const delayMs = Math.max(250, (exp - Date.now() / 1000 - leadSeconds) * 1000);
 
   proactiveRefreshTimer = setTimeout(() => {
     proactiveRefreshTimer = null;
