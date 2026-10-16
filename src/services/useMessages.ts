@@ -77,6 +77,7 @@ import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { compareMessages, getMessageTimestamp } from '../utils/messageOrder';
 import { parseMessageEx } from '../utils/messageReplyQuote';
 import { recordTopicStateTelemetry } from './topic-state-telemetry';
+import { recordMessageDeletionTelemetry } from './message-deletion-telemetry';
 
 // Store mutations replace message payloads. Deep Vue proxies make every field
 // of every cached message reactive and multiply the work of bulk merges; a
@@ -639,7 +640,7 @@ const applyReactionOverlaysToMessages = (
 ): IMessage[] =>
   messages.map(message => applyReactionOverlayToMessage(topicId, message));
 
-const rememberPersistedDeletedMessageIds = async (
+export const rememberPersistedDeletedMessageIds = async (
   topicId: string,
   userId?: string
 ): Promise<void> => {
@@ -688,6 +689,12 @@ export const reconcileDeletedMessage = (
   message: IMessage
 ): boolean => {
   if (!isDeletedMessageForTopic(topicId, message)) return false;
+  recordMessageDeletionTelemetry('stale_filtered', topicId, message.id, {
+    source: 'message_store',
+    blocked: true,
+    clientMessageId: getClientId(message),
+    receivedStatus: message.status
+  });
   if (deletedMessageIdsByTopic.get(topicId)?.has(message.id)) return true;
 
   // Отменённая отправка может подтвердиться уже после выхода из топика с новым ID.
@@ -2168,8 +2175,15 @@ export const cancelDelayedOutgoingMessage = (
 
 export const deleteMessageFromLocal = (
   topicId: string,
-  messageId: string
-): void => {
+  messageId: string,
+  userId?: string,
+  diagnostic: {
+    source?: string;
+    eventId?: string;
+    pts?: string;
+    traceId?: string;
+  } = {}
+): Promise<void> => {
   const message = getClientMessageById(topicId, messageId);
   const clientId =
     message && message.senderUserId === authedUser.value?.id
@@ -2180,7 +2194,7 @@ export const deleteMessageFromLocal = (
     clearPendingUploadMessage(topicId, clientId);
     cancelDelayedOutgoingMessage(topicId, clientId);
     cancelOutgoingDeliveryTimeout(topicId, clientId);
-    void deleteShadowTopicMessage(topicId, clientId);
+    void deleteShadowTopicMessage(topicId, clientId, userId);
   }
   rememberDeletedMessageId(topicId, messageId);
   clearReactionOverlayForMessage(topicId, messageId);
@@ -2203,7 +2217,22 @@ export const deleteMessageFromLocal = (
   cancelDelayedOutgoingMessage(topicId, messageId);
   cancelOutgoingDeliveryTimeout(topicId, messageId);
   unpinLocalMessageForMe(topicId, messageId);
-  void deleteShadowTopicMessage(topicId, messageId);
+  recordMessageDeletionTelemetry(
+    'applied',
+    topicId,
+    messageId,
+    {
+      source: diagnostic.source || 'local',
+      eventId: diagnostic.eventId,
+      pts: diagnostic.pts,
+      hadLocalMessage: !!message,
+      clientMessageId: clientId,
+      activeTopicId: route.value.id,
+      remainingInMemory: !!getClientMessageById(topicId, messageId)
+    },
+    diagnostic.traceId
+  );
+  return deleteShadowTopicMessage(topicId, messageId, userId);
 };
 
 export const editMessageFromLocal = (

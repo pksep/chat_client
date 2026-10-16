@@ -2,9 +2,12 @@ import { createApp, h, nextTick } from 'vue';
 import { createPinia } from 'pinia';
 import MessageList from '../../src/components/MessageList.vue';
 import Chat from '../../src/components/Chat.vue';
+import TopicList from '../../src/components/ContactList/TopicList.vue';
 import { authedUser } from '../../src/composables/useAuth';
+import { useSelectedMessages } from '../../src/composables/useSelectedMessages';
 import {
   setTopics,
+  topics as topicState,
   getSelectedTopic,
   updateLocalLastMessageTopic
 } from '../../src/composables/useTopics';
@@ -13,10 +16,17 @@ import {
   navigateToDialogsList
 } from '../../src/composables/navigation';
 import { setConfig } from '../../src/services/useConfig';
-import { initializeChat, getChatSDK } from '../../src/services/useChat';
+import {
+  initializeChat,
+  getChatSDK,
+  deleteMessageChat
+} from '../../src/services/useChat';
+import * as telemetry from '../../src/services/useTelemetry';
 import { ChatSDK } from '../../src/services/useChatSDK';
 import { navigateToNotificationTarget } from '../../src/services/useNotificationNavigation';
 import * as messages from '../../src/services/useMessages';
+import * as shadow from '../../src/services/useShadowChatSync';
+import { importChatBackgroundSnapshot } from '../../src/services/useChatBackgroundSync';
 import { emojiDirective } from '../../src/directives/emoji';
 import { setTopicMessageVisibilityChecker } from '../../src/services/useTopicViewportState';
 import '../../src/assets/globals.css';
@@ -124,7 +134,13 @@ export async function initializeTopicPerformanceFixture(
   return {
     topics,
     messages,
+    telemetry,
+    deleteMessageChat,
+    shadow,
+    importChatBackgroundSnapshot,
+    selection: useSelectedMessages(),
     getSelectedTopic,
+    setTopics,
     updateLocalLastMessageTopic,
     sdk: getChatSDK(),
     initializeChat,
@@ -143,6 +159,18 @@ export async function initializeTopicPerformanceFixture(
       metrics.maxMessageNodes = 0;
       metrics.longTasks = [];
       metrics.skeletonSamples = [];
+    },
+    mountTopicList() {
+      const root = document.createElement('div');
+      root.style.cssText =
+        'position:fixed;inset:0;z-index:1000;background:white';
+      document.body.append(root);
+      const listApp = createApp({
+        render: () =>
+          h(TopicList, { topics: topicState.value, dataTestid: 'Status' })
+      });
+      listApp.directive('emoji', emojiDirective);
+      listApp.mount(root);
     },
     seed(topicId: string, rows: IMessage[]) {
       messages.saveMessagesToLocal(topicId, rows, {

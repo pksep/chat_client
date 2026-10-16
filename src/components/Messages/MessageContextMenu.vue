@@ -1142,20 +1142,14 @@ const handleDeleteMessage = async (): Promise<void> => {
 
     const messagesToDelete = [...selectedMessages.value];
 
-    for (const message of messagesToDelete) {
-      deleteMessageFromLocal(message.topicId, message.id);
-    }
-
-    for (const message of messagesToDelete) {
-      void deleteMessageChat({
-        messageId: message.id,
-        topicId: message.topicId
-      });
-    }
-
     clearSelectedMessages();
     handleCloseDeleteModal();
     handleClosePopover();
+    await Promise.all(
+      messagesToDelete.map(message =>
+        deleteMessageChat({ messageId: message.id, topicId: message.topicId })
+      )
+    );
     return;
   }
 
