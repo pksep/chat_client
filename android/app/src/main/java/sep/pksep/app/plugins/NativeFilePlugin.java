@@ -6,10 +6,13 @@ import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ActivityNotFoundException;
+import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.os.SystemClock;
 import android.provider.BaseColumns;
 import android.provider.MediaStore;
 import android.util.Base64;
@@ -27,16 +30,168 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileNotFoundException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import org.json.JSONObject;
+import org.json.JSONArray;
+import sep.pksep.app.upload.NativeUploadStore;
+import sep.pksep.app.upload.NativeUploadWorker;
+import sep.pksep.app.sync.ChatBackgroundSyncStore;
 
 @CapacitorPlugin(name = "NativeFile")
 public class NativeFilePlugin extends Plugin {
     private static final String CACHE_DIR_NAME = "shared_files";
     private static final String EVENT_FILE_DOWNLOAD_PROGRESS = "fileDownloadProgress";
+    private final ExecutorService statusExecutor = Executors.newFixedThreadPool(2);
+    private final ExecutorService openExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService uploadExecutor = Executors.newFixedThreadPool(2);
+
+    @Override
+    protected void handleOnDestroy() {
+        statusExecutor.shutdownNow();
+        openExecutor.shutdownNow();
+        uploadExecutor.shutdownNow();
+        super.handleOnDestroy();
+    }
+
+    @PluginMethod
+    public void getMessageUploadCapabilities(PluginCall call) {
+        call.resolve(new JSObject().put("version", 1));
+    }
+
+    @PluginMethod
+    public void prepareMessageUpload(PluginCall call) {
+        uploadExecutor.execute(() -> {
+            try {
+                String id = call.getString("id");
+                JSONObject state = new JSONObject(call.getData().toString());
+                ChatBackgroundSyncStore.Session session = ChatBackgroundSyncStore.getSession(getContext());
+                if (!session.isValid() || !session.userId.equals(state.optString("userId")) ||
+                    !session.apiUrl.equals(state.optString("apiUrl"))) throw new SecurityException();
+                NativeUploadStore.cleanup(getContext(), id);
+                JSONObject existing = NativeUploadStore.read(getContext(), id);
+                if (existing != null && (!session.userId.equals(existing.optString("userId")) ||
+                    !session.apiUrl.equals(existing.optString("apiUrl")))) throw new SecurityException();
+                if (existing != null && !"staging".equals(existing.optString("status"))) {
+                    call.resolve(new JSObject().put("status", existing.optString("status"))); return;
+                }
+                JSONArray files = state.getJSONArray("files");
+                if (files.length() < 1 || files.length() > 10) throw new IllegalArgumentException();
+                state.put("status", "staging"); NativeUploadStore.saveActive(getContext(), id, state);
+                call.resolve(new JSObject().put("status", "staging"));
+            } catch (Exception error) { call.reject("Не удалось подготовить фоновую отправку", error); }
+        });
+    }
+
+    @PluginMethod
+    public void stageMessageUploadChunk(PluginCall call) {
+        uploadExecutor.execute(() -> {
+            try {
+                String id = call.getString("id");
+                JSONObject state = NativeUploadStore.read(getContext(), id);
+                if (state == null || !"staging".equals(state.optString("status"))) throw new IllegalStateException();
+                int index = call.getInt("index", -1);
+                if (index < 0 || index >= state.getJSONArray("files").length()) throw new IllegalArgumentException();
+                long offset = call.getData().getLong("offset");
+                String base64 = call.getString("base64", "");
+                if (base64.length() > 1500000) throw new IllegalArgumentException();
+                byte[] bytes = Base64.decode(base64, Base64.DEFAULT);
+                long expected = state.getJSONArray("files").getJSONObject(index).getLong("size");
+                if (offset < 0 || offset + bytes.length > expected) throw new IllegalArgumentException();
+                File file = new File(NativeUploadStore.directory(getContext(), id), index + ".bin");
+                if (offset > 0 && file.length() != offset) throw new IllegalStateException();
+                try (FileOutputStream out = new FileOutputStream(file, offset != 0)) { out.write(bytes); }
+                call.resolve();
+            } catch (Exception error) { call.reject("Не удалось сохранить вложение для отправки", error); }
+        });
+    }
+
+    @PluginMethod
+    public void enqueueMessageUpload(PluginCall call) {
+        uploadExecutor.execute(() -> {
+            try {
+                String id = call.getString("id");
+                JSONObject state = NativeUploadStore.read(getContext(), id);
+                if (state == null) throw new IllegalStateException();
+                if ("cancelled".equals(state.optString("status"))) throw new IllegalStateException();
+                JSONArray files = state.getJSONArray("files");
+                for (int i = 0; i < files.length(); i++) {
+                    File file = new File(NativeUploadStore.directory(getContext(), id), i + ".bin");
+                    if (file.length() != files.getJSONObject(i).getLong("size")) throw new IllegalStateException();
+                }
+                state.put("status", "queued"); NativeUploadStore.saveActive(getContext(), id, state);
+                NativeUploadWorker.enqueue(getContext(), id);
+                call.resolve();
+            } catch (Exception error) { call.reject("Не удалось поставить сообщение в очередь", error); }
+        });
+    }
+
+    @PluginMethod
+    public void getMessageUpload(PluginCall call) {
+        uploadExecutor.execute(() -> {
+            try {
+                String id = call.getString("id");
+                JSONObject state = NativeUploadStore.read(getContext(), id);
+                ChatBackgroundSyncStore.Session session = ChatBackgroundSyncStore.getSession(getContext());
+                if (state == null || !session.userId.equals(state.optString("userId")) ||
+                    !session.apiUrl.equals(state.optString("apiUrl"))) {
+                    call.resolve(new JSObject().put("status", "missing")); return;
+                }
+                if ("queued".equals(state.optString("status"))) NativeUploadWorker.enqueue(getContext(), id);
+                JSObject result = new JSObject().put("status", state.optString("status"));
+                result.put("fileIndex", state.optInt("fileIndex"));
+                result.put("percent", state.optInt("percent"));
+                if (state.has("result")) result.put("message", state.getJSONObject("result"));
+                if (state.has("error")) result.put("error", state.getString("error"));
+                call.resolve(result);
+            } catch (Exception error) { call.reject("Не удалось проверить отправку", error); }
+        });
+    }
+
+    @PluginMethod
+    public void cancelMessageUpload(PluginCall call) {
+        uploadExecutor.execute(() -> {
+            try {
+                String id = call.getString("id");
+                JSONObject state = NativeUploadStore.read(getContext(), id);
+                if (state == null) {
+                    // Удаление сообщения может прийти раньше передачи файлов из WebView.
+                    ChatBackgroundSyncStore.Session session = ChatBackgroundSyncStore.getSession(getContext());
+                    state = new JSONObject().put("id", id).put("userId", session.userId).put("apiUrl", session.apiUrl);
+                }
+                if (!"completed".equals(state.optString("status"))) {
+                    state.put("status", "cancelled"); NativeUploadStore.save(getContext(), id, state);
+                    androidx.work.WorkManager.getInstance(getContext()).cancelUniqueWork("message-upload-" + id).getResult().get();
+                }
+                call.resolve();
+            } catch (Exception error) { call.reject("Не удалось отменить отправку", error); }
+        });
+    }
+
+    @PluginMethod
+    public void retryMessageUpload(PluginCall call) {
+        uploadExecutor.execute(() -> {
+            try {
+                String id = call.getString("id");
+                JSONObject state = NativeUploadStore.read(getContext(), id);
+                ChatBackgroundSyncStore.Session session = ChatBackgroundSyncStore.getSession(getContext());
+                if (state == null || !session.userId.equals(state.optString("userId")) ||
+                    !session.apiUrl.equals(state.optString("apiUrl"))) throw new SecurityException();
+                if ("failed".equals(state.optString("status"))) {
+                    state.put("status", "queued"); state.remove("error");
+                    NativeUploadStore.saveActive(getContext(), id, state);
+                    NativeUploadWorker.enqueue(getContext(), id);
+                }
+                call.resolve();
+            } catch (Exception error) { call.reject("Не удалось повторить отправку", error); }
+        });
+    }
 
     private interface DownloadProgressCallback extends NativeFileTransfer.ProgressListener {}
 
@@ -96,6 +251,7 @@ public class NativeFilePlugin extends Plugin {
 
     @PluginMethod
     public void openDownloadedFile(PluginCall call) {
+        long requestedAt = SystemClock.elapsedRealtime();
         String url = call.getString("url");
         String fileName = sanitizeFileName(call.getString("fileName"));
         String mimeType = call.getString("mimeType");
@@ -107,7 +263,9 @@ public class NativeFilePlugin extends Plugin {
             return;
         }
 
-        try {
+        openExecutor.execute(() -> {
+          long lookupStartedAt = SystemClock.elapsedRealtime();
+          try {
             DownloadedFile downloadedFile;
             String resolvedFileName = fileName.isEmpty() ? deriveFileName(url) : fileName;
             String resolvedMimeType = resolveMimeType(resolvedFileName, mimeType, url);
@@ -138,19 +296,45 @@ public class NativeFilePlugin extends Plugin {
             }
 
             if (downloadedFile == null) {
-                call.reject("File is not downloaded");
+                call.reject("Файл больше не находится в загрузках", "FILE_NOT_FOUND");
                 return;
             }
 
-            openDownloadedFileWithViewer(downloadedFile);
-
-            JSObject result = new JSObject();
-            result.put("path", getDownloadedFilePath(downloadedFile));
-            result.put("mimeType", downloadedFile.mimeType);
-            call.resolve(result);
-        } catch (Exception error) {
-            call.reject("Failed to open downloaded file: " + error.getMessage(), error);
-        }
+            // Проверяем сохранённый URI вне очереди Capacitor и UI-потока.
+            if (downloadedFile.uri != null) {
+                try (AssetFileDescriptor descriptor = getContext().getContentResolver()
+                    .openAssetFileDescriptor(downloadedFile.uri, "r")) {
+                    if (descriptor == null) throw new FileNotFoundException();
+                }
+            } else if (!isUsableFile(downloadedFile.file)) {
+                throw new FileNotFoundException();
+            }
+            long lookupFinishedAt = SystemClock.elapsedRealtime();
+            DownloadedFile readyFile = downloadedFile;
+            getActivity().runOnUiThread(() -> {
+                try {
+                    openDownloadedFileWithViewer(readyFile);
+                    JSObject timings = new JSObject();
+                    timings.put("queueMs", lookupStartedAt - requestedAt);
+                    timings.put("lookupMs", lookupFinishedAt - lookupStartedAt);
+                    timings.put("launchMs", SystemClock.elapsedRealtime() - lookupFinishedAt);
+                    JSObject result = new JSObject();
+                    result.put("path", getDownloadedFilePath(readyFile));
+                    result.put("mimeType", readyFile.mimeType);
+                    result.put("timings", timings);
+                    call.resolve(result);
+                } catch (ActivityNotFoundException error) {
+                    call.reject("Нет приложения для открытия этого файла", "VIEWER_UNAVAILABLE", error);
+                } catch (Exception error) {
+                    call.reject("Не удалось открыть файл", "OPEN_FAILED", error);
+                }
+            });
+          } catch (FileNotFoundException error) {
+            call.reject("Файл больше не находится в загрузках", "FILE_NOT_FOUND", error);
+          } catch (Exception error) {
+            call.reject("Не удалось подготовить файл к открытию", "OPEN_FAILED", error);
+          }
+        });
     }
 
     @PluginMethod
@@ -165,7 +349,8 @@ public class NativeFilePlugin extends Plugin {
             return;
         }
 
-        try {
+        statusExecutor.execute(() -> {
+          try {
             DownloadedFile downloadedFile = findDownloadedFile(
                 url,
                 fileName,
@@ -190,9 +375,10 @@ public class NativeFilePlugin extends Plugin {
                 downloadedFile != null ? downloadedFile.mimeType : resolvedMimeType
             );
             call.resolve(result);
-        } catch (Exception error) {
+          } catch (Exception error) {
             call.reject("Failed to read file status: " + error.getMessage(), error);
-        }
+          }
+        });
     }
 
     @PluginMethod

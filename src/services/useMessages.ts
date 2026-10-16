@@ -2185,6 +2185,15 @@ export const deleteMessageFromLocal = (
   } = {}
 ): Promise<void> => {
   const message = getClientMessageById(topicId, messageId);
+  if (message && parseMessageEx(message.ex)?.nativeUpload === true) {
+    void import('./native-message-upload')
+      .then(({ cancelNativeMessageUpload }) =>
+        cancelNativeMessageUpload(getClientId(message) || messageId)
+      )
+      .catch(error =>
+        console.warn('Не удалось отменить фоновую отправку', error)
+      );
+  }
   const clientId =
     message && message.senderUserId === authedUser.value?.id
       ? getClientId(message)

@@ -444,7 +444,9 @@ const handleDoubleTap = (event: MouseEvent): void => {
 
   if (
     target instanceof Element &&
-    target.closest('button, a, input, .reactions, .message-selection-toggle')
+    target.closest(
+      'button, a, input, .reactions, .message-selection-toggle, .message__article__file'
+    )
   ) {
     return;
   }

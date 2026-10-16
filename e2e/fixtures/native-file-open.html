@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h } from 'vue';
+      import MessageBubbleFiles from '../../src/components/Messages/MessageBubbleFiles.vue';
+      import { handleNativeFileClick } from '../../src/services/useNativeFile';
+      import { setConfig } from '../../src/services/useConfig';
+      import '@pksep/yui/styles';
+      import '../../src/assets/message-bubble.css';
+      setConfig({ CHAT_PATH_TO_FILE_CDN: location.origin });
+      window.fileDoubleClicks = 0;
+      const media = {
+        id: 'pdf',
+        type: 'FILE',
+        path: 'already-downloaded.pdf',
+        originName: 'Документ.pdf',
+        size: 43951
+      };
+      const params = new URLSearchParams(location.search);
+      const files = params.has('multiple')
+        ? [
+            media,
+            {
+              ...media,
+              id: 'second-pdf',
+              path: 'second.pdf',
+              originName: 'Второй.pdf'
+            }
+          ]
+        : [media];
+      window.fileTargets = [];
+      window.fileReplyClicks = 0;
+      createApp({
+        render: () =>
+          h(
+            'div',
+            {
+              style: 'max-width: 340px; padding: 20px',
+              onDblclick: () => window.fileDoubleClicks++
+            },
+            [
+              h(MessageBubbleFiles, {
+                message: params.has('caption')
+                  ? '<p>Подпись <a href="#caption">ссылка</a></p>'
+                  : '',
+                media: files,
+                time: '12:40',
+                replyMessage: params.has('caption')
+                  ? { id: 'reply', text: 'Исходное сообщение', media: [] }
+                  : undefined,
+                isMeSender: true,
+                isMobile: true,
+                dataTestid: 'NativePdf',
+                onNavigateMessage: () => window.fileReplyClicks++,
+                onSetSlider: (items, index) => {
+                  window.fileTargets.push(items[index].path);
+                  return handleNativeFileClick(items[index]);
+                }
+              })
+            ]
+          )
+      }).mount('#app');
+    </script>
+  </body>
+</html>
