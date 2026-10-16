@@ -902,9 +902,9 @@ import EmojiIcon from '../UI/EmojiIcon.vue';
 import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
 import {
   getAuthUser,
+  logoutChatSession,
   redirectToAuthorization
 } from '../../composables/useAuth';
-import { useLogout } from '../../composables/useLogin';
 import { clearAnyChatBackgroundSyncSession } from '../../services/useChatBackgroundSync';
 import { cleanupPushNotificationsOnLogout } from '../../services/usePushNotifications';
 import {
@@ -1634,8 +1634,14 @@ const runLogoutCleanup = async (): Promise<void> => {
 };
 
 const handleLogout = async (): Promise<void> => {
+  try {
+    await logoutChatSession();
+  } catch (error) {
+    console.warn('Failed to end the shared chat session:', error);
+    return;
+  }
+
   await runLogoutCleanup();
-  useLogout();
   redirectToAuthorization();
 };
 
