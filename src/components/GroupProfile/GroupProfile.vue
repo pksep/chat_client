@@ -46,7 +46,7 @@
 <script lang="ts" setup>
 import { IGroupProfileProps } from '../interfaces/interfaces';
 import { getHasWebsocketConnection } from '../../services/useChat';
-import { computed } from 'vue';
+import { useDelayedConnectionStatus } from '../../composables/useDelayedConnectionStatus';
 import ConnectionStatus from '../UI/ConnectionStatus.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import TypingIndicator from '../UI/TypingIndicator.vue';
@@ -56,7 +56,9 @@ const props = withDefaults(defineProps<IGroupProfileProps>(), {
   topic: () => null
 });
 
-const isWaitingConnection = computed(() => !getHasWebsocketConnection());
+const isWaitingConnection = useDelayedConnectionStatus(
+  () => !getHasWebsocketConnection()
+);
 
 defineOptions({
   inheritAttrs: false

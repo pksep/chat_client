@@ -1253,7 +1253,8 @@ const HARD_RECONNECT_THROTTLE_MS = 10000;
 const NATIVE_NETWORK_RECOVERY_GRACE_MS = 15000;
 const BROWSER_NETWORK_RECOVERY_GRACE_MS = 10000;
 const HTTP_HEALTH_PROBE_TIMEOUT_MS = 8000;
-const NETWORK_REACHABILITY_TIMEOUT_MS = 1200;
+const NETWORK_REACHABILITY_TIMEOUT_MS = 5000;
+const NETWORK_REACHABILITY_POLL_INTERVAL_MS = 5000;
 const HTTP_HEALTH_PROBE_RETRY_DELAY_MS = 1500;
 const NATIVE_HTTP_HEALTH_PROBE_ATTEMPTS = 3;
 const NETWORK_DIAGNOSTIC_FAILURE_REPEAT_MS = 60_000;
@@ -2009,8 +2010,19 @@ const ensureNetworkStatePolling = (): void => {
     return;
   }
 
+  let lastReachabilityCheckAt = 0;
   networkStatePollInterval = setInterval(() => {
     pollBrowserNetworkState();
+    const now = Date.now();
+    if (
+      document.visibilityState !== 'visible' ||
+      (networkReachable.value &&
+        now - lastReachabilityCheckAt < NETWORK_REACHABILITY_POLL_INTERVAL_MS)
+    ) {
+      return;
+    }
+
+    lastReachabilityCheckAt = now;
     void networkReachabilityCheck.check();
   }, 1000);
 };

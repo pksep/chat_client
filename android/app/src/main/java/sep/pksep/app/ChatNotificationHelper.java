@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import sep.pksep.app.sync.ChatStartupHistory;
+import sep.pksep.app.sync.ChatBackgroundSyncStore;
 
 public final class ChatNotificationHelper {
     public static final String ACTION_OPEN_CHAT_NOTIFICATION =
@@ -39,7 +40,10 @@ public final class ChatNotificationHelper {
         String title,
         String body
     ) {
-        if (context == null || data == null || data.isEmpty()) {
+        if (
+            context == null || data == null || data.isEmpty() ||
+            !ChatBackgroundSyncStore.getSession(context).isValid()
+        ) {
             return;
         }
 
@@ -260,7 +264,10 @@ public final class ChatNotificationHelper {
         String topicId,
         String replyText
     ) {
-        if (context == null || isBlank(topicId) || isBlank(replyText)) {
+        if (
+            context == null || isBlank(topicId) || isBlank(replyText) ||
+            !ChatBackgroundSyncStore.getSession(context).isValid()
+        ) {
             return;
         }
 

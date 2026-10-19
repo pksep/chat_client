@@ -35,6 +35,10 @@ public class NotificationTapPlugin extends Plugin {
         }
     }
 
+    public static void clearPendingNotificationTap() {
+        pendingNotificationTap = null;
+    }
+
     private void flushPendingNotificationTap() {
         if (
             pendingNotificationTap == null ||

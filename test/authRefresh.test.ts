@@ -95,7 +95,7 @@ describe('обновление общей сессии чата', () => {
     cookies = new Map();
     setConfig({
       CHAT_API_DOMAIN: 'http://chat.test/api',
-      CHAT_ERP_AUTH_URL: 'http://erp.test'
+      CHAT_ERP_URL: 'http://erp.test'
     });
   });
 
@@ -155,12 +155,6 @@ describe('обновление общей сессии чата', () => {
     globalThis.fetch = mock(async (input: RequestInfo | URL) => {
       const url = String(input);
       requestedUrls.push(url);
-      if (url === 'http://chat.test/api/auth/refresh') {
-        return Response.json(
-          { code: 'CHAT_REFRESH_MISSING', message: 'cookie missing' },
-          { status: 401 }
-        );
-      }
       if (url === 'http://erp.test/api/auth/session') {
         return Response.json({ ok: true, token: newToken });
       }
@@ -175,7 +169,6 @@ describe('обновление общей сессии чата', () => {
       source: 'erp_bootstrap'
     });
     expect(requestedUrls).toEqual([
-      'http://chat.test/api/auth/refresh',
       'http://erp.test/api/auth/session',
       'http://chat.test/api/auth/session'
     ]);
@@ -221,15 +214,9 @@ describe('обновление общей сессии чата', () => {
     let refreshRequests = 0;
     globalThis.fetch = mock(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === 'http://chat.test/api/auth/refresh') {
+      if (url === 'http://erp.test/api/auth/session') {
         refreshRequests++;
         await refreshGate;
-        return Response.json(
-          { code: 'CHAT_REFRESH_MISSING', message: 'cookie missing' },
-          { status: 401 }
-        );
-      }
-      if (url === 'http://erp.test/api/auth/session') {
         return Response.json({ ok: true, token });
       }
       if (url === 'http://chat.test/api/auth/session') {

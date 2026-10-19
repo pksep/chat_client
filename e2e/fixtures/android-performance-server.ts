@@ -77,7 +77,6 @@ export async function createAndroidPerformanceServer({
   const config = {
     CHAT_API_DOMAIN: `${origin}/api`,
     CHAT_WS_DOMAIN: origin,
-    CHAT_AUTH_API: `${origin}/auth`,
     CHAT_ERP_URL: origin,
     CHAT_MASTRA_URL: `${origin}/ai`,
     CHAT_PATH_TO_FILE_CDN: origin,
@@ -148,7 +147,6 @@ export async function createAndroidPerformanceServer({
         [
           `VITE_CHAT_API_DOMAIN=${config.CHAT_API_DOMAIN}`,
           `VITE_CHAT_WS_DOMAIN=${config.CHAT_WS_DOMAIN}`,
-          `VITE_AUTH_API=${config.CHAT_AUTH_API}`,
           `VITE_ERP_URL=${config.CHAT_ERP_URL}`,
           `VITE_MASTRA_URL=${config.CHAT_MASTRA_URL}`,
           `VITE_PATH_TO_FILE_CDN=${config.CHAT_PATH_TO_FILE_CDN}`,

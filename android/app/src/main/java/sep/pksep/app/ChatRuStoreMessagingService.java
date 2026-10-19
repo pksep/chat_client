@@ -9,6 +9,7 @@ import ru.rustore.sdk.pushclient.messaging.model.RemoteMessage;
 import ru.rustore.sdk.pushclient.messaging.service.RuStoreMessagingService;
 import sep.pksep.app.plugins.RuStorePushPlugin;
 import sep.pksep.app.sync.ChatBackgroundSyncScheduler;
+import sep.pksep.app.sync.ChatBackgroundSyncStore;
 
 public class ChatRuStoreMessagingService extends RuStoreMessagingService {
     @Override
@@ -18,6 +19,9 @@ public class ChatRuStoreMessagingService extends RuStoreMessagingService {
 
     @Override
     public void onMessageReceived(RemoteMessage remoteMessage) {
+        if (!ChatBackgroundSyncStore.getSession(this).isValid()) {
+            return;
+        }
         NotificationChannelHelper.ensureDefaultChannel(this);
 
         Map<String, String> remoteData = remoteMessage.getData();

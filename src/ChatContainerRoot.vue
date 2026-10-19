@@ -20,8 +20,6 @@ import {
 } from './services/useSessionUser';
 import {
   clearBootstrapErpSession,
-  clearChatAuthSession,
-  clearErpAuthSession,
   fetchAuthUser,
   getAuthUser,
   getChatAuthSession,
@@ -29,6 +27,10 @@ import {
   getStoredChatAccessToken,
   isStoredChatSessionPersistent,
   isAuthError,
+  handleConfirmedInactiveSession,
+  isChatAccessTokenExpired,
+  isChatSessionEnding,
+  isSharedAccessToken,
   saveChatAuthSession,
   setAuthUser,
   tryRefreshErpSession,
@@ -473,10 +475,6 @@ onUnmounted(() => {
   removeAppVisibilityListener = null;
 });
 
-const clearStoredErpToken = () => {
-  clearErpAuthSession();
-};
-
 const getStoredSessionUserId = (): string => {
   return sessionStorage.getItem('userId') || '';
 };
@@ -607,7 +605,7 @@ const runAppInitialization = async () => {
         }
       : null;
     let usedBootstrapToken = false;
-    const authData = shouldUseBootstrapToken
+    let authData = shouldUseBootstrapToken
       ? await useAuth(bootstrapErpToken)
           .then(data => {
             usedBootstrapToken = true;
@@ -624,6 +622,29 @@ const runAppInitialization = async () => {
             throw error;
           })
       : storedAuthData || (await tryRefreshErpSession());
+
+    if (
+      !usedBootstrapToken &&
+      authData?.token &&
+      isSharedAccessToken(authData.token) &&
+      isChatAccessTokenExpired(authData.token) &&
+      hasStartupNetwork()
+    ) {
+      try {
+        const refreshed = await tryRefreshErpSession();
+        if (!refreshed) {
+          await handleConfirmedInactiveSession();
+          return;
+        }
+        authData = refreshed;
+      } catch (error) {
+        console.warn(
+          'Не удалось обновить сессию при запуске, открываем сохранённый чат:',
+          error
+        );
+      }
+    }
+    if (isChatSessionEnding()) return;
     if (!authData?.token) {
       throw new Error('Chat token is missing from auth response');
     }
@@ -696,13 +717,12 @@ const runAppInitialization = async () => {
     await initialCacheHydration;
     console.error('Failed to initialize chat:', error);
 
-    if (isMobile.value) {
-      if (isAuthError(error)) {
-        clearStoredErpToken();
-        clearChatAuthSession();
-        clearBootstrapErpSession();
-      }
+    if (isAuthError(error)) {
+      await handleConfirmedInactiveSession();
+      return;
+    }
 
+    if (isMobile.value) {
       if (initialUserId && hydratedCacheUserId !== initialUserId) {
         await hydrateCriticalCache(initialUserId);
       }

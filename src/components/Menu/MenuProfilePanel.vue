@@ -902,11 +902,8 @@ import EmojiIcon from '../UI/EmojiIcon.vue';
 import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
 import {
   getAuthUser,
-  logoutChatSession,
-  redirectToAuthorization
+  logoutChatSession
 } from '../../composables/useAuth';
-import { clearAnyChatBackgroundSyncSession } from '../../services/useChatBackgroundSync';
-import { cleanupPushNotificationsOnLogout } from '../../services/usePushNotifications';
 import {
   updateCurrentUserStatus,
   removeCurrentUserStatusPreset
@@ -1620,29 +1617,8 @@ const clearStatus = async (): Promise<void> => {
   await saveStatus(null);
 };
 
-const runLogoutCleanup = async (): Promise<void> => {
-  await cleanupPushNotificationsOnLogout().catch(error => {
-    console.warn('Failed to cleanup push notifications during logout:', error);
-  });
-
-  void clearAnyChatBackgroundSyncSession().catch(error => {
-    console.warn(
-      'Failed to clear chat background sync session during logout:',
-      error
-    );
-  });
-};
-
 const handleLogout = async (): Promise<void> => {
-  try {
-    await logoutChatSession();
-  } catch (error) {
-    console.warn('Failed to end the shared chat session:', error);
-    return;
-  }
-
-  await runLogoutCleanup();
-  redirectToAuthorization();
+  await logoutChatSession();
 };
 
 const confirmLogout = (): void => {

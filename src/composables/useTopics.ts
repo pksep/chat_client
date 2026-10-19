@@ -1,5 +1,9 @@
 import { ref, computed, watch } from 'vue';
-import { getChatSDK, waitForChatSDK } from '../services/useChat';
+import {
+  getChatSDK,
+  getHasWebsocketConnection,
+  waitForChatSDK
+} from '../services/useChat';
 import { takeNativeStartupHistory } from '../services/native-startup-history';
 import { WebSocketEventType } from '../services/useChatSDK/websocketEvents';
 import { ITopic, ITopicInfo, IUser } from '../components/interfaces/interfaces';
@@ -592,7 +596,42 @@ const createTopicsApi = () => {
       return topics.value;
     }
 
-    topics.value = normalizeTopics(mergeLocalBotTopics(nativeTopics), userId);
+    const previousTopics = topicsById.value;
+    const previousServerUnreadCounts = serverUnreadCounts.value;
+    const preserveOfflineUnread = !getHasWebsocketConnection();
+    const normalizedTopics = normalizeTopics(
+      mergeLocalBotTopics(nativeTopics),
+      userId
+    );
+
+    if (preserveOfflineUnread) {
+      const nextServerUnreadCounts = { ...serverUnreadCounts.value };
+      for (const topic of normalizedTopics) {
+        const previous = previousTopics.get(topic.id);
+        if (
+          !previous ||
+          getMessageTimestamp(topic.lastMessage) >
+            getMessageTimestamp(previous.lastMessage)
+        ) {
+          continue;
+        }
+
+        // Старый фоновый снимок не должен отменять локальное прочтение офлайн.
+        topic.unreadMessageCount = previous.unreadMessageCount;
+        topic.taggedMe = previous.taggedMe;
+        topic.info = {
+          ...topic.info,
+          isMarkedUnread: previous.info?.isMarkedUnread
+        };
+        nextServerUnreadCounts[topic.id] =
+          previousServerUnreadCounts[topic.id] ??
+          previous.unreadMessageCount ??
+          0;
+      }
+      serverUnreadCounts.value = nextServerUnreadCounts;
+    }
+
+    topics.value = normalizedTopics;
     void saveCachedTopics(stripEphemeralTopicState(topics.value || []), userId);
     void warmShadowUnreadStateForTopics(topics.value, userId);
 

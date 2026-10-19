@@ -55,6 +55,7 @@ import { getAuthToken, subscribeAuthToken } from '../../composables/useLogin';
 import {
   handleConfirmedInactiveSession,
   isAuthError,
+  isChatSessionEnding,
   tryRefreshErpSession,
   withErpRefreshOnAuthError
 } from '../../composables/useAuth';
@@ -1012,32 +1013,44 @@ export class ChatSDK {
   }
 
   async updateAccessToken(token: string): Promise<boolean> {
+    if (isChatSessionEnding()) return false;
     this.token = token;
 
     if (!this.socket) {
       return true;
     }
 
-    this.socket.auth = { token };
+    const socket = this.socket;
+    socket.auth = { token };
 
-    if (!this.socket.connected) {
-      this.socket.connect();
+    if (!socket.connected) {
+      socket.connect();
       return true;
     }
 
     try {
-      const response = (await this.socket
+      const response = (await socket
         .timeout(5000)
         .emitWithAck('authenticate', { token })) as {
         success?: boolean;
         status?: number;
       };
 
-      return response?.success === true;
+      if (response?.success === true) return true;
     } catch (error) {
       console.warn('Socket.IO: Не удалось обновить токен соединения', error);
-      return false;
     }
+
+    if (
+      !isChatSessionEnding() &&
+      this.socket === socket &&
+      this.token === token
+    ) {
+      // При потере подтверждения сервер мог сохранить прежний токен сокета.
+      socket.disconnect();
+      socket.connect();
+    }
+    return false;
   }
 
   private handleWebSocketEvent(rawEvent: any): void {

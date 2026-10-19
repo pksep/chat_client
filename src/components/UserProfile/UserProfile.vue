@@ -75,6 +75,7 @@ import { getUserById, getUserLastOnline } from '../../composables/useUsers';
 import { getAuthUser } from '../../composables/useAuth';
 import ConnectionStatus from '../UI/ConnectionStatus.vue';
 import { getHasWebsocketConnection } from '../../services/useChat';
+import { useDelayedConnectionStatus } from '../../composables/useDelayedConnectionStatus';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import BotAvatar from '../UI/BotAvatar.vue';
 import EmojiIcon from '../UI/EmojiIcon.vue';
@@ -102,7 +103,9 @@ const isCurrentUser = computed(
   () =>
     !!effectiveUser.value?.id && getAuthUser()?.id === effectiveUser.value.id
 );
-const isWaitingConnection = computed(() => !getHasWebsocketConnection());
+const isWaitingConnection = useDelayedConnectionStatus(
+  () => !getHasWebsocketConnection()
+);
 const currentStatus = computed(() =>
   normalizeUserStatus(effectiveUser.value?.status)
 );
