@@ -223,6 +223,7 @@ import {
 } from '../../utils/mediaPreview';
 import { sanitizeMessageHtml } from '../../utils/sanitizeMessageHtml';
 import { copyMessageSelection } from '../../utils/copyMessageSelection';
+import { inquiryMediaRevision } from '../../services/useMediaBlobCache';
 
 const props = defineProps<IMessageBubbleProps>();
 const safeMessageHtml = computed(() => sanitizeMessageHtml(props.message));
@@ -316,7 +317,7 @@ const isNearViewport = (
 };
 
 watch(
-  [mediaFiles, shouldLoadMedia],
+  [mediaFiles, shouldLoadMedia, inquiryMediaRevision],
   ([medias]) => {
     if (!shouldLoadMedia.value) {
       return;

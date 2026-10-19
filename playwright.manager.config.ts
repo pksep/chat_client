@@ -1,7 +1,13 @@
 import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['manager-reuse.spec.ts', 'manager-bot-channels.spec.ts'],
+  testMatch: [
+    'manager-reuse.spec.ts',
+    'manager-bot-channels.spec.ts',
+    'manager-media.spec.ts',
+    'slider-download.spec.ts',
+    'media-cache-heic.spec.ts'
+  ],
   workers: 1,
   timeout: 90000,
   expect: { timeout: 30000 },

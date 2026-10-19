@@ -149,6 +149,11 @@ import {
   triggerBrowserDownloads
 } from '../../utils/media-download';
 import { VIDEO_FALLBACK_THUMBNAIL } from '../../utils/mediaPreview';
+import {
+  ensureMediaObjectUrl,
+  isInquiryFile
+} from '../../services/useMediaBlobCache';
+import { showErrorNotification } from '../../composables/useNotifications';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -268,7 +273,9 @@ const isSliderContentMedia = (media: IMedia) =>
     includePdf: !isAndroidNativePlatform()
   });
 
-const buildSliderItem = (initialMedia: IMedia) =>
+const buildSliderItem = (
+  initialMedia: IMedia
+): ReturnType<typeof createLiveSliderItem> =>
   createLiveSliderItem(() => {
     const media =
       props.media?.find(item => item.id === initialMedia.id) || initialMedia;
@@ -284,6 +291,12 @@ const buildSliderItem = (initialMedia: IMedia) =>
 
     return {
       path: sliderPath,
+      mediaType:
+        media.type === MediaType.Image
+          ? 'image'
+          : media.type === MediaType.Video
+            ? 'video'
+            : undefined,
       fallbackPath,
       name,
       downloadPath
@@ -300,8 +313,26 @@ const downloadMediaFile = async (media: IMedia) => {
   triggerBrowserDownload(fallbackUrl, fileName);
 };
 
-const handleDownloadMessageMedia = async () => {
+const prepareInquiryMedias = async (medias: IMedia[]): Promise<boolean> => {
+  const paths = [
+    ...new Set(medias.map(media => media.path).filter(isInquiryFile))
+  ];
+  const results = await Promise.all(
+    paths.map(path => ensureMediaObjectUrl(path))
+  );
+
+  if (results.some(url => !url)) {
+    showErrorNotification('Не удалось загрузить вложение. Повторите попытку.');
+    return false;
+  }
+
+  return true;
+};
+
+const handleDownloadMessageMedia = async (): Promise<void> => {
   const mediaFiles = props.media || [];
+
+  if (!(await prepareInquiryMedias(mediaFiles))) return;
 
   if (!isAndroidNativePlatform()) {
     await triggerBrowserDownloads(
@@ -318,7 +349,10 @@ const handleDownloadMessageMedia = async () => {
   }
 };
 
-const setSliderElement = async (medias: IMedia[], defaultIndex: number = 0) => {
+const setSliderElement = async (
+  medias: IMedia[],
+  defaultIndex: number = 0
+): Promise<void> => {
   if (props.isSelectionMode) {
     return;
   }
@@ -328,6 +362,12 @@ const setSliderElement = async (medias: IMedia[], defaultIndex: number = 0) => {
   if (!selectedMedia) {
     return;
   }
+
+  const openingMedias = isSliderContentMedia(selectedMedia)
+    ? medias.filter(isSliderContentMedia)
+    : [selectedMedia];
+
+  if (!(await prepareInquiryMedias(openingMedias))) return;
 
   if (
     selectedMedia.type === MediaType.File &&
