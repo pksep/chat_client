@@ -3,6 +3,7 @@ import { MessageTypeEnum } from '@pksep/yui';
 import { ChatSDK } from './useChatSDK';
 import { createReconnectRefreshCoordinator } from './reconnect-refresh';
 import { createNetworkReachabilityCheck } from './network-reachability';
+import { createNativeNetworkChangeHandler } from './native-network-change';
 import { getIsTopicNearBottom } from './useTopicViewportState';
 import {
   configureCustomBackgroundSync,
@@ -1253,7 +1254,8 @@ const HARD_RECONNECT_THROTTLE_MS = 10000;
 const NATIVE_NETWORK_RECOVERY_GRACE_MS = 15000;
 const BROWSER_NETWORK_RECOVERY_GRACE_MS = 10000;
 const HTTP_HEALTH_PROBE_TIMEOUT_MS = 8000;
-const NETWORK_REACHABILITY_TIMEOUT_MS = 1200;
+const NETWORK_REACHABILITY_TIMEOUT_MS = 5000;
+const NETWORK_REACHABILITY_POLL_INTERVAL_MS = 5000;
 const HTTP_HEALTH_PROBE_RETRY_DELAY_MS = 1500;
 const NATIVE_HTTP_HEALTH_PROBE_ATTEMPTS = 3;
 const NETWORK_DIAGNOSTIC_FAILURE_REPEAT_MS = 60_000;
@@ -2009,8 +2011,19 @@ const ensureNetworkStatePolling = (): void => {
     return;
   }
 
+  let lastReachabilityCheckAt = 0;
   networkStatePollInterval = setInterval(() => {
     pollBrowserNetworkState();
+    const now = Date.now();
+    if (
+      document.visibilityState !== 'visible' ||
+      (networkReachable.value &&
+        now - lastReachabilityCheckAt < NETWORK_REACHABILITY_POLL_INTERVAL_MS)
+    ) {
+      return;
+    }
+
+    lastReachabilityCheckAt = now;
     void networkReachabilityCheck.check();
   }, 1000);
 };
@@ -2034,6 +2047,10 @@ const recordNativeNetworkStatus = (
   status: NativeNetworkStatus
 ): void => {
   const signature = JSON.stringify({
+    networkRevision: status.networkRevision,
+    networkBlocked: status.networkBlocked,
+    networkMetered: status.networkMetered,
+    networkRestrictBackgroundStatus: status.networkRestrictBackgroundStatus,
     networkConnected: status.networkConnected,
     networkValidated: status.networkValidated,
     networkVpn: status.networkVpn,
@@ -2051,7 +2068,9 @@ const recordNativeNetworkStatus = (
     category: 'network',
     name: 'network.native.status_changed',
     level:
-      status.networkConnected && status.networkValidated !== false
+      status.networkConnected &&
+      status.networkValidated !== false &&
+      status.networkBlocked !== true
         ? 'info'
         : 'warn',
     entityType: 'network',
@@ -2061,6 +2080,23 @@ const recordNativeNetworkStatus = (
     }
   });
 };
+
+const handleNativeNetworkChange = createNativeNetworkChangeHandler({
+  onOffline: () => {
+    if (!chatSDK) return;
+    markBrowserNetworkUnavailable();
+  },
+  onRestore: () => {
+    if (!chatSDK) return;
+    confirmBrowserNetworkAvailable();
+    handleNetworkOrResumeChange('network-change', {
+      assumeOnlineOnNative: true,
+      forceHardReconnect: true,
+      forceRefresh: true
+    });
+    void networkReachabilityCheck.check();
+  }
+});
 
 const setupNativeNetworkDiagnostics = async (): Promise<void> => {
   if (
@@ -2073,11 +2109,15 @@ const setupNativeNetworkDiagnostics = async (): Promise<void> => {
 
   try {
     nativeNetworkDiagnosticListener = await addNativeNetworkStatusListener(
-      status => recordNativeNetworkStatus('callback', status)
+      status => {
+        recordNativeNetworkStatus('callback', status);
+        handleNativeNetworkChange(status);
+      }
     );
     const status = await getNativeNetworkStatus();
     if (status) {
       recordNativeNetworkStatus('initial', status);
+      handleNativeNetworkChange(status);
     }
   } catch (error) {
     recordTelemetryEvent({
@@ -2161,6 +2201,7 @@ const networkReachabilityCheck = createNetworkReachabilityCheck({
 
     try {
       const result = await chatSDK!.probeNetworkReachability(signal);
+      if (signal.aborted) return false;
       recordNetworkHealthDiagnostic(
         result.reachable,
         performance.now() - startedAt,
@@ -2168,6 +2209,8 @@ const networkReachabilityCheck = createNetworkReachabilityCheck({
       );
       return result.reachable;
     } catch (error) {
+      if (signal.aborted && signal.reason?.name !== 'TimeoutError')
+        return false;
       recordNetworkHealthDiagnostic(false, performance.now() - startedAt, {
         error
       });
@@ -2180,7 +2223,12 @@ const networkReachabilityCheck = createNetworkReachabilityCheck({
       return;
     }
 
-    if (networkReachable.value) return;
+    if (networkReachable.value) {
+      void chatSDK?.checkConnectionHealth({
+        canReconnect: () => !hasActiveCallRuntime()
+      });
+      return;
+    }
 
     confirmBrowserNetworkAvailable();
     syncFreshDataForResume('network-poll', {
@@ -2285,27 +2333,27 @@ export const initializeChat = async (options: {
   userId?: string;
   cacheReady?: Promise<void>;
 }): Promise<void> => {
+  const previousSDK = chatSDK;
   const backgroundSession = saveAnyChatBackgroundSyncSession({
     token: options.token,
     userId: options.userId,
     apiUrl: options.apiUrl
   });
-  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
-    // Сохранение native-сессии не должно задерживать SDK и первый экран чата.
-    void backgroundSession.catch(error => {
-      console.warn('Не удалось сохранить сессию фоновой синхронизации:', error);
-    });
-  } else {
-    await backgroundSession;
-  }
+  // Фоновый HTTP не должен блокировать запуск SDK ни в Android, ни в браузере.
+  void backgroundSession.catch(error => {
+    console.warn('Не удалось сохранить сессию фоновой синхронизации:', error);
+  });
 
+  // Предыдущие сокеты и отложенные повторы не должны обновлять новую сессию.
+  previousSDK?.setConnectionStateListener();
+  previousSDK?.disconnect();
+  networkReachabilityCheck.invalidate();
   chatSDK = new ChatSDK({
     apiUrl: options.apiUrl,
     wsUrl: options.wsUrl,
     token: options.token
   });
-  // Диагностика не меняет состояние соединения: она различает потерю сети
-  // Android и недоступность сервера чата у конкретного оператора.
+  // Нативный callback также обнаруживает смену сети при прежнем типе подключения.
   void setupNativeNetworkDiagnostics();
   networkReachabilityCheck.invalidate();
   networkReachable.value = true;

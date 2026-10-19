@@ -15,6 +15,7 @@ import androidx.core.app.NotificationManagerCompat;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import sep.pksep.app.sync.ChatBackgroundSyncStore;
 
 public final class IncomingCallNotificationHelper {
     public static final String CHANNEL_ID = "incoming_call_v3";
@@ -96,6 +97,9 @@ public final class IncomingCallNotificationHelper {
         String topicId,
         String topicType
     ) {
+        if (!ChatBackgroundSyncStore.getSession(context).isValid()) {
+            return;
+        }
         createChannel(context);
 
         if (!canShowIncomingCallAlert(context)) {

@@ -14,6 +14,7 @@ import {
 } from '../utils/stored-chat-session';
 import { buildGroupCallInviteAuthorizationUrl } from '../utils/groupCallInviteUrl';
 import { withNetworkTimeout } from '../utils/network-timeout';
+import { fetchAuthWithCookies } from '../utils/auth-http';
 export {
   CHAT_AUTH_SESSION_KEY,
   getChatAuthSession
@@ -31,6 +32,8 @@ const AUTH_REFRESH_CHANNEL_NAME = 'chat_auth_refresh_events';
 let authSessionRevision = 0;
 let proactiveRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 let refreshBroadcastChannel: BroadcastChannel | null = null;
+let sessionEndingPromise: Promise<void> | null = null;
+let isEndingSession = false;
 
 export interface AuthResponse {
   token: string;
@@ -96,6 +99,13 @@ export const isSharedAccessToken = (token: string): boolean => {
 const getTokenTiming = (token: string): JwtTiming => {
   return decodeJwtPart<JwtTiming>(token, 1) || {};
 };
+
+export const isChatAccessTokenExpired = (token: string): boolean => {
+  const { exp } = getTokenTiming(token);
+  return typeof exp === 'number' && exp * 1000 <= Date.now();
+};
+
+export const isChatSessionEnding = (): boolean => isEndingSession;
 
 const getTokenExpiresInSeconds = (token: string): number => {
   const { exp } = getTokenTiming(token);
@@ -231,14 +241,11 @@ export const loginWithCredentials = async (
   credentials: DirectAuthCredentials
 ): Promise<AuthResponse> => {
   const config = getConfig();
-  const response = await fetch(getCredentialsLoginUrl(config), {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(credentials)
-  });
+  const response = await fetchAuthWithCookies(
+    getCredentialsLoginUrl(config),
+    'POST',
+    { ...credentials }
+  );
 
   const data = await response.json();
 
@@ -383,8 +390,59 @@ const redirectToAuthorizationInternal = (broadcast: boolean): void => {
   window.location.replace(authorizationUrl);
 };
 
-export const redirectToAuthorization = (): void => {
-  redirectToAuthorizationInternal(true);
+const endChatSession = (
+  logoutOnServer: boolean,
+  broadcast: boolean
+): Promise<void> => {
+  if (sessionEndingPromise) return sessionEndingPromise;
+
+  isEndingSession = true;
+  authSessionRevision++;
+  if (proactiveRefreshTimer) {
+    clearTimeout(proactiveRefreshTimer);
+    proactiveRefreshTimer = null;
+  }
+  // Отключаем сокет сразу, сохраняя токен в хранилище для удаления push-подписки.
+  useLogout();
+  const pendingRefresh = sessionRefreshPromise;
+
+  sessionEndingPromise = (async () => {
+    try {
+      const { cleanupPushNotificationsOnLogout } = await import(
+        '../services/usePushNotifications'
+      );
+      await cleanupPushNotificationsOnLogout();
+    } catch (error) {
+      console.warn(
+        'Не удалось полностью очистить уведомления при выходе:',
+        error
+      );
+    }
+
+    // Ротация cookie, начатая до выхода, должна завершиться до её отзыва.
+    await pendingRefresh?.catch(() => undefined);
+    if (logoutOnServer) {
+      try {
+        const response = await requestChatLogout();
+        if (!response.ok) {
+          console.warn(
+            'Не удалось завершить серверную сессию чата:',
+            response.status
+          );
+        }
+      } catch (error) {
+        console.warn('Не удалось завершить серверную сессию чата:', error);
+      }
+    }
+
+    redirectToAuthorizationInternal(broadcast);
+  })();
+
+  return sessionEndingPromise;
+};
+
+export const redirectToAuthorization = (): Promise<void> => {
+  return endChatSession(false, true);
 };
 
 const readAuthErrorBody = async (
@@ -506,6 +564,7 @@ export const isAuthError = (error: unknown): boolean => {
 let sessionRefreshPromise: Promise<AuthResponse | null> | null = null;
 
 export const tryRefreshErpSession = (): Promise<AuthResponse | null> => {
+  if (isEndingSession) return Promise.resolve(null);
   if (sessionRefreshPromise) {
     return sessionRefreshPromise;
   }
@@ -540,69 +599,45 @@ export const tryRefreshErpSession = (): Promise<AuthResponse | null> => {
 };
 
 export const logoutChatSession = async (): Promise<void> => {
-  authSessionRevision++;
-  if (proactiveRefreshTimer) {
-    clearTimeout(proactiveRefreshTimer);
-    proactiveRefreshTimer = null;
-  }
-
-  const pendingRefresh = sessionRefreshPromise;
-  if (pendingRefresh) {
-    await pendingRefresh.catch(() => undefined);
-  }
-
-  const response = await requestChatLogout();
-
-  if (!response.ok) {
-    let message = 'Не удалось завершить сессию чата';
-
-    try {
-      const data = await response.json();
-      message = data?.message || data?.error || message;
-    } catch {
-      // HTTP status is enough when the error body is not JSON.
-    }
-
-    throw Object.assign(new Error(message), { status: response.status });
-  }
+  await endChatSession(true, true);
 };
 
 const requestChatLogout = (): Promise<Response> => {
   const config = getConfig();
 
-  return withNetworkTimeout(signal =>
-    fetch(`${config.CHAT_API_DOMAIN.replace(/\/+$/, '')}/auth/logout`, {
-      method: 'POST',
-      credentials: 'include',
-      signal
-    })
+  return fetchAuthWithCookies(
+    `${config.CHAT_API_DOMAIN.replace(/\/+$/, '')}/auth/logout`,
+    'POST'
   );
 };
 
 const validateChatToken = async (token: string): Promise<AuthUser | null> => {
   const config = getConfig();
-  const response = await withNetworkTimeout(signal =>
-    fetch(`${config.CHAT_API_DOMAIN.replace(/\/+$/, '')}/auth/session`, {
-      method: 'GET',
-      signal,
-      headers: { Authorization: `Bearer ${token}` }
-    })
-  );
-
-  if (response.status === 401) {
-    return null;
-  }
-
-  if (!response.ok) {
-    const body = await readAuthErrorBody(response);
-    throw createAuthHttpError(
-      response.status,
-      getAuthErrorMessage(body, 'Сервис авторизации временно недоступен'),
-      body.code
+  return withNetworkTimeout(async signal => {
+    const response = await fetch(
+      `${config.CHAT_API_DOMAIN.replace(/\/+$/, '')}/auth/session`,
+      {
+        method: 'GET',
+        signal,
+        headers: { Authorization: `Bearer ${token}` }
+      }
     );
-  }
 
-  return (await response.json()) as AuthUser;
+    if (response.status === 401) {
+      return null;
+    }
+
+    if (!response.ok) {
+      const body = await readAuthErrorBody(response);
+      throw createAuthHttpError(
+        response.status,
+        getAuthErrorMessage(body, 'Сервис авторизации временно недоступен'),
+        body.code
+      );
+    }
+
+    return (await response.json()) as AuthUser;
+  });
 };
 
 const verifySameUser = (user: AuthUser | undefined): boolean => {
@@ -616,24 +651,28 @@ const refreshThroughErp = async (
   source: ChatAuthSessionSource
 ): Promise<AuthResponse | null> => {
   const config = getConfig();
-  const erpAuthUrl = config.CHAT_ERP_AUTH_URL?.trim();
+  const erpUrl = config.CHAT_ERP_URL?.trim();
 
-  if (!erpAuthUrl) {
-    throw createAuthHttpError(
-      503,
-      'Публичный адрес ERP для обновления сессии не настроен',
-      'AUTH_UNAVAILABLE'
-    );
+  let erpSessionUrl: URL | undefined;
+  try {
+    if (erpUrl) {
+      erpSessionUrl = new URL(`${erpUrl.replace(/\/+$/, '')}/api/auth/session`);
+    }
+  } catch {
+    // Повторный запрос не исправит некорректный адрес в конфигурации.
   }
 
-  const response = await withNetworkTimeout(signal =>
-    fetch(`${erpAuthUrl.replace(/\/+$/, '')}/api/auth/session`, {
-      method: 'GET',
-      credentials: 'include',
-      cache: 'no-store',
-      signal
-    })
-  );
+  if (
+    !erpSessionUrl ||
+    (erpSessionUrl.protocol !== 'https:' && erpSessionUrl.protocol !== 'http:')
+  ) {
+    console.warn(
+      'Адрес ERP для обновления сессии не настроен или некорректен, требуется повторная авторизация'
+    );
+    return null;
+  }
+
+  const response = await fetchAuthWithCookies(erpSessionUrl.href, 'GET');
 
   if (response.status === 401) {
     return null;
@@ -676,21 +715,18 @@ const refreshThroughErp = async (
 const requestSharedRefresh = async (
   source: ChatAuthSessionSource
 ): Promise<AuthResponse | null> => {
+  // ERP-сессия не должна обновляться через cookie от прежнего входа в чат.
+  if (source === 'erp_bootstrap') return refreshThroughErp(source);
+
   const config = getConfig();
-  const response = await withNetworkTimeout(signal =>
-    fetch(`${config.CHAT_API_DOMAIN.replace(/\/+$/, '')}/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-      signal
-    })
+  const response = await fetchAuthWithCookies(
+    `${config.CHAT_API_DOMAIN.replace(/\/+$/, '')}/auth/refresh`,
+    'POST'
   );
   const body = await readAuthErrorBody(response);
 
   if (response.status === 401) {
-    if (
-      body.code === 'CHAT_REFRESH_MISSING' &&
-      (source === 'erp_bootstrap' || source === 'unknown_shared')
-    ) {
+    if (body.code === 'CHAT_REFRESH_MISSING' && source === 'unknown_shared') {
       return refreshThroughErp(source);
     }
 
@@ -713,7 +749,15 @@ const requestSharedRefresh = async (
     false
   );
 
-  if (!authResponse.token || !verifySameUser(authResponse.user)) {
+  if (!authResponse.token) {
+    throw createAuthHttpError(
+      503,
+      'Сервис обновления сессии вернул некорректный ответ',
+      'AUTH_UNAVAILABLE'
+    );
+  }
+
+  if (!verifySameUser(authResponse.user)) {
     return null;
   }
 
@@ -726,15 +770,17 @@ const saveRefreshedBackgroundSession = (
 ): void => {
   const apiUrl = getConfig().CHAT_API_DOMAIN?.trim();
   if (!apiUrl) return;
+  const revision = authSessionRevision;
 
   void import('../services/useChatBackgroundSync')
-    .then(({ saveAnyChatBackgroundSyncSession }) =>
-      saveAnyChatBackgroundSyncSession({
+    .then(({ saveAnyChatBackgroundSyncSession }) => {
+      if (isEndingSession || revision !== authSessionRevision) return;
+      return saveAnyChatBackgroundSyncSession({
         token,
         userId: user?.id || authedUser.value?.id,
         apiUrl
-      })
-    )
+      });
+    })
     .catch(error => {
       console.warn('Не удалось обновить токен фоновой синхронизации:', error);
     });
@@ -745,7 +791,11 @@ const applyRefreshedSession = (
   refreshRevision: number,
   broadcast: boolean
 ): AuthResponse | null => {
-  if (authSessionRevision !== refreshRevision || !authResponse.token) {
+  if (
+    isEndingSession ||
+    authSessionRevision !== refreshRevision ||
+    !authResponse.token
+  ) {
     return null;
   }
 
@@ -787,6 +837,7 @@ const refreshSharedSession = async (
   initialToken: string,
   refreshRevision: number
 ): Promise<AuthResponse | null> => {
+  if (isEndingSession) return null;
   const currentToken = getAuthToken() || getStoredChatAccessToken();
   const storedSession = getChatAuthSession();
   const source = inferSessionSource(storedSession);
@@ -821,7 +872,7 @@ const refreshSharedSession = async (
     }
   }
 
-  if (authSessionRevision !== refreshRevision) {
+  if (isEndingSession || authSessionRevision !== refreshRevision) {
     return null;
   }
 
@@ -830,6 +881,7 @@ const refreshSharedSession = async (
 
   const applied = applyRefreshedSession(refreshed, refreshRevision, true);
   if (applied) return applied;
+  if (isEndingSession) return null;
 
   const latestToken = getAuthToken() || getStoredChatAccessToken();
   if (!latestToken) return null;
@@ -857,10 +909,11 @@ const handleAuthRefreshBroadcast = async (
       return;
     }
 
-    redirectToAuthorizationInternal(false);
+    await endChatSession(false, false);
     return;
   }
 
+  if (isEndingSession || !getChatAuthSession()?.token) return;
   if (!message.token || !isSharedAccessToken(message.token)) return;
 
   const expectedUserId = getChatAuthSession()?.user?.id || authedUser.value?.id;
@@ -937,13 +990,7 @@ const scheduleSharedTokenRefresh = (
 };
 
 export const handleConfirmedInactiveSession = async (): Promise<void> => {
-  try {
-    await requestChatLogout();
-  } catch (error) {
-    console.warn('Не удалось очистить refresh-cookie чата:', error);
-  }
-
-  redirectToAuthorization();
+  await endChatSession(true, true);
 };
 
 export const withAuthResponseRefresh = async (

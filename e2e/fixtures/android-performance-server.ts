@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import type { Socket } from 'node:net';
 import { Server } from 'socket.io';
 
 const uuid = (prefix: string, value: number) =>
@@ -77,7 +78,6 @@ export async function createAndroidPerformanceServer({
   const config = {
     CHAT_API_DOMAIN: `${origin}/api`,
     CHAT_WS_DOMAIN: origin,
-    CHAT_AUTH_API: `${origin}/auth`,
     CHAT_ERP_URL: origin,
     CHAT_MASTRA_URL: `${origin}/ai`,
     CHAT_PATH_TO_FILE_CDN: origin,
@@ -148,7 +148,6 @@ export async function createAndroidPerformanceServer({
         [
           `VITE_CHAT_API_DOMAIN=${config.CHAT_API_DOMAIN}`,
           `VITE_CHAT_WS_DOMAIN=${config.CHAT_WS_DOMAIN}`,
-          `VITE_AUTH_API=${config.CHAT_AUTH_API}`,
           `VITE_ERP_URL=${config.CHAT_ERP_URL}`,
           `VITE_MASTRA_URL=${config.CHAT_MASTRA_URL}`,
           `VITE_PATH_TO_FILE_CDN=${config.CHAT_PATH_TO_FILE_CDN}`,
@@ -285,6 +284,11 @@ export async function createAndroidPerformanceServer({
     }
     json([]);
   });
+  const httpConnections = new Set<Socket>();
+  server.on('connection', connection => {
+    httpConnections.add(connection);
+    connection.once('close', () => httpConnections.delete(connection));
+  });
   const io = new Server(server, { cors: { origin: true, credentials: true } });
   io.on('connection', socket => {
     connections.push({ event: 'connect', at: Date.now() });
@@ -347,7 +351,10 @@ export async function createAndroidPerformanceServer({
     state,
     io,
     async close() {
-      await new Promise<void>(resolve => io.close(() => resolve()));
+      const closing = io.close();
+      // Браузер может оставить HTTP или upgrade-соединение после проверок.
+      for (const connection of httpConnections) connection.destroy();
+      await closing;
     }
   };
 }

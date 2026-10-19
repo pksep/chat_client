@@ -4,14 +4,11 @@ import { ref } from 'vue';
 const configStore = ref<IChatContainerConfig>({});
 const CONFIG_KEYS: Array<keyof IChatContainerConfig> = [
   'CHAT_MASTRA_URL',
-  'CHAT_AUTH_API',
   'CHAT_API_DOMAIN',
   'CHAT_WS_DOMAIN',
   'CHAT_ERP_URL',
-  'CHAT_ERP_AUTH_URL',
   'CHAT_PATH_TO_FILE_CDN',
   'CHAT_LIVEKIT_URL',
-  'CHAT_URL',
   'CHAT_BOT_GATEWAY',
   'CHAT_CALL_TOPIC_AUTO_PROMPT_ENABLED',
   'CHAT_MULTIPART_UPLOAD_CONCURRENCY'

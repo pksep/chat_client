@@ -60,7 +60,7 @@ import {
   saveBootstrapErpSession,
   saveChatAuthSession
 } from './composables/useAuth';
-import { fetchUsersForAuth } from './composables/useUsers';
+import { fetchUsersForAuth, getUsersList } from './composables/useUsers';
 import { initShareIntentHandling } from './services/useShareIntent';
 import { initTelemetryLocation } from './services/useTelemetryLocation';
 import {
@@ -69,6 +69,7 @@ import {
 } from './utils/nativeStartup';
 import { useThemeStore } from './stores/theme';
 import { withNetworkTimeout } from './utils/network-timeout';
+import { isBotUser } from './utils/bot';
 import {
   prepareMessageExperience,
   prepareMessageListAfterPaint
@@ -299,12 +300,10 @@ const parseRuntimeConfig = (
     }, {});
 
   return {
-    CHAT_AUTH_API: envMap.VITE_AUTH_API,
     CHAT_MASTRA_URL: envMap.VITE_MASTRA_URL,
     CHAT_API_DOMAIN: envMap.VITE_CHAT_API_DOMAIN,
     CHAT_WS_DOMAIN: envMap.VITE_CHAT_WS_DOMAIN,
     CHAT_ERP_URL: envMap.VITE_ERP_URL,
-    CHAT_ERP_AUTH_URL: envMap.VITE_ERP_AUTH_URL,
     CHAT_PATH_TO_FILE_CDN: envMap.VITE_PATH_TO_FILE_CDN,
     CHAT_LIVEKIT_URL: envMap.VITE_LIVEKIT_URL,
     CHAT_BOT_GATEWAY: envMap.VITE_BOT_GATEWAY_URL,
@@ -632,8 +631,20 @@ const submitCredentialsLogin = async () => {
   errorMessage.value = '';
 
   try {
+    const identifier = identifierValue.value.trim();
+    const users = getUsersList().filter(user => !isBotUser(user));
+    const matchingUsers = users.filter(
+      user => user.initials?.trim() === identifier
+    );
+    // В списке показаны инициалы, но авторизация принимает табельный номер.
+    const tabel =
+      users.some(user => user.nickname === identifier) ||
+      matchingUsers.length !== 1
+        ? identifier
+        : matchingUsers[0].nickname;
+
     const authData = await loginWithCredentials({
-      identifier: identifierValue.value.trim(),
+      identifier: tabel,
       password: passwordValue.value.trim()
     });
 
