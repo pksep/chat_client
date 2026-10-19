@@ -28,7 +28,6 @@ async function seedSession(page: Page, layout: string | null) {
           {
             url: apiBase,
             config: {
-              CHAT_AUTH_API: apiBase,
               CHAT_API_DOMAIN: `${apiBase}/`,
               CHAT_WS_DOMAIN: 'ws://127.0.0.1:65530',
               CHAT_MASTRA_URL: 'http://127.0.0.1:4111'

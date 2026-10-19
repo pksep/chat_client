@@ -25,6 +25,7 @@ import ru.rustore.sdk.pushclient.RuStorePushClient;
 import sep.pksep.app.ChatNotificationDismissalHelper;
 import sep.pksep.app.ChatNotificationHelper;
 import sep.pksep.app.NotificationChannelHelper;
+import sep.pksep.app.IncomingCallNotificationHelper;
 
 @CapacitorPlugin(
     name = "RuStorePush",
@@ -142,7 +143,10 @@ public class RuStorePushPlugin extends Plugin {
 
     @PluginMethod
     public void clearAllNotifications(PluginCall call) {
+        IncomingCallNotificationHelper.dismissAllIncomingCalls(getContext());
         ChatNotificationHelper.dismissAll(getContext());
+        NotificationTapPlugin.clearPendingNotificationTap();
+        pendingPushReceived.clear();
         call.resolve();
     }
 

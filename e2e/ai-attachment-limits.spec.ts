@@ -9,7 +9,6 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(id => {
     const url = 'http://127.0.0.1:65530';
     const config = {
-      CHAT_AUTH_API: url,
       CHAT_MASTRA_URL: 'http://127.0.0.1:4111',
       CHAT_API_DOMAIN: url,
       CHAT_WS_DOMAIN: 'ws://127.0.0.1:65530',

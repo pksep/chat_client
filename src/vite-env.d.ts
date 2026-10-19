@@ -9,7 +9,6 @@ interface ImportMetaEnv {
   readonly VITE_STICKER_API_URL?: string;
   readonly VITE_CALL_BACKGROUND_ASSET_BASE_URL?: string;
   readonly VITE_REACTION_VIDEO_ASSET_BASE_URL?: string;
-  readonly VITE_BOT_GATEWAY_URL?: string;
 }
 
 interface ImportMeta {
