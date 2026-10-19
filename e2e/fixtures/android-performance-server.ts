@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import type { Socket } from 'node:net';
 import { Server } from 'socket.io';
 
 const uuid = (prefix: string, value: number) =>
@@ -283,6 +284,11 @@ export async function createAndroidPerformanceServer({
     }
     json([]);
   });
+  const httpConnections = new Set<Socket>();
+  server.on('connection', connection => {
+    httpConnections.add(connection);
+    connection.once('close', () => httpConnections.delete(connection));
+  });
   const io = new Server(server, { cors: { origin: true, credentials: true } });
   io.on('connection', socket => {
     connections.push({ event: 'connect', at: Date.now() });
@@ -345,7 +351,10 @@ export async function createAndroidPerformanceServer({
     state,
     io,
     async close() {
-      await new Promise<void>(resolve => io.close(() => resolve()));
+      const closing = io.close();
+      // Браузер может оставить HTTP или upgrade-соединение после проверок.
+      for (const connection of httpConnections) connection.destroy();
+      await closing;
     }
   };
 }

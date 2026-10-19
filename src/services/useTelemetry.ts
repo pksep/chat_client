@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { getStoredChatAccessToken } from '../composables/useAuth';
 import { getAuthToken } from '../composables/useLogin';
 import { getConfig } from './useConfig';
+import { withNetworkTimeout } from '../utils/network-timeout';
 import {
   getTelemetryDeviceContext,
   getTelemetryInstallationId,
@@ -284,16 +285,19 @@ export const flushTelemetryEvents = async (): Promise<void> => {
       return;
     }
 
-    const response = await fetch(`${config.CHAT_API_DOMAIN}/telemetry/events`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        events: batch
-      })
-    });
+    const response = await withNetworkTimeout(
+      signal =>
+        fetch(`${config.CHAT_API_DOMAIN}/telemetry/events`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ events: batch }),
+          signal
+        }),
+      TELEMETRY_RETRY_DELAY_MS
+    );
 
     if (response.status === 401 || response.status === 403) {
       // При недействительной сессии не переносим её диагностику в новую.

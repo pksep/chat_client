@@ -613,28 +613,31 @@ const requestChatLogout = (): Promise<Response> => {
 
 const validateChatToken = async (token: string): Promise<AuthUser | null> => {
   const config = getConfig();
-  const response = await withNetworkTimeout(signal =>
-    fetch(`${config.CHAT_API_DOMAIN.replace(/\/+$/, '')}/auth/session`, {
-      method: 'GET',
-      signal,
-      headers: { Authorization: `Bearer ${token}` }
-    })
-  );
-
-  if (response.status === 401) {
-    return null;
-  }
-
-  if (!response.ok) {
-    const body = await readAuthErrorBody(response);
-    throw createAuthHttpError(
-      response.status,
-      getAuthErrorMessage(body, 'Сервис авторизации временно недоступен'),
-      body.code
+  return withNetworkTimeout(async signal => {
+    const response = await fetch(
+      `${config.CHAT_API_DOMAIN.replace(/\/+$/, '')}/auth/session`,
+      {
+        method: 'GET',
+        signal,
+        headers: { Authorization: `Bearer ${token}` }
+      }
     );
-  }
 
-  return (await response.json()) as AuthUser;
+    if (response.status === 401) {
+      return null;
+    }
+
+    if (!response.ok) {
+      const body = await readAuthErrorBody(response);
+      throw createAuthHttpError(
+        response.status,
+        getAuthErrorMessage(body, 'Сервис авторизации временно недоступен'),
+        body.code
+      );
+    }
+
+    return (await response.json()) as AuthUser;
+  });
 };
 
 const verifySameUser = (user: AuthUser | undefined): boolean => {
@@ -653,9 +656,7 @@ const refreshThroughErp = async (
   let erpSessionUrl: URL | undefined;
   try {
     if (erpUrl) {
-      erpSessionUrl = new URL(
-        `${erpUrl.replace(/\/+$/, '')}/api/auth/session`
-      );
+      erpSessionUrl = new URL(`${erpUrl.replace(/\/+$/, '')}/api/auth/session`);
     }
   } catch {
     // Повторный запрос не исправит некорректный адрес в конфигурации.
@@ -725,10 +726,7 @@ const requestSharedRefresh = async (
   const body = await readAuthErrorBody(response);
 
   if (response.status === 401) {
-    if (
-      body.code === 'CHAT_REFRESH_MISSING' &&
-      source === 'unknown_shared'
-    ) {
+    if (body.code === 'CHAT_REFRESH_MISSING' && source === 'unknown_shared') {
       return refreshThroughErp(source);
     }
 

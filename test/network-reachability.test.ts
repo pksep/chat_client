@@ -23,6 +23,7 @@ test('зависшая проверка завершается по таймау
   });
   await check.check();
   expect(signal.aborted).toBe(true);
+  expect(signal.reason.name).toBe('TimeoutError');
   expect(results).toEqual([false]);
 });
 

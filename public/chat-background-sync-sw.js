@@ -9,6 +9,7 @@
   const MAX_PENDING_TOPIC_IDS = 32;
   const MAX_MESSAGE_TOPICS = 8;
   const MESSAGE_LIMIT = 50;
+  const HTTP_REQUEST_TIMEOUT_MS = 10000;
 
   let runningSync = null;
 
@@ -132,32 +133,53 @@
     return trimToEmpty(snapshot && (snapshot.lastPts || snapshot.toPts));
   };
 
-  const appendPendingHint = async hint => {
-    const current = (await getValue(PENDING_HINTS_KEY)) || {};
-    const topicIds = Array.isArray(current.topicIds)
-      ? current.topicIds.slice()
-      : [];
-    const topicId = trimToEmpty(hint.topicId);
+  // Чтение и изменение очереди выполняются одной транзакцией: push и retry
+  // могут добавлять задания одновременно с завершением сетевого запроса.
+  const changePendingHints = async update => {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.get(PENDING_HINTS_KEY);
+      let previous;
+      request.onsuccess = () => {
+        previous = (request.result && request.result.value) || {};
+        const next = update(previous);
+        if (next) store.put({ key: PENDING_HINTS_KEY, value: next });
+        else store.delete(PENDING_HINTS_KEY);
+      };
+      tx.oncomplete = () => {
+        db.close();
+        resolve(previous);
+      };
+      tx.onabort = tx.onerror = () => {
+        db.close();
+        reject(tx.error);
+      };
+    });
+  };
 
-    if (topicId && !topicIds.includes(topicId)) {
-      topicIds.push(topicId);
-    }
-
-    const trimmedTopicIds = topicIds.slice(-MAX_PENDING_TOPIC_IDS);
-    const nextHints = {
-      topicIds: trimmedTopicIds,
+  const appendPendingHint = async hint =>
+    changePendingHints(current => ({
+      topicIds: [
+        ...new Set(
+          [
+            ...(Array.isArray(current.topicIds) ? current.topicIds : []),
+            ...(Array.isArray(hint.topicIds) ? hint.topicIds : []),
+            hint.topicId
+          ]
+            .map(trimToEmpty)
+            .filter(Boolean)
+        )
+      ].slice(-MAX_PENDING_TOPIC_IDS),
       pts: chooseMaxPts(current.pts, hint.pts),
       eventId: trimToEmpty(hint.eventId || current.eventId),
       reason: trimToEmpty(hint.reason || current.reason || 'background'),
       updatedAt: nowIso()
-    };
-
-    await setValue(PENDING_HINTS_KEY, nextHints);
-  };
+    }));
 
   const consumePendingHints = async () => {
-    const hints = (await getValue(PENDING_HINTS_KEY)) || {};
-    await deleteValue(PENDING_HINTS_KEY);
+    const hints = await changePendingHints(() => null);
 
     return {
       topicIds: Array.isArray(hints.topicIds)
@@ -195,14 +217,36 @@
   };
 
   const fetchJson = async (session, path) => {
-    const response = await fetch(`${session.apiUrl}${path}`, {
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${session.token}`
-      }
+    const controller = new AbortController();
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        reject(
+          new DOMException(
+            'Сервер синхронизации не ответил вовремя',
+            'TimeoutError'
+          )
+        );
+        controller.abort();
+      }, HTTP_REQUEST_TIMEOUT_MS);
     });
-
-    return readJson(response);
+    try {
+      return await Promise.race([
+        (async () => {
+          const response = await fetch(`${session.apiUrl}${path}`, {
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${session.token}`
+            },
+            signal: controller.signal
+          });
+          return readJson(response);
+        })(),
+        timeout
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
   };
 
   const asArray = payload => {
@@ -317,14 +361,25 @@
           result[topicId] = messages;
         }
       } catch (error) {
-        if (error.status === 401 || error.status === 403) {
+        if (
+          error.status == null ||
+          error.status === 401 ||
+          error.status === 403 ||
+          error.status === 408 ||
+          error.status === 429 ||
+          error.status >= 500
+        ) {
+          // Позиция синхронизации не должна продвигаться без запрошенной истории.
           throw error;
         }
 
-        console.warn('[ChatBackgroundSyncSW] Не удалось загрузить сообщения топика', {
-          topicId,
-          error: error.message || String(error)
-        });
+        console.warn(
+          '[ChatBackgroundSyncSW] Не удалось загрузить сообщения топика',
+          {
+            topicId,
+            error: error.message || String(error)
+          }
+        );
       }
     }
 
@@ -437,7 +492,7 @@
       };
 
       if (retryable) {
-        await setValue(PENDING_HINTS_KEY, {
+        await appendPendingHint({
           topicIds: hints.topicIds || [],
           pts: hints.pts || '',
           eventId: hints.eventId || '',
@@ -478,7 +533,9 @@
     runningSync = (async () => {
       let result = await runSyncOnce();
 
-      while (await hasPendingHints()) {
+      // Повторяемую ошибку продолжит Background Sync или следующее событие сети.
+      // Немедленный повтор здесь снова оставляет hints и создаёт бесконечный цикл.
+      while (result.ok && (await hasPendingHints())) {
         result = await runSyncOnce();
       }
 

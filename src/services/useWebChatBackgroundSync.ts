@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { withNetworkTimeout } from '../utils/network-timeout';
 import type {
   ChatBackgroundSnapshotImportOptions,
   ChatBackgroundSyncRequest,
@@ -26,6 +27,14 @@ const TARGETED_SYNC_EVENTS_LIMIT = 300;
 const FOREGROUND_SYNC_EVENTS_LIMIT = 75;
 const TOPICS_LIMIT = 999;
 const SYNC_TAG = 'chat-background-sync';
+let sessionRevision = 0;
+let sessionUpdate = Promise.resolve();
+
+const updateSession = (operation: () => Promise<void>): Promise<void> => {
+  const pending = sessionUpdate.then(operation);
+  sessionUpdate = pending.catch(() => {});
+  return pending;
+};
 
 type WebSyncRecord<T> = {
   key: string;
@@ -216,13 +225,16 @@ const fetchJson = async (
   session: WebSyncSession,
   path: string
 ): Promise<unknown> => {
-  const response = await fetch(`${session.apiUrl}${path}`, {
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${session.token}`
-    }
-  });
-  const body = await response.text();
+  const { response, body } = await withNetworkTimeout(async signal => {
+    const response = await fetch(`${session.apiUrl}${path}`, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${session.token}`
+      },
+      signal
+    });
+    return { response, body: await response.text() };
+  }, 10000);
 
   if (!response.ok) {
     throw new WebChatBackgroundSyncHttpError(response.status, body);
@@ -238,17 +250,20 @@ const fetchJson = async (
 const requestScopedSyncToken = async (
   session: ChatBackgroundSyncSession
 ): Promise<{ syncToken: string; expiresAt?: string } | null> => {
-  const response = await fetch(
-    `${normalizeApiUrl(session.apiUrl)}/sync/token`,
-    {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${session.token}`
+  const { response, body } = await withNetworkTimeout(async signal => {
+    const response = await fetch(
+      `${normalizeApiUrl(session.apiUrl)}/sync/token`,
+      {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${session.token}`
+        },
+        signal
       }
-    }
-  );
-  const body = await response.text();
+    );
+    return { response, body: await response.text() };
+  });
 
   if (!response.ok) {
     throw new WebChatBackgroundSyncHttpError(response.status, body);
@@ -452,9 +467,13 @@ const fetchLatestMessagesByTopic = async (
         return [topicId, asArray(payload)] as const;
       } catch (error) {
         if (
-          error instanceof WebChatBackgroundSyncHttpError &&
-          error.isAuthError
+          !(error instanceof WebChatBackgroundSyncHttpError) ||
+          error.isAuthError ||
+          error.status === 408 ||
+          error.status === 429 ||
+          error.status >= 500
         ) {
+          // Сетевой сбой истории не означает, что она пуста и синхронизация завершена.
           throw error;
         }
 
@@ -671,22 +690,26 @@ export const saveWebChatBackgroundSyncSession = async (
     return;
   }
 
+  const revision = ++sessionRevision;
   let scopedToken: { syncToken: string; expiresAt?: string } | null = null;
 
   try {
     scopedToken = await requestScopedSyncToken(session);
   } catch (error) {
-    await setStatus({
-      state: 'failed',
-      reason: 'session_saved',
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Не удалось запросить ограниченный токен синхронизации',
-      retryable:
-        !(error instanceof WebChatBackgroundSyncHttpError) ||
-        !error.isAuthError,
-      updatedAt: nowIso()
+    await updateSession(async () => {
+      if (revision !== sessionRevision) return;
+      await setStatus({
+        state: 'failed',
+        reason: 'session_saved',
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Не удалось запросить ограниченный токен синхронизации',
+        retryable:
+          !(error instanceof WebChatBackgroundSyncHttpError) ||
+          !error.isAuthError,
+        updatedAt: nowIso()
+      });
     });
     console.warn(
       '[WebChatBackgroundSync] Не удалось запросить ограниченный токен синхронизации:',
@@ -695,13 +718,17 @@ export const saveWebChatBackgroundSyncSession = async (
     return;
   }
 
+  if (revision !== sessionRevision) return;
   if (!scopedToken?.syncToken) {
-    await setStatus({
-      state: 'failed',
-      reason: 'session_saved',
-      error: 'Ограниченный токен синхронизации отсутствует',
-      retryable: true,
-      updatedAt: nowIso()
+    await updateSession(async () => {
+      if (revision !== sessionRevision) return;
+      await setStatus({
+        state: 'failed',
+        reason: 'session_saved',
+        error: 'Ограниченный токен синхронизации отсутствует',
+        retryable: true,
+        updatedAt: nowIso()
+      });
     });
     return;
   }
@@ -716,11 +743,17 @@ export const saveWebChatBackgroundSyncSession = async (
     updatedAt: nowIso()
   };
 
-  await setValue(SESSION_KEY, payload);
-  await setStatus({
-    state: 'session_saved',
-    updatedAt: payload.updatedAt
+  // HTTP выполняется параллельно запуску SDK, но старый ответ не должен
+  // отменять последующий выход или заменять более новую сессию.
+  await updateSession(async () => {
+    if (revision !== sessionRevision) return;
+    await setValue(SESSION_KEY, payload);
+    await setStatus({
+      state: 'session_saved',
+      updatedAt: payload.updatedAt
+    });
   });
+  if (revision !== sessionRevision) return;
   await saveWebSyncMeta(
     'web_background_sync:session_saved',
     {
@@ -741,15 +774,18 @@ export const clearWebChatBackgroundSyncSession = async (): Promise<void> => {
     return;
   }
 
-  await Promise.all([
-    deleteValue(SESSION_KEY),
-    deleteValue(SNAPSHOT_KEY),
-    deleteValue(STATUS_KEY),
-    deleteValue(PENDING_HINTS_KEY)
-  ]);
-  await setStatus({
-    state: 'session_cleared',
-    updatedAt: nowIso()
+  ++sessionRevision;
+  await updateSession(async () => {
+    await Promise.all([
+      deleteValue(SESSION_KEY),
+      deleteValue(SNAPSHOT_KEY),
+      deleteValue(STATUS_KEY),
+      deleteValue(PENDING_HINTS_KEY)
+    ]);
+    await setStatus({
+      state: 'session_cleared',
+      updatedAt: nowIso()
+    });
   });
 };
 
