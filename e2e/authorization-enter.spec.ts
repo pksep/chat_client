@@ -39,6 +39,8 @@ test('Enter в пароле отправляет вход один раз, не�
     await route.fulfill({ status: 401, json: { message: 'Тестовый ответ' } });
   });
   await page.goto(`/?organization=${encodeURIComponent(organization)}`);
+  // Загрузка ленивого экрана в Vite не входит в проверку поведения Enter.
+  await page.getByTestId('AuthorizationScreen').waitFor();
   const login = page.getByPlaceholder('Введите логин');
   const password = page.getByPlaceholder('Введите пароль');
   await expect(password).toBeVisible();
@@ -63,6 +65,7 @@ test('Enter в логине тоже запускает вход', async ({ page
     await route.fulfill({ status: 401, json: { message: 'Тестовый ответ' } });
   });
   await page.goto(`/?organization=${encodeURIComponent(organization)}`);
+  await page.getByTestId('AuthorizationScreen').waitFor();
   await page.getByPlaceholder('Введите пароль').fill('test-password');
   const login = page.getByPlaceholder('Введите логин');
   await login.fill('enter-test');

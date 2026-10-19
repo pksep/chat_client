@@ -52,7 +52,7 @@ test('восстановление сети не ждёт Socket.IO backoff и �
   ]);
 });
 
-test('ожидание сети появляется сразу и сохраняется при устаревшем состоянии сокета', async ({
+test('ожидание сети появляется после задержки и сохраняется при устаревшем состоянии сокета', async ({
   page,
   context
 }) => {
@@ -88,14 +88,14 @@ test('ожидание сети появляется сразу и сохран�
     return [beforeFocus, status()];
   });
   expect(states).toEqual([
-    { connected: false, text: 'Ожидание сети' },
-    { connected: false, text: 'Ожидание сети' }
+    { connected: false, text: undefined },
+    { connected: false, text: undefined }
   ]);
-  await page.clock.runFor(1200);
+  await page.clock.runFor(5000);
   await expect(profile.locator('.connection-status')).toHaveText(
     'Ожидание сети'
   );
-  await page.clock.runFor(9000);
+  await page.clock.runFor(5000);
   await expect(profile.locator('.connection-status')).toHaveText('Нет сети');
 
   await context.setOffline(false);
@@ -105,6 +105,7 @@ test('ожидание сети появляется сразу и сохран�
   });
   await expect(profile.locator('.connection-status')).toHaveCount(0);
   await context.setOffline(true);
+  await page.clock.runFor(5000);
   await expect(profile.locator('.connection-status')).toHaveText(
     'Ожидание сети'
   );
@@ -112,7 +113,7 @@ test('ожидание сети появляется сразу и сохран�
 });
 
 for (const failure of ['error', 'timeout'] as const) {
-  test(`потеря связи без offline обнаруживается быстро (${failure})`, async ({
+  test(`потеря связи без offline обнаруживается с ограниченным ожиданием (${failure})`, async ({
     page
   }) => {
     let unavailable = false;
@@ -139,13 +140,16 @@ for (const failure of ['error', 'timeout'] as const) {
     await expect.poll(() => requests).toBeGreaterThan(0);
     await expect(profile.locator('.connection-status')).toHaveCount(0);
 
+    // Опрос раз в 5 с проверяется тиками по 1 с: перед запросом возможны 6 с,
+    // затем 5 с таймаута и 5 с задержки индикатора. Оставляем запас на рендер.
+    const detectionTimeoutMs = failure === 'timeout' ? 18000 : 16000;
     const startedAt = Date.now();
     unavailable = true;
     await expect(profile.locator('.connection-status')).toHaveText(
       'Ожидание сети',
-      { timeout: 3000 }
+      { timeout: detectionTimeoutMs }
     );
-    expect(Date.now() - startedAt).toBeLessThan(3000);
+    expect(Date.now() - startedAt).toBeLessThan(detectionTimeoutMs);
     expect(
       await page.evaluate(() => ({
         browserOnline: navigator.onLine,
@@ -168,10 +172,11 @@ for (const failure of ['error', 'timeout'] as const) {
   });
 }
 
-test('offline в нативном приложении сразу показывает ожидание сети', async ({
+test('offline в нативном приложении показывает ожидание сети после задержки', async ({
   page,
   context
 }) => {
+  await page.clock.install();
   await openFixture(page);
   await page.evaluate(async () => {
     const path = '/e2e/fixtures/network-harness.ts';
@@ -184,6 +189,7 @@ test('offline в нативном приложении сразу показыв
   const profile = page.getByTestId('NetworkProfile-UserProfile-Container');
   await expect(profile.locator('.connection-status')).toHaveCount(0);
   await context.setOffline(true);
+  await page.clock.runFor(5000);
 
   const status = await page.evaluate(async () => {
     const fixture = (window as any).networkFixture;

@@ -1,5 +1,6 @@
 import { refreshChatAccess } from '../../composables/useChatAccess';
 import { bindIncomingChatEvents } from './incoming-events';
+import { createSocketReconnectScheduler } from '../socket-reconnect';
 import {
   User,
   Topic,
@@ -93,6 +94,8 @@ export interface WebSocketEvent {
 const UPLOAD_RETRY_MAX_DELAY_MS = 5000;
 const VIDEO_UPLOAD_COVER_TIMEOUT_MS = 8000;
 const IMMEDIATE_NETWORK_RECONNECT_THROTTLE_MS = 1000;
+const SOCKET_HEALTH_CHECK_INTERVAL_MS = 10000;
+const SOCKET_HEALTH_CHECK_TIMEOUT_MS = 5000;
 const PUBLIC_CALL_INVITE_PATHS = [
   '/calls/invite-preview',
   '/calls/invite-livekit-token'
@@ -134,6 +137,7 @@ export class ChatSDK {
   private socket: Socket | null = null;
   private removeIncomingChatEvents: (() => void) | null = null;
   private removeAuthTokenListener: (() => void) | null = null;
+  private removeConnectionListeners: (() => void) | null = null;
   private readonly multipartUploadAbortControllers = new Map<
     string,
     AbortController
@@ -150,6 +154,26 @@ export class ChatSDK {
   private utils: ChatUtilsInterface;
   private connectionStateListener?: (connected: boolean) => void;
   private lastImmediateNetworkReconnectAt = 0;
+  private connectionPromise: Promise<void> | null = null;
+  private cancelConnectionAttempt: (() => void) | null = null;
+  private authRecoveryInFlight = false;
+  private socketHealthSupported = false;
+  private socketHealthFailures = 0;
+  private lastSocketHealthCheckAt = 0;
+  private socketHealthProbe: Promise<void> | null = null;
+  private readonly socketReconnect = createSocketReconnectScheduler({
+    getSocket: () => this.socket,
+    isEnabled: () => !isChatSessionEnding() && !this.authRecoveryInFlight,
+    onAttempt: (reason, attempt) => {
+      recordTelemetryEvent({
+        category: 'network',
+        name: 'network.websocket.retry_inactive',
+        level: 'warn',
+        entityType: 'websocket',
+        payload: { reason, attempt }
+      });
+    }
+  });
 
   private reqi: Reqi;
 
@@ -688,7 +712,48 @@ export class ChatSDK {
     };
   }
 
-  async connect(): Promise<void> {
+  connect(): Promise<void> {
+    if (this.socket?.connected) return Promise.resolve();
+    if (this.connectionPromise) {
+      this.reconnectIfNeeded();
+      return this.connectionPromise;
+    }
+
+    const attempt = this.socket
+      ? this.waitForReconnection(this.socket)
+      : this.openConnection();
+    this.connectionPromise = attempt;
+    const clearAttempt = () => {
+      if (this.connectionPromise === attempt) this.connectionPromise = null;
+    };
+    void attempt.then(clearAttempt, clearAttempt);
+    return attempt;
+  }
+
+  private waitForReconnection(socket: Socket): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const finish = (error?: Error) => {
+        clearTimeout(timeout);
+        socket.off('connect', onConnect);
+        if (this.cancelConnectionAttempt === cancel)
+          this.cancelConnectionAttempt = null;
+        if (error) reject(error);
+        else resolve();
+      };
+      const onConnect = () => finish();
+      const cancel = () =>
+        finish(new DOMException('Подключение чата отменено', 'AbortError'));
+      const timeout = setTimeout(
+        () => finish(new Error('Истекло время восстановления соединения чата')),
+        30000
+      );
+      this.cancelConnectionAttempt = cancel;
+      socket.once('connect', onConnect);
+      this.reconnectIfNeeded();
+    });
+  }
+
+  private openConnection(): Promise<void> {
     return new Promise((resolve, reject) => {
       let authReconnectAttempted = false;
       let isSettled = false;
@@ -699,6 +764,7 @@ export class ChatSDK {
 
         clearTimeout(initialConnectionTimeout);
         initialConnectionTimeout = null;
+        this.cancelConnectionAttempt = null;
       };
 
       const resolveOnce = () => {
@@ -716,13 +782,15 @@ export class ChatSDK {
         clearInitialConnectionTimeout();
         reject(error);
       };
+      this.cancelConnectionAttempt = () =>
+        rejectOnce(new DOMException('Подключение чата отменено', 'AbortError'));
 
       try {
         console.info('Socket.IO: Initializing chat connection', {
           wsUrl: this.wsUrl
         });
 
-        this.socket = io(this.wsUrl, {
+        const socket = io(this.wsUrl, {
           transports: ['websocket', 'polling'],
           tryAllTransports: true,
           auth: cb => {
@@ -737,6 +805,34 @@ export class ChatSDK {
           reconnectionDelayMax: 5000,
           timeout: 30000
         });
+        this.socket = socket;
+        const managerListeners: Array<() => void> = [];
+        const onManager = (
+          event: string,
+          listener: (...args: any[]) => void
+        ) => {
+          socket.io.on(event as any, listener);
+          managerListeners.push(() => socket.io.off(event as any, listener));
+        };
+        let removeEngineListeners = () => {};
+        const bindEngineListeners = () => {
+          removeEngineListeners();
+          const engine = socket.io.engine;
+          if (!engine) return;
+          const onUpgrade = (transport: { name: string }) =>
+            console.log('Socket.IO: Transport upgraded', {
+              transport: transport.name
+            });
+          engine.on('upgrade', onUpgrade);
+          removeEngineListeners = () => engine.off('upgrade', onUpgrade);
+        };
+        onManager('open', bindEngineListeners);
+        bindEngineListeners();
+        this.removeConnectionListeners = () => {
+          removeEngineListeners();
+          managerListeners.forEach(remove => remove());
+          socket.removeAllListeners();
+        };
 
         initialConnectionTimeout = setTimeout(() => {
           rejectOnce(
@@ -759,8 +855,11 @@ export class ChatSDK {
             message?: string;
           }) => {
             if (authError?.status === 401) {
+              if (this.authRecoveryInFlight || this.socket !== socket) return;
+              this.authRecoveryInFlight = true;
               try {
                 const refreshed = await tryRefreshErpSession();
+                if (this.socket !== socket || isChatSessionEnding()) return;
 
                 if (refreshed?.token) {
                   await this.updateAccessToken(refreshed.token);
@@ -773,17 +872,35 @@ export class ChatSDK {
                   'Socket.IO: Не удалось обновить токен, сессия сохранена',
                   error
                 );
-                this.socket?.connect();
+                this.socketReconnect.schedule('auth_refresh_unavailable');
+              } finally {
+                this.authRecoveryInFlight = false;
+                if (this.socket === socket && !socket.connected) {
+                  this.socketReconnect.schedule('auth_refresh_unavailable');
+                }
               }
               return;
             }
 
             if (authError?.status === 503) {
               console.warn('Socket.IO: Сервис авторизации временно недоступен');
+              recordTelemetryEvent({
+                category: 'network',
+                name: 'network.websocket.auth_unavailable',
+                level: 'warn',
+                entityType: 'websocket',
+                payload: { status: 503, phase: 'event' }
+              });
             }
           }
         );
         this.socket.on('connect', () => {
+          if (this.socket !== socket) return;
+          this.socketReconnect.reset();
+          this.socketHealthSupported = false;
+          this.socketHealthFailures = 0;
+          this.lastSocketHealthCheckAt = 0;
+          this.socketHealthProbe = null;
           void refreshChatAccess();
           authReconnectAttempted = false;
           this.emitConnectionState(true);
@@ -805,24 +922,53 @@ export class ChatSDK {
           resolveOnce();
         });
 
+        this.socket.on('connectionReady', () => {
+          if (this.socket !== socket || !socket.connected) return;
+          this.socketHealthSupported = true;
+        });
+
         this.socket.on('connect_error', async error => {
+          if (this.socket !== socket || isChatSessionEnding()) return;
           const authStatus = (error as { data?: { status?: number } })?.data
             ?.status;
+
+          recordTelemetryEvent({
+            category: 'network',
+            name: 'network.websocket.connect_error',
+            level: 'error',
+            entityType: 'websocket',
+            payload: {
+              wsUrl: this.wsUrl,
+              authStatus,
+              active: socket.active,
+              transport: socket.io.engine?.transport?.name,
+              ...getTelemetryErrorPayload(error)
+            }
+          });
 
           if (authStatus === 503) {
             console.warn(
               'Socket.IO: Сервис авторизации временно недоступен, сессия сохранена'
             );
             this.emitConnectionState(false);
+            this.socketReconnect.schedule('auth_unavailable');
             rejectOnce(error);
             return;
           }
 
-          if (!authReconnectAttempted && isAuthError(error)) {
+          if (isAuthError(error)) {
+            if (this.authRecoveryInFlight) return;
+            if (authReconnectAttempted) {
+              await handleConfirmedInactiveSession();
+              rejectOnce(error);
+              return;
+            }
             authReconnectAttempted = true;
+            this.authRecoveryInFlight = true;
 
             try {
               const refreshed = await tryRefreshErpSession();
+              if (this.socket !== socket || isChatSessionEnding()) return;
 
               if (refreshed?.token && this.socket) {
                 this.token = refreshed.token;
@@ -844,6 +990,11 @@ export class ChatSDK {
               );
               this.emitConnectionState(false);
               rejectOnce(error);
+            } finally {
+              this.authRecoveryInFlight = false;
+              if (this.socket === socket && !socket.connected) {
+                this.socketReconnect.schedule('auth_refresh_unavailable');
+              }
             }
             return;
           }
@@ -853,22 +1004,14 @@ export class ChatSDK {
             transport: this.socket?.io?.engine?.transport?.name,
             readyState: this.socket?.io?.engine?.readyState
           });
-          recordTelemetryEvent({
-            category: 'network',
-            name: 'network.websocket.connect_error',
-            level: 'error',
-            entityType: 'websocket',
-            payload: {
-              wsUrl: this.wsUrl,
-              transport: this.socket?.io?.engine?.transport?.name,
-              readyState: this.socket?.io?.engine?.readyState,
-              ...getTelemetryErrorPayload(error)
-            }
-          });
           this.emitConnectionState(false);
+          if (!isAuthError(error))
+            this.socketReconnect.schedule('connect_error');
         });
 
         this.socket.on('disconnect', reason => {
+          this.socketHealthProbe = null;
+          this.socketHealthSupported = false;
           this.emitConnectionState(false);
           recordTelemetryEvent({
             category: 'network',
@@ -886,9 +1029,12 @@ export class ChatSDK {
             transport: this.socket?.io?.engine?.transport?.name,
             readyState: this.socket?.io?.engine?.readyState
           });
+          if (reason === 'io server disconnect') {
+            this.socketReconnect.schedule('server_disconnect');
+          }
         });
 
-        this.socket.on('reconnect_attempt', attemptNumber => {
+        onManager('reconnect_attempt', attemptNumber => {
           this.emitConnectionState(false);
           recordTelemetryEvent({
             category: 'network',
@@ -910,14 +1056,14 @@ export class ChatSDK {
           );
         });
 
-        this.socket.on('reconnect', attemptNumber => {
-          this.emitConnectionState(true);
+        onManager('reconnect', attemptNumber => {
           recordTelemetryEvent({
             category: 'network',
-            name: 'network.websocket.reconnected',
+            name: 'network.websocket.transport_reconnected',
             entityType: 'websocket',
             payload: {
               attemptNumber,
+              namespaceReady: false,
               socketId: this.socket?.id,
               transport: this.socket?.io?.engine?.transport?.name
             }
@@ -931,7 +1077,7 @@ export class ChatSDK {
           );
         });
 
-        this.socket.on('reconnect_error', error => {
+        onManager('reconnect_error', error => {
           this.emitConnectionState(false);
           recordTelemetryEvent({
             category: 'network',
@@ -952,7 +1098,7 @@ export class ChatSDK {
           });
         });
 
-        this.socket.on('reconnect_failed', () => {
+        onManager('reconnect_failed', () => {
           this.emitConnectionState(false);
           recordTelemetryEvent({
             category: 'network',
@@ -966,24 +1112,10 @@ export class ChatSDK {
           console.error('Reconnection failed after maximum attempts');
         });
 
-        this.socket.io.on('error', error => {
+        onManager('error', error => {
           this.emitConnectionState(false);
           console.error('Socket.IO manager error:', error, {
             wsUrl: this.wsUrl
-          });
-        });
-
-        this.socket.io.engine.on('upgrade', transport => {
-          console.log('Socket.IO: Transport upgraded', {
-            transport: transport.name
-          });
-        });
-
-        this.socket.io.engine.on('close', reason => {
-          this.emitConnectionState(false);
-          console.warn('Socket.IO engine closed', {
-            reason,
-            transport: this.socket?.io?.engine?.transport?.name
           });
         });
 
@@ -1001,6 +1133,12 @@ export class ChatSDK {
   }
 
   disconnect(): void {
+    this.socketReconnect.reset();
+    this.cancelConnectionAttempt?.();
+    this.cancelConnectionAttempt = null;
+    this.connectionPromise = null;
+    this.socketHealthProbe = null;
+    this.socketHealthSupported = false;
     this.removeIncomingChatEvents?.();
     this.removeIncomingChatEvents = null;
     this.removeAuthTokenListener?.();
@@ -1008,6 +1146,8 @@ export class ChatSDK {
     if (this.socket) {
       this.emitConnectionState(false);
       this.socket.disconnect();
+      this.removeConnectionListeners?.();
+      this.removeConnectionListeners = null;
       this.socket = null;
     }
   }
@@ -1091,22 +1231,93 @@ export class ChatSDK {
   }
 
   reconnectIfNeeded(): void {
-    if (!this.socket) {
+    if (!this.socket || isChatSessionEnding() || this.authRecoveryInFlight) {
       return;
     }
 
     if (!this.socket.connected) {
-      console.info(
-        'Socket.IO: Forcing reconnect after resume/visibility change'
-      );
-      this.socket.connect();
+      // Транспортные ошибки уже повторяет Manager; отказ namespace требует повтора.
+      this.socketReconnect.schedule('resume_or_poll');
+    }
+  }
+
+  async checkConnectionHealth(
+    options: { canReconnect?: () => boolean } = {}
+  ): Promise<void> {
+    const socket = this.socket;
+    if (!socket || isChatSessionEnding() || this.authRecoveryInFlight) return;
+    if (!socket.connected) {
+      this.socketReconnect.schedule('inactive_socket');
+      return;
+    }
+    if (
+      !this.socketHealthSupported ||
+      this.socketHealthProbe ||
+      Date.now() - this.lastSocketHealthCheckAt <
+        SOCKET_HEALTH_CHECK_INTERVAL_MS
+    )
+      return;
+
+    this.lastSocketHealthCheckAt = Date.now();
+    const socketId = socket.id;
+    const startedAt = performance.now();
+    const isCurrentConnection = () =>
+      this.socket === socket && socket.connected && socket.id === socketId;
+    const probe = (async () => {
+      try {
+        const response = await socket
+          .timeout(SOCKET_HEALTH_CHECK_TIMEOUT_MS)
+          .emitWithAck('checkConnection');
+        if (!isCurrentConnection()) return;
+        if (response?.success !== true) {
+          throw new Error('Сервер не подтвердил готовность соединения чата');
+        }
+        if (this.socketHealthFailures > 0) {
+          this.emitConnectionState(true);
+          recordTelemetryEvent({
+            category: 'network',
+            name: 'network.websocket.health_recovered',
+            entityType: 'websocket',
+            payload: { durationMs: Math.round(performance.now() - startedAt) }
+          });
+        }
+        this.socketHealthFailures = 0;
+      } catch (error) {
+        if (!isCurrentConnection()) return;
+        this.socketHealthFailures++;
+        this.emitConnectionState(false);
+        recordTelemetryEvent({
+          category: 'network',
+          name: 'network.websocket.health_failed',
+          level: 'warn',
+          entityType: 'websocket',
+          payload: {
+            failures: this.socketHealthFailures,
+            durationMs: Math.round(performance.now() - startedAt),
+            ...getTelemetryErrorPayload(error)
+          }
+        });
+        // Два подтверждённых сбоя защищают от лишнего reconnect на медленной сети.
+        if (
+          this.socketHealthFailures >= 2 &&
+          (options.canReconnect?.() ?? true)
+        ) {
+          this.reconnectImmediatelyAfterNetworkRestore();
+        }
+      }
+    })();
+    this.socketHealthProbe = probe;
+    try {
+      await probe;
+    } finally {
+      if (this.socketHealthProbe === probe) this.socketHealthProbe = null;
     }
   }
 
   reconnectImmediatelyAfterNetworkRestore(): void {
     const socket = this.socket;
 
-    if (!socket) {
+    if (!socket || isChatSessionEnding() || this.authRecoveryInFlight) {
       return;
     }
 
@@ -1120,6 +1331,7 @@ export class ChatSDK {
     }
 
     this.lastImmediateNetworkReconnectAt = now;
+    this.socketReconnect.reset();
     console.info('Socket.IO: Reconnecting immediately after network restore');
     recordTelemetryEvent({
       category: 'network',

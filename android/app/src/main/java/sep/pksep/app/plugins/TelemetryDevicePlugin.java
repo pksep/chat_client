@@ -20,6 +20,7 @@ import java.net.URL;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.TimeZone;
+import java.util.concurrent.ConcurrentHashMap;
 
 @CapacitorPlugin(name = "TelemetryDevice")
 public class TelemetryDevicePlugin extends Plugin {
@@ -28,6 +29,9 @@ public class TelemetryDevicePlugin extends Plugin {
     private static final int MAX_HTTP_PROBE_TIMEOUT_MS = 8000;
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback networkCallback;
+    private Network lastObservedNetwork;
+    private long networkRevision;
+    private final ConcurrentHashMap<Network, Boolean> blockedNetworks = new ConcurrentHashMap<>();
 
     @Override
     public void load() {
@@ -46,7 +50,14 @@ public class TelemetryDevicePlugin extends Plugin {
 
             @Override
             public void onLost(Network network) {
+                blockedNetworks.remove(network);
                 notifyLostNetworkStatus(network);
+            }
+
+            @Override
+            public void onBlockedStatusChanged(Network network, boolean blocked) {
+                blockedNetworks.put(network, blocked);
+                notifyCurrentNetworkStatus();
             }
 
             @Override
@@ -72,6 +83,7 @@ public class TelemetryDevicePlugin extends Plugin {
         }
 
         networkCallback = null;
+        blockedNetworks.clear();
         connectivityManager = null;
         super.handleOnDestroy();
     }
@@ -232,6 +244,14 @@ public class TelemetryDevicePlugin extends Plugin {
         notifyListeners(NETWORK_STATUS_CHANGE_EVENT, status, true);
     }
 
+    private synchronized long getNetworkRevision(Network network) {
+        if (network == null ? lastObservedNetwork != null : !network.equals(lastObservedNetwork)) {
+            lastObservedNetwork = network;
+            networkRevision++;
+        }
+        return networkRevision;
+    }
+
     private JSObject buildNetworkStatus() {
         JSObject result = new JSObject();
         ConnectivityManager manager = connectivityManager;
@@ -248,11 +268,21 @@ public class TelemetryDevicePlugin extends Plugin {
         }
 
         Network activeNetwork = manager.getActiveNetwork();
+        result.put("networkMetered", manager.isActiveNetworkMetered());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            result.put("networkRestrictBackgroundStatus", manager.getRestrictBackgroundStatus());
+        }
+        // Счётчик живёт только в процессе; идентификаторы Wi-Fi и сети не передаются.
+        result.put("networkRevision", getNetworkRevision(activeNetwork));
         if (activeNetwork == null) {
             result.put("networkConnected", false);
             result.put("networkValidated", false);
             return result;
         }
+
+        // Android 10+ сообщает ограничения для UID приложения отдельно от VALIDATED.
+        Boolean blocked = blockedNetworks.get(activeNetwork);
+        if (blocked != null) result.put("networkBlocked", blocked);
 
         NetworkCapabilities capabilities =
             manager.getNetworkCapabilities(activeNetwork);

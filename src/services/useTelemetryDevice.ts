@@ -8,6 +8,10 @@ type TelemetryDeviceInfo = Record<string, unknown>;
 
 export type NativeNetworkStatus = {
   networkConnected: boolean;
+  networkRevision?: number;
+  networkBlocked?: boolean;
+  networkMetered?: boolean;
+  networkRestrictBackgroundStatus?: number;
   networkValidated?: boolean;
   networkVpn?: boolean;
   networkWifi?: boolean;
@@ -171,7 +175,8 @@ export const addNativeNetworkStatusListener = async (
   return TelemetryDevice.addListener('networkStatusChange', status => {
     cachedDeviceContext = {
       ...(cachedDeviceContext || getBrowserDeviceContext()),
-      ...status
+      ...status,
+      networkBlocked: status.networkBlocked
     };
     listener(status);
   });

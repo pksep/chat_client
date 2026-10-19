@@ -26,7 +26,16 @@ export const createNetworkReachabilityCheck = (
         once: true
       });
     });
-    const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+    const timeout = setTimeout(
+      () =>
+        controller.abort(
+          new DOMException(
+            'Проверка сервера превысила время ожидания',
+            'TimeoutError'
+          )
+        ),
+      options.timeoutMs
+    );
 
     try {
       const reachable = await Promise.race([

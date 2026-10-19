@@ -7,7 +7,11 @@ import {
   tryRefreshErpSession,
   withAuthResponseRefresh
 } from '../src/composables/useAuth';
-import { getAuthToken, setAuthToken, useLogout } from '../src/composables/useLogin';
+import {
+  getAuthToken,
+  setAuthToken,
+  useLogout
+} from '../src/composables/useLogin';
 
 class MemoryStorage {
   private readonly values = new Map<string, string>();
@@ -252,4 +256,106 @@ describe('обновление общей сессии чата', () => {
     expect(getAuthToken()).toBe(oldToken);
     expect(getChatAuthSession()?.token).toBe(oldToken);
   });
+
+  test('незавершённый ответ refresh освобождает очередь и разрешает повтор без выхода', async () => {
+    const oldToken = sharedToken('stalled-body');
+    const newToken = sharedToken('recovered-body');
+    setAuthToken(oldToken, 900);
+    saveChatAuthSession(
+      { token: oldToken, user, source: 'chat_credentials' },
+      true
+    );
+    let body!: ReadableStreamDefaultController<Uint8Array>;
+    const fetchMock = mock(
+      async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              body = controller;
+            }
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+    );
+    globalThis.fetch = fetchMock as typeof fetch;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const attempts = Array.from({ length: 20 }, () => tryRefreshErpSession());
+      const bounded = Promise.race([
+        Promise.all(attempts),
+        new Promise((_, reject) => {
+          deadline = setTimeout(
+            () =>
+              reject(new Error('Обновление сессии осталось заблокированным')),
+            5500
+          );
+        })
+      ]);
+      await expect(bounded).rejects.toMatchObject({ name: 'TimeoutError' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(getChatAuthSession()?.token).toBe(oldToken);
+      expect(getAuthToken()).toBe(oldToken);
+      globalThis.fetch = mock(async () =>
+        Response.json({ token: newToken, user })
+      ) as typeof fetch;
+      await expect(tryRefreshErpSession()).resolves.toMatchObject({
+        token: newToken
+      });
+    } finally {
+      clearTimeout(deadline);
+      body?.close();
+    }
+  }, 6500);
+
+  test('незавершённая проверка ERP-токена не блокирует последующий refresh', async () => {
+    const oldToken = sharedToken('erp-stalled-validation');
+    const newToken = sharedToken('erp-recovered-validation');
+    setAuthToken(oldToken, 900);
+    saveChatAuthSession(
+      { token: oldToken, user, source: 'erp_bootstrap' },
+      true
+    );
+    let body!: ReadableStreamDefaultController<Uint8Array>;
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          body = controller;
+        }
+      })
+    );
+    globalThis.fetch = mock(async (input: RequestInfo | URL) =>
+      String(input).startsWith('http://erp.test/')
+        ? Response.json({ token: newToken })
+        : response
+    ) as typeof fetch;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await expect(
+        Promise.race([
+          tryRefreshErpSession(),
+          new Promise((_, reject) => {
+            deadline = setTimeout(
+              () =>
+                reject(new Error('Проверка токена осталась заблокированной')),
+              5500
+            );
+          })
+        ])
+      ).rejects.toMatchObject({ name: 'TimeoutError' });
+      expect(getChatAuthSession()?.token).toBe(oldToken);
+      globalThis.fetch = mock(async (input: RequestInfo | URL) =>
+        Response.json(
+          String(input).startsWith('http://erp.test/')
+            ? { token: newToken }
+            : user
+        )
+      ) as typeof fetch;
+      await expect(tryRefreshErpSession()).resolves.toMatchObject({
+        token: newToken
+      });
+    } finally {
+      clearTimeout(deadline);
+      body.close();
+    }
+  }, 6500);
 });
