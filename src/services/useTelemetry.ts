@@ -9,6 +9,11 @@ import {
   hydrateTelemetryDeviceContext
 } from './useTelemetryDevice';
 import { getIsVpnActive } from './useVpnStatus';
+import {
+  getTelemetryLocationContext,
+  onTelemetryLocationUnavailable,
+  refreshTelemetryLocation
+} from './useTelemetryLocation';
 
 export type TelemetryLevel = 'debug' | 'info' | 'warn' | 'error';
 export type TelemetryCategory =
@@ -47,13 +52,88 @@ type TelemetryEvent = {
 
 const TELEMETRY_BATCH_SIZE = 20;
 const TELEMETRY_MAX_QUEUE_SIZE = 300;
+const PERSISTED_NETWORK_TELEMETRY_KEY = 'chat.telemetry.network.pending.v1';
+const PERSISTED_NETWORK_TELEMETRY_MAX_SIZE = 180;
 const TELEMETRY_FLUSH_DELAY_MS = 2000;
 const TELEMETRY_RETRY_DELAY_MS = 10000;
 const MAX_STRING_LENGTH = 700;
 const MAX_ARRAY_LENGTH = 30;
 const MAX_DEPTH = 5;
 
-let telemetryQueue: TelemetryEvent[] = [];
+const shouldPersistTelemetry = (
+  event: Pick<TelemetryEvent, 'category' | 'name'> &
+    Partial<Pick<TelemetryEvent, 'level'>>
+): boolean =>
+  event.category === 'network' ||
+  (event.category === 'app' && event.name.startsWith('app.update.')) ||
+  (event.category === 'chat' &&
+    (event.name.startsWith('chat.message_delete.') ||
+      event.level === 'warn' ||
+      event.level === 'error'));
+
+const getPersistedNetworkTelemetry = (): TelemetryEvent[] => {
+  if (typeof localStorage === 'undefined') {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(
+      localStorage.getItem(PERSISTED_NETWORK_TELEMETRY_KEY) || '[]'
+    );
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .filter(
+        (event): event is TelemetryEvent =>
+          !!event &&
+          typeof event === 'object' &&
+          typeof event.id === 'string' &&
+          typeof event.name === 'string' &&
+          typeof event.occurredAt === 'string' &&
+          shouldPersistTelemetry(event)
+      )
+      .slice(-PERSISTED_NETWORK_TELEMETRY_MAX_SIZE);
+  } catch {
+    // Повреждённые данные диагностики не должны мешать запуску чата.
+    return [];
+  }
+};
+
+const persistNetworkTelemetry = (events: TelemetryEvent[]): void => {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+
+  try {
+    const networkEvents = events
+      .filter(shouldPersistTelemetry)
+      .slice(-PERSISTED_NETWORK_TELEMETRY_MAX_SIZE)
+      .map(event => {
+        const context = { ...event.context };
+        // Координаты остаются только в памяти текущего запуска.
+        delete context.location;
+        return { ...event, context };
+      });
+
+    if (networkEvents.length === 0) {
+      localStorage.removeItem(PERSISTED_NETWORK_TELEMETRY_KEY);
+      return;
+    }
+
+    localStorage.setItem(
+      PERSISTED_NETWORK_TELEMETRY_KEY,
+      JSON.stringify(networkEvents)
+    );
+  } catch {
+    // Хранилище может быть заполнено или недоступно в WebView;
+    // очередь в памяти продолжает работать до завершения приложения.
+  }
+};
+
+let telemetryQueue: TelemetryEvent[] = getPersistedNetworkTelemetry();
 let telemetryFlushTimer: ReturnType<typeof setTimeout> | null = null;
 let isTelemetryFlushInFlight = false;
 
@@ -150,6 +230,7 @@ const buildDefaultTelemetryContext = (): Record<string, unknown> => {
     isNative: Capacitor.isNativePlatform(),
     installationId: getTelemetryInstallationId(),
     device,
+    location: getTelemetryLocationContext(),
     visibility:
       typeof document !== 'undefined' ? document.visibilityState : undefined,
     network: {
@@ -193,13 +274,13 @@ export const flushTelemetryEvents = async (): Promise<void> => {
   }
 
   const batch = telemetryQueue.slice(0, TELEMETRY_BATCH_SIZE);
-  telemetryQueue = telemetryQueue.slice(batch.length);
   isTelemetryFlushInFlight = true;
 
   try {
     const config = getConfig();
 
     if (!config.CHAT_API_DOMAIN) {
+      scheduleTelemetryFlush(TELEMETRY_RETRY_DELAY_MS);
       return;
     }
 
@@ -215,16 +296,19 @@ export const flushTelemetryEvents = async (): Promise<void> => {
     });
 
     if (response.status === 401 || response.status === 403) {
+      // При недействительной сессии не переносим её диагностику в новую.
+      telemetryQueue = telemetryQueue.slice(batch.length);
+      persistNetworkTelemetry(telemetryQueue);
       return;
     }
 
     if (!response.ok) {
       throw new Error(`Telemetry request failed: ${response.status}`);
     }
+
+    telemetryQueue = telemetryQueue.slice(batch.length);
+    persistNetworkTelemetry(telemetryQueue);
   } catch (error) {
-    telemetryQueue = [...batch, ...telemetryQueue].slice(
-      -TELEMETRY_MAX_QUEUE_SIZE
-    );
     scheduleTelemetryFlush(TELEMETRY_RETRY_DELAY_MS);
   } finally {
     isTelemetryFlushInFlight = false;
@@ -259,11 +343,50 @@ export const recordTelemetryEvent = (input: TelemetryEventInput): void => {
     }
   };
 
+  const evictedEvent =
+    telemetryQueue.length >= TELEMETRY_MAX_QUEUE_SIZE
+      ? telemetryQueue[0]
+      : undefined;
   telemetryQueue = [...telemetryQueue, event].slice(-TELEMETRY_MAX_QUEUE_SIZE);
+
+  // Сохраняем диагностику сети, обновлений и сбоев чата до перезапуска APK.
+  if (
+    shouldPersistTelemetry(event) ||
+    (evictedEvent && shouldPersistTelemetry(evictedEvent))
+  ) {
+    persistNetworkTelemetry(telemetryQueue);
+  }
   scheduleTelemetryFlush(
     input.level === 'error' ? 0 : TELEMETRY_FLUSH_DELAY_MS
   );
+
+  if (
+    input.name === 'chat.message_send.start' ||
+    input.name === 'upload.message_send.start'
+  ) {
+    // Получение координат не задерживает отправку сообщения.
+    void refreshTelemetryLocation().then(() => {
+      recordTelemetryEvent({
+        category: input.category,
+        name: 'chat.message_send.location',
+        traceId: input.traceId,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        payload: {
+          topicId: input.payload?.topicId,
+          sendOccurredAt: event.occurredAt
+        }
+      });
+    });
+  }
 };
+
+onTelemetryLocationUnavailable(() => {
+  telemetryQueue.forEach(event => {
+    if (event.context) delete event.context.location;
+  });
+  persistNetworkTelemetry(telemetryQueue);
+});
 
 export const createTelemetryTraceId = (prefix: string): string =>
   `${prefix}-${Date.now()}-${createUuid().slice(0, 8)}`;
@@ -275,7 +398,20 @@ export const getTelemetryErrorPayload = (
     return {
       errorName: error.name,
       errorMessage: error.message,
-      errorStack: error.stack
+      errorStack: error.stack,
+      errorCode: (error as Error & { code?: string | number }).code
+    };
+  }
+
+  if (error && typeof error === 'object') {
+    const nativeError = error as Record<string, unknown>;
+    return {
+      errorName: nativeError.name,
+      errorMessage:
+        typeof nativeError.message === 'string'
+          ? nativeError.message
+          : String(error),
+      errorCode: nativeError.code
     };
   }
 

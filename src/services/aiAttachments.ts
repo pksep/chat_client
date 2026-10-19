@@ -1,6 +1,6 @@
 import {
-  ensureAuthorizedResponse,
-  getStoredChatAccessToken
+  getStoredChatAccessToken,
+  withAuthResponseRefresh
 } from '../composables/useAuth';
 import { getAuthToken } from '../composables/useLogin';
 import { getConfig } from './useConfig';
@@ -144,8 +144,8 @@ export const stageAiAttachment = async (
   file: File
 ): Promise<AiAttachmentReference> => {
   validateAiAttachments([file]);
-  const targetResponse = ensureAuthorizedResponse(
-    await fetchAiAttachmentResponse(getAiAttachmentsUrl('upload-target'), {
+  const targetResponse = await withAuthResponseRefresh(() =>
+    fetchAiAttachmentResponse(getAiAttachmentsUrl('upload-target'), {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({
@@ -161,8 +161,8 @@ export const stageAiAttachment = async (
 
   await uploadToStorage(target.uploadUrl, file);
 
-  const completeResponse = ensureAuthorizedResponse(
-    await fetchAiAttachmentResponse(getAiAttachmentsUrl('complete'), {
+  const completeResponse = await withAuthResponseRefresh(() =>
+    fetchAiAttachmentResponse(getAiAttachmentsUrl('complete'), {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ attachmentToken: target.attachmentToken })
@@ -184,8 +184,8 @@ export const refreshAiAttachments = async (
     )
   ];
   if (!ids.length) return mergeRefreshedAiAttachments(original, []);
-  const response = ensureAuthorizedResponse(
-    await fetchAiAttachmentResponse(getAiAttachmentsUrl('refresh'), {
+  const response = await withAuthResponseRefresh(() =>
+    fetchAiAttachmentResponse(getAiAttachmentsUrl('refresh'), {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ attachmentIds: ids }),

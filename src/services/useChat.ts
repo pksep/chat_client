@@ -14,6 +14,7 @@ import type { PtsMeta } from './useChatSDK/websocketEvents';
 import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { authedUser } from '../composables/useAuth';
+import { showErrorNotification } from '../composables/useNotifications';
 import {
   configureChatFolderSync,
   refreshChatFoldersFromSocket
@@ -54,9 +55,11 @@ import {
   deleteMessageFromLocal,
   editMessageFromLocal,
   playNotificationSound,
+  reconcileDeletedMessage,
   fetchMessagesForTopic,
   fetchPinnedMessagesForTopic,
   getFullMessagesByTopicId,
+  getClientMessageById,
   getTopicIdsWithMessages,
   mergeMessagesForTopic
 } from './useMessages';
@@ -121,6 +124,21 @@ import {
   requestAnyChatBackgroundSync,
   saveAnyChatBackgroundSyncSession
 } from './useChatBackgroundSync';
+import {
+  createTelemetryTraceId,
+  getTelemetryErrorPayload,
+  recordTelemetryEvent
+} from './useTelemetry';
+import { recordMessageDeletionTelemetry } from './message-deletion-telemetry';
+import { recordTopicStateTelemetry } from './topic-state-telemetry';
+import { parseMessageEx } from '../utils/messageReplyQuote';
+import {
+  addNativeNetworkStatusListener,
+  getNativeNetworkStatus,
+  probeNativeEndpoint,
+  type NativeNetworkStatus
+} from './useTelemetryDevice';
+import type { PluginListenerHandle } from '@capacitor/core';
 
 let chatSDK: ChatSDK | null = null;
 type ChatSDKReadyWaiter = (sdk: ChatSDK) => void;
@@ -179,6 +197,7 @@ const processedPts = new Set<number>();
 
 type MessageHandlingOptions = {
   silent?: boolean;
+  source?: string;
 };
 
 type ReconnectRefreshReason =
@@ -289,8 +308,14 @@ const syncPtsStateToServer = async (): Promise<void> => {
     processedPts.add(latestProcessedPts);
   }
 
-  chatSDK.sendWebSocketEvent(WebSocketEventType.SYNC_STATE, {
+  const sent = chatSDK.sendWebSocketEvent(WebSocketEventType.SYNC_STATE, {
     pts: lastPtsMeta.pts
+  });
+  recordTelemetryEvent({
+    category: 'chat',
+    name: 'chat.sync.replay_requested',
+    level: sent ? 'info' : 'warn',
+    payload: { fromPts: lastPtsMeta.pts, sent }
   });
 };
 
@@ -367,6 +392,7 @@ const setupChatListeners = (): void => {
     message: IMessage,
     opts?: MessageHandlingOptions
   ): void => {
+    if (reconcileDeletedMessage(message.topicId, message)) return;
     const { getSelectedTopic, updateLocalLastMessageTopic } = useTopics();
 
     if (
@@ -454,6 +480,23 @@ const setupChatListeners = (): void => {
 
     updateLocalLastMessageTopic(message.topicId, message);
     updateLocalLastMessageGroup(message.topicId);
+    if (message.senderUserId === currentUserId.value) {
+      const clientMessageId = parseMessageEx(message.ex)?.clientId;
+      recordTopicStateTelemetry(
+        'outgoing_server_echo',
+        getSelectedTopic(message.topicId),
+        getFullMessagesByTopicId(message.topicId).find(
+          item => item.id === message.id
+        ),
+        currentUserId.value,
+        {
+          receivedMessageId: message.id,
+          receivedStatus: message.status,
+          clientMessageId:
+            typeof clientMessageId === 'string' ? clientMessageId : undefined
+        }
+      );
+    }
   };
 
   const handleTopicChangePayload = (payload: {
@@ -566,7 +609,16 @@ const setupChatListeners = (): void => {
       });
       void removeCallHistoryMessage(deletedMessageId);
       clearDeletedReactionTarget(payload.data.topicId, deletedMessageId);
-      deleteMessageFromLocal(payload.data.topicId, deletedMessageId);
+      void deleteMessageFromLocal(
+        payload.data.topicId,
+        deletedMessageId,
+        undefined,
+        {
+          source: opts?.source || 'ws',
+          eventId: payload.ptsMeta?.eventId,
+          pts: payload.ptsMeta?.pts
+        }
+      );
       if (deletedLastMessage) {
         void reconcileLastMessageAfterDelete(
           payload.data.topicId,
@@ -601,7 +653,25 @@ const setupChatListeners = (): void => {
     userId?: string;
     ptsMeta?: PtsMeta;
   }): void => {
-    if (!shouldProcessPtsMeta(payload.ptsMeta)) {
+    const accepted = shouldProcessPtsMeta(payload.ptsMeta);
+    recordTelemetryEvent({
+      category: 'chat',
+      name: 'chat.read_receipt.received',
+      entityType: 'topic',
+      entityId: payload.topicId,
+      payload: {
+        topicId: payload.topicId,
+        messageIds: payload.messageIds,
+        messageCount: payload.messageIds.length,
+        lastReadMessageId: payload.messageIds.at(-1),
+        readerIsSelf: payload.userId === currentUserId.value,
+        readerIdPresent: !!payload.userId,
+        accepted,
+        pts: payload.ptsMeta?.pts,
+        eventId: payload.ptsMeta?.eventId
+      }
+    });
+    if (!accepted) {
       return;
     }
 
@@ -634,6 +704,22 @@ const setupChatListeners = (): void => {
     }
 
     changeLocalReadStatus(payload.topicId, payload.messageIds, payload.userId);
+    const readTopic = useTopics().getSelectedTopic(payload.topicId);
+    recordTopicStateTelemetry(
+      'read_receipt_applied',
+      readTopic,
+      getFullMessagesByTopicId(payload.topicId).find(
+        message => message.id === readTopic?.lastMessage?.id
+      ),
+      currentUserId.value,
+      {
+        readMessageCount: payload.messageIds.length,
+        lastMessageIncluded:
+          !!readTopic?.lastMessage?.id &&
+          payload.messageIds.includes(readTopic.lastMessage.id),
+        readerIsSelf: payload.userId === currentUserId.value
+      }
+    );
 
     if (payload.userId === currentUserId.value) {
       void clearTopicNotifications(payload.topicId);
@@ -904,7 +990,7 @@ const setupChatListeners = (): void => {
               ...(event.payload as any),
               ptsMeta
             },
-            { silent: true }
+            { silent: true, source: 'replay' }
           );
           break;
         case 'message.read':
@@ -944,6 +1030,34 @@ const setupChatListeners = (): void => {
             persistPtsMeta(ptsMeta);
           }
           break;
+      }
+    });
+    const hasMore = payload.hasMore ?? payload.events.length >= 200;
+    let continuationSent: boolean | undefined;
+    if (
+      hasMore &&
+      normalizePts(payload.toPts) > normalizePts(payload.fromPts)
+    ) {
+      continuationSent = chatSDK?.sendWebSocketEvent(
+        WebSocketEventType.SYNC_STATE,
+        {
+          pts: payload.toPts
+        }
+      );
+    }
+    recordTelemetryEvent({
+      category: 'chat',
+      name: 'chat.sync.replay_page',
+      level: hasMore && !continuationSent ? 'warn' : 'info',
+      payload: {
+        fromPts: payload.fromPts,
+        toPts: payload.toPts,
+        eventCount: payload.events.length,
+        deletionCount: payload.events.filter(
+          event => event.eventType === 'message.delete'
+        ).length,
+        hasMore,
+        continuationSent
       }
     });
   });
@@ -1139,9 +1253,11 @@ const HARD_RECONNECT_THROTTLE_MS = 10000;
 const NATIVE_NETWORK_RECOVERY_GRACE_MS = 15000;
 const BROWSER_NETWORK_RECOVERY_GRACE_MS = 10000;
 const HTTP_HEALTH_PROBE_TIMEOUT_MS = 8000;
-const NETWORK_REACHABILITY_TIMEOUT_MS = 1200;
+const NETWORK_REACHABILITY_TIMEOUT_MS = 5000;
+const NETWORK_REACHABILITY_POLL_INTERVAL_MS = 5000;
 const HTTP_HEALTH_PROBE_RETRY_DELAY_MS = 1500;
 const NATIVE_HTTP_HEALTH_PROBE_ATTEMPTS = 3;
+const NETWORK_DIAGNOSTIC_FAILURE_REPEAT_MS = 60_000;
 let networkStatePollInterval: ReturnType<typeof setInterval> | null = null;
 let browserOfflineFallbackTimeout: ReturnType<typeof setTimeout> | null = null;
 let backgroundForegroundSyncTimeout: ReturnType<typeof setTimeout> | null =
@@ -1153,6 +1269,10 @@ let lastHardReconnectAt = 0;
 let nativeNetworkRecoveryUntil = 0;
 let browserNetworkRecoveryUntil = 0;
 let connectionAttemptId = 0;
+let lastNetworkHealthReachability: boolean | null = null;
+let lastNetworkHealthFailureTelemetryAt = 0;
+let nativeNetworkDiagnosticListener: PluginListenerHandle | null = null;
+let lastNativeNetworkDiagnosticSignature = '';
 
 const route = useUrlWatcher();
 
@@ -1890,16 +2010,182 @@ const ensureNetworkStatePolling = (): void => {
     return;
   }
 
+  let lastReachabilityCheckAt = 0;
   networkStatePollInterval = setInterval(() => {
     pollBrowserNetworkState();
+    const now = Date.now();
+    if (
+      document.visibilityState !== 'visible' ||
+      (networkReachable.value &&
+        now - lastReachabilityCheckAt < NETWORK_REACHABILITY_POLL_INTERVAL_MS)
+    ) {
+      return;
+    }
+
+    lastReachabilityCheckAt = now;
     void networkReachabilityCheck.check();
   }, 1000);
+};
+
+const getChatHealthDiagnosticUrl = (): string | null => {
+  const apiUrl = getConfig().CHAT_API_DOMAIN;
+
+  if (!apiUrl) {
+    return null;
+  }
+
+  try {
+    return new URL('/live-health', apiUrl).toString();
+  } catch {
+    return null;
+  }
+};
+
+const recordNativeNetworkStatus = (
+  source: string,
+  status: NativeNetworkStatus
+): void => {
+  const signature = JSON.stringify({
+    networkConnected: status.networkConnected,
+    networkValidated: status.networkValidated,
+    networkVpn: status.networkVpn,
+    networkWifi: status.networkWifi,
+    networkCellular: status.networkCellular,
+    networkEthernet: status.networkEthernet
+  });
+
+  if (signature === lastNativeNetworkDiagnosticSignature) {
+    return;
+  }
+
+  lastNativeNetworkDiagnosticSignature = signature;
+  recordTelemetryEvent({
+    category: 'network',
+    name: 'network.native.status_changed',
+    level:
+      status.networkConnected && status.networkValidated !== false
+        ? 'info'
+        : 'warn',
+    entityType: 'network',
+    payload: {
+      source,
+      nativeNetwork: status
+    }
+  });
+};
+
+const setupNativeNetworkDiagnostics = async (): Promise<void> => {
+  if (
+    nativeNetworkDiagnosticListener ||
+    !Capacitor.isNativePlatform() ||
+    Capacitor.getPlatform() !== 'android'
+  ) {
+    return;
+  }
+
+  try {
+    nativeNetworkDiagnosticListener = await addNativeNetworkStatusListener(
+      status => recordNativeNetworkStatus('callback', status)
+    );
+    const status = await getNativeNetworkStatus();
+    if (status) {
+      recordNativeNetworkStatus('initial', status);
+    }
+  } catch (error) {
+    recordTelemetryEvent({
+      category: 'network',
+      name: 'network.native.status_unavailable',
+      level: 'warn',
+      entityType: 'network',
+      payload: getTelemetryErrorPayload(error)
+    });
+  }
+};
+
+const recordNetworkHealthDiagnostic = (
+  reachable: boolean,
+  durationMs: number,
+  details: {
+    httpStatus?: number;
+    error?: unknown;
+  } = {}
+): void => {
+  const now = Date.now();
+  const wasUnreachable = lastNetworkHealthReachability === false;
+  const shouldRecordFailure =
+    !reachable &&
+    (!wasUnreachable ||
+      now - lastNetworkHealthFailureTelemetryAt >=
+        NETWORK_DIAGNOSTIC_FAILURE_REPEAT_MS);
+  const shouldRecordRecovery = reachable && wasUnreachable;
+
+  lastNetworkHealthReachability = reachable;
+
+  if (!shouldRecordFailure && !shouldRecordRecovery) {
+    return;
+  }
+
+  if (!reachable) {
+    lastNetworkHealthFailureTelemetryAt = now;
+  }
+
+  const healthUrl = getChatHealthDiagnosticUrl();
+
+  // fetch не различает ошибки DNS, TLS, оператора и таймауты. Проверка Android
+  // уточняет причину; результаты сохраняются до успешной отправки диагностики.
+  void Promise.all([
+    getNativeNetworkStatus().catch(() => null),
+    !reachable && healthUrl
+      ? probeNativeEndpoint(healthUrl).catch(error => ({
+          reachable: false,
+          durationMs: 0,
+          ...getTelemetryErrorPayload(error)
+        }))
+      : Promise.resolve(null)
+  ]).then(([nativeNetwork, nativeEndpointProbe]) => {
+    recordTelemetryEvent({
+      category: 'network',
+      name: reachable
+        ? 'network.chat_health.recovered'
+        : 'network.chat_health.unreachable',
+      level: reachable ? 'info' : 'warn',
+      entityType: 'network',
+      payload: {
+        endpoint: '/live-health',
+        reachable,
+        durationMs: Math.round(durationMs),
+        httpStatus: details.httpStatus,
+        ...(details.error
+          ? { webError: getTelemetryErrorPayload(details.error) }
+          : {}),
+        nativeNetwork,
+        nativeEndpointProbe
+      }
+    });
+  });
 };
 
 const networkReachabilityCheck = createNetworkReachabilityCheck({
   timeoutMs: NETWORK_REACHABILITY_TIMEOUT_MS,
   isEnabled: () => !!chatSDK && document.visibilityState === 'visible',
-  probe: signal => chatSDK!.probeNetworkReachability(signal),
+  probe: async signal => {
+    const startedAt = performance.now();
+
+    try {
+      const result = await chatSDK!.probeNetworkReachability(signal);
+      recordNetworkHealthDiagnostic(
+        result.reachable,
+        performance.now() - startedAt,
+        { httpStatus: result.httpStatus }
+      );
+      return result.reachable;
+    } catch (error) {
+      recordNetworkHealthDiagnostic(false, performance.now() - startedAt, {
+        error
+      });
+      return false;
+    }
+  },
   onResult: reachable => {
     if (!reachable) {
       networkReachable.value = false;
@@ -2030,6 +2316,9 @@ export const initializeChat = async (options: {
     wsUrl: options.wsUrl,
     token: options.token
   });
+  // Диагностика не меняет состояние соединения: она различает потерю сети
+  // Android и недоступность сервера чата у конкретного оператора.
+  void setupNativeNetworkDiagnostics();
   networkReachabilityCheck.invalidate();
   networkReachable.value = true;
   notifyChatSDKReady(chatSDK);
@@ -2450,14 +2739,59 @@ export const deleteMessageChat = async (params: {
   topicId: string;
 }): Promise<void> => {
   const sdk = getChatSDK();
+  const traceId = createTelemetryTraceId('message-delete');
+  const startedAt = Date.now();
+  let confirmed = false;
+  let slowTimer: ReturnType<typeof setTimeout> | undefined;
+  const record = (
+    stage: 'requested' | 'confirmed' | 'failed' | 'slow',
+    details: Record<string, unknown> = {}
+  ) =>
+    recordMessageDeletionTelemetry(
+      stage,
+      params.topicId,
+      params.messageId,
+      {
+        source: 'http',
+        activeTopicId: route.value.id,
+        elapsedMs: Date.now() - startedAt,
+        serverConfirmed: confirmed,
+        ...details
+      },
+      traceId
+    );
 
   try {
-    sdk.sendWebSocketEvent(WebSocketEventType.DELETE_MESSAGE, {
-      messageId: params.messageId,
-      topicId: params.topicId
+    const localMessage = getClientMessageById(params.topicId, params.messageId);
+    if (
+      localMessage?.senderUserId === authedUser.value?.id &&
+      parseMessageEx(localMessage?.ex)?.clientId === params.messageId
+    ) {
+      await deleteMessageFromLocal(params.topicId, params.messageId);
+      return;
+    }
+    record('requested', { socketConnected: hasLiveSocketConnection() });
+    slowTimer = setTimeout(() => record('slow'), 15_000);
+    await sdk.deleteMessage(params.topicId, params.messageId);
+    confirmed = true;
+    clearTimeout(slowTimer);
+    record('confirmed');
+    // Подтверждение HTTP не зависит от комнаты, открытой к моменту ответа.
+    await deleteMessageFromLocal(params.topicId, params.messageId, undefined, {
+      source: 'http',
+      traceId
     });
   } catch (error) {
-    console.error('[ChatSDK] Failed to send message via WebSocket:', error);
+    const cause = error instanceof Error && error.cause ? error.cause : error;
+    const httpStatus = (cause as { status?: unknown } | null)?.status;
+    record('failed', {
+      errorName: cause instanceof Error ? cause.name : 'UnknownError',
+      httpStatus: typeof httpStatus === 'number' ? httpStatus : undefined
+    });
+    console.error('[ChatSDK] Не удалось удалить сообщение:', error);
+    showErrorNotification('Не удалось удалить сообщение');
+  } finally {
+    clearTimeout(slowTimer);
   }
 };
 

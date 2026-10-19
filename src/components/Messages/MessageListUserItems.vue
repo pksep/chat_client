@@ -115,6 +115,7 @@
             @unmount-forward-message="$emit('setForwardMessage', $event)"
             @unmount-retry-message-id="$emit('retryMessage', $event)"
             @unmount-navigate-message-id="$emit('scrollToMessage', $event)"
+            @open-sticker-pack="$emit('openStickerPack', $event)"
           />
         </div>
       </div>
@@ -301,6 +302,7 @@ const emit = defineEmits([
   'setForwardMessage',
   'retryMessage',
   'scrollToMessage',
+  'openStickerPack',
   'contentReady'
 ]);
 

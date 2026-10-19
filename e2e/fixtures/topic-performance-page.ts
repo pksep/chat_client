@@ -75,7 +75,7 @@ export async function openFixture(
         body: '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><div id="app"></div>'
       });
     }
-    return route.continue();
+    return route.fallback();
   });
   await page.goto('/__topic-performance');
   await page.evaluate(async options => {

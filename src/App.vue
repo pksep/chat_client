@@ -60,14 +60,16 @@ import {
   saveBootstrapErpSession,
   saveChatAuthSession
 } from './composables/useAuth';
-import { fetchUsersForAuth } from './composables/useUsers';
+import { fetchUsersForAuth, getUsersList } from './composables/useUsers';
 import { initShareIntentHandling } from './services/useShareIntent';
+import { initTelemetryLocation } from './services/useTelemetryLocation';
 import {
   dispatchNativeStartupReady,
   NOTIFICATION_TOPIC_SHELL_READY_EVENT
 } from './utils/nativeStartup';
 import { useThemeStore } from './stores/theme';
 import { withNetworkTimeout } from './utils/network-timeout';
+import { isBotUser } from './utils/bot';
 import {
   prepareMessageExperience,
   prepareMessageListAfterPaint
@@ -164,6 +166,7 @@ const dispatchNativeStartupReadyOnce = () => {
 
   isNativeStartupReadyDispatched = true;
   dispatchNativeStartupReady();
+  void initTelemetryLocation();
 };
 
 const removeStartupShell = () => {
@@ -297,7 +300,6 @@ const parseRuntimeConfig = (
     }, {});
 
   return {
-    CHAT_AUTH_API: envMap.VITE_AUTH_API,
     CHAT_MASTRA_URL: envMap.VITE_MASTRA_URL,
     CHAT_API_DOMAIN: envMap.VITE_CHAT_API_DOMAIN,
     CHAT_WS_DOMAIN: envMap.VITE_CHAT_WS_DOMAIN,
@@ -629,8 +631,20 @@ const submitCredentialsLogin = async () => {
   errorMessage.value = '';
 
   try {
+    const identifier = identifierValue.value.trim();
+    const users = getUsersList().filter(user => !isBotUser(user));
+    const matchingUsers = users.filter(
+      user => user.initials?.trim() === identifier
+    );
+    // В списке показаны инициалы, но авторизация принимает табельный номер.
+    const tabel =
+      users.some(user => user.nickname === identifier) ||
+      matchingUsers.length !== 1
+        ? identifier
+        : matchingUsers[0].nickname;
+
     const authData = await loginWithCredentials({
-      identifier: identifierValue.value.trim(),
+      identifier: tabel,
       password: passwordValue.value.trim()
     });
 
@@ -641,7 +655,8 @@ const submitCredentialsLogin = async () => {
     saveChatAuthSession(
       {
         token: authData.token,
-        user: authData.user
+        user: authData.user,
+        source: authData.source
       },
       rememberAccount.value
     );

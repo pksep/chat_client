@@ -269,7 +269,34 @@ export const importChatBackgroundSnapshot = async (
     topicsApi.applyNativeTopicSnapshot(topics, resolvedUserId);
   }
 
+  // Фоновый снимок содержит события удаления даже для неоткрытых топиков.
+  // Сначала применяем их, чтобы история из этого же снимка не вернула сообщения.
+  for (const event of events) {
+    if (event.eventType !== 'message.delete') continue;
+    const payload = event.payload;
+    if (
+      payload.scope === 'SELF' &&
+      payload.targetUserId &&
+      payload.targetUserId !== resolvedUserId
+    )
+      continue;
+    const data = payload.data as { id?: string; topicId?: string } | undefined;
+    const topicId = data?.topicId || event.topicId;
+    const messageId = data?.id || (payload.messageId as string | undefined);
+    if (!topicId || !messageId) continue;
+    await messagesApi.deleteMessageFromLocal(
+      topicId,
+      messageId,
+      resolvedUserId,
+      { source: provider, eventId: event.eventId, pts: event.pts }
+    );
+  }
+
   for (const [topicId, messages] of messageEntries) {
+    await messagesApi.rememberPersistedDeletedMessageIds(
+      topicId,
+      resolvedUserId
+    );
     const limitedMessages =
       opts?.maxMessagesPerTopic && opts.maxMessagesPerTopic > 0
         ? messages.slice(-opts.maxMessagesPerTopic)
@@ -311,34 +338,8 @@ export const importChatBackgroundSnapshot = async (
     ]);
   }
 
-  const lastPts = snapshot.lastPts || snapshot.toPts;
-  if (lastPts) {
-    await shadowApi.saveShadowSyncMeta(
-      'pts:last',
-      {
-        pts: lastPts,
-        eventId: snapshot.status?.eventId,
-        topicId: snapshot.status?.topicId,
-        timestamp: snapshot.updatedAt || new Date().toISOString(),
-        source: provider
-      },
-      resolvedUserId
-    );
-
-    if (snapshot.status?.topicId) {
-      await shadowApi.saveShadowSyncMeta(
-        `pts:topic:${snapshot.status.topicId}`,
-        {
-          pts: lastPts,
-          eventId: snapshot.status?.eventId,
-          topicId: snapshot.status.topicId,
-          timestamp: snapshot.updatedAt || new Date().toISOString(),
-          source: provider
-        },
-        resolvedUserId
-      );
-    }
-  }
+  // Native экспортирует лишь часть событий. Общий курсор двигается при
+  // полном replay по сокету, иначе пропущенные удаления больше не придут.
 
   if (events.length > 0) {
     await shadowApi.saveShadowSyncMeta(

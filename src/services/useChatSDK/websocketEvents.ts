@@ -110,6 +110,7 @@ export interface WebSocketEventPayloads {
     fromPts?: string | null;
     toPts?: string | null;
     events: SyncReplayEvent[];
+    hasMore?: boolean;
   };
   [WebSocketEventType.JOIN_TOPIC]: { topicId: string };
   [WebSocketEventType.LEAVE_TOPIC]: { topicId: string };

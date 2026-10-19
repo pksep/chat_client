@@ -172,7 +172,9 @@ export const clientPlatform = (item: ManagerInquiry): string =>
     site: 'Сайт',
     avito: 'Авито',
     vk: 'ВКонтакте',
-    vkontakte: 'ВКонтакте'
+    vkontakte: 'ВКонтакте',
+    telegram: 'Telegram',
+    max: 'MAX'
   })[item.source?.channel || 'widget'] ||
   item.source?.name ||
   'Сайт';

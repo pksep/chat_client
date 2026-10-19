@@ -4,7 +4,8 @@ import { onBeforeUnmount, watch, type WatchSource } from 'vue';
 export enum BackButtonPriority {
   navigation = 0,
   screen = 10,
-  overlay = 20
+  overlay = 20,
+  keyboard = 30
 }
 
 const backButtonHandlers: Array<{

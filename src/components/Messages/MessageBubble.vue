@@ -46,6 +46,7 @@
         v-bind="props"
         :sticker="sticker"
         @navigate-message="handleNavigateMessage"
+        @activate="handleStickerClick"
       />
 
       <MessageBubbleFiles
@@ -87,7 +88,9 @@
         :is-selected="props.isSelected"
         :is-me-sender="props.isMeSender"
         :message="props.message"
+        :message-ex="props.messageEx"
         :media="props.media"
+        :context-media-id="contextMediaId"
         :is-pin="props.isPin"
         :data-testid="dataTestid"
         @unmount-edit-message-id="emits('unmount-edit-message-id', $event)"
@@ -163,6 +166,7 @@ const emits = defineEmits([
   'unmount-forward-message',
   'unmount-retry-message-id',
   'unmount-navigate-message-id',
+  'open-sticker-pack',
   'toggle-selection'
 ]);
 
@@ -180,6 +184,7 @@ const {
 const isContextMenuOpen = computed(
   () => !!props.messageId && isOpen.value[props.messageId] === true
 );
+const contextMediaId = ref<string | null>(null);
 const isCallTopicDefaultMessageEx = computed(() =>
   Boolean(parseCallTopicDefaultMessageEx(props.messageEx))
 );
@@ -393,6 +398,13 @@ const handleContextMenu = (event: MouseEvent) => {
     return;
   }
 
+  const target = event.target;
+  contextMediaId.value =
+    target instanceof Element
+      ? target
+          .closest('[data-message-media-id]')
+          ?.getAttribute('data-message-media-id') || null
+      : null;
   openActivePopover(props.messageId, event);
 };
 
@@ -412,6 +424,11 @@ const handleMessageClick = () => {
   emits('toggle-selection');
 };
 
+const handleStickerClick = () => {
+  if (props.isSelectionMode) handleMessageClick();
+  else if (sticker.value?.pack) emits('open-sticker-pack', sticker.value.pack);
+};
+
 const handleDoubleTap = (event: MouseEvent): void => {
   if (
     !props.isMobile ||
@@ -427,7 +444,9 @@ const handleDoubleTap = (event: MouseEvent): void => {
 
   if (
     target instanceof Element &&
-    target.closest('button, a, input, .reactions, .message-selection-toggle')
+    target.closest(
+      'button, a, input, .reactions, .message-selection-toggle, .message__article__file'
+    )
   ) {
     return;
   }

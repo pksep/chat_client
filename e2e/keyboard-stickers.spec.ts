@@ -49,7 +49,7 @@ test('Android-клавиатура передаёт стикер в очеред
     .toBe(true);
   await page.evaluate(() =>
     (window as any).keyboardFixture.listeners.mediaReceived({
-      filePath: '/stickers/sep-robots/v1/heart.webp',
+      filePath: '/e2e/fixtures/sticker-assets/animation.webp',
       name: 'keyboard-hello.webp',
       mimeType: 'image/webp'
     })
@@ -65,7 +65,7 @@ test('Android-клавиатура передаёт стикер в очеред
   await expect(page.locator('dialog:visible')).toHaveCount(0);
   await expect
     .poll(() => page.evaluate(() => (window as any).keyboardFixture.released))
-    .toContain('/stickers/sep-robots/v1/heart.webp');
+    .toContain('/e2e/fixtures/sticker-assets/animation.webp');
   await page.getByRole('button', { name: 'Тёмная тема', exact: true }).click();
   await expect
     .poll(() => page.evaluate(() => (window as any).keyboardFixture.enabled))

@@ -46,6 +46,7 @@ export interface IMessageBubbleProps {
 }
 
 export interface IMessageContextMenu extends IMessageBubbleProps {
+  contextMediaId?: string | null;
   isOpen: any;
   position: any;
 }

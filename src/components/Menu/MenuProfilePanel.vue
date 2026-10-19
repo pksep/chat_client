@@ -427,6 +427,10 @@
           </div>
         </div>
 
+        <StickerPackSelect
+          :data-testid="`${props.dataTestid}-MenuProfilePanel-Stickers`"
+        />
+
         <div v-if="isMobile" class="menu-profile__update">
           <div
             class="menu-profile__wallpapers-trigger"
@@ -898,11 +902,8 @@ import EmojiIcon from '../UI/EmojiIcon.vue';
 import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
 import {
   getAuthUser,
-  redirectToAuthorization
+  logoutChatSession
 } from '../../composables/useAuth';
-import { useLogout } from '../../composables/useLogin';
-import { clearAnyChatBackgroundSyncSession } from '../../services/useChatBackgroundSync';
-import { cleanupPushNotificationsOnLogout } from '../../services/usePushNotifications';
 import {
   updateCurrentUserStatus,
   removeCurrentUserStatusPreset
@@ -932,6 +933,7 @@ import {
   statusPresetDesignPreview
 } from './status-presets-design-preview';
 import ChatsToolbar from './ChatsToolbar.vue';
+import StickerPackSelect from './StickerPackSelect.vue';
 
 const CallBackgroundPreviewModal = defineAsyncComponent(
   () => import('../CallModal/CallBackgroundPreviewModal.vue')
@@ -1615,23 +1617,8 @@ const clearStatus = async (): Promise<void> => {
   await saveStatus(null);
 };
 
-const runLogoutCleanup = async (): Promise<void> => {
-  await cleanupPushNotificationsOnLogout().catch(error => {
-    console.warn('Failed to cleanup push notifications during logout:', error);
-  });
-
-  void clearAnyChatBackgroundSyncSession().catch(error => {
-    console.warn(
-      'Failed to clear chat background sync session during logout:',
-      error
-    );
-  });
-};
-
 const handleLogout = async (): Promise<void> => {
-  await runLogoutCleanup();
-  useLogout();
-  redirectToAuthorization();
+  await logoutChatSession();
 };
 
 const confirmLogout = (): void => {

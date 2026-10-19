@@ -3,7 +3,6 @@ import { expect, test } from '@playwright/test';
 const organization = 'http://127.0.0.1:65530';
 const config = [
   `VITE_CHAT_API_DOMAIN=${organization}/api`,
-  `VITE_AUTH_API=${organization}`,
   `VITE_CHAT_WS_DOMAIN=${organization}`,
   `VITE_ERP_URL=${organization}`
 ].join('\n');

@@ -1,3 +1,5 @@
+@import './chat-scrollbar.css';
+
 .chat__nothing {
   display: grid;
   margin-top: 0;
@@ -68,56 +70,15 @@ p.chat__nothing-paragraph {
   border-radius: 18px 0 0 18px;
 }
 
-@supports not selector(::-webkit-scrollbar) {
-  .chat__message-wrapper {
-    scrollbar-color: var(--primary-color) transparent;
-    scrollbar-width: thin;
-  }
-}
-
-.chat__message-wrapper::-webkit-scrollbar {
-  width: 6px;
-  background: transparent;
-}
-
-.chat__message-wrapper::-webkit-scrollbar-track,
-.chat__message-wrapper::-webkit-scrollbar-track-piece,
-.chat__message-wrapper::-webkit-scrollbar-corner {
-  background: transparent;
-}
-
-.chat__message-wrapper::-webkit-scrollbar-button,
-.chat__message-wrapper::-webkit-scrollbar-button:single-button,
-.chat__message-wrapper::-webkit-scrollbar-button:vertical:decrement,
-.chat__message-wrapper::-webkit-scrollbar-button:vertical:increment {
-  display: none !important;
-  min-width: 0 !important;
-  width: 0 !important;
-  max-width: 0 !important;
-  min-height: 0 !important;
-  height: 0 !important;
-  max-height: 0 !important;
-  border: 0 !important;
-  -webkit-appearance: none !important;
-  background: none !important;
-}
-
-.chat__message-wrapper::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: var(--primary-color);
-}
-
 .chat__message-wrapper>.chat__message-bubble,
 .chat__message-wrapper>.chat__floating-date-divider,
 .chat__message-wrapper>.chat__pagination-loading,
-.chat__message-wrapper>.chat-update-banner,
 .chat__message-wrapper>.chat__message-empty-state {
   grid-area: 1 / 1;
 }
 
 .chat__message-wrapper>.chat__floating-date-divider,
-.chat__message-wrapper>.chat__pagination-loading,
-.chat__message-wrapper>.chat-update-banner {
+.chat__message-wrapper>.chat__pagination-loading {
   align-self: start;
   overflow-anchor: none;
 }

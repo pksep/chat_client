@@ -1,5 +1,18 @@
 <template>
   <Icon v-if="platform === 'ВКонтакте'" :name="IconNameEnum.socialVk" />
+  <Icon
+    v-else-if="platform === 'Telegram'"
+    :name="IconNameEnum.socialTelegram"
+  />
+  <img
+    v-else-if="platform === 'MAX'"
+    :src="maxIconUrl"
+    class="client-platform-icon"
+    width="24"
+    height="24"
+    alt=""
+    aria-hidden="true"
+  />
   <svg
     v-else-if="platform === 'Авито'"
     width="24"
@@ -29,5 +42,16 @@
 </template>
 <script setup lang="ts">
 import { Icon, IconNameEnum } from '@pksep/yui';
+// Официальный значок MAX: https://go.max.ru/brandbook.
+import maxIconUrl from '../../assets/max-icon.svg';
+
 defineProps<{ platform: string }>();
 </script>
+
+<style scoped>
+.client-platform-icon {
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+</style>

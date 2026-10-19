@@ -1,5 +1,10 @@
 import { shallowReactive } from 'vue';
-import { getChatSDK, getHasBrowserNetwork, waitForChatSDK } from './useChat';
+import {
+  deleteMessageChat,
+  getChatSDK,
+  getHasBrowserNetwork,
+  waitForChatSDK
+} from './useChat';
 import {
   IMedia,
   IMessage,
@@ -71,6 +76,8 @@ import type { ShadowReadStateValue } from './useShadowChatSync';
 import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { compareMessages, getMessageTimestamp } from '../utils/messageOrder';
 import { parseMessageEx } from '../utils/messageReplyQuote';
+import { recordTopicStateTelemetry } from './topic-state-telemetry';
+import { recordMessageDeletionTelemetry } from './message-deletion-telemetry';
 
 // Store mutations replace message payloads. Deep Vue proxies make every field
 // of every cached message reactive and multiply the work of bulk merges; a
@@ -633,7 +640,7 @@ const applyReactionOverlaysToMessages = (
 ): IMessage[] =>
   messages.map(message => applyReactionOverlayToMessage(topicId, message));
 
-const rememberPersistedDeletedMessageIds = async (
+export const rememberPersistedDeletedMessageIds = async (
   topicId: string,
   userId?: string
 ): Promise<void> => {
@@ -662,7 +669,38 @@ const filterDeletedMessagesForTopic = (
     return messages;
   }
 
-  return messages.filter(message => !deletedIds.has(message.id));
+  return messages.filter(message => !reconcileDeletedMessage(topicId, message));
+};
+
+const isDeletedMessageForTopic = (
+  topicId: string,
+  message: IMessage
+): boolean => {
+  const deletedIds = deletedMessageIdsByTopic.get(topicId);
+  if (deletedIds?.has(message.id)) return true;
+
+  const clientId =
+    message.senderUserId === authedUser.value?.id ? getClientId(message) : null;
+  return !!clientId && !!deletedIds?.has(clientId);
+};
+
+export const reconcileDeletedMessage = (
+  topicId: string,
+  message: IMessage
+): boolean => {
+  if (!isDeletedMessageForTopic(topicId, message)) return false;
+  recordMessageDeletionTelemetry('stale_filtered', topicId, message.id, {
+    source: 'message_store',
+    blocked: true,
+    clientMessageId: getClientId(message),
+    receivedStatus: message.status
+  });
+  if (deletedMessageIdsByTopic.get(topicId)?.has(message.id)) return true;
+
+  // Отменённая отправка может подтвердиться уже после выхода из топика с новым ID.
+  rememberDeletedMessageId(topicId, message.id);
+  void deleteMessageChat({ topicId, messageId: message.id });
+  return true;
 };
 
 const isPendingOutgoingMessage = (message: IMessage): boolean => {
@@ -1942,7 +1980,7 @@ export const prefetchAroundMessageContext = (
 };
 
 export const addMessageToLocal = (topicId: string, message: IMessage): void => {
-  if (deletedMessageIdsByTopic.get(topicId)?.has(message.id)) {
+  if (reconcileDeletedMessage(topicId, message)) {
     return;
   }
 
@@ -2137,12 +2175,42 @@ export const cancelDelayedOutgoingMessage = (
 
 export const deleteMessageFromLocal = (
   topicId: string,
-  messageId: string
-): void => {
+  messageId: string,
+  userId?: string,
+  diagnostic: {
+    source?: string;
+    eventId?: string;
+    pts?: string;
+    traceId?: string;
+  } = {}
+): Promise<void> => {
+  const message = getClientMessageById(topicId, messageId);
+  if (message && parseMessageEx(message.ex)?.nativeUpload === true) {
+    void import('./native-message-upload')
+      .then(({ cancelNativeMessageUpload }) =>
+        cancelNativeMessageUpload(getClientId(message) || messageId)
+      )
+      .catch(error =>
+        console.warn('Не удалось отменить фоновую отправку', error)
+      );
+  }
+  const clientId =
+    message && message.senderUserId === authedUser.value?.id
+      ? getClientId(message)
+      : null;
+  if (clientId && clientId !== messageId) {
+    rememberDeletedMessageId(topicId, clientId);
+    clearPendingUploadMessage(topicId, clientId);
+    cancelDelayedOutgoingMessage(topicId, clientId);
+    cancelOutgoingDeliveryTimeout(topicId, clientId);
+    void deleteShadowTopicMessage(topicId, clientId, userId);
+  }
   rememberDeletedMessageId(topicId, messageId);
   clearReactionOverlayForMessage(topicId, messageId);
   updateTopicMessageStores(topicId, messages =>
-    messages.filter(message => message.id !== messageId)
+    messages.filter(
+      message => message.id !== messageId && message.id !== clientId
+    )
   );
   schedulePersistMessages(topicId);
   syncTopicUnreadState(topicId);
@@ -2155,9 +2223,25 @@ export const deleteMessageFromLocal = (
   );
 
   clearPendingUploadMessage(topicId, messageId);
+  cancelDelayedOutgoingMessage(topicId, messageId);
   cancelOutgoingDeliveryTimeout(topicId, messageId);
   unpinLocalMessageForMe(topicId, messageId);
-  void deleteShadowTopicMessage(topicId, messageId);
+  recordMessageDeletionTelemetry(
+    'applied',
+    topicId,
+    messageId,
+    {
+      source: diagnostic.source || 'local',
+      eventId: diagnostic.eventId,
+      pts: diagnostic.pts,
+      hadLocalMessage: !!message,
+      clientMessageId: clientId,
+      activeTopicId: route.value.id,
+      remainingInMemory: !!getClientMessageById(topicId, messageId)
+    },
+    diagnostic.traceId
+  );
+  return deleteShadowTopicMessage(topicId, messageId, userId);
 };
 
 export const editMessageFromLocal = (
@@ -2443,7 +2527,7 @@ export const getTopicMessagePreview = (topicId: string): IMessage | null => {
     !message?.id ||
     message.deletedAt ||
     (message.topicId && message.topicId !== topicId) ||
-    deletedMessageIdsByTopic.get(topicId)?.has(message.id) ||
+    isDeletedMessageForTopic(topicId, message) ||
     canonicalTopicStateIds.has(topicId)
   )
     return null;
@@ -3367,6 +3451,18 @@ export const changeMessageStatusLocally = (
   if (updatedMessage) {
     syncLocalLastMessage(topicId, updatedMessage);
   }
+  recordTopicStateTelemetry(
+    'local_message_status',
+    getSelectedTopic(topicId),
+    updatedMessage,
+    authedUser.value?.id,
+    {
+      messageId,
+      previousStatus: currentMessage?.status,
+      nextStatus: status,
+      foundInLocalCache: !!updatedMessage
+    }
+  );
 };
 
 export const setFileUploadPendingStatus = (

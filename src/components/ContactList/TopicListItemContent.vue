@@ -95,7 +95,7 @@
         <TypingIndicator :label="topicTypingLabel" />
       </div>
       <div
-        v-else-if="!props.showLastOnline && !!props.topic.lastMessage?.text"
+        v-else-if="!props.showLastOnline && !!lastMessagePreview"
         :key="lastMessagePreviewKey"
         :class="[
           'contact-list__description',
@@ -105,9 +105,9 @@
         ]"
         v-emoji
         :data-testid="`${props.dataTestid}-ContactList-Description${props.index + 1}`"
-        :aria-label="`Latest message: ${stripHtml(props.topic.lastMessage.text || 'No message')}`"
+        :aria-label="`Latest message: ${lastMessagePreview}`"
       >
-        {{ stripHtml(props.topic.lastMessage.text) }}
+        {{ lastMessagePreview }}
       </div>
       <div
         v-else-if="
@@ -235,7 +235,9 @@ import {
   hasTopicUnreadIndicator
 } from '../../utils/topicUnreadBadge';
 import { resolveLastMessageStatus } from '../../utils/topic-last-message';
-import { stripHtml } from '../../utils/stripHtml';
+import { getTopicStateDiagnostic } from '../../utils/topic-state-diagnostics';
+import { recordTopicStateTelemetry } from '../../services/topic-state-telemetry';
+import { useMessagePreview } from '../../composables/useMessagePreview';
 import { formatLastSeen } from '../../utils/dateUtils';
 import { formatUserStatusText } from '../../utils/userStatus';
 import { getBotUsername, isBotTopic, isDeletedBotUser } from '../../utils/bot';
@@ -272,6 +274,7 @@ const emits = defineEmits<{
 }>();
 
 const authedUser = computed(() => getAuthUser());
+const lastMessagePreview = useMessagePreview(() => props.topic.lastMessage);
 const { getTopicTypingUsers, getTopicUnreadReactionMessageId } = useTopics();
 const { getFullMediaPath } = useMessageMedia();
 
@@ -332,7 +335,7 @@ const topicLastMessageStatus = computed(() =>
 const lastMessagePreviewKey = computed(() => {
   const lastMessage = props.topic.lastMessage;
 
-  return `${props.topic.id}:${lastMessage?.id || ''}:${lastMessage?.text || ''}`;
+  return `${props.topic.id}:${lastMessage?.id || ''}:${lastMessagePreview.value}`;
 });
 const showMessageStatus = computed(
   () =>
@@ -354,6 +357,60 @@ const unreadBadgeCount = computed(() =>
 );
 const showUnreadIndicator = computed(() =>
   hasTopicUnreadIndicator(props.topic, authedUser.value?.id)
+);
+
+const topicDiagnostic = computed(() => ({
+  ...getTopicStateDiagnostic(
+    props.topic,
+    getClientMessageById(props.topic.id, props.topic.lastMessage?.id),
+    authedUser.value?.id
+  ),
+  unreadBadgeCount: unreadBadgeCount.value,
+  showUnreadIndicator: showUnreadIndicator.value
+}));
+
+const recordRenderedTopicState = (source: string, warning = false) =>
+  recordTopicStateTelemetry(
+    source,
+    props.topic,
+    getClientMessageById(props.topic.id, props.topic.lastMessage?.id),
+    authedUser.value?.id,
+    {
+      unreadBadgeCount: unreadBadgeCount.value,
+      showUnreadIndicator: showUnreadIndicator.value
+    },
+    warning
+  );
+
+watch(
+  topicDiagnostic,
+  (snapshot, previous) => {
+    if (props.showCheckbox || props.showLastOnline) return;
+    if (snapshot.statusMismatch)
+      recordRenderedTopicState('topic_list_render', true);
+    else if (previous && JSON.stringify(snapshot) !== JSON.stringify(previous))
+      recordRenderedTopicState('topic_list_render');
+  },
+  { immediate: true, flush: 'post' }
+);
+
+watch(
+  [
+    () => props.topic.id,
+    () => props.topic.lastMessage?.id,
+    () => topicLastMessageStatus.value,
+    () =>
+      showMessageStatus.value && !props.showCheckbox && !props.showLastOnline
+  ],
+  ([, , status, visible], _, onCleanup) => {
+    if (!visible || status !== MessageStatusEnum.WAIT) return;
+    const timeout = setTimeout(
+      () => recordRenderedTopicState('topic_list_wait_timeout', true),
+      30_000
+    );
+    onCleanup(() => clearTimeout(timeout));
+  },
+  { immediate: true, flush: 'post' }
 );
 const unreadIndicatorLabel = computed(() =>
   unreadBadgeCount.value > 0

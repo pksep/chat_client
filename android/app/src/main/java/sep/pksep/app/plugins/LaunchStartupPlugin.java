@@ -10,6 +10,15 @@ import sep.pksep.app.MainActivity;
 @CapacitorPlugin(name = "LaunchStartup")
 public class LaunchStartupPlugin extends Plugin {
     @PluginMethod
+    public void waitForPermissions(PluginCall call) {
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).whenStartupRuntimePermissionsReady(call::resolve);
+        } else {
+            call.resolve();
+        }
+    }
+
+    @PluginMethod
     public void reveal(PluginCall call) {
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).revealStartupOverlay();

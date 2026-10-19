@@ -29,7 +29,6 @@ test.beforeEach(async ({ page }) => {
         {
           url,
           config: {
-            CHAT_AUTH_API: url,
             CHAT_API_DOMAIN: url,
             CHAT_WS_DOMAIN: 'ws://127.0.0.1:65530',
             CHAT_MASTRA_URL: 'http://127.0.0.1:4111',

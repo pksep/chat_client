@@ -103,7 +103,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -123,6 +122,7 @@ import type { ChatsToolbarFilter } from '../../composables/useChatsToolbarState'
 import ConnectionStatus from '../UI/ConnectionStatus.vue';
 import ChatsToolbarFilters from './ChatsToolbarFilters.vue';
 import { getTopicsRefreshFailed } from '../../composables/useTopics';
+import { useDelayedConnectionStatus } from '../../composables/useDelayedConnectionStatus';
 import {
   getHasBrowserNetwork,
   getHasWebsocketConnection
@@ -172,17 +172,12 @@ const emits = defineEmits<{
   (e: 'create-bot'): void;
 }>();
 
-const hasRenderableTopics = computed(() =>
-  Object.values(props.filterCounts).some(count => count > 0)
+const isWaitingConnection = useDelayedConnectionStatus(
+  () =>
+    !getHasBrowserNetwork() ||
+    getTopicsRefreshFailed() ||
+    !getHasWebsocketConnection()
 );
-
-const isWaitingConnection = computed(() => {
-  if (!getHasBrowserNetwork() || getTopicsRefreshFailed()) {
-    return true;
-  }
-
-  return !getHasWebsocketConnection() && !hasRenderableTopics.value;
-});
 
 const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();

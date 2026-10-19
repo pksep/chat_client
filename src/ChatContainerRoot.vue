@@ -6,7 +6,6 @@
 </template>
 
 <script setup lang="ts">
-import { Capacitor } from '@capacitor/core';
 import { nextTick, onBeforeMount, onUnmounted, watch } from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 
@@ -21,8 +20,6 @@ import {
 } from './services/useSessionUser';
 import {
   clearBootstrapErpSession,
-  clearChatAuthSession,
-  clearErpAuthSession,
   fetchAuthUser,
   getAuthUser,
   getChatAuthSession,
@@ -30,6 +27,10 @@ import {
   getStoredChatAccessToken,
   isStoredChatSessionPersistent,
   isAuthError,
+  handleConfirmedInactiveSession,
+  isChatAccessTokenExpired,
+  isChatSessionEnding,
+  isSharedAccessToken,
   saveChatAuthSession,
   setAuthUser,
   tryRefreshErpSession,
@@ -47,6 +48,7 @@ import { getGroupById } from './composables/useGroup';
 import { useUrlWatcher } from './composables/navigation';
 import { fetchPinnedMessagesForTopic } from './services/useMessages';
 import { initPushNotifications } from './services/usePushNotifications';
+import { initTelemetryLocation } from './services/useTelemetryLocation';
 import {
   clearTopicNotifications,
   notificationTopicRefreshRequest,
@@ -473,10 +475,6 @@ onUnmounted(() => {
   removeAppVisibilityListener = null;
 });
 
-const clearStoredErpToken = () => {
-  clearErpAuthSession();
-};
-
 const getStoredSessionUserId = (): string => {
   return sessionStorage.getItem('userId') || '';
 };
@@ -602,11 +600,12 @@ const runAppInitialization = async () => {
     const storedAuthData = hasStoredChatSession
       ? {
           token: directAuthSession?.token || storedChatToken || '',
-          user: directAuthSession?.user
+          user: directAuthSession?.user,
+          source: directAuthSession?.source
         }
       : null;
     let usedBootstrapToken = false;
-    const authData = shouldUseBootstrapToken
+    let authData = shouldUseBootstrapToken
       ? await useAuth(bootstrapErpToken)
           .then(data => {
             usedBootstrapToken = true;
@@ -623,6 +622,29 @@ const runAppInitialization = async () => {
             throw error;
           })
       : storedAuthData || (await tryRefreshErpSession());
+
+    if (
+      !usedBootstrapToken &&
+      authData?.token &&
+      isSharedAccessToken(authData.token) &&
+      isChatAccessTokenExpired(authData.token) &&
+      hasStartupNetwork()
+    ) {
+      try {
+        const refreshed = await tryRefreshErpSession();
+        if (!refreshed) {
+          await handleConfirmedInactiveSession();
+          return;
+        }
+        authData = refreshed;
+      } catch (error) {
+        console.warn(
+          'Не удалось обновить сессию при запуске, открываем сохранённый чат:',
+          error
+        );
+      }
+    }
+    if (isChatSessionEnding()) return;
     if (!authData?.token) {
       throw new Error('Chat token is missing from auth response');
     }
@@ -630,12 +652,12 @@ const runAppInitialization = async () => {
     setAuthToken(authData.token);
     // Навигация из push уже подключена в main.ts. Регистрация токена и
     // запрос разрешения не должны занимать мост перед свежей историей.
-    const pushReady = Capacitor.isNativePlatform()
-      ? waitForStartupPaint()
-      : Promise.resolve();
-    void pushReady.then(initPushNotifications).catch(error => {
-      console.warn('Не удалось инициализировать push-уведомления:', error);
-    });
+    void waitForStartupPaint()
+      .then(initTelemetryLocation)
+      .then(initPushNotifications)
+      .catch(error => {
+        console.warn('Не удалось инициализировать push-уведомления:', error);
+      });
 
     const authUserId =
       authData.user?.id ||
@@ -649,7 +671,8 @@ const runAppInitialization = async () => {
     saveChatAuthSession(
       {
         token: authData.token,
-        user: authData.user
+        user: authData.user,
+        source: authData.source || directAuthSession?.source
       },
       persistSession
     );
@@ -694,13 +717,12 @@ const runAppInitialization = async () => {
     await initialCacheHydration;
     console.error('Failed to initialize chat:', error);
 
-    if (isMobile.value) {
-      if (isAuthError(error)) {
-        clearStoredErpToken();
-        clearChatAuthSession();
-        clearBootstrapErpSession();
-      }
+    if (isAuthError(error)) {
+      await handleConfirmedInactiveSession();
+      return;
+    }
 
+    if (isMobile.value) {
       if (initialUserId && hydratedCacheUserId !== initialUserId) {
         await hydrateCriticalCache(initialUserId);
       }

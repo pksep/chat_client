@@ -223,7 +223,17 @@
         </Button>
 
         <Button
-          v-if="!!props.message"
+          v-if="canCopyContent"
+          :type="ButtonTypeEnum.popover"
+          :size="SizesEnum.small"
+          @click.stop="handleCopyContent"
+          :data-testid="`${props.dataTestid}-MessageBubble-CopyContentButton`"
+        >
+          <CopyIcon /> {{ copyContentLabel }}
+        </Button>
+
+        <Button
+          v-else-if="!copyContent && !!props.message && !messageSticker"
           :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="handleCopyMessage"
@@ -403,7 +413,14 @@ import {
   BackButtonPriority,
   useBackButtonHandler
 } from '../../composables/useBackButton';
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  ref,
+  shallowRef,
+  watch
+} from 'vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -420,6 +437,17 @@ import CachedAvatar from '../UI/CachedAvatar.vue';
 import ReplyIcon from '../UI/ReplyIcon.vue';
 import EditIcon from '../UI/EditIcon.vue';
 import { getMessageSticker } from '../../utils/stickers';
+import {
+  createChatClipboardContent,
+  writeChatClipboardContent,
+  canCopyChatMedia,
+  usesNativeChatMediaClipboard,
+  type PreparedChatClipboardMedia
+} from '../../utils/chat-clipboard';
+import { prepareChatClipboardMedia } from '../../services/chat-clipboard-media';
+import { useMessageMedia } from './composables/useMessageMedia';
+import { showErrorNotification } from '../../composables/useNotifications';
+import { MediaType } from '@pksep/zod-shared-chat';
 import PinIcon from '../UI/PinIcon.vue';
 import UnpinIcon from '../UI/UnpinIcon.vue';
 import CopyIcon from '../UI/CopyIcon.vue';
@@ -511,6 +539,63 @@ const isSelectionContextMenu = computed(
   () => !!props.isSelectionMode && !!props.isSelected
 );
 const hasDownloadableMedia = computed(() => !!props.media?.length);
+const messageSticker = computed(() =>
+  getMessageSticker(props.messageEx, props.media)
+);
+const contextMedia = computed(
+  () =>
+    props.media?.find(media => media.id === props.contextMediaId) ||
+    (!stripHtml(props.message || '').trim() ? props.media?.[0] : undefined)
+);
+const copyContent = computed(() =>
+  createChatClipboardContent(
+    props.messageEx,
+    props.media || [],
+    contextMedia.value
+  )
+);
+const copyContentLabel = computed(() => {
+  const content = copyContent.value;
+  if (content?.kind !== 'media') return 'Копировать стикер';
+  if (content.media.type === MediaType.Image) return 'Копировать фото';
+  if (content.media.type === MediaType.Video) return 'Копировать видео';
+  return 'Копировать файл';
+});
+const { getFullMediaPath } = useMessageMedia();
+const copyPreparation = shallowRef<Promise<PreparedChatClipboardMedia> | null>(
+  null
+);
+const copyUnavailable = ref(false);
+const canCopyContent = computed(
+  () =>
+    copyContent.value?.kind === 'sticker' ||
+    (!!copyPreparation.value && !copyUnavailable.value)
+);
+watch(
+  [copyContent, () => props.isOpen[props.messageId]],
+  ([content, opened], _, onCleanup) => {
+    copyPreparation.value = null;
+    copyUnavailable.value = false;
+    if (!opened || !content || content.kind === 'sticker') return;
+    const media = messageSticker.value ? props.media?.[0] : contextMedia.value;
+    if (!media || !canCopyChatMedia(media)) return;
+    if (usesNativeChatMediaClipboard()) {
+      // Android copies a reference through the native clipboard. Downloading
+      // the complete media here is both unnecessary and caused false failures
+      // in WebView before the user could press "Copy".
+      copyPreparation.value = Promise.resolve({ original: new Blob() });
+      return;
+    }
+    const controller = new AbortController();
+    onCleanup(() => controller.abort());
+    const preparation = prepareChatClipboardMedia(content, controller.signal);
+    copyPreparation.value = preparation;
+    void preparation.catch(() => {
+      if (!controller.signal.aborted) copyUnavailable.value = true;
+    });
+  },
+  { immediate: true }
+);
 const isGroupTopic = computed(
   () => currentTopic.value?.type === TopicType.Group
 );
@@ -521,6 +606,7 @@ const currentMessage = computed(() =>
 
 type SelectedReplyQuote = {
   text: string;
+  copyText?: string;
   occurrenceIndex?: number;
 };
 
@@ -604,6 +690,7 @@ const selectedReplyQuote = computed<SelectedReplyQuote>(() => {
 
   return {
     text: selectedText,
+    copyText: selection.toString(),
     occurrenceIndex: getSelectedQuoteOccurrenceIndex(
       contentElement,
       range,
@@ -1055,24 +1142,18 @@ const handleDeleteMessage = async (): Promise<void> => {
 
     const messagesToDelete = [...selectedMessages.value];
 
-    for (const message of messagesToDelete) {
-      deleteMessageFromLocal(message.topicId, message.id);
-    }
-
-    for (const message of messagesToDelete) {
-      void deleteMessageChat({
-        messageId: message.id,
-        topicId: message.topicId
-      });
-    }
-
     clearSelectedMessages();
     handleCloseDeleteModal();
     handleClosePopover();
+    await Promise.all(
+      messagesToDelete.map(message =>
+        deleteMessageChat({ messageId: message.id, topicId: message.topicId })
+      )
+    );
     return;
   }
 
-  if (canRetryMessage.value && currentMessage.value) {
+  if (isLocalPendingMessage.value && currentMessage.value) {
     deleteMessageFromLocal(
       currentMessage.value.topicId,
       currentMessage.value.id
@@ -1082,13 +1163,13 @@ const handleDeleteMessage = async (): Promise<void> => {
     return;
   }
 
-  await deleteMessageChat({
+  const deletion = {
     messageId: props.messageId,
     topicId: props.topicId
-  });
-
+  };
   handleCloseDeleteModal();
   handleClosePopover();
+  await deleteMessageChat(deletion);
 };
 
 const handleEditMessage = () => {
@@ -1310,8 +1391,7 @@ const handleSelectEmoji = (emoji: { i: string }) => {
 };
 
 const handleCopyMessage = async () => {
-  const selection = window.getSelection();
-  const selectedText = selection?.toString().trim();
+  const selectedText = selectedReplyQuote.value.copyText;
 
   if (selectedText) {
     await navigator.clipboard.writeText(selectedText);
@@ -1326,6 +1406,31 @@ const handleCopyMessage = async () => {
   }
 
   handleClosePopover();
+};
+
+const handleCopyContent = async () => {
+  const content = copyContent.value;
+  if (!content || !canCopyContent.value) return;
+  const sticker = messageSticker.value;
+  const media = sticker ? props.media?.[0] : contextMedia.value;
+  const source = sticker?.src || (media ? getFullMediaPath(media, false) : '');
+  const preview =
+    sticker?.previewSrc ||
+    (media?.type === MediaType.Image
+      ? getFullMediaPath(media, false)
+      : undefined);
+  try {
+    await writeChatClipboardContent(
+      content,
+      source,
+      preview,
+      copyPreparation.value || undefined
+    );
+    handleClosePopover();
+  } catch {
+    copyUnavailable.value = true;
+    showErrorNotification('Не удалось скопировать вложение');
+  }
 };
 
 const closePopoverState = () => {

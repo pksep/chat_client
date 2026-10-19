@@ -1,5 +1,9 @@
 import { ref, computed, watch } from 'vue';
-import { getChatSDK, waitForChatSDK } from '../services/useChat';
+import {
+  getChatSDK,
+  getHasWebsocketConnection,
+  waitForChatSDK
+} from '../services/useChat';
 import { takeNativeStartupHistory } from '../services/native-startup-history';
 import { WebSocketEventType } from '../services/useChatSDK/websocketEvents';
 import { ITopic, ITopicInfo, IUser } from '../components/interfaces/interfaces';
@@ -59,6 +63,7 @@ import {
   resolveTopicLastMessage
 } from '../utils/topic-last-message';
 import { compactPersonName } from '../utils/personName';
+import { recordTopicStateTelemetry } from '../services/topic-state-telemetry';
 import {
   applyTopicPinSetting,
   sortTopicsByPinOrder
@@ -311,6 +316,43 @@ const createTopicsApi = () => {
       [normalizedTopic.id]: resolvedUnreadCount
     };
     normalizedTopic.lastMessage = resolveLatestMessage(normalizedTopic);
+    if (
+      normalizedTopic.lastMessage &&
+      existingTopic?.lastMessage?.id === normalizedTopic.lastMessage.id
+    ) {
+      normalizedTopic.lastMessage = resolveTopicLastMessage(
+        existingTopic.lastMessage,
+        normalizedTopic.lastMessage
+      );
+    }
+    if (
+      existingTopic &&
+      ((topic.lastMessage?.id === normalizedTopic.lastMessage?.id &&
+        topic.lastMessage?.status !== normalizedTopic.lastMessage?.status) ||
+        (topic.unreadMessageCount || 0) !==
+          (existingTopic.unreadMessageCount || 0))
+    ) {
+      recordTopicStateTelemetry(
+        'topic_snapshot_merge',
+        normalizedTopic,
+        localMessages.find(
+          message => message.id === normalizedTopic.lastMessage?.id
+        ),
+        authUserId,
+        {
+          incomingLastMessageId: topic.lastMessage?.id,
+          incomingStatus: topic.lastMessage?.status,
+          incomingUnreadCount: topic.unreadMessageCount,
+          previousUnreadCount: existingTopic.unreadMessageCount,
+          localMessageCount: localMessages.length,
+          statusReconciled:
+            topic.lastMessage?.id === normalizedTopic.lastMessage?.id &&
+            topic.lastMessage?.status !== normalizedTopic.lastMessage?.status
+        },
+        topic.lastMessage?.id === normalizedTopic.lastMessage?.id &&
+          topic.lastMessage?.status !== normalizedTopic.lastMessage?.status
+      );
+    }
     const hasLocalUnreadMessages =
       !!authedUser.value?.id &&
       localMessages.some(
@@ -554,7 +596,42 @@ const createTopicsApi = () => {
       return topics.value;
     }
 
-    topics.value = normalizeTopics(mergeLocalBotTopics(nativeTopics), userId);
+    const previousTopics = topicsById.value;
+    const previousServerUnreadCounts = serverUnreadCounts.value;
+    const preserveOfflineUnread = !getHasWebsocketConnection();
+    const normalizedTopics = normalizeTopics(
+      mergeLocalBotTopics(nativeTopics),
+      userId
+    );
+
+    if (preserveOfflineUnread) {
+      const nextServerUnreadCounts = { ...serverUnreadCounts.value };
+      for (const topic of normalizedTopics) {
+        const previous = previousTopics.get(topic.id);
+        if (
+          !previous ||
+          getMessageTimestamp(topic.lastMessage) >
+            getMessageTimestamp(previous.lastMessage)
+        ) {
+          continue;
+        }
+
+        // Старый фоновый снимок не должен отменять локальное прочтение офлайн.
+        topic.unreadMessageCount = previous.unreadMessageCount;
+        topic.taggedMe = previous.taggedMe;
+        topic.info = {
+          ...topic.info,
+          isMarkedUnread: previous.info?.isMarkedUnread
+        };
+        nextServerUnreadCounts[topic.id] =
+          previousServerUnreadCounts[topic.id] ??
+          previous.unreadMessageCount ??
+          0;
+      }
+      serverUnreadCounts.value = nextServerUnreadCounts;
+    }
+
+    topics.value = normalizedTopics;
     void saveCachedTopics(stripEphemeralTopicState(topics.value || []), userId);
     void warmShadowUnreadStateForTopics(topics.value, userId);
 
@@ -771,13 +848,31 @@ const createTopicsApi = () => {
   ): void => {
     const topic = topics.value.find(topic => topic.id === topicId);
     if (topic) {
+      const incomingMessage = lastMessage || getLocalLastMessage(topic);
       if (lastMessage) {
         topic.lastMessage = resolveLatestMessage(topic, lastMessage);
       } else {
         topic.lastMessage = resolveLastMessageAfterLocalSync(
           topic.lastMessage,
-          getLocalLastMessage(topic),
+          incomingMessage,
           hasKnownTopicMessagesState(topicId)
+        );
+      }
+
+      if (
+        incomingMessage?.id === topic.lastMessage?.id &&
+        incomingMessage?.status !== topic.lastMessage?.status
+      ) {
+        recordTopicStateTelemetry(
+          'local_snapshot_merge',
+          topic,
+          incomingMessage,
+          authedUser.value?.id,
+          {
+            incomingStatus: incomingMessage?.status,
+            statusReconciled: true
+          },
+          true
         );
       }
 
@@ -1034,6 +1129,33 @@ const createTopicsApi = () => {
       (shouldUseComputedUnread
         ? computedUnreadHasTaggedMessage
         : unreadHasTaggedMessage);
+
+    if (
+      baseUnreadCount !== nextUnreadCount ||
+      topic.unreadMessageCount !== nextUnreadCount
+    ) {
+      recordTopicStateTelemetry(
+        'unread_reconciled',
+        topic,
+        messages.find(message => message.id === topic.lastMessage?.id),
+        currentUserId,
+        {
+          serverUnreadCount: baseUnreadCount,
+          effectiveServerUnreadCount,
+          previewReadCount: previewReadIds.size,
+          localMessageCount: messages.length,
+          localUnreadCount: unreadMessageCount,
+          computedUnreadMessageCount,
+          shouldUseComputedUnread,
+          hasLatestRangeCoverage,
+          hasLatestMessageInLocalCache,
+          hasShadowReadBoundary,
+          shadowLastReadMessageId: shadowReadState?.lastReadMessageId,
+          shadowLastReadAt: shadowReadState?.lastReadAt,
+          nextUnreadCount
+        }
+      );
+    }
 
     if (
       topic.unreadMessageCount === nextUnreadCount &&

@@ -32,6 +32,7 @@
         :active-send="props.forwardMessages.length > 0 || props.allowEmptySend"
         v-model="internalInputText"
         ref="contentEditorRef"
+        :attachment-draft-key="composerDraftKey"
         :active-attach-file="props.allowAttachFile"
         :active-select-user="allowMentionUsers"
         :active-select-slash="isBotChat && botCommands.length > 0"
@@ -40,7 +41,7 @@
         :slash-items="botCommands"
         :slash-config="slashConfig"
         :read-clipboard-text="readClipboardText"
-        :stickers="availableStickers"
+        :stickers="[]"
         @unmount-sticker="emit('sendSticker', $event)"
         @unmount-send="handleSend"
         @unmount-attach-file="(...args: any[]) => $emit('attachFile', ...args)"
@@ -177,6 +178,12 @@
         </template>
       </ContentEditor>
     </div>
+    <ChatStickerPicker
+      ref="stickerPickerRef"
+      :host="inputContainerRef"
+      :enabled="canUseStickers"
+      @select="emit('sendSticker', $event)"
+    />
     <Teleport to="body">
       <div
         v-if="isTauriFileDragging"
@@ -214,8 +221,9 @@ import EditIcon from '../UI/EditIcon.vue';
 import ForwardIcon from '../UI/ForwardIcon.vue';
 import SkeletonBlock from '../UI/SkeletonBlock.vue';
 import { stripHtml } from '../../utils/stripHtml';
-import { chatStickers } from '../../utils/stickers';
+import ChatStickerPicker from './ChatStickerPicker.vue';
 import { bindKeyboardMedia } from '../../services/useKeyboardMedia';
+import { bindChatClipboardPaste } from '../../services/useChatClipboard';
 import { useManagerInquiries } from '../../composables/useManagerInquiries';
 import type { IMessage } from '../interfaces/interfaces';
 import { currentGroup } from '../../composables/useGroup';
@@ -248,6 +256,8 @@ import {
   normalizeAtSearchQuery
 } from '../../utils/searchMatch';
 import { useManagerRouteSubscription } from '../../composables/useManagerRoutes';
+import { useComposerKeyboard } from '../../composables/useComposerKeyboard';
+import { getStickerReference } from '../../utils/stickers';
 
 interface Props {
   topicId?: string;
@@ -310,12 +320,11 @@ const internalInputText = computed({
   set: val => emit('update:modelValue', val)
 });
 
-const availableStickers = computed(() =>
-  props.editMessage ||
-  route.value.type === RouteTypes.AI ||
-  useManagerInquiries().byTopic.value.has(props.topicId || route.value.id)
-    ? []
-    : chatStickers
+const canUseStickers = computed(
+  () =>
+    !props.editMessage &&
+    route.value.type !== RouteTypes.AI &&
+    !useManagerInquiries().byTopic.value.has(props.topicId || route.value.id)
 );
 
 const replyActionTitle = computed(() => {
@@ -348,6 +357,9 @@ const formatForwardMessagesLabel = (count: number): string => {
 };
 
 const route = useUrlWatcher();
+const composerDraftKey = computed(
+  () => `${route.value.type}:${route.value.id || 'default'}`
+);
 const config = getConfig();
 const activeTopic = computed(() =>
   route.value.id ? getSelectedTopic(route.value.id) : undefined
@@ -500,12 +512,20 @@ const botCommands = computed(() => {
 const contentEditorRef =
   useTemplateRef<typeof ContentEditor>('contentEditorRef');
 const inputContainerRef = useTemplateRef<HTMLElement>('inputContainerRef');
+const composerKeyboard = useComposerKeyboard(inputContainerRef);
 const isTauriFileDragging = ref(false);
 const isEditorReady = ref(false);
 let shouldFocusEditorWhenReady = false;
 
 const handleEditorMounted = async (): Promise<void> => {
   await nextTick();
+  (
+    contentEditorRef.value as { preloadEmojiPicker?: () => void } | null
+  )?.preloadEmojiPicker?.();
+  if (canUseStickers.value)
+    stickerPickerRef.value?.prepare(
+      getStickerReference(activeTopic.value?.lastMessage?.ex)?.pack
+    );
   // EditorContent переносит DOM редактора в собственном nextTick после mounted.
   // Перед кадром все дочерние обновления закончены и высота композера известна.
   requestAnimationFrame(reportInputHeight);
@@ -517,6 +537,7 @@ const handleInputSkeletonPointerDown = (): void => {
 };
 
 const handleContentEditorPointerDown = (event: PointerEvent): void => {
+  if (composerKeyboard.handlePointerDown(event)) return;
   const target = event.target;
 
   if (
@@ -531,6 +552,7 @@ const handleContentEditorPointerDown = (event: PointerEvent): void => {
 };
 
 const handleContentEditorPopoverClick = (event: MouseEvent): void => {
+  composerKeyboard.handleClick(event);
   const root = inputContainerRef.value;
   const target = event.target;
 
@@ -565,6 +587,10 @@ let activeTypingTopicId: string | null = null;
 let lastTypingPingAt = 0;
 let unlistenTauriFileDrop: (() => void) | null = null;
 let unlistenKeyboardMedia: (() => void) | null = null;
+let chatClipboard: ReturnType<typeof bindChatClipboardPaste> | null = null;
+const stickerPickerRef = ref<InstanceType<typeof ChatStickerPicker> | null>(
+  null
+);
 let keyboardMediaDisposed = false;
 let inputResizeObserver: ResizeObserver | null = null;
 let inputMutationObserver: MutationObserver | null = null;
@@ -715,11 +741,34 @@ const handleTauriFilesDropped = (files: File[]): void => {
 };
 
 defineExpose({
+  openStickerPack: (pack: string) => stickerPickerRef.value?.openPack(pack),
   focus: () => contentEditorRef.value?.focus(),
+  pasteCopiedContent: () =>
+    chatClipboard?.pasteFromClipboard() ?? Promise.resolve(false),
   insertText: (text: string) =>
     contentEditorRef.value?.editor?.commands?.insertContent?.(text),
+  insertPlainText: (text: string) =>
+    contentEditorRef.value?.editor?.commands?.insertContent?.({
+      type: 'text',
+      text
+    }),
   getRootElement: () => inputContainerRef.value
 });
+
+watch(
+  () =>
+    [
+      isEditorReady.value && canUseStickers.value,
+      activeTopic.value?.lastMessage?.ex
+    ] as const,
+  ([ready, ex]) => {
+    if (ready) {
+      const pack = getStickerReference(ex)?.pack;
+      stickerPickerRef.value?.prepare(pack);
+    }
+  },
+  { flush: 'post' }
+);
 
 watch(
   () => internalInputText.value,
@@ -747,6 +796,19 @@ watch(
 );
 
 watch(
+  composerDraftKey,
+  async draftKey => {
+    state.mentionSearch = '';
+    state.slashSearch = '';
+    await nextTick();
+    if (draftKey !== composerDraftKey.value || !inputContainerRef.value) return;
+    reportInputHeight();
+    emit('ready');
+  },
+  { flush: 'post' }
+);
+
+watch(
   () => activeTopic.value?.user?.id,
   () => {
     if (!isBotChat.value) {
@@ -759,9 +821,23 @@ watch(
 );
 
 onMounted(() => {
+  chatClipboard = bindChatClipboardPaste({
+    getTargetElement: () => inputContainerRef.value,
+    getTopicId: () => props.topicId || route.value.id,
+    canPasteSticker: () => canUseStickers.value,
+    canPasteMedia: () =>
+      props.allowAttachFile &&
+      !props.editMessage &&
+      route.value.type !== RouteTypes.AI,
+    onSticker: sticker => emit('sendSticker', sticker),
+    onKeyboardSticker: file => emit('sendKeyboardMedia', file),
+    onMedia: ({ file, isMedia }) => {
+      void contentEditorRef.value?.queueAttachFiles([file], isMedia);
+    }
+  });
   void bindKeyboardMedia({
     getTargetElement: () =>
-      availableStickers.value.length ? inputContainerRef.value : null,
+      canUseStickers.value ? inputContainerRef.value : null,
     onMedia: file => emit('sendKeyboardMedia', file)
   }).then(unlisten => {
     if (keyboardMediaDisposed) unlisten?.();
@@ -807,6 +883,7 @@ onBeforeUnmount(() => {
   emit('heightChange', 0);
   unlistenTauriFileDrop?.();
   unlistenKeyboardMedia?.();
+  chatClipboard?.dispose();
   void stopTyping();
 });
 </script>

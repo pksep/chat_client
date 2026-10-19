@@ -51,10 +51,11 @@ import { ChatMedia, ChatMediaInterface } from './media';
 import { ChatWS, ChatWSInterface } from './ws';
 import { ChatUtils, ChatUtilsInterface } from './utils';
 import { ITopic } from '../../components/interfaces/interfaces';
-import { getAuthToken } from '../../composables/useLogin';
+import { getAuthToken, subscribeAuthToken } from '../../composables/useLogin';
 import {
+  handleConfirmedInactiveSession,
   isAuthError,
-  redirectToAuthorization,
+  isChatSessionEnding,
   tryRefreshErpSession,
   withErpRefreshOnAuthError
 } from '../../composables/useAuth';
@@ -121,12 +122,18 @@ export interface UploadTelemetryContext {
   signal?: AbortSignal;
 }
 
+export interface NetworkReachabilityProbeResult {
+  reachable: boolean;
+  httpStatus?: number;
+}
+
 export class ChatSDK {
   private apiUrl: string;
   private wsUrl: string;
   private token?: string;
   private socket: Socket | null = null;
   private removeIncomingChatEvents: (() => void) | null = null;
+  private removeAuthTokenListener: (() => void) | null = null;
   private readonly multipartUploadAbortControllers = new Map<
     string,
     AbortController
@@ -162,6 +169,14 @@ export class ChatSDK {
     this.group = new ChatGroup(this.reqi);
     this.media = new ChatMedia(this.reqi);
     this.utils = new ChatUtils(this.reqi);
+    this.removeAuthTokenListener = subscribeAuthToken(token => {
+      if (!token) {
+        this.disconnect();
+        return;
+      }
+
+      void this.updateAccessToken(token);
+    });
   }
 
   setConnectionStateListener(listener?: (connected: boolean) => void): void {
@@ -654,7 +669,9 @@ export class ChatSDK {
     }
   }
 
-  async probeNetworkReachability(signal: AbortSignal): Promise<boolean> {
+  async probeNetworkReachability(
+    signal: AbortSignal
+  ): Promise<NetworkReachabilityProbeResult> {
     // Проверка сети не читает топики и не обращается к базе данных.
     const url = new URL('/live-health', this.apiUrl);
     url.searchParams.set('_', String(Date.now()));
@@ -663,7 +680,12 @@ export class ChatSDK {
       credentials: 'omit',
       signal
     });
-    return response.status < 500;
+    return {
+      // HTTP 4xx подтверждает доступность DNS, TLS и маршрута до сервера;
+      // ошибка сервера означает недоступность самого эндпоинта.
+      reachable: response.status < 500,
+      httpStatus: response.status
+    };
   }
 
   async connect(): Promise<void> {
@@ -729,6 +751,38 @@ export class ChatSDK {
         this.socket.on('userAccessUpdated', () => {
           void refreshChatAccess();
         });
+        this.socket.on(
+          'authError',
+          async (authError: {
+            status?: number;
+            code?: string;
+            message?: string;
+          }) => {
+            if (authError?.status === 401) {
+              try {
+                const refreshed = await tryRefreshErpSession();
+
+                if (refreshed?.token) {
+                  await this.updateAccessToken(refreshed.token);
+                  return;
+                }
+
+                await handleConfirmedInactiveSession();
+              } catch (error) {
+                console.warn(
+                  'Socket.IO: Не удалось обновить токен, сессия сохранена',
+                  error
+                );
+                this.socket?.connect();
+              }
+              return;
+            }
+
+            if (authError?.status === 503) {
+              console.warn('Socket.IO: Сервис авторизации временно недоступен');
+            }
+          }
+        );
         this.socket.on('connect', () => {
           void refreshChatAccess();
           authReconnectAttempted = false;
@@ -752,22 +806,45 @@ export class ChatSDK {
         });
 
         this.socket.on('connect_error', async error => {
+          const authStatus = (error as { data?: { status?: number } })?.data
+            ?.status;
+
+          if (authStatus === 503) {
+            console.warn(
+              'Socket.IO: Сервис авторизации временно недоступен, сессия сохранена'
+            );
+            this.emitConnectionState(false);
+            rejectOnce(error);
+            return;
+          }
+
           if (!authReconnectAttempted && isAuthError(error)) {
             authReconnectAttempted = true;
 
-            const refreshed = await tryRefreshErpSession();
+            try {
+              const refreshed = await tryRefreshErpSession();
 
-            if (refreshed?.token && this.socket) {
-              this.token = refreshed.token;
+              if (refreshed?.token && this.socket) {
+                this.token = refreshed.token;
+                this.socket.auth = { token: refreshed.token };
+                console.warn(
+                  'Socket.IO: Retrying initial connection after token refresh'
+                );
+                this.socket.connect();
+                return;
+              }
+
+              await handleConfirmedInactiveSession();
+              rejectOnce(error);
+            } catch (refreshError) {
+              authReconnectAttempted = false;
               console.warn(
-                'Socket.IO: Retrying initial connection after token refresh'
+                'Socket.IO: Сервис обновления токена недоступен, сессия сохранена',
+                refreshError
               );
-              this.socket.connect();
-              return;
+              this.emitConnectionState(false);
+              rejectOnce(error);
             }
-
-            redirectToAuthorization();
-            rejectOnce(error);
             return;
           }
 
@@ -926,6 +1003,8 @@ export class ChatSDK {
   disconnect(): void {
     this.removeIncomingChatEvents?.();
     this.removeIncomingChatEvents = null;
+    this.removeAuthTokenListener?.();
+    this.removeAuthTokenListener = null;
     if (this.socket) {
       this.emitConnectionState(false);
       this.socket.disconnect();
@@ -933,10 +1012,45 @@ export class ChatSDK {
     }
   }
 
-  private authenticate(token: string): void {
-    if (this.socket && this.socket.connected) {
-      this.socket.emit('authenticate', { token });
+  async updateAccessToken(token: string): Promise<boolean> {
+    if (isChatSessionEnding()) return false;
+    this.token = token;
+
+    if (!this.socket) {
+      return true;
     }
+
+    const socket = this.socket;
+    socket.auth = { token };
+
+    if (!socket.connected) {
+      socket.connect();
+      return true;
+    }
+
+    try {
+      const response = (await socket
+        .timeout(5000)
+        .emitWithAck('authenticate', { token })) as {
+        success?: boolean;
+        status?: number;
+      };
+
+      if (response?.success === true) return true;
+    } catch (error) {
+      console.warn('Socket.IO: Не удалось обновить токен соединения', error);
+    }
+
+    if (
+      !isChatSessionEnding() &&
+      this.socket === socket &&
+      this.token === token
+    ) {
+      // При потере подтверждения сервер мог сохранить прежний токен сокета.
+      socket.disconnect();
+      socket.connect();
+    }
+    return false;
   }
 
   private handleWebSocketEvent(rawEvent: any): void {
@@ -1366,6 +1480,24 @@ export class ChatSDK {
     messageIds: string[],
     reachedEnd = false
   ): Promise<void> {
+    recordTelemetryEvent({
+      category: 'chat',
+      name: 'chat.read_receipt.emitted',
+      entityType: 'topic',
+      entityId: topicId,
+      level: this.socket?.connected ? 'info' : 'warn',
+      payload: {
+        topicId,
+        messageIds,
+        messageCount: messageIds.length,
+        lastReadMessageId: messageIds.at(-1),
+        reachedEnd,
+        socketConnected: !!this.socket?.connected,
+        socketId: this.socket?.id,
+        bufferedEventCount: this.socket?.sendBuffer?.length,
+        deliveryConfirmed: false
+      }
+    });
     this.socket.emit(WebSocketEventType.READ_MESSAGE, {
       messageIds,
       topicId,

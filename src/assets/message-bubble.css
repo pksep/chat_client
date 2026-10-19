@@ -460,10 +460,18 @@
 }
 
 .message__article__file {
-  cursor: pointer;
+  cursor: auto;
   padding: 6px 14px 6px 10px;
   position: relative;
   overflow: visible;
+}
+
+.message__article__file--single {
+  cursor: pointer;
+}
+
+.message__article__file .message-file__caption {
+  cursor: auto;
 }
 
 .message__article__file .message-time {
@@ -1033,6 +1041,7 @@ div.message-content__html>ul>li {
 
 .message__article__file .message-content {
   display: grid;
+  cursor: pointer;
   gap: 2px;
   max-width: 320px;
 }

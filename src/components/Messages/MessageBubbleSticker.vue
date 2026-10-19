@@ -2,17 +2,9 @@
   <div
     class="message-sticker-stack"
     :class="{ 'message-sticker-stack--appearing': animateAppearance }"
+    :style="{ '--sticker-width': `${stickerWidth}px` }"
     :data-testid="`${props.dataTestid}-Sticker`"
   >
-    <MessageAuthorMeta
-      v-if="
-        !props.isMeSender && !props.isDialog && !props.continuesFromPrevious
-      "
-      :sender="props.sender"
-      :sender-user="props.senderUser"
-      :sender-role="props.senderRole"
-      :data-testid="`${props.dataTestid}-AuthorMeta`"
-    />
     <MessageReferenceBlock
       v-if="props.replyMessage || props.forwardUser"
       :reply-message="props.replyMessage"
@@ -27,7 +19,13 @@
         aspectRatio: `${props.sticker.width || 1} / ${props.sticker.height || 1}`
       }"
       :data-sticker-id="props.sticker.id"
-      @click.stop
+      :role="canOpenPack ? 'button' : undefined"
+      :tabindex="canOpenPack ? 0 : undefined"
+      :aria-label="canOpenPack ? 'Открыть набор стикеров' : undefined"
+      :class="{ 'message-sticker__image--interactive': canOpenPack }"
+      @click.stop="emit('activate')"
+      @keydown.enter.stop.prevent="canOpenPack && emit('activate')"
+      @keydown.space.stop.prevent="canOpenPack && emit('activate')"
       @dblclick.stop
     >
       <img
@@ -41,6 +39,7 @@
         decoding="async"
       />
       <img
+        v-if="props.sticker.format !== 'webm' && props.sticker.format !== 'tgs'"
         :src="props.sticker.src"
         class="message-sticker__animation"
         :class="{ 'message-sticker__animation--loaded': imageLoaded }"
@@ -52,6 +51,32 @@
         decoding="async"
         loading="lazy"
         @load="imageLoaded = true"
+        @error="imageLoaded = false"
+      />
+      <StickerTgsAnimation
+        v-else-if="props.sticker.format === 'tgs'"
+        :src="props.sticker.src"
+        :label="props.sticker.label"
+        class="message-sticker__animation"
+        :class="{ 'message-sticker__animation--loaded': imageLoaded }"
+        :aria-hidden="!imageLoaded"
+        @load="imageLoaded = true"
+        @error="imageLoaded = false"
+      />
+      <video
+        v-else
+        :src="props.sticker.src"
+        class="message-sticker__animation"
+        :class="{ 'message-sticker__animation--loaded': imageLoaded }"
+        :aria-label="props.sticker.label"
+        width="220"
+        height="220"
+        autoplay
+        muted
+        loop
+        playsinline
+        disablepictureinpicture
+        @loadeddata="imageLoaded = true"
         @error="imageLoaded = false"
       />
     </div>
@@ -87,20 +112,40 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { ChatStickerItem } from '../../utils/stickers';
 import type { IMessageBubbleProps } from './interface/interface';
-import MessageAuthorMeta from './MessageAuthorMeta.vue';
 import MessageReferenceBlock from './MessageReferenceBlock.vue';
 import MessageEmojies from './MessageEmojies.vue';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import ErrorIcon from '../UI/ErrorIcon.vue';
 import { MessageStatus } from '../../services/useChatSDK/types';
+import StickerTgsAnimation from './StickerTgsAnimation.vue';
+import { prepareStickerPicker } from '../../services/sticker-catalog';
 
 const props = defineProps<IMessageBubbleProps & { sticker: ChatStickerItem }>();
-defineEmits(['navigate-message']);
+const emit = defineEmits(['navigate-message', 'activate']);
+const canOpenPack = computed(
+  () => !!props.sticker.pack && !props.isSelectionMode
+);
+const stickerWidth = computed(() =>
+  Math.min(
+    220,
+    props.sticker.width || 512,
+    (220 * (props.sticker.width || 512)) / (props.sticker.height || 512)
+  )
+);
 const imageLoaded = ref(false);
+watch([imageLoaded, () => props.sticker.pack], ([loaded, pack]) => {
+  if (loaded) prepareStickerPicker(pack);
+});
+watch(
+  () => props.sticker.src,
+  () => {
+    imageLoaded.value = false;
+  }
+);
 const animateAppearance =
   props.isMeSender && props.messageStatus === MessageStatus.Wait;
 const showErrorIcon = computed(
@@ -112,7 +157,7 @@ const showErrorIcon = computed(
 .message-sticker-stack {
   display: grid;
   gap: 10px;
-  width: min(220px, calc(100vw - 100px));
+  width: min(var(--sticker-width, 220px), calc(100vw - 100px));
   background: transparent;
 }
 
@@ -147,11 +192,20 @@ const showErrorIcon = computed(
   cursor: default;
 }
 
-.message-sticker__image img {
+.message-sticker__image img,
+.message-sticker__image video {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+.message-sticker__image--interactive {
+  cursor: pointer;
+}
+.message-sticker__image--interactive:focus-visible {
+  outline: 2px solid var(--border-hover, #9cbeff);
+  outline-offset: 3px;
 }
 
 .message-sticker__animation {

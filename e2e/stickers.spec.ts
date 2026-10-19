@@ -1,4 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { mockStickerCatalog } from './fixtures/sticker-catalog';
+
+test.beforeEach(async ({ page }) => {
+  await mockStickerCatalog(page);
+});
 
 test('время, статус и реакции стикера выглядят как у одного эмодзи', async ({
   page
@@ -323,7 +328,7 @@ for (const [stickerId, stickerLabel] of [
     });
     await page.route(`**/sep-robots/v1/${stickerId}.webp`, async route => {
       await animationReady;
-      await route.continue();
+      await route.fallback();
     });
     try {
       await page.goto('/e2e/fixtures/stickers.html');
@@ -415,7 +420,7 @@ test('анимация постоянно движется после неско
     .locator('.message-sticker__image');
   const image = playback.locator('.message-sticker__animation');
   await expect(image).toHaveClass(/--loaded/);
-  await expect(playback).toHaveCSS('cursor', 'default');
+  await expect(playback).toHaveCSS('cursor', 'pointer');
   const source = await image.getAttribute('src');
   await playback.click();
   expect(await image.getAttribute('src')).toBe(source);
@@ -426,11 +431,12 @@ test('анимация постоянно движется после неско
   const frame = await image.screenshot();
   await expect
     .poll(async () => (await image.screenshot()).equals(frame), {
-      timeout: 2500
+      timeout: 2500,
+      intervals: [70, 110, 170]
     })
     .toBe(false);
   await expect(playback.locator('button, canvas')).toHaveCount(0);
-  await expect(playback).toHaveCSS('cursor', 'default');
+  await expect(playback).toHaveCSS('cursor', 'pointer');
   await expect(page.locator('dialog:visible')).toHaveCount(0);
   await expect(page.getByTestId('SendCount')).toHaveText('Отправлено: 1');
 });

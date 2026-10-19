@@ -16,6 +16,7 @@ let package = Package(
         .package(name: "CapacitorBarcodeScanner", path: "..\..\..\node_modules\@capacitor\barcode-scanner"),
         .package(name: "CapacitorClipboard", path: "..\..\..\node_modules\@capacitor\clipboard"),
         .package(name: "CapacitorFilesystem", path: "..\..\..\node_modules\@capacitor\filesystem"),
+        .package(name: "CapacitorGeolocation", path: "..\..\..\node_modules\@capacitor\geolocation"),
         .package(name: "CapacitorPreferences", path: "..\..\..\node_modules\@capacitor\preferences")
     ],
     targets: [
@@ -28,6 +29,7 @@ let package = Package(
                 .product(name: "CapacitorBarcodeScanner", package: "CapacitorBarcodeScanner"),
                 .product(name: "CapacitorClipboard", package: "CapacitorClipboard"),
                 .product(name: "CapacitorFilesystem", package: "CapacitorFilesystem"),
+                .product(name: "CapacitorGeolocation", package: "CapacitorGeolocation"),
                 .product(name: "CapacitorPreferences", package: "CapacitorPreferences")
             ]
         )

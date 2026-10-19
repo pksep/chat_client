@@ -1,7 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
-import { chatStickers } from '../src/utils/stickers';
-import durations from '../src/utils/sticker-durations.json';
 import {
   inspectStickerAnimation,
   prepareKeyboardSticker
@@ -17,32 +15,33 @@ const gifLoopOffset = (bytes: Uint8Array) =>
   Buffer.from(bytes).indexOf('NETSCAPE2.0') + 13;
 
 describe('непрерывная анимация стикеров', () => {
-  test('все 15 локальных файлов анимированы, зациклены и имеют готовое превью', async () => {
-    for (const sticker of chatStickers) {
-      const source = await readFile(
-        new URL(`../public${sticker.src}`, import.meta.url)
-      );
-      const bytes = new Uint8Array(source);
-      const before = bytes.slice();
-      const duration = inspectStickerAnimation(bytes);
-      expect(duration).toBeGreaterThan(0);
-      expect(duration).toBe((durations as Record<string, number>)[sticker.id]);
-      // Анализатор меняет конечное число повторов на 0; готовые ресурсы уже зациклены.
-      expect(bytes).toEqual(before);
-      expect(
-        (
-          await readFile(
-            new URL(`../public${sticker.previewSrc}`, import.meta.url)
-          )
-        ).length
-      ).toBeGreaterThan(0);
-    }
+  test('зацикленный WebP сохраняет кадры и длительность без изменения байтов', async () => {
+    const source = await readFile(
+      new URL('../e2e/fixtures/sticker-assets/animation.webp', import.meta.url)
+    );
+    const bytes = new Uint8Array(source);
+    const before = bytes.slice();
+    const duration = inspectStickerAnimation(bytes);
+    expect(duration).toBeGreaterThan(0);
+    expect(duration).toBe(300);
+    // Анализатор меняет конечное число повторов на 0; готовые ресурсы уже зациклены.
+    expect(bytes).toEqual(before);
+    expect(
+      (
+        await readFile(
+          new URL('../e2e/fixtures/sticker-assets/preview.png', import.meta.url)
+        )
+      ).length
+    ).toBeGreaterThan(0);
   });
 
   test('WebP из клавиатуры повторяется без изменения кадров и типа файла', async () => {
     const original = new Uint8Array(
       await readFile(
-        new URL('../public/stickers/sep-robots/v1/heart.webp', import.meta.url)
+        new URL(
+          '../e2e/fixtures/sticker-assets/animation.webp',
+          import.meta.url
+        )
       )
     );
     const bytes = original.slice();
@@ -51,7 +50,7 @@ describe('непрерывная анимация стикеров', () => {
     const result = await prepareKeyboardSticker(
       new File([bytes], 'keyboard.webp', { type: 'image/webp' })
     );
-    expect(result.durationMs).toBe(durations['sep-robot-heart']);
+    expect(result.durationMs).toBe(300);
     expect(result.file.name).toBe('keyboard.webp');
     expect(result.file.type).toBe('image/webp');
     expect(new Uint8Array(await result.file.arrayBuffer())).toEqual(original);

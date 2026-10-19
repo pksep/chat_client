@@ -79,6 +79,13 @@ import { buildForwardMessageSendPlan } from '../../../utils/forward-message-send
 import { getUploadFileSizeError } from '../../../services/useChatSDK/multipart-upload';
 import { createStickerMessage } from '../../../utils/stickers';
 import { prepareKeyboardSticker } from '../../../utils/sticker-animation';
+import {
+  canUseNativeMessageUpload,
+  getNativeMessageUpload,
+  normalizeNativeUploadMessage,
+  sendNativeMessageUpload,
+  retryNativeMessageUpload
+} from '../../../services/native-message-upload';
 
 const MAX_HTML_LENGTH = 4000;
 const FORWARD_TEXT_SEND_DELAY_MS = 250;
@@ -149,6 +156,7 @@ const pendingMessageRetryStates = new Map<string, PendingMessageRetryState>();
 const activePendingMessageRetries = new Set<string>();
 const backgroundInterruptedUploadMessages = new Set<string>();
 const activeUploadRequests = new Map<string, Promise<boolean>>();
+const activeNativeUploadMessages = new Set<string>();
 let arePendingMessageRetryListenersBound = false;
 let lastDocumentHiddenAt = 0;
 
@@ -563,6 +571,7 @@ export function useMessageSender(
     );
 
   const canAutoRetryMessage = (message?: IMessage | null): boolean => {
+    if (message?.id && activeNativeUploadMessages.has(message.id)) return false;
     if (!isAutoRetryCandidate(message)) {
       return false;
     }
@@ -579,7 +588,10 @@ export function useMessageSender(
       return true;
     }
 
-    return message.media.every(media => !media.isLoading || media.uploadError);
+    return (
+      parseMessageEx(message.ex)?.nativeUpload === true ||
+      message.media.every(media => !media.isLoading || media.uploadError)
+    );
   };
 
   const clearPendingMessageAutoRetry = (
@@ -846,6 +858,57 @@ export function useMessageSender(
 
     if (!isAutoRetryCandidate(message)) {
       return true;
+    }
+
+    if (parseMessageEx(message.ex)?.nativeUpload === true) {
+      if (activeNativeUploadMessages.has(messageId)) return false;
+      const native = await getNativeMessageUpload(messageId);
+      if (native.status === 'completed' && native.message) {
+        addMessageToLocal(
+          topicId,
+          normalizeNativeUploadMessage(native.message)
+        );
+        return true;
+      }
+      // Не запускаем параллельную отправку из WebView после перезапуска приложения.
+      if (native.status === 'queued' || native.status === 'uploading') {
+        changeMessageStatusLocally(topicId, messageId, MessageStatus.Wait);
+        return false;
+      }
+      if (native.status === 'failed' || native.status === 'cancelled') {
+        changeMessageStatusLocally(
+          topicId,
+          messageId,
+          MessageStatus.NotDelivered
+        );
+        return false;
+      }
+      const attachments = await Promise.all(
+        message.media.map(media =>
+          getPendingUploadFile(topicId, messageId, media.id)
+        )
+      );
+      if (attachments.some(file => !file)) return false;
+      activeNativeUploadMessages.add(messageId);
+      try {
+        const sent = await sendNativeMessageUpload(
+          message,
+          attachments as IQueuedFilePayload[],
+          (index, percent) =>
+            changeFileUploadPercent(
+              topicId,
+              messageId,
+              message.media[index].id,
+              percent
+            )
+        );
+        addMessageToLocal(topicId, sent);
+        return true;
+      } catch {
+        return false;
+      } finally {
+        activeNativeUploadMessages.delete(messageId);
+      }
     }
 
     if (message.media?.length) {
@@ -1443,7 +1506,9 @@ export function useMessageSender(
     };
   };
 
-  const handleSendSticker = async (stickerId: string): Promise<void> => {
+  const handleSendSticker = async (
+    stickerId: Parameters<typeof createStickerMessage>[0]
+  ): Promise<void> => {
     const content = createStickerMessage(stickerId);
     const topicId = route.value.id;
     if (
@@ -2012,6 +2077,11 @@ export function useMessageSender(
       ? crypto.randomUUID()
       : generateUUID();
     const messageTraceId = createTelemetryTraceId('attachment');
+    const useNativeUpload =
+      !managerReplyRouteId &&
+      !forwardMessageIds.length &&
+      filePayloads.some(({ file }) => file.type.startsWith('video/')) &&
+      (await canUseNativeMessageUpload());
 
     const localMedia: IMedia[] = await Promise.all(
       filePayloads.map(async ({ file, isMedia }, i) => {
@@ -2091,6 +2161,7 @@ export function useMessageSender(
       media: localMedia,
       ex: createMessageEx({
         clientId,
+        ...(useNativeUpload ? { nativeUpload: true } : {}),
         ...(options?.keyboardSticker
           ? {
               kind: 'sticker',
@@ -2105,6 +2176,7 @@ export function useMessageSender(
       })
     };
 
+    if (useNativeUpload) activeNativeUploadMessages.add(clientId);
     addMessageToLocal(newMessage.topicId, newMessage);
     const pendingUploadMessagePersistence = registerPendingUploadMessage(
       newMessage.topicId,
@@ -2166,7 +2238,37 @@ export function useMessageSender(
       ...pendingUploadFileHandoffs.values()
     ]);
 
-    await pendingUploadMessageStatePromise;
+    try {
+      await pendingUploadMessageStatePromise;
+    } catch (error) {
+      activeNativeUploadMessages.delete(clientId);
+      throw error;
+    }
+
+    if (useNativeUpload) {
+      try {
+        await pendingUploadPersistencePromise;
+        const sent = await sendNativeMessageUpload(
+          newMessage,
+          filePayloads,
+          (index, percent) =>
+            changeFileUploadPercent(topicId, clientId, String(index), percent)
+        );
+        addMessageToLocal(topicId, sent);
+      } catch (error: any) {
+        changeMessageStatusLocally(
+          topicId,
+          clientId,
+          MessageStatus.NotDelivered
+        );
+        showErrorNotification(error?.message || 'Не удалось отправить видео');
+        schedulePendingMessageAutoRetry(topicId, clientId, { reset: true });
+      } finally {
+        activeNativeUploadMessages.delete(clientId);
+      }
+      state.replyMessage = null;
+      return;
+    }
 
     let hasUploadError = false;
     for (const [i, payload] of filePayloads.entries()) {
@@ -2413,6 +2515,14 @@ export function useMessageSender(
     clearBackgroundInterruptedUpload(topicId, messageId);
 
     const message = getMessageById(topicId, messageId);
+
+    if (message && parseMessageEx(message.ex)?.nativeUpload === true) {
+      const native = await getNativeMessageUpload(messageId);
+      if (native.status === 'failed') await retryNativeMessageUpload(messageId);
+      await trySendPendingMessage(topicId, messageId);
+      schedulePendingMessageAutoRetry(topicId, messageId, { reset: true });
+      return;
+    }
 
     if (!message?.media?.length) {
       if (!message?.text) {

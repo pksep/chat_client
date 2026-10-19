@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import sep.pksep.app.sync.ChatBackgroundSyncScheduler;
+import sep.pksep.app.sync.ChatBackgroundSyncStore;
 
 public class ChatFirebaseMessagingService extends FirebaseMessagingService {
     @Override
@@ -19,6 +20,9 @@ public class ChatFirebaseMessagingService extends FirebaseMessagingService {
     @Override
     public void onMessageReceived(RemoteMessage remoteMessage) {
         super.onMessageReceived(remoteMessage);
+        if (!ChatBackgroundSyncStore.getSession(this).isValid()) {
+            return;
+        }
         NotificationChannelHelper.ensureDefaultChannel(this);
 
         if (MainActivity.isAppInForeground()) {

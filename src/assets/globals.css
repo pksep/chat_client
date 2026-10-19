@@ -90,6 +90,10 @@ select,
   visibility: hidden;
 }
 
+:is(.emoji-picker, .emoji-picker-panel) .v3-emoji-picker .v3-footer {
+  display: none;
+}
+
 .emoji-glyph {
   position: relative;
   display: inline-block;
