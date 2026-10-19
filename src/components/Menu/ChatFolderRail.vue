@@ -69,7 +69,7 @@
             :aria-label="`Непрочитанных сообщений: ${allUnreadCount}`"
             data-testid="ChatFolders-Rail-All-UnreadCount"
           >
-            {{ allUnreadCount > 99 ? '99+' : allUnreadCount }}
+            {{ unreadBadgeLabel(allUnreadCount) }}
           </span>
         </span>
         <span class="chat-folder-rail__label">Все чаты</span>
@@ -80,7 +80,7 @@
           :aria-label="`Непрочитанных сообщений: ${allUnreadCount}`"
           data-testid="ChatFolders-Rail-All-UnreadCount"
         >
-          {{ allUnreadCount > 99 ? '99+' : allUnreadCount }}
+          {{ unreadBadgeLabel(allUnreadCount) }}
         </span>
       </button>
 
@@ -149,7 +149,7 @@
                 )?.isMuted
               }"
             >
-              {{ getUnreadCount(folder) > 99 ? '99+' : getUnreadCount(folder) }}
+              {{ unreadBadgeLabel(getUnreadCount(folder)) }}
             </span>
           </span>
           <span class="chat-folder-rail__label">{{ folder.name }}</span>
@@ -182,6 +182,7 @@
 </template>
 
 <script setup lang="ts">
+import { unreadBadgeLabel } from '../../utils/unread-badge-label';
 import { computed } from 'vue';
 import type { ITopic } from '../interfaces/interfaces';
 import type { ChatFolder } from '../../services/useChatSDK/chat-folder';

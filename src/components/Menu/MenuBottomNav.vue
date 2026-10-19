@@ -57,7 +57,7 @@
               }
             ]"
           >
-            {{ sectionBadgeState.chats.count }}
+            {{ unreadBadgeLabel(sectionBadgeState.chats.count) }}
           </span>
         </span>
       </button>
@@ -82,7 +82,7 @@
               }
             ]"
           >
-            {{ sectionBadgeState.calls.count }}
+            {{ unreadBadgeLabel(sectionBadgeState.calls.count) }}
           </span>
         </span>
       </button>
@@ -108,7 +108,7 @@
               }
             ]"
           >
-            {{ sectionBadgeState.clients.count }}
+            {{ unreadBadgeLabel(sectionBadgeState.clients.count) }}
           </span>
         </span>
       </button>
@@ -135,7 +135,7 @@
               v-if="sectionBadgeState.ai.count"
               class="menu-bottom-nav__unread-count"
             >
-              {{ sectionBadgeState.ai.count }}
+              {{ unreadBadgeLabel(sectionBadgeState.ai.count) }}
             </span>
             <span
               v-if="backgroundActivityStatus"
@@ -268,6 +268,7 @@ import { parseCallMessage } from '../../utils/parseCallMessage';
 import { useCallUnreadState } from '../../services/useCallUnreadState';
 import { useChatFolders } from '../../composables/useChatFolders';
 import { useChatAccess } from '../../composables/useChatAccess';
+import { unreadBadgeLabel } from '../../utils/unread-badge-label';
 
 const props = withDefaults(
   defineProps<{
