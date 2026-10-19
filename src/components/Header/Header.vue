@@ -534,6 +534,8 @@ import {
   quitGroup
 } from '../../composables/useGroup';
 import ConfirmModal from '../UI/ConfirmModal.vue';
+import { deleteClientChat } from '../../composables/useClientChatDeletion';
+import { showErrorNotification } from '../../composables/useNotifications';
 import { TopicType } from '../../services/useChatSDK/types';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import SearchIcon from '../UI/SearchIcon.vue';
@@ -697,6 +699,7 @@ const clientInquiry = computed(() =>
   clientInquiries.value.get(currentTopic.value?.id || '')
 );
 const isExternalInquiry = computed(() => isClientTopic(currentTopic.value));
+const deletingClientChat = ref(false);
 const isFavoriteDialogTopic = computed(
   () =>
     route.value.type === RouteTypes.FAVORITES ||
@@ -788,26 +791,30 @@ const mobileInfoMembersLabel = computed(() => {
   return `${count} ${getParticipantForm(count)}`;
 });
 const actionModalTitle = computed(() =>
-  route.value.type === RouteTypes.AI && isAiTaskSession.value
-    ? 'Удаление задачи'
-    : route.value.type === RouteTypes.DIALOGS ||
-        route.value.type === RouteTypes.AI
-      ? 'Удаление чата'
-      : currentRouteGroup.value?.isAdmin
-        ? 'Удаление канала'
-        : 'Выход из канала'
+  isExternalInquiry.value
+    ? 'Удаление чата'
+    : route.value.type === RouteTypes.AI && isAiTaskSession.value
+      ? 'Удаление задачи'
+      : route.value.type === RouteTypes.DIALOGS ||
+          route.value.type === RouteTypes.AI
+        ? 'Удаление чата'
+        : currentRouteGroup.value?.isAdmin
+          ? 'Удаление канала'
+          : 'Выход из канала'
 );
 
 const actionModalDescription = computed(() =>
-  route.value.type === RouteTypes.AI
-    ? isAiTaskSession.value
-      ? 'Вы действительно хотите удалить задачу?'
-      : 'Вы действительно хотите удалить чат?'
-    : route.value.type === RouteTypes.DIALOGS
-      ? 'Вы уверены, что хотите удалить чат?'
-      : currentRouteGroup.value?.isAdmin
-        ? 'Вы уверены, что хотите удалить канал?'
-        : 'Вы уверены, что хотите покинуть канал?'
+  isExternalInquiry.value
+    ? 'Удалить чат из списка у всех менеджеров? Переписка сохранится. При новом сообщении клиента чат вернётся со всей историей.'
+    : route.value.type === RouteTypes.AI
+      ? isAiTaskSession.value
+        ? 'Вы действительно хотите удалить задачу?'
+        : 'Вы действительно хотите удалить чат?'
+      : route.value.type === RouteTypes.DIALOGS
+        ? 'Вы уверены, что хотите удалить чат?'
+        : currentRouteGroup.value?.isAdmin
+          ? 'Вы уверены, что хотите удалить канал?'
+          : 'Вы уверены, что хотите покинуть канал?'
 );
 const currentTypingUsers = computed(() =>
   route.value?.id ? getTopicTypingUsers(route.value.id) : []
@@ -1447,7 +1454,16 @@ const getHeaderContextMenuOptions = computed(() => {
       });
     }
 
-    if (isExternalInquiry.value) return options;
+    if (isExternalInquiry.value) {
+      options.push({
+        value: 'Удалить чат',
+        function: handleOpenActionModal,
+        style: 'color: var(--error-color)',
+        iconName: IconNameEnum.deleteSmall
+      });
+
+      return options;
+    }
 
     if (route.value.type === RouteTypes.GROUP) {
       options.push({
@@ -1561,6 +1577,29 @@ const handleConfirmClearHistory = (): void => {
 };
 
 const handleConfirmActionModal = async (): Promise<void> => {
+  if (isExternalInquiry.value && route.value.id) {
+    if (deletingClientChat.value) return;
+
+    deletingClientChat.value = true;
+    const topicId = route.value.id;
+
+    try {
+      await deleteClientChat(topicId);
+
+      if (route.value.id === topicId) navigateToGroupsList();
+
+      handleCloseActionModal();
+    } catch {
+      showErrorNotification(
+        'Не удалось удалить чат клиента. Попробуйте ещё раз.'
+      );
+    } finally {
+      deletingClientChat.value = false;
+    }
+
+    return;
+  }
+
   if (route.value.type === RouteTypes.AI) {
     const sessionId = aiAssistantSessionId.value;
     if (aiAssistantTask.value) {
