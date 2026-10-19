@@ -2,6 +2,7 @@ import {
   ensureMediaObjectUrl,
   loadCachedMediaObjectUrl
 } from './useMediaBlobCache';
+import { directAvatarUrl } from '../utils/direct-avatar-url';
 
 const MAX_RETAINED_AVATAR_IMAGES = 64;
 const readyAvatarImages = new Map<string, HTMLImageElement>();
@@ -38,6 +39,7 @@ export const preloadAvatarImage = (url: string): Promise<boolean> => {
   image.decoding = 'sync';
   image.loading = 'eager';
   image.fetchPriority = 'high';
+  image.referrerPolicy = 'no-referrer';
 
   const pending = new Promise<boolean>(resolve => {
     let settled = false;
@@ -70,18 +72,20 @@ export const preloadAvatarImage = (url: string): Promise<boolean> => {
   return pending;
 };
 
-const isLocalDirectAvatarUrl = (path: string): boolean =>
-  /^(blob:|data:|file:\/\/)/i.test(path);
-
 export const preloadAvatarPath = async (
   path?: string | null,
   opts?: { allowNetwork?: boolean }
 ): Promise<boolean> => {
   if (!path) return false;
 
-  let url: string | null;
-  if (isLocalDirectAvatarUrl(path)) {
-    url = path;
+  let url: string | null = directAvatarUrl(path);
+  if (url) {
+    if (
+      /^https:/i.test(url) &&
+      !opts?.allowNetwork &&
+      !hasVerifiedAvatarUrl(url)
+    )
+      return false;
   } else {
     url = opts?.allowNetwork
       ? await ensureMediaObjectUrl(path)
