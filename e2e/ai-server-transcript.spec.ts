@@ -80,6 +80,93 @@ const answer = (page: Page, text: string) =>
     )
     .filter({ hasText: text });
 
+test('ошибки трёх запросов остаются после своих вопросов при обновлении истории и перезагрузке', async ({
+  page
+}) => {
+  const id = `qa-failed-message-order-${Date.now()}`;
+  await seed(page, id);
+  const stored: ReturnType<typeof message>[] = [];
+  let runs = 0;
+
+  await page.route('**/users/me/access', route =>
+    route.fulfill({
+      json: {
+        userId: 'local-ui-test-user',
+        erpUserId: null,
+        erpRoleId: null,
+        access: { client: false, ai: true },
+        effective: { client: false, ai: true }
+      }
+    })
+  );
+  await page.route('**/conversations/**', async route => {
+    const path = new URL(route.request().url()).pathname;
+
+    return route.fulfill({
+      json: path.endsWith('/messages')
+        ? snapshot(stored)
+        : { generation: 0, deleted: false, protocol: 1 }
+    });
+  });
+  await page.route('**/api/agents/generalAgent/stream*', async route => {
+    const body = route.request().postDataJSON();
+    const input = body.messages.at(-1);
+
+    expect(input.role).toBe('user');
+    expect(typeof body.requestContext.requestId).toBe('string');
+    const requestId = body.requestContext.requestId;
+
+    // Повтор транспорта не создаёт второй вопрос с тем же ID запроса.
+    if (!stored.some(item => item.requestId === requestId)) {
+      stored.push({
+        ...message(`saved-user-${runs}`, 'user', input.content),
+        requestId
+      });
+      runs += 1;
+    }
+
+    return route.fulfill({
+      status: 500,
+      json: { error: 'QA provider failure' }
+    });
+  });
+  await page.goto(`/ai/${id}`);
+  await expect(page.locator('#startup-shell')).toHaveCount(0, {
+    timeout: 30_000
+  });
+  const editor = page.locator('.ai-assistant__editor');
+  const bubbles = page.locator('.ai-assistant__message');
+  const questions = ['Первый вопрос', 'Второй вопрос', 'Третий вопрос'];
+
+  for (const [index, question] of questions.entries()) {
+    await editor.locator('[contenteditable="true"]').fill(question);
+    await editor.locator('.toolbar-button.right:visible').click();
+    await expect.poll(() => runs).toBe(index + 1);
+    await expect(bubbles).toHaveCount((index + 1) * 2, { timeout: 15_000 });
+
+    for (let position = 0; position <= index; position += 1) {
+      await expect(bubbles.nth(position * 2)).toContainText(
+        questions[position]
+      );
+      await expect(bubbles.nth(position * 2 + 1)).toContainText(
+        'При обработке запроса произошла ошибка'
+      );
+    }
+  }
+
+  await page.reload();
+  await expect(bubbles).toHaveCount(6);
+
+  for (const [index, question] of questions.entries()) {
+    await expect(bubbles.nth(index * 2)).toContainText(question);
+    await expect(bubbles.nth(index * 2 + 1)).toContainText(
+      'При обработке запроса произошла ошибка'
+    );
+  }
+
+  expect(runs).toBe(3);
+});
+
 for (const localProtocol of [0, 1] as const) {
   test(`переход истории сохраняет прежние сообщения и файлы при отказе второй страницы, старый протокол ${localProtocol}`, async ({
     page
