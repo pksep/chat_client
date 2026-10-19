@@ -2,6 +2,7 @@ import { authedUser } from './useAuth';
 import { getConfig } from '../services/useConfig';
 import {
   loadInquiry,
+  refreshManagerInquiries,
   managerRequest,
   type ManagerInquiry
 } from './useManagerInquiries';
@@ -62,36 +63,47 @@ async function receiveContact(event: MessageEvent): Promise<void> {
   if (entry.contactId && entry.contactId !== message.contactId) return;
   entry.saving = true;
   try {
-    if (Number(entry.inquiry.erp_contact_id) !== message.contactId) {
-      // Связываем уже сохранённый контакт через прежнюю очередь и её проверки прав.
-      await managerRequest(`inquiries/${entry.inquiry.id}/erp/sync`, {
+    // Каждое сохранение обновляет реквизиты, даже если контакт уже связан.
+    const accepted = await managerRequest<{ id: string }>(
+      `inquiries/${entry.inquiry.id}/erp/sync`,
+      {
         operationId: message.requestId,
         contactId: message.contactId
-      });
-      for (let attempt = 0; attempt < 20; attempt++) {
-        if (authedUser.value?.id !== entry.actorId)
-          throw new Error('Сеанс чата изменился');
-        const detail = await loadInquiry(entry.inquiry.id);
-        if (Number(detail.inquiry.erp_contact_id) === message.contactId) break;
-        const operation = detail.erpOperations.find(
-          item => item.id === message.requestId
-        );
-        if (operation && ['failed', 'conflict'].includes(operation.state))
-          throw new Error(
-            'Контакт сохранён. Связь с обращением требует повторной синхронизации в чате.'
-          );
-        if (attempt === 19)
-          throw new Error(
-            'Контакт сохранён. Синхронизация обращения ещё выполняется.'
-          );
-        await new Promise(resolve => setTimeout(resolve, 1500));
       }
+    );
+    for (let attempt = 0; attempt < 20; attempt++) {
+      if (authedUser.value?.id !== entry.actorId)
+        throw new Error('Сеанс чата изменился');
+      const detail = await loadInquiry(entry.inquiry.id);
+      if (authedUser.value?.id !== entry.actorId)
+        throw new Error('Сеанс чата изменился');
+      const operation = detail.erpOperations.find(
+        item => item.id === accepted.id
+      );
+      if (
+        operation?.state === 'completed' &&
+        Number(detail.inquiry.erp_contact_id) === message.contactId
+      )
+        break;
+      if (operation && ['failed', 'conflict'].includes(operation.state))
+        throw new Error(
+          'Контакт сохранён. Связь с обращением требует повторной синхронизации в чате.'
+        );
+      if (attempt === 19)
+        throw new Error(
+          'Контакт сохранён. Синхронизация обращения ещё выполняется.'
+        );
+      await new Promise(resolve => setTimeout(resolve, 1500));
     }
+    // Другие диалоги того же контакта тоже получают обновлённые реквизиты.
+    await refreshManagerInquiries();
+    if (authedUser.value?.id !== entry.actorId) return;
     entry.popup.postMessage(
       { type: 'sep:manager-contact:linked', requestId: message.requestId },
       entry.origin
     );
   } catch (error) {
+    if (authedUser.value?.id !== entry.actorId) return;
     entry.popup.postMessage(
       {
         type: 'sep:manager-contact:link-error',
