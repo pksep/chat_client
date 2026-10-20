@@ -8,6 +8,7 @@ import {
   test
 } from 'bun:test';
 import { AI_STREAM_TIMEOUT_MS } from '../src/services/mastraStreamLifecycle';
+import { ref } from 'vue';
 
 type StreamFactory = (signal: AbortSignal) => Response | Promise<Response>;
 
@@ -45,7 +46,15 @@ mock.module('../src/composables/useAuth', () => ({
   getAuthUser: () => ({ id: 'test-user' }),
   getChatAuthSession: () => null,
   getStoredChatAccessToken: () => null,
+  withAuthResponseRefresh: (request: () => Promise<Response>) => request(),
   ensureAuthorizedResponse: (response: Response) => response
+}));
+
+const access = ref({ ai: true, client: false });
+mock.module('../src/composables/useChatAccess', () => ({
+  requireAiAccess: async () => undefined,
+  fetchWithAiAccess: (...args: Parameters<typeof fetch>) => fetch(...args),
+  useChatAccess: () => ({ access })
 }));
 
 mock.module('../src/composables/useNotifications', () => ({

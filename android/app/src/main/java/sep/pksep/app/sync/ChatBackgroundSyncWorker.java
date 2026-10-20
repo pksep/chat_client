@@ -30,7 +30,7 @@ public class ChatBackgroundSyncWorker extends Worker {
     private static final int DEFAULT_SYNC_EVENTS_LIMIT = 150;
     private static final int TARGETED_SYNC_EVENTS_LIMIT = 300;
     private static final int FOREGROUND_SYNC_EVENTS_LIMIT = 75;
-    private static final int TOPICS_LIMIT = 999;
+    private static final int TOPICS_LIMIT = 50;
 
     public ChatBackgroundSyncWorker(
         @NonNull Context context,

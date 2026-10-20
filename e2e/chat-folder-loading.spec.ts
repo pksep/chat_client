@@ -74,15 +74,28 @@ for (const theme of ['light', 'dark']) {
       expect(loadedRailBox?.height).toBe(railBox?.height);
       expect(loadedRailBox?.y).toBe(railBox?.y);
     } else expect(loadedRailBox).toEqual(railBox);
-    expect(
-      await page.getByTestId('ChatFolders-Folder-folder-0').boundingBox()
-    ).toEqual(rowBox);
-    expect(
-      await page
-        .getByTestId('ChatFolders-Folder-folder-0')
-        .locator('.chat-folders-panel__folder-icon')
-        .boundingBox()
-    ).toEqual(rowAvatarBox);
+    const loadedRowBox = (await page
+      .getByTestId('ChatFolders-Folder-folder-0')
+      .boundingBox())!;
+    const loadedRowAvatarBox = (await page
+      .getByTestId('ChatFolders-Folder-folder-0')
+      .locator('.chat-folders-panel__folder-icon')
+      .boundingBox())!;
+    if (isMobile) {
+      // Загруженные папки могут занять больше строк, чем короткий скелетон.
+      expect(loadedRowBox).toMatchObject({
+        x: rowBox!.x,
+        width: rowBox!.width,
+        height: rowBox!.height
+      });
+      expect(loadedRowAvatarBox).toEqual({
+        ...rowAvatarBox,
+        y: loadedRowBox.y + rowAvatarBox!.y - rowBox!.y
+      });
+    } else {
+      expect(loadedRowBox).toEqual(rowBox);
+      expect(loadedRowAvatarBox).toEqual(rowAvatarBox);
+    }
 
     await page.getByTestId('Fixture-Refresh').click();
     await expect(page.locator('.skeleton-block')).toHaveCount(0);

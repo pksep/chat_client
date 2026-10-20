@@ -415,7 +415,7 @@ const mentionConfig = {
   getIsOnline: (user: any) =>
     getHasWebsocketConnection() &&
     !isDeletedBotUser(user) &&
-    !getUserLastOnline(user) &&
+    getUserLastOnline(user) === null &&
     getAuthUser()?.id !== user.id,
   getInsertLabel: (user: any) => `@${user.initials || 'User'} `,
   getInsertAttrs: (user: any) => ({ userId: user.id })

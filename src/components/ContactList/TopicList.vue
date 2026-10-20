@@ -202,6 +202,15 @@
       </TopicFolderContextMenu>
     </li>
     <li
+      v-if="paginated && hasMoreTopics"
+      ref="paginationSentinelRef"
+      class="contact-list__pagination"
+      role="presentation"
+      :data-testid="`${props.dataTestid}-ContactList-LoadMore`"
+    >
+      <span v-if="loadingMoreTopics" role="status">Загрузка…</span>
+    </li>
+    <li
       v-if="showMessageSectionTitle"
       class="contact-list__section-title"
       :data-testid="`${props.dataTestid}-ContactList-MessagesTitle`"
@@ -408,7 +417,7 @@ import BotAvatar from '../UI/BotAvatar.vue';
 import type { IContactListProps } from './interfaces/contact-list';
 import { getAuthUser } from '../../composables/useAuth';
 import { IMessage, ITopic } from '../interfaces/interfaces';
-import { useTopics } from '../../composables/useTopics';
+import { getTopicsRefreshFailed, useTopics } from '../../composables/useTopics';
 import { formatListTime } from '../../composables/useTime';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
@@ -457,6 +466,7 @@ import { resolveTopicLastMessage } from '../../utils/topic-last-message';
 import { preloadAvatarPath } from '../../services/avatar-image-verification';
 
 interface IExtendedContactListProps extends IContactListProps {
+  paginated?: boolean;
   showCheckbox?: boolean;
   showLastOnline?: boolean;
   selectedTopicIds?: Set<string | number>;
@@ -474,7 +484,12 @@ const {
   toggleMuteTopic,
   setTopicMarkedUnread,
   resetTopicUnreadState,
-  getTopicUnreadReactionMessageId
+  getTopicUnreadReactionMessageId,
+  hasMoreTopics,
+  loading: loadingTopics,
+  loadingMoreTopics,
+  loadMoreTopics,
+  loadRemainingTopics
 } = useTopics();
 
 const props = withDefaults(defineProps<IExtendedContactListProps>(), {
@@ -499,6 +514,26 @@ const emits = defineEmits<{
   ): void;
   (e: 'unmount-message', result: IMessageSearchResult): void;
 }>();
+
+watch(
+  [
+    () => props.paginated,
+    () => props.searchQuery,
+    () => props.toolbarFilter,
+    () => props.showCheckbox,
+    hasMoreTopics
+  ],
+  () => {
+    if (
+      props.paginated &&
+      (props.searchQuery?.trim() ||
+        (props.toolbarFilter && props.toolbarFilter !== 'all') ||
+        props.showCheckbox)
+    )
+      void loadRemainingTopics();
+  },
+  { immediate: true }
+);
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
@@ -540,6 +575,44 @@ const displayTopics = computed(() =>
 );
 // Переподключение обновляет реактивные статусы, сохраняя DOM и наблюдатели превью.
 const listRootRef = ref<HTMLElement | null>(null);
+const paginationSentinelRef = ref<HTMLElement | null>(null);
+let paginationObserver: IntersectionObserver | null = null;
+const syncPaginationObserver = (): void => {
+  paginationObserver?.disconnect();
+  const sentinel = paginationSentinelRef.value;
+  if (
+    !sentinel ||
+    loadingTopics.value ||
+    startupTopicsPending.value ||
+    typeof IntersectionObserver === 'undefined'
+  )
+    return;
+
+  paginationObserver = new IntersectionObserver(async entries => {
+    if (
+      !entries.some(entry => entry.isIntersecting) ||
+      loadingTopics.value ||
+      loadingMoreTopics.value ||
+      startupTopicsPending.value
+    )
+      return;
+
+    await loadMoreTopics();
+    // После успеха заполняем свободное место, после ошибки ждём новой прокрутки.
+    if (paginationSentinelRef.value === sentinel && !getTopicsRefreshFailed())
+      syncPaginationObserver();
+  });
+  paginationObserver.observe(sentinel);
+};
+watch(
+  [paginationSentinelRef, loadingTopics, startupTopicsPending],
+  syncPaginationObserver,
+  { flush: 'post' }
+);
+onBeforeUnmount(() => {
+  paginationObserver?.disconnect();
+  paginationObserver = null;
+});
 const pendingActiveTopicId = ref<string | null>(null);
 const compactHoverTopic = ref<{ topic: ITopic; index: number } | null>(null);
 const compactPopoverRef = ref<HTMLElement | null>(null);
@@ -1439,7 +1512,7 @@ const isTopicUserOnline = (topic: ITopic): boolean => {
     isBotTopic(topic) ||
     (topic.type === TopicType.DM &&
       !!topic.user &&
-      !getUserLastOnline(topic.user) &&
+      getUserLastOnline(topic.user) === null &&
       getHasWebsocketConnection())
   );
 };
@@ -1461,6 +1534,14 @@ const getTopicActiveCall = (topic: ITopic) => {
 </script>
 
 <style scoped>
+.contact-list__pagination {
+  display: flex;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px;
+  color: var(--text-light-color);
+  font-size: 14px;
+}
 .contact-list__avatar--interactive {
   cursor: pointer;
 }
@@ -1565,5 +1646,23 @@ const getTopicActiveCall = (topic: ITopic) => {
 .contact-list__skeleton-line--short {
   width: 54%;
   height: 12px;
+}
+
+@media (width > 768px) {
+  .contact-list__skeleton-avatar {
+    width: calc(var(--size-avatar) * 2);
+    height: calc(var(--size-avatar) * 2);
+    flex-basis: calc(var(--size-avatar) * 2);
+  }
+
+  .contact-list__skeleton-content {
+    grid-template-rows: 20px 22px;
+    align-items: center;
+    align-self: stretch;
+    min-width: 0;
+    padding: 10px 0 6px;
+    gap: 0;
+    box-sizing: border-box;
+  }
 }
 </style>

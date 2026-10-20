@@ -1,20 +1,26 @@
 import type { Reqi } from '@pksep/reqi';
 import { withNetworkTimeout } from '../../utils/network-timeout';
+import {
+  rememberNativeStartupRead,
+  takeNativeStartupRead
+} from '../native-startup-reads';
 
 interface PendingReads {
   requests: Map<string, Promise<unknown>>;
   getScope: () => string | undefined;
   scope?: string;
+  apiUrl?: string;
 }
 
 const pendingReads = new WeakMap<Reqi, PendingReads>();
 
 export const configureJsonReads = (
   reqi: Reqi,
-  getScope: () => string | undefined = () => undefined
+  getScope: () => string | undefined = () => undefined,
+  apiUrl?: string
 ): void => {
   if (pendingReads.has(reqi)) return;
-  const state: PendingReads = { requests: new Map(), getScope };
+  const state: PendingReads = { requests: new Map(), getScope, apiUrl };
   pendingReads.set(reqi, state);
 
   const sendRequest = reqi.sendRequest.bind(reqi);
@@ -44,11 +50,19 @@ export const readJson = <T>(
   if (pending && options?.reusePending !== false) return pending as Promise<T>;
 
   const request = withNetworkTimeout(async signal => {
+    const prepared = await takeNativeStartupRead(scope, state.apiUrl, endpoint);
+    if (signal.aborted) throw signal.reason;
+    if (prepared.available) {
+      rememberNativeStartupRead(endpoint, scope, state.apiUrl);
+      return prepared.data as T;
+    }
     const response = await reqi.get(endpoint, {
       parsed: false,
       request: { signal }
     });
-    return (await response.json()) as T;
+    const result = (await response.json()) as T;
+    rememberNativeStartupRead(endpoint, scope, state.apiUrl);
+    return result;
   }, options?.timeoutMs ?? 10_000).finally(() => {
     if (state.requests.get(endpoint) === request) {
       state.requests.delete(endpoint);

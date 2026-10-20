@@ -900,10 +900,7 @@ import type { IUser, IUserStatus } from '../interfaces/interfaces';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import EmojiIcon from '../UI/EmojiIcon.vue';
 import { preloadNotoEmojiAssets } from '../../composables/useEmojiStyle';
-import {
-  getAuthUser,
-  logoutChatSession
-} from '../../composables/useAuth';
+import { getAuthUser, logoutChatSession } from '../../composables/useAuth';
 import {
   updateCurrentUserStatus,
   removeCurrentUserStatusPreset

@@ -1055,7 +1055,10 @@ export const cleanupPushNotificationsOnLogout = async (): Promise<void> => {
       })
     );
     if (!response.ok) {
-      console.warn('Не удалось удалить push-подписку на сервере:', response.status);
+      console.warn(
+        'Не удалось удалить push-подписку на сервере:',
+        response.status
+      );
     }
   };
   const startedAt = Date.now();

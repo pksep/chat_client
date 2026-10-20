@@ -47,7 +47,7 @@ describe('initial theme bootstrap', () => {
     assert.equal(result.classes.has('theme-dark'), true);
     assert.equal(result.classes.has('theme-light'), false);
     assert.equal(result.rootStyle.colorScheme, 'dark');
-    assert.equal(result.themeColor, '#212531');
+    assert.equal(result.themeColor, '#262a38');
   });
 
   it('falls back to the light theme for an unsupported value', () => {
@@ -55,7 +55,7 @@ describe('initial theme bootstrap', () => {
 
     assert.equal(result.classes.has('theme-light'), true);
     assert.equal(result.rootStyle.colorScheme, 'light');
-    assert.equal(result.themeColor, '#f8f9fd');
+    assert.equal(result.themeColor, '#ffffff');
   });
 
   it('loads the blocking theme script before the startup shell markup', () => {

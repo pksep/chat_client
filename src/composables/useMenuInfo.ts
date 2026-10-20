@@ -3,7 +3,7 @@ import { currentGroup, useGroup } from '../composables/useGroup';
 import { getChatSDK } from '../services/useChat';
 import { getUsersList } from './useUsers';
 import { useTopics } from './useTopics';
-import type { IUser } from '../components/interfaces/interfaces';
+import type { ITopic, IUser } from '../components/interfaces/interfaces';
 import { TopicType } from '../services/useChatSDK/types';
 import { RouteType } from './navigation/useUrlRouting';
 
@@ -86,8 +86,7 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
     if (!props.isEnabled) return;
 
     const sdk = getChatSDK();
-    const topics = await sdk.getTopics();
-    const findTopic = topics.data.find(to => to.id === props.topic.id);
+    const findTopic = (await sdk.getTopicById(props.topic.id)) as ITopic;
 
     if (findTopic?.type === TopicType.Group) {
       const { group } = await sdk.getGroup(findTopic.group.id);

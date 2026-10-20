@@ -117,6 +117,9 @@ async function folderFixture(page: Page, scope = 'chats') {
 }
 
 async function noExit(page: Page) {
+  await expect(page.locator('html')).not.toHaveAttribute(
+    'data-android-minimizes'
+  );
   await expect(page.locator('html')).not.toHaveAttribute('data-android-exits');
 }
 
@@ -144,7 +147,7 @@ for (const scope of ['chats', 'clients']) {
       expect(mutations).toEqual([]);
       await androidBack(page);
       await expect(page.locator('html')).toHaveAttribute(
-        'data-android-exits',
+        'data-android-minimizes',
         '1'
       );
     });
@@ -229,7 +232,10 @@ test('вложенное окно и меню имеют приоритет на
   await expect(page).toHaveURL(/\/dialogs$/);
   await noExit(page);
   await androidBack(page);
-  await expect(page.locator('html')).toHaveAttribute('data-android-exits', '1');
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-android-minimizes',
+    '1'
+  );
 });
 
 test('обрезка аватара закрывается перед родительским окном', async ({
@@ -347,7 +353,10 @@ test('Назад из мобильных разделов возвращает �
   await expect(page.getByTestId('ChatFolders-Panel')).toHaveCount(0);
   await noExit(page);
   await androidBack(page);
-  await expect(page.locator('html')).toHaveAttribute('data-android-exits', '1');
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-android-minimizes',
+    '1'
+  );
 });
 
 for (const width of [393, 600]) {
@@ -408,7 +417,7 @@ for (const width of [393, 600]) {
     await noExit(page);
     await androidBack(page);
     await expect(page.locator('html')).toHaveAttribute(
-      'data-android-exits',
+      'data-android-minimizes',
       '1'
     );
   });
@@ -512,7 +521,10 @@ test('Назад с ввода пароля возвращает к выбору
   ).toHaveCount(0);
   await noExit(page);
   await androidBack(page);
-  await expect(page.locator('html')).toHaveAttribute('data-android-exits', '1');
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-android-minimizes',
+    '1'
+  );
 });
 
 test('Назад сворачивает голосовой режим ИИ', async ({ page, isMobile }) => {

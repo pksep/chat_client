@@ -6,6 +6,10 @@ import {
   type Ref
 } from 'vue';
 import { sendMessageChat, uploadFile } from '../../../services/useChat';
+import {
+  outgoingSendGate,
+  outgoingSendKey
+} from '../../../utils/outgoing-send-gate';
 import { useManagerInquiries } from '../../../composables/useManagerInquiries';
 import {
   managerSendError,
@@ -1015,9 +1019,15 @@ export function useMessageSender(
       return;
     }
 
-    const delayMs = options?.immediate
+    const retryDelayMs = options?.immediate
       ? 0
       : getNextRetryDelayMs(retryState.attempt);
+    const delayMs = Math.max(
+      retryDelayMs,
+      outgoingSendGate.delay(
+        outgoingSendKey(authUser.value?.id || '', topicId, messageId)
+      )
+    );
 
     const timeoutId = setTimeout(async () => {
       pendingMessageRetryTimers.delete(retryKey);
@@ -1078,7 +1088,9 @@ export function useMessageSender(
       }
 
       if (didSend) {
-        clearPendingMessageAutoRetry(topicId, messageId);
+        // Отправка в сокет ещё не подтверждение. При потере echo повторяем
+        // после ожидания, пока сервер не заменит временное сообщение.
+        schedulePendingMessageAutoRetry(topicId, messageId);
         return;
       }
 

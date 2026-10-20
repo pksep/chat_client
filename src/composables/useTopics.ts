@@ -4,7 +4,6 @@ import {
   getHasWebsocketConnection,
   waitForChatSDK
 } from '../services/useChat';
-import { takeNativeStartupHistory } from '../services/native-startup-history';
 import { WebSocketEventType } from '../services/useChatSDK/websocketEvents';
 import { ITopic, ITopicInfo, IUser } from '../components/interfaces/interfaces';
 import {
@@ -23,6 +22,10 @@ import { authedUser } from './useAuth';
 import {
   loadCachedTopics,
   loadFastCachedTopics,
+  loadCachedUnreadTopicSummaries,
+  saveCachedUnreadTopicSummaries,
+  loadCachedTopicSyncSnapshot,
+  saveCachedTopicSyncSnapshot,
   saveCachedTopics
 } from '../services/useChatStateCache';
 import {
@@ -68,6 +71,11 @@ import {
   applyTopicPinSetting,
   sortTopicsByPinOrder
 } from '../utils/topic-order';
+import { hasNextTopicPage, TOPICS_PAGE_SIZE } from '../utils/topic-pagination';
+import { isCallTopic } from '../utils/call-topic';
+import type { PaginatedResponse } from '../services/useChatSDK/types';
+import { isTopicSyncState, type TopicSyncState } from '../utils/topic-sync';
+import { rememberNativeTopicSync } from '../services/native-startup-reads';
 
 const topics = ref<ITopic[]>([]);
 const topicsById = computed(
@@ -76,6 +84,10 @@ const topicsById = computed(
 const loading = ref(false);
 const error = ref<string | null>(null);
 const topicsRefreshFailed = ref(false);
+const hasMoreTopics = ref(false);
+const loadingMoreTopics = ref(false);
+const loadingClientTopics = ref(false);
+const unreadTopicSummaries = ref<ITopic[]>([]);
 export const getTopicsRefreshFailed = (): boolean => topicsRefreshFailed.value;
 const displayedUnreadCount = ref(0);
 const TYPING_STATE_TTL_MS = 4000;
@@ -164,14 +176,14 @@ const createTopicsApi = () => {
     getDisplayableTopicUnreadCount(topic, authUserId, getFullMessagesByTopicId);
 
   const hasAnyActiveUnreadTopic = (): boolean =>
-    topics.value.some(
+    getUnreadTopicList().some(
       topic =>
         getTopicDisplayableUnreadCount(topic) > 0 &&
         (!topic.info?.isMute || topic.taggedMe)
     );
 
   const getActualUnreadCount = (): number =>
-    topics.value.reduce(
+    getUnreadTopicList().reduce(
       (acc, topic) => acc + getTopicDisplayableUnreadCount(topic),
       0
     );
@@ -443,8 +455,6 @@ const createTopicsApi = () => {
       const persistedTopic = { ...topic };
       delete persistedTopic.typingUserIds;
       delete persistedTopic.activeCall;
-      delete persistedTopic.hasUnreadReaction;
-      delete persistedTopic.unreadReactionMessageId;
 
       return persistedTopic;
     });
@@ -570,13 +580,15 @@ const createTopicsApi = () => {
           );
         }
 
-        const refreshedTopics = await sdk.getTopics();
-        setTopics(refreshedTopics.data || []);
+        const favoriteTopic = await sdk.getTopicById(favoriteStore.topicId);
+        if (getChatSDK() !== sdk || authedUser.value?.id !== userId)
+          return null;
+        addTopicList(favoriteTopic as unknown as ITopic);
 
-        const favoriteTopic =
+        const createdFavoriteTopic =
           topics.value.find(topic => isFavoriteTopic(topic, userId)) || null;
 
-        return favoriteTopic;
+        return createdFavoriteTopic;
       } catch (creationError) {
         console.error('Не удалось создать Избранное:', creationError);
         return null;
@@ -590,11 +602,23 @@ const createTopicsApi = () => {
 
   const applyNativeTopicSnapshot = (
     nativeTopics: ITopic[],
-    userId?: string
+    userId?: string,
+    snapshotUpdatedAt?: string
   ): ITopic[] => {
-    if (!Array.isArray(nativeTopics) || nativeTopics.length === 0) {
+    if (
+      !Array.isArray(nativeTopics) ||
+      nativeTopics.length === 0 ||
+      (userId && authedUser.value?.id && authedUser.value.id !== userId)
+    ) {
       return topics.value;
     }
+    // Отложенный фоновый снимок не должен отменять уже применённый ответ сети.
+    const updatedAt = Date.parse(snapshotUpdatedAt || '');
+    if (
+      lastNetworkTopicsAppliedAt > 0 &&
+      (!Number.isFinite(updatedAt) || updatedAt <= lastNetworkTopicsAppliedAt)
+    )
+      return topics.value;
 
     const previousTopics = topicsById.value;
     const previousServerUnreadCounts = serverUnreadCounts.value;
@@ -696,6 +720,7 @@ const createTopicsApi = () => {
   };
 
   const hydrateTopicsFromCache = async (userId?: string): Promise<ITopic[]> => {
+    unreadTopicSummaries.value = loadCachedUnreadTopicSummaries(userId);
     if (topics.value.length > 0) {
       await warmShadowUnreadStateForTopics(topics.value, userId);
       return topics.value;
@@ -705,6 +730,13 @@ const createTopicsApi = () => {
     const cachedTopics = stripEphemeralTopicState(
       fastTopics?.length ? fastTopics : await loadCachedTopics(userId)
     );
+    if (!cachedTopics.length) {
+      const confirmed = await loadCachedTopicSyncSnapshot(userId);
+      if (confirmed)
+        cachedTopics.push(...stripEphemeralTopicState(confirmed.topics));
+    }
+    if (authedUser.value?.id && authedUser.value.id !== userId)
+      return topics.value;
 
     if (cachedTopics.length > 0) {
       topics.value = normalizeTopics(cachedTopics, userId);
@@ -714,98 +746,422 @@ const createTopicsApi = () => {
     return topics.value;
   };
 
-  const fetchAllTopics = async (options?: {
+  const isMainListTopic = (topic: ITopic): boolean =>
+    !isCallTopic(topic) &&
+    topic.group?.description !== 'sep-chat:external-inquiry:v1';
+
+  let paginationSession:
+    | {
+        sdk: ReturnType<typeof getChatSDK>;
+        userId: string | undefined;
+        page: number;
+        ids: Set<string>;
+        sync?: TopicSyncState;
+      }
+    | undefined;
+  let lastNetworkTopicsAppliedAt = 0;
+  let refreshPromise: Promise<ITopic[]> | undefined;
+  let morePromise: Promise<ITopic[]> | undefined;
+  let clientsPromise: Promise<void> | undefined;
+  let clientsSdk: ReturnType<typeof getChatSDK> = null;
+
+  watch(
+    () => authedUser.value?.id,
+    () => {
+      paginationSession = undefined;
+      lastNetworkTopicsAppliedAt = 0;
+      refreshPromise = undefined;
+      morePromise = undefined;
+      clientsPromise = undefined;
+      clientsSdk = null;
+      loading.value = false;
+      loadingMoreTopics.value = false;
+      loadingClientTopics.value = false;
+      unreadTopicSummaries.value = loadCachedUnreadTopicSummaries(
+        authedUser.value?.id
+      );
+      hasMoreTopics.value = false;
+    },
+    { flush: 'sync' }
+  );
+
+  const getUnreadTopicList = (): ITopic[] => {
+    const summaries = new Map(
+      unreadTopicSummaries.value.map(topic => [topic.id, topic])
+    );
+    topics.value.forEach(topic => {
+      const summary = summaries.get(topic.id);
+      summaries.set(
+        topic.id,
+        summary &&
+          getMessageTimestamp(summary.lastMessage) >
+            getMessageTimestamp(topic.lastMessage)
+          ? {
+              ...topic,
+              lastMessage: summary.lastMessage,
+              unreadMessageCount:
+                serverUnreadCounts.value[topic.id] ?? topic.unreadMessageCount
+            }
+          : topic
+      );
+    });
+    return [...summaries.values()].filter(topic => !isCallTopic(topic));
+  };
+
+  const applyTopicPage = (
+    response: PaginatedResponse<ITopic>,
+    session: NonNullable<typeof paginationSession>,
+    page: number,
+    pruneMissing = false
+  ): void => {
+    response.data.forEach(topic => session.ids.add(topic.id));
+    session.page = page;
+    if (page === 1 && isTopicSyncState(response.sync))
+      session.sync = response.sync;
+    hasMoreTopics.value = hasNextTopicPage(response, page, TOPICS_PAGE_SIZE);
+    if (response.unreadTopics) {
+      unreadTopicSummaries.value = response.unreadTopics;
+      saveCachedUnreadTopicSummaries(response.unreadTopics, session.userId);
+    }
+    const unreadById = response.unreadTopics
+      ? new Map(response.unreadTopics.map(topic => [topic.id, topic]))
+      : null;
+    const received = new Map(
+      response.data
+        .filter(topic => isMainListTopic(topic) || topic.id === route.value.id)
+        .map(topic => [topic.id, topic])
+    );
+    const retained = topics.value.filter(
+      topic =>
+        (!isCallTopic(topic) || topic.id === route.value.id) &&
+        (hasMoreTopics.value ||
+          !isMainListTopic(topic) ||
+          session.ids.has(topic.id) ||
+          (!pruneMissing && topic.id === route.value.id))
+    );
+    retained.forEach(topic => {
+      if (!received.has(topic.id)) {
+        const summary = unreadById?.get(topic.id);
+        received.set(
+          topic.id,
+          unreadById
+            ? {
+                ...topic,
+                unreadMessageCount: summary?.unreadMessageCount ?? 0,
+                taggedMe: summary?.taggedMe ?? false,
+                info: {
+                  ...topic.info,
+                  isMute: summary?.info?.isMute ?? topic.info?.isMute
+                }
+              }
+            : topic
+        );
+      }
+    });
+    setTopics([...received.values()]);
+    lastNetworkTopicsAppliedAt = Date.now();
+    topicsRefreshFailed.value = false;
+  };
+
+  const persistTopicSyncSession = async (
+    session: NonNullable<typeof paginationSession>
+  ) => {
+    const sync = !hasMoreTopics.value && session.sync ? session.sync : null;
+    await saveCachedTopicSyncSnapshot(
+      stripEphemeralTopicState(topics.value),
+      sync,
+      session.userId
+    );
+    if (sync) rememberNativeTopicSync(sync);
+  };
+
+  const finishTopicMaintenance = async (): Promise<void> => {
+    if (!hasMoreTopics.value) {
+      await ensureFavoriteTopic();
+      const serverActiveCalls = topics.value
+        .filter(
+          topic =>
+            !!topic.activeCall?.roomId &&
+            typeof topic.activeCall?.callType === 'string'
+        )
+        .map(topic => ({
+          roomId: topic.activeCall!.roomId,
+          topicId: topic.id,
+          callType: topic.activeCall!.callType || 'livekit',
+          startTime: topic.activeCall?.startTime ?? null,
+          participantCount: topic.activeCall?.participantCount,
+          groupMode: topic.activeCall?.groupMode,
+          elapsedDurationMs: topic.activeCall?.elapsedDurationMs
+        }));
+      const { syncServerActiveCalls } = await import('../services/useCalls');
+      await syncServerActiveCalls(serverActiveCalls);
+    }
+    await warmShadowUnreadStateForTopics(topics.value);
+  };
+
+  const fetchAllTopics = (options?: {
     deferMaintenanceUntil?: Promise<void>;
     cacheReady?: Promise<void>;
     onNetworkApplied?: () => void;
   }): Promise<ITopic[]> => {
+    if (
+      refreshPromise &&
+      (!paginationSession ||
+        (paginationSession.sdk === getChatSDK() &&
+          paginationSession.userId === authedUser.value?.id))
+    )
+      return refreshPromise.then(items => {
+        if (
+          !topicsRefreshFailed.value &&
+          paginationSession?.sdk === getChatSDK()
+        )
+          options?.onNetworkApplied?.();
+        return items;
+      });
+    morePromise = undefined;
+    loadingMoreTopics.value = false;
     loading.value = true;
     error.value = null;
-
-    try {
+    const task = (async () => {
       const sdk = getChatSDK() || (await waitForChatSDK());
       if (!sdk) throw new Error('Чат ещё не подключён');
-      const startupTopics = options?.cacheReady
-        ? await takeNativeStartupHistory<ITopic[]>()
-        : null;
-      const response = startupTopics
-        ? { data: startupTopics }
-        : await sdk.getTopics();
+      const userId = authedUser.value?.id;
+      const session: NonNullable<typeof paginationSession> = {
+        sdk,
+        userId,
+        page: 0,
+        ids: new Set<string>()
+      };
+      paginationSession = session;
+      const isCurrent = () =>
+        paginationSession === session &&
+        getChatSDK() === sdk &&
+        authedUser.value?.id === userId;
       await options?.cacheReady;
-      if (getChatSDK() !== sdk) return topics.value;
-      setTopics(response.data);
-      topicsRefreshFailed.value = false;
-      options?.onNetworkApplied?.();
-      const finishTopicMaintenance = async () => {
-        let authoritativeTopics = response.data;
-
-        if (startupTopics) {
-          try {
-            const authoritativeResponse = await sdk.getTopics();
-            if (getChatSDK() !== sdk) return;
-            authoritativeTopics = authoritativeResponse.data;
-            setTopics(authoritativeTopics);
-          } catch (maintenanceError) {
-            // Нативный быстрый снимок может быть неполным. На его основании
-            // нельзя создавать системный топик: иначе появится второй пустой
-            // экземпляр «Избранного». Повторим проверку при следующем полном
-            // успешном обновлении списка.
-            console.warn(
-              'Не удалось подтвердить полный список перед обслуживанием:',
-              maintenanceError
+      if (!isCurrent()) return topics.value;
+      const confirmed = await loadCachedTopicSyncSnapshot(userId);
+      if (!isCurrent()) return topics.value;
+      let response: PaginatedResponse<ITopic> | undefined;
+      let isDelta = false;
+      if (confirmed) {
+        try {
+          const delta = await sdk.syncTopics(confirmed.sync);
+          if (!isCurrent()) return topics.value;
+          if (delta.reset === false && isTopicSyncState(delta.sync)) {
+            const calls = new Map(
+              delta.activeCalls.map(call => [call.topicId, call])
             );
-            return;
+            const merged = new Map(
+              confirmed.topics.map(topic => [topic.id, topic])
+            );
+            delta.data.forEach(topic => merged.set(topic.id, topic));
+            if (delta.topicIds.every(id => merged.has(id))) {
+              isDelta = true;
+              response = {
+                data: delta.topicIds.map(id => ({
+                  ...merged.get(id)!,
+                  activeCall: calls.get(id) || null
+                })),
+                unreadTopics: delta.unreadTopics,
+                sync: delta.sync,
+                meta: {
+                  totalItems: delta.topicIds.length,
+                  totalPages: 1,
+                  currentPage: 1
+                }
+              } as PaginatedResponse<ITopic>;
+            }
+          }
+        } catch (syncError) {
+          if (!isCurrent()) return topics.value;
+          console.warn(
+            'Не удалось обновить список по PTS, проверяем первую страницу:',
+            syncError
+          );
+        }
+      }
+      response ??= await sdk.getTopics({
+        scope: 'chats',
+        includeUnread: true,
+        includeSync: true
+      });
+      if (!isCurrent()) return topics.value;
+      applyTopicPage(response, session, 1, isDelta);
+      // Старый сервер игнорирует scope: первые страницы могут состоять только
+      // из служебных звонков. Доходим до обычных чатов без пустого первого экрана.
+      if (
+        !isDelta &&
+        !isTopicSyncState(response.sync) &&
+        response.data.some(topic => !isMainListTopic(topic))
+      ) {
+        let visibleCount = response.data.filter(isMainListTopic).length;
+        while (hasMoreTopics.value && visibleCount < TOPICS_PAGE_SIZE) {
+          const totalPages = response.meta?.totalPages ?? response.totalPages;
+          const batchSize = Number.isInteger(totalPages)
+            ? Math.max(1, Math.min(3, totalPages! - session.page))
+            : 1;
+          const firstPage = session.page + 1;
+          const batch = await Promise.allSettled(
+            Array.from({ length: batchSize }, (_, index) =>
+              sdk.getTopics({ page: firstPage + index, scope: 'chats' })
+            )
+          );
+          if (!isCurrent()) return topics.value;
+          for (const [index, result] of batch.entries()) {
+            if (result.status === 'rejected') throw result.reason;
+            const next = result.value;
+            const page = firstPage + index;
+            if (
+              hasNextTopicPage(next, page, TOPICS_PAGE_SIZE) &&
+              next.data.every(topic => session.ids.has(topic.id))
+            )
+              throw new Error(
+                'Сервер вернул повторную или пустую страницу чатов'
+              );
+            visibleCount += next.data.filter(isMainListTopic).length;
+            applyTopicPage(next, session, page);
           }
         }
-
-        await ensureFavoriteTopic();
-        const serverActiveCalls = authoritativeTopics
-          .filter(
-            topic =>
-              !!topic.activeCall?.roomId &&
-              typeof topic.activeCall?.callType === 'string'
-          )
-          .map(topic => ({
-            roomId: topic.activeCall!.roomId,
-            topicId: topic.id,
-            callType: topic.activeCall!.callType || 'livekit',
-            startTime: topic.activeCall?.startTime ?? null,
-            participantCount: topic.activeCall?.participantCount,
-            groupMode: topic.activeCall?.groupMode,
-            elapsedDurationMs: topic.activeCall?.elapsedDurationMs
-          }));
-
-        const { syncServerActiveCalls } = await import('../services/useCalls');
-        await syncServerActiveCalls(serverActiveCalls);
-        await warmShadowUnreadStateForTopics(topics.value);
+      }
+      // Старый API без курсора и без прежнего снимка нечего подтверждать
+      // или сбрасывать. Запись пустого снимка задерживала первый экран.
+      if (session.sync || confirmed) await persistTopicSyncSession(session);
+      if (!isCurrent()) return topics.value;
+      options?.onNetworkApplied?.();
+      const maintenance = async () => {
+        if (isCurrent()) await finishTopicMaintenance();
       };
       if (options?.deferMaintenanceUntil) {
-        const userId = authedUser.value?.id;
-        // Список уже получен. Создание Избранного и восстановление звонков
-        // не должны удерживать стартовый скелетон поверх готовых чатов.
-        void options.deferMaintenanceUntil
-          .then(() => {
-            if (getChatSDK() !== sdk || authedUser.value?.id !== userId) return;
-            return finishTopicMaintenance();
-          })
-          .catch(error => {
-            console.warn(
-              'Не удалось завершить фоновую подготовку списка:',
-              error
-            );
-          });
-      } else {
-        await finishTopicMaintenance();
-      }
+        void options.deferMaintenanceUntil.then(maintenance).catch(error => {
+          console.warn(
+            'Не удалось завершить фоновую подготовку списка:',
+            error
+          );
+        });
+      } else await maintenance();
       return topics.value;
-    } catch (err) {
-      topicsRefreshFailed.value = true;
-      error.value = (err as Error).message;
-      console.error('Failed to fetch topics:', error.value);
-      return topics.value || [];
-    } finally {
-      loading.value = false;
+    })()
+      .catch(err => {
+        if (refreshPromise === task) {
+          topicsRefreshFailed.value = true;
+          error.value = (err as Error).message;
+          console.error('Не удалось загрузить чаты:', error.value);
+        }
+        return topics.value;
+      })
+      .finally(() => {
+        if (refreshPromise === task) {
+          loading.value = false;
+          refreshPromise = undefined;
+        }
+      });
+    refreshPromise = task;
+    return task;
+  };
+
+  const loadMoreTopics = (): Promise<ITopic[]> => {
+    if (morePromise) return morePromise;
+    if (refreshPromise) return refreshPromise.then(loadMoreTopics);
+    const session = paginationSession;
+    if (!session || !hasMoreTopics.value) return Promise.resolve(topics.value);
+    loadingMoreTopics.value = true;
+    const task = (async () => {
+      const page = session.page + 1;
+      const response = await session.sdk.getTopics({ page, scope: 'chats' });
+      if (
+        paginationSession !== session ||
+        getChatSDK() !== session.sdk ||
+        authedUser.value?.id !== session.userId
+      )
+        return topics.value;
+      if (
+        hasNextTopicPage(response, page, TOPICS_PAGE_SIZE) &&
+        response.data.every(topic => session.ids.has(topic.id))
+      ) {
+        throw new Error('Сервер вернул повторную или пустую страницу чатов');
+      }
+      applyTopicPage(response, session, page);
+      if (session.sync) await persistTopicSyncSession(session);
+      if (!hasMoreTopics.value) await finishTopicMaintenance();
+      return topics.value;
+    })()
+      .catch(err => {
+        if (paginationSession === session) {
+          topicsRefreshFailed.value = true;
+          error.value = (err as Error).message;
+        }
+        return topics.value;
+      })
+      .finally(() => {
+        if (morePromise === task) {
+          loadingMoreTopics.value = false;
+          morePromise = undefined;
+        }
+      });
+    morePromise = task;
+    return task;
+  };
+
+  const loadRemainingTopics = async (): Promise<void> => {
+    if (refreshPromise) await refreshPromise;
+    while (hasMoreTopics.value) {
+      const previousPage = paginationSession?.page;
+      await loadMoreTopics();
+      if (paginationSession?.page === previousPage) return;
     }
+  };
+
+  const loadClientTopics = (options?: {
+    isAllowed?: () => boolean;
+  }): Promise<void> => {
+    const requestedSdk = getChatSDK();
+    const userId = authedUser.value?.id;
+    if (!userId || options?.isAllowed?.() === false) return Promise.resolve();
+    if (clientsPromise && clientsSdk === requestedSdk) return clientsPromise;
+    clientsSdk = requestedSdk;
+    loadingClientTopics.value = true;
+    const task = (async () => {
+      const sdk = await (requestedSdk || waitForChatSDK());
+      if (
+        !sdk ||
+        clientsPromise !== task ||
+        authedUser.value?.id !== userId ||
+        options?.isAllowed?.() === false
+      )
+        return;
+      clientsSdk = sdk;
+      const clients = await sdk.getAllTopics({
+        scope: 'clients',
+        isCurrent: () => getChatSDK() === sdk && authedUser.value?.id === userId
+      });
+      if (
+        clientsPromise !== task ||
+        getChatSDK() !== sdk ||
+        authedUser.value?.id !== userId ||
+        options?.isAllowed?.() === false
+      )
+        return;
+      setTopics([
+        ...topics.value.filter(
+          topic => isMainListTopic(topic) || topic.id === route.value.id
+        ),
+        ...clients
+      ]);
+    })()
+      .catch(error => {
+        if (clientsPromise === task && authedUser.value?.id === userId)
+          topicsRefreshFailed.value = true;
+        console.warn('Не удалось загрузить чаты клиентов:', error);
+      })
+      .finally(() => {
+        if (clientsPromise === task) {
+          clientsPromise = undefined;
+          clientsSdk = null;
+          loadingClientTopics.value = false;
+        }
+      });
+    clientsPromise = task;
+    return task;
   };
 
   const createTopic = async (peerId: string): Promise<ITopic | null> => {
@@ -894,7 +1250,9 @@ const createTopicsApi = () => {
   ): void => {
     const topic = topicsById.value.get(topicId);
     if (topic) {
-      const lastMessage = topic.lastMessage;
+      // Сначала заменяем временный ID серверным, даже если часы клиента спешат.
+      const lastMessage = resolveLatestMessage(topic);
+      topic.lastMessage = lastMessage;
       if (lastMessage && messageIds.includes(lastMessage.id)) {
         lastMessage.status = MessageStatus.Read;
       }
@@ -1579,6 +1937,13 @@ const createTopicsApi = () => {
   };
 
   const deleteTopicFromList = (topicId: string): void => {
+    unreadTopicSummaries.value = unreadTopicSummaries.value.filter(
+      topic => topic.id !== topicId
+    );
+    saveCachedUnreadTopicSummaries(
+      unreadTopicSummaries.value,
+      authedUser.value?.id
+    );
     topics.value = [...topics.value.filter(t => t.id !== topicId)];
     groups.value = [...groups.value.filter(t => t.id !== topicId)];
     schedulePersistTopics();
@@ -1602,7 +1967,7 @@ const createTopicsApi = () => {
   };
 
   const totalUnreadCount = computed(() => {
-    return topics.value.reduce(
+    return getUnreadTopicList().reduce(
       (acc, topic) => acc + getTopicDisplayableUnreadCount(topic),
       0
     );
@@ -1654,6 +2019,13 @@ const createTopicsApi = () => {
     applyNativeTopicSnapshot,
     hydrateTopicsFromCache,
     fetchAllTopics,
+    hasMoreTopics,
+    loadingMoreTopics,
+    loadingClientTopics,
+    loadMoreTopics,
+    loadRemainingTopics,
+    loadClientTopics,
+    getUnreadTopicList,
     createTopic,
     updateLocalLastMessageTopic,
     updateLocalTopicReadStatus,

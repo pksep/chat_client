@@ -276,6 +276,7 @@ public class MainActivity extends BridgeActivity {
                     markStartupBenchmark("webview-commit");
                     if (preparedWebViewHidden) {
                         preparedWebViewCommitted = true;
+                        if (!launchedFromChatNotification) preparedWebContentReady = true;
                         maybeRevealPreparedWebView();
                         return;
                     }
@@ -311,7 +312,12 @@ public class MainActivity extends BridgeActivity {
     }
 
     public void revealStartupOverlay() {
-        if (!preparedNativeLaunch) runOnUiThread(this::releaseLaunchSplash);
+        runOnUiThread(() -> {
+            releaseLaunchSplash();
+            // Маршрут и web-скелетон уже готовы; сеть не должна удерживать логотип.
+            preparedWebContentReady = true;
+            maybeRevealPreparedWebView();
+        });
     }
 
     public void hideStartupOverlayAndReleaseSplash() {
@@ -1147,6 +1153,12 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void load() {
         markStartupBenchmark("bridge-start");
+        if (config == null) config = com.getcapacitor.CapConfig.loadDefault(this);
+        // Плагин создаёт свои перекрытия до запуска JS: белый цвет по умолчанию
+        // не должен появляться даже на один кадр при сохранённой тёмной теме.
+        LaunchAppearance.configureSystemBarPlugin(this, config);
+        if (isDarkLaunchTheme()) setTheme(R.style.AppTheme_NoActionBarDark);
+        LaunchAppearance.applySystemBars(this);
         super.load();
         markStartupBenchmark("bridge-ready");
     }

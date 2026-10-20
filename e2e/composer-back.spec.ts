@@ -38,7 +38,7 @@ for (const mode of ['Эмодзи', 'Стикеры', 'Стикеры без н�
     await expect(page).toHaveURL(topicUrl);
     await expect(page.locator('.chat__input .ProseMirror')).toBeVisible();
     await expect(page.locator('html')).not.toHaveAttribute(
-      'data-android-exits'
+      'data-android-minimizes'
     );
     await androidBack(page);
     await expect(page).toHaveURL(/\/dialogs$/);
@@ -100,10 +100,17 @@ test('закрытый или удалённый редактор освобож
   await trigger.tap();
   await expect(picker).toHaveCount(0);
   await androidBack(page);
-  await expect(page.locator('html')).toHaveAttribute('data-android-exits', '1');
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-android-minimizes',
+    '1'
+  );
   await trigger.tap();
   await expect(picker).toBeVisible();
   await page.evaluate(() => (window as any).stickerFixture.unmount());
   await androidBack(page);
-  await expect(page.locator('html')).toHaveAttribute('data-android-exits', '2');
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-android-minimizes',
+    '2'
+  );
+  await expect(page.locator('html')).not.toHaveAttribute('data-android-exits');
 });

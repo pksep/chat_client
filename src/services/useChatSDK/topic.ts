@@ -4,9 +4,32 @@ import { readJson } from './read-json';
 import { CHAT_CONTENT_REQUEST_TIMEOUT_MS } from '../../utils/network-timeout';
 import { PaginatedResponse } from './types';
 import { ITopic } from '../../components/interfaces/interfaces';
+import type { TopicSyncState, TopicSyncResponse } from '../../utils/topic-sync';
+import { topicSyncEndpoint } from '../../utils/topic-sync';
+import {
+  collectTopicPages,
+  TOPICS_PAGE_SIZE
+} from '../../utils/topic-pagination';
+
+export interface TopicQuery {
+  page?: number;
+  limit?: number;
+  type?: 'DM' | 'GROUP';
+  scope?: 'all' | 'chats' | 'clients' | 'sidebar';
+  includeUnread?: boolean;
+  includeSync?: boolean;
+}
+
+export interface TopicPagesOptions {
+  scope?: TopicQuery['scope'];
+  onPage?: (topics: ITopic[], complete: boolean) => void | Promise<void>;
+  isCurrent?: () => boolean;
+}
 
 export interface ChatTopicInterface {
-  getTopics(): Promise<PaginatedResponse<ITopic>>;
+  getTopics(params?: TopicQuery): Promise<PaginatedResponse<ITopic>>;
+  getAllTopics(options?: TopicPagesOptions): Promise<ITopic[]>;
+  syncTopics(state: TopicSyncState): Promise<TopicSyncResponse>;
   createTopic(topicData: { peerId: string }): Promise<Topic>;
   deleteTopic(topicId: string): Promise<void>;
   togglePinTopic(topicId: string): Promise<TopicSetting>;
@@ -42,10 +65,14 @@ export class ChatTopic implements ChatTopicInterface {
     this.reqi = reqi;
   }
 
-  async getTopics(): Promise<PaginatedResponse<ITopic>> {
+  async getTopics(params?: TopicQuery): Promise<PaginatedResponse<ITopic>> {
     const queryParams = new URLSearchParams();
-    queryParams.append('page', '1');
-    queryParams.append('limit', '999');
+    queryParams.append('page', String(params?.page ?? 1));
+    queryParams.append('limit', String(params?.limit ?? TOPICS_PAGE_SIZE));
+    if (params?.type) queryParams.append('type', params.type);
+    queryParams.append('scope', params?.scope ?? 'chats');
+    if (params?.includeUnread) queryParams.append('includeUnread', 'true');
+    if (params?.includeSync) queryParams.append('includeSync', 'true');
 
     const queryString = queryParams.toString();
     const endpoint = `/topics${queryString ? `?${queryString}` : ''}`;
@@ -57,6 +84,19 @@ export class ChatTopic implements ChatTopicInterface {
     } catch (error) {
       throw new Error(`Failed to fetch topics: ${(error as Error).message}`);
     }
+  }
+
+  getAllTopics(options?: TopicPagesOptions): Promise<ITopic[]> {
+    return collectTopicPages(
+      (page, limit) => this.getTopics({ page, limit, scope: options?.scope }),
+      options
+    );
+  }
+
+  syncTopics(state: TopicSyncState): Promise<TopicSyncResponse> {
+    return readJson<TopicSyncResponse>(this.reqi, topicSyncEndpoint(state), {
+      timeoutMs: CHAT_CONTENT_REQUEST_TIMEOUT_MS
+    });
   }
 
   async createTopic(topicData: { peerId: string }): Promise<Topic> {

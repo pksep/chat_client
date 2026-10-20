@@ -12,6 +12,8 @@ import {
 
 const originalWindow = globalThis.window;
 const originalDocument = globalThis.document;
+const originalRequestFrame = globalThis.requestAnimationFrame;
+const originalCancelFrame = globalThis.cancelAnimationFrame;
 
 const installWindowMock = () => {
   let href = 'http://localhost:5173/';
@@ -26,6 +28,8 @@ const installWindowMock = () => {
   };
 
   Object.assign(globalThis, {
+    requestAnimationFrame: () => 1,
+    cancelAnimationFrame: () => undefined,
     document: {
       title: 'Chat'
     },
@@ -42,6 +46,18 @@ const installWindowMock = () => {
 
 afterEach(() => {
   notificationTopicRefreshRequest.value = null;
+  for (const [key, value] of [
+    ['requestAnimationFrame', originalRequestFrame],
+    ['cancelAnimationFrame', originalCancelFrame]
+  ] as const) {
+    if (value === undefined) Reflect.deleteProperty(globalThis, key);
+    else
+      Object.defineProperty(globalThis, key, {
+        configurable: true,
+        writable: true,
+        value
+      });
+  }
 
   if (originalWindow === undefined) {
     Reflect.deleteProperty(globalThis, 'window');

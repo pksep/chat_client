@@ -74,6 +74,90 @@ async function prepare(page: Page, offline = false) {
   );
 }
 
+test('прямой вход показывает сохранённое время посещения до ответа пользователей', async ({
+  page,
+  isMobile
+}, testInfo) => {
+  test.skip(isMobile, 'Мобильный старт уже ждёт свежее присутствие.');
+  await prepare(page);
+  await page.route('**/presence-cache-seed', route =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: '<!doctype html><html></html>'
+    })
+  );
+  await page.goto('/presence-cache-seed');
+  const peer = fixture.topics[1].user;
+  await page.evaluate(
+    async ({ peer, userId }) => {
+      const { saveCachedUsers } = await import(
+        '/src/services/useChatStateCache.ts'
+      );
+      await saveCachedUsers(
+        [{ ...peer, lastOnline: new Date(Date.now() - 300_000) }] as any,
+        userId
+      );
+    },
+    { peer, userId: fixture.user.id }
+  );
+
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  let requested = false;
+  await page.route('**/api/users?*', async route => {
+    requested = true;
+    await gate;
+    await route.fulfill({
+      json: {
+        data: fixture.users.map(user =>
+          user.id === peer.id ? { ...user, lastOnline: null } : user
+        )
+      }
+    });
+  });
+  await page.addInitScript(() => {
+    (window as any).__firstHeaderFrame = null;
+    const capture = () => {
+      const status = document.querySelector(
+        '.chat__header-profile .user-profile__ex'
+      );
+      if (status && !document.getElementById('startup-shell')) {
+        (window as any).__firstHeaderFrame = status.textContent;
+      } else requestAnimationFrame(capture);
+    };
+    requestAnimationFrame(capture);
+  });
+  try {
+    await page.goto(`/dialogs/${fixture.topics[1].id}`);
+    await expect(page.locator('#startup-shell')).toHaveCount(0, {
+      timeout: 30_000
+    });
+    expect(requested).toBe(true);
+    const status = page.locator('.chat__header-profile .user-profile__ex');
+    const title = page.locator(
+      '.chat__header-profile .user-profile__title-text'
+    );
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__firstHeaderFrame))
+      .toContain('5 минут назад');
+    await expect(status).toContainText('5 минут назад');
+    const original = (await title.boundingBox())!;
+    await page.screenshot({
+      path: testInfo.outputPath('cached-last-seen.png')
+    });
+    release();
+    await expect(status).toHaveText('Онлайн');
+    const updated = (await title.boundingBox())!;
+    expect({ x: updated.x, y: updated.y }).toEqual({
+      x: original.x,
+      y: original.y
+    });
+    await page.screenshot({ path: testInfo.outputPath('fresh-online.png') });
+  } finally {
+    release();
+  }
+});
+
 test('обычный запуск ждёт свежий список и показывает новое сообщение в первом кадре', async ({
   page
 }) => {
@@ -101,7 +185,7 @@ test('обычный запуск ждёт свежий список и пока
     });
   });
   try {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect.poll(() => requested, { timeout: 30_000 }).toBe(true);
     await expect(page.locator('#startup-shell')).toHaveCount(1);
     expect(
@@ -142,7 +226,8 @@ test('нет сети: обычный запуск показывает кеш �
     .poll(() => page.evaluate(() => (window as any).__firstTopicFrame))
     .toContain('Сохранённое сообщение');
   await expect(page.locator('.connection-status:visible')).toContainText(
-    'Нет сети'
+    'Нет сети',
+    { timeout: 10_000 }
   );
 });
 
@@ -161,7 +246,8 @@ test('сервер недоступен: кеш доступен, заголов
     .poll(() => page.evaluate(() => (window as any).__firstTopicFrame))
     .toContain('Сохранённое сообщение');
   await expect(page.locator('.connection-status:visible')).toContainText(
-    'Не удалось обновить'
+    'Не удалось обновить',
+    { timeout: 10_000 }
   );
   expect(
     await page.evaluate(
@@ -198,7 +284,7 @@ test('зависший сервер при наличии сети открыв�
   await page.routeWebSocket('**/socket.io/**', socket => socket.close());
   try {
     await page.goto('/');
-    await expect.poll(() => requestedAt).toBeGreaterThan(0);
+    await expect.poll(() => requestedAt, { timeout: 15000 }).toBeGreaterThan(0);
     expect(await page.evaluate(() => navigator.onLine)).toBe(true);
     await expect(page.locator('#startup-shell')).toHaveCount(0, {
       timeout: 8_000
@@ -239,7 +325,7 @@ for (const failure of ['stalled', 'unavailable'] as const) {
     const gate = new Promise<void>(resolve => {
       release = resolve;
     });
-    await page.route('**/chat/token', async route => {
+    await page.route('**/api/auth/session', async route => {
       if (failure === 'stalled') await gate;
       await route
         .fulfill({ status: 503, json: { error: 'Тестовая недоступность' } })

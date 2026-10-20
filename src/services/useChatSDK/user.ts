@@ -1,6 +1,7 @@
 import { User, Topic } from '@pksep/zod-shared-chat';
 import { Reqi } from '@pksep/reqi';
 import { readJson } from './read-json';
+import { CHAT_CONTENT_REQUEST_TIMEOUT_MS } from '../../utils/network-timeout';
 import { SearchParams, PaginatedResponse } from './types';
 import type { UserStatusValue } from '../../utils/userStatus';
 import type {
@@ -85,7 +86,9 @@ export class ChatUser implements ChatUserInterface {
     const endpoint = `/users${queryString ? `?${queryString}` : ''}`;
 
     try {
-      return await readJson<PaginatedResponse<User>>(this.reqi, endpoint);
+      return await readJson<PaginatedResponse<User>>(this.reqi, endpoint, {
+        timeoutMs: CHAT_CONTENT_REQUEST_TIMEOUT_MS
+      });
     } catch (error) {
       throw new Error(`Failed to fetch users: ${(error as Error).message}`);
     }

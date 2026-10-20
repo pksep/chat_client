@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 
 import sep.pksep.app.sync.ChatStartupHistory;
+import sep.pksep.app.sync.ChatStartupReads;
 
 /**
  * Keeps the original app logo visible while fresh data and Chromium are
@@ -36,6 +37,7 @@ public class NotificationLaunchActivity extends AppCompatActivity {
         new WeakReference<>(null);
 
     private boolean mainActivityStarted = false;
+    private boolean pausedForMainActivity = false;
     private int launchGeneration = 0;
     private JSONArray preparedRows;
     private long preparedHistoryStartedAt;
@@ -61,6 +63,7 @@ public class NotificationLaunchActivity extends AppCompatActivity {
         launchSplash.setOnExitAnimationListener(provider -> provider.remove());
         Intent launchIntent = getIntent();
         String topicId = topicId(launchIntent);
+        if (topicId.isEmpty() && !MainActivity.hasCreatedInstance()) ChatStartupReads.start(this);
         // Start TLS/DNS before inflating the launcher view. Rendering proceeds
         // in parallel and the first server page can arrive within the first
         // second even when connection setup is temporarily slow.
@@ -86,6 +89,7 @@ public class NotificationLaunchActivity extends AppCompatActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         mainActivityStarted = false;
+        pausedForMainActivity = false;
         String topicId = topicId(intent);
         long historyStartedAt = System.currentTimeMillis();
         CompletableFuture<JSONArray> fresh = ChatStartupHistory.start(this, topicId);
@@ -258,10 +262,18 @@ public class NotificationLaunchActivity extends AppCompatActivity {
         // lower activity while SurfaceFlinger swaps WebView surfaces exposes
         // the home wallpaper for several frames. When Back really returns to
         // this activity, close it immediately instead of launching again.
-        if (mainActivityStarted && !isFinishing()) {
+        if (mainActivityStarted &&
+            (pausedForMainActivity || MainActivity.hasCreatedInstance()) &&
+            !isFinishing()) {
             finish();
             overridePendingTransition(0, 0);
         }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (mainActivityStarted) pausedForMainActivity = true;
     }
 
     @Override

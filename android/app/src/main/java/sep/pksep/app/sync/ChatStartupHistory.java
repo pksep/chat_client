@@ -14,14 +14,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import sep.pksep.app.BuildConfig;
 
-// Один свежий запрос при открытии Activity перекрывает время создания WebView.
+// Ранняя история уведомления перекрывает создание WebView. Список чатов
+// синхронизирует сам WebView из IndexedDB, чтобы не дублировать запросы.
 public final class ChatStartupHistory {
     private static final ExecutorService IO = Executors.newFixedThreadPool(2);
     private static final ExecutorService CACHE_IO = Executors.newSingleThreadExecutor();
     private static final String CACHE_DIRECTORY = "startup-history";
-    // Match the Web client request so the native fast path cannot replace the
-    // complete cached list with only the server's smaller first page.
-    private static final int STARTUP_TOPICS_LIMIT = 999;
     // Keep the complete "30 new messages" notification scenario in the
     // native first frame without making the tap wait for a larger payload.
     private static final int STARTUP_MESSAGES_LIMIT = 32;
@@ -46,12 +44,7 @@ public final class ChatStartupHistory {
                     if (!session.isValid() || session.userId == null || session.userId.isEmpty()) return null;
                     mark("history-requested");
                     ChatBackgroundSyncApi api = new ChatBackgroundSyncApi(session, 1500, 1500);
-                    // Fetch the same complete first page as the Web client. The
-                    // response is transferred directly into the first WebView
-                    // render, so it must contain every current topic.
-                    JSONArray rows = topicId.isEmpty()
-                        ? api.fetchTopics(STARTUP_TOPICS_LIMIT)
-                        : api.fetchLatestMessages(topicId, STARTUP_MESSAGES_LIMIT);
+                    JSONArray rows = api.fetchLatestMessages(topicId, STARTUP_MESSAGES_LIMIT);
                     mark("history-received");
                     return new Response(session, rows);
                 } catch (Exception error) {
@@ -98,6 +91,7 @@ public final class ChatStartupHistory {
     ) {
         String normalizedTopicId = normalizeTopicId(topicId);
         activeTopicId = normalizedTopicId;
+        if (normalizedTopicId.isEmpty()) return CompletableFuture.completedFuture(null);
         Request request = getOrStart(context, normalizedTopicId);
         return request.result.handle(
             (response, error) -> error == null && response != null
@@ -111,6 +105,7 @@ public final class ChatStartupHistory {
         String notificationTopicId
     ) {
         String normalizedTopicId = normalizeTopicId(notificationTopicId);
+        if (normalizedTopicId.isEmpty()) return;
         getOrStart(context, normalizedTopicId);
     }
 

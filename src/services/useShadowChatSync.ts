@@ -5,6 +5,8 @@ import {
 } from '../utils/startup-topic-records';
 import { reviveCachedDates } from '../utils/revive-cached-dates';
 import type { IMessage } from '../components/interfaces/interfaces';
+import { mergeMessageSnapshots } from '../utils/merge-message-snapshots';
+import { isMessageIdDeleted } from '../utils/message-identity';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
 import { recordMessageDeletionTelemetry } from './message-deletion-telemetry';
 
@@ -176,23 +178,6 @@ const getDeletedMessagesMetaKey = (topicId: string): string =>
 const getReadStateCacheKey = (topicId: string, userId: string) =>
   `${userId || 'anonymous'}:${topicId}`;
 
-const getMessageTimestamp = (message: IMessage): number => {
-  const candidates = [message.updatedAt, message.deletedAt, message.createdAt];
-
-  for (const candidate of candidates) {
-    const timestamp =
-      candidate instanceof Date
-        ? candidate.getTime()
-        : new Date(candidate || 0).getTime();
-
-    if (!Number.isNaN(timestamp) && timestamp > 0) {
-      return timestamp;
-    }
-  }
-
-  return 0;
-};
-
 const getMessageCreatedTimestamp = (message: IMessage): number => {
   const timestamp =
     message.createdAt instanceof Date
@@ -213,72 +198,13 @@ const compareMessagesByPosition = (left: IMessage, right: IMessage): number => {
   return (left.id || '').localeCompare(right.id || '');
 };
 
-const parseMessageEx = (
-  message: Pick<IMessage, 'ex'>
-): Record<string, unknown> | null => {
-  if (!message.ex) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(message.ex);
-  } catch {
-    return null;
-  }
-};
-
-const getMessageStableKey = (message: IMessage): string | null => {
-  if (!message?.id) {
-    return null;
-  }
-
-  const clientId = parseMessageEx(message)?.clientId;
-
-  if (typeof clientId === 'string' && clientId.length > 0) {
-    return `client:${clientId}`;
-  }
-
-  return `id:${message.id}`;
-};
-
 const mergeMessages = (
   existingMessages: IMessage[],
   incomingMessages: IMessage[]
-): IMessage[] => {
-  const mergedByKey = new Map<string, IMessage>();
-
-  existingMessages.forEach(message => {
-    const stableKey = getMessageStableKey(message);
-
-    if (stableKey) {
-      mergedByKey.set(stableKey, message);
-    }
-  });
-
-  incomingMessages.forEach(message => {
-    const stableKey = getMessageStableKey(message);
-
-    if (!stableKey) {
-      return;
-    }
-
-    const existingMessage = mergedByKey.get(stableKey);
-
-    if (!existingMessage) {
-      mergedByKey.set(stableKey, message);
-      return;
-    }
-
-    if (getMessageTimestamp(message) >= getMessageTimestamp(existingMessage)) {
-      mergedByKey.set(stableKey, {
-        ...existingMessage,
-        ...message
-      });
-    }
-  });
-
-  return Array.from(mergedByKey.values()).sort(compareMessagesByPosition);
-};
+): IMessage[] =>
+  mergeMessageSnapshots([...existingMessages, ...incomingMessages]).sort(
+    compareMessagesByPosition
+  );
 
 const openDb = (): Promise<IDBDatabase | null> => openChatDatabase(DB_NAME);
 
@@ -759,7 +685,7 @@ const filterShadowDeletedMessages = async (
   }
 
   return messages.filter(message => {
-    if (!deletedMessageIds.has(message.id)) return true;
+    if (!isMessageIdDeleted(message, deletedMessageIds)) return true;
     recordMessageDeletionTelemetry('stale_filtered', topicId, message.id, {
       source: 'shadow',
       blocked: true
@@ -1329,14 +1255,15 @@ export const loadShadowReadState = async (
 export const deleteShadowTopicMessage = async (
   topicId: string,
   messageId: string,
-  userId = getResolvedUserId()
+  userId = getResolvedUserId(),
+  tombstoneId = messageId
 ): Promise<void> => {
   if (!getShadowSyncEnabled() || !topicId || !messageId || !userId) {
     return;
   }
 
   try {
-    await markShadowTopicMessageDeleted(topicId, messageId, userId);
+    await markShadowTopicMessageDeleted(topicId, tombstoneId, userId);
 
     const cacheKey = getTopicCacheKey(topicId, userId);
     const existing = await getRecord<ShadowTopicSnapshotRecord>(

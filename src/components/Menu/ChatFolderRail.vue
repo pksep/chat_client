@@ -86,7 +86,7 @@
 
       <template v-if="props.loading && !props.folders.length">
         <span
-          v-for="index in 3"
+          v-for="index in props.mobile ? 2 : 3"
           :key="`folder-skeleton-${index}`"
           class="chat-folder-rail__item chat-folder-rail__item--skeleton"
           aria-hidden="true"

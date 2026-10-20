@@ -322,7 +322,7 @@ const topicPresenceIsOnline = computed(() => {
     props.topic.type === TopicType.DM &&
     !topicIsFavorite.value &&
     !isDeletedBotUser(user) &&
-    !getUserLastOnline(user) &&
+    getUserLastOnline(user) === null &&
     authedUser.value?.id !== user.id
   );
 });

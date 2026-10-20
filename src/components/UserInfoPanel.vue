@@ -261,7 +261,7 @@ const isOnline = computed(
     !clientInquiry.value &&
     !isDeletedAccount.value &&
     !isCurrentUser.value &&
-    !lastOnline.value
+    lastOnline.value === null
 );
 const isMuted = computed(() => !!directTopic.value?.info?.isMute);
 const canCall = computed(
