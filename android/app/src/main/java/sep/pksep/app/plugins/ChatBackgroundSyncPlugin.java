@@ -13,10 +13,41 @@ import java.util.Iterator;
 import sep.pksep.app.sync.ChatBackgroundSyncScheduler;
 import sep.pksep.app.sync.ChatBackgroundSyncStore;
 import sep.pksep.app.sync.ChatStartupHistory;
+import sep.pksep.app.sync.ChatStartupReads;
 import sep.pksep.app.BuildConfig;
 
 @CapacitorPlugin(name = "ChatBackgroundSync")
 public class ChatBackgroundSyncPlugin extends Plugin {
+    @PluginMethod
+    public void prepareStartupReads(PluginCall call) {
+        markStartupHistory("startup-reads-bridge-prepare");
+        ChatStartupReads.prepare(getContext(), call.getString("token", ""))
+            .thenAccept(reads -> {
+                markStartupHistory("startup-reads-bridge-prepared");
+                call.resolve(reads == null ? new JSObject().put("available", false) : toJsObject(reads));
+            });
+    }
+
+    @PluginMethod
+    public void takeStartupRead(PluginCall call) {
+        markStartupHistory("startup-read-bridge-take");
+        ChatStartupReads.take(getContext(), call.getString("token", ""),
+            call.getString("apiUrl", ""), call.getString("endpoint", ""))
+            .thenAccept(read -> {
+                JSObject result = new JSObject().put("available", read != null);
+                if (read != null) result.put("data", read.data).put("startedAt", read.startedAt);
+                markStartupHistory("startup-read-bridge-resolve");
+                call.resolve(result);
+            });
+    }
+
+    @PluginMethod
+    public void saveStartupReadPlan(PluginCall call) {
+        ChatStartupReads.savePlan(getContext(), call.getString("token", ""),
+            call.getString("apiUrl", ""), call.getArray("endpoints", new com.getcapacitor.JSArray()));
+        call.resolve();
+    }
+
     @PluginMethod
     public void prepareStartupHistory(PluginCall call) {
         markStartupHistory("history-bridge-prepare");

@@ -2,6 +2,8 @@ import './polyfills/legacy-webview';
 import { prepareChatDatabases } from './utils/chat-startup-databases';
 import { prepareStartupTopicRecords } from './utils/startup-topic-records';
 import type { PreparedStartupHistory } from './utils/startup-history';
+import type { PreparedStartupReads } from './utils/prepared-startup-reads';
+import { getChatAuthSession } from './utils/stored-chat-session';
 
 declare global {
   interface Window {
@@ -17,6 +19,9 @@ interface StartupNativePlugin {
   consumePendingNotificationTap?: () => Promise<StartupNotificationPayload>;
   reveal?: () => Promise<void>;
   prepareStartupHistory?: () => Promise<PreparedStartupHistory>;
+  prepareStartupReads?: (options: {
+    token: string;
+  }) => Promise<PreparedStartupReads>;
 }
 
 interface StartupCapacitorBridge {
@@ -286,7 +291,9 @@ const startupUrl = new URL(window.location.href);
 const startupPathParts = startupUrl.pathname.split('/').filter(Boolean);
 const startupRouteType = startupPathParts[0];
 const hasStartupTopicRoute =
-  ((startupRouteType === 'dialogs' || startupRouteType === 'group') &&
+  ((startupRouteType === 'dialogs' ||
+    startupRouteType === 'group' ||
+    startupRouteType === 'favorites') &&
     Boolean(startupPathParts[1])) ||
   Boolean(
     startupUrl.searchParams.get('dialogs') ||
@@ -322,7 +329,29 @@ window.__chatNativeStartupCleanup = (async () => {
   }
 
   if (isAndroidNative) {
+    // Маршрут проходит очередь моста раньше больших пакетов данных.
+    const notificationCheck = (async () =>
+      capacitor?.Plugins?.NotificationTap?.consumePendingNotificationTap?.())();
     prepareChatDatabases();
+    const session = getChatAuthSession();
+    if (session?.token) {
+      const result =
+        capacitor?.Plugins?.ChatBackgroundSync?.prepareStartupReads?.({
+          token: session.token
+        });
+      if (result) {
+        // Передаём готовые ответы до загрузки Vue и фоновых native-плагинов.
+        window.__chatNativePreparedReads = {
+          token: session.token,
+          result: result
+            .then(value => {
+              performance.mark('chat-startup:native-reads-prepared');
+              return value;
+            })
+            .catch(() => null)
+        };
+      }
+    }
     // Передаём готовый HTTP-ответ параллельно загрузке main; SDK проверит его
     // пользователя, сервер, маршрут и возраст перед применением.
     window.__chatNativePreparedHistory =
@@ -336,8 +365,7 @@ window.__chatNativeStartupCleanup = (async () => {
         link.href = 'data:,';
       });
     try {
-      const pendingNotificationTap =
-        await capacitor?.Plugins?.NotificationTap?.consumePendingNotificationTap?.();
+      const pendingNotificationTap = await notificationCheck;
 
       // Пустой ответ тоже завершает проверку запуска: повторный native-вызов
       // перед монтированием Vue не нужен. Новые intent подберёт слушатель.
@@ -352,15 +380,14 @@ window.__chatNativeStartupCleanup = (async () => {
         )
       ) {
         applyStartupTopicShell(pendingNotificationTap);
-        // Маршрут нужен до импорта приложения; декодирование фона и снятие
-        // native splash не должны задерживать загрузку настоящего чата.
-        void capacitor?.Plugins?.LaunchStartup?.reveal?.().catch(error => {
-          console.warn('Не удалось показать стартовый экран:', error);
-        });
       }
     } catch (error) {
       console.warn('Failed to prepare notification startup shell:', error);
     }
+    // Маршрут уже выбран; сеть обновляется за web-скелетоном, не за логотипом.
+    void capacitor?.Plugins?.LaunchStartup?.reveal?.().catch(error => {
+      console.warn('Не удалось показать стартовый экран:', error);
+    });
     const topicRoute = /^\/(?:dialogs|group)\/([^/]+)/.exec(
       window.location.pathname
     );

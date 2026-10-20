@@ -1,5 +1,56 @@
 import { expect, test } from '@playwright/test';
 
+test('ранняя передача списка не задерживает маршрут и показ WebView при зависшем мосте', async ({
+  page
+}) => {
+  await page.route('**/__native-startup-reads', route =>
+    route.fulfill({ contentType: 'text/html', body: '<!doctype html>' })
+  );
+  await page.goto('/__native-startup-reads');
+  const result = await page.evaluate(async () => {
+    const calls: string[] = [];
+    localStorage.setItem(
+      'chat_auth_session',
+      JSON.stringify({ token: 'early-token' })
+    );
+    (window as any).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'android',
+      Plugins: {
+        ChatBackgroundSync: {
+          prepareStartupReads: ({ token }: { token: string }) => {
+            calls.push(token);
+            return new Promise(() => {});
+          }
+        },
+        NotificationTap: {
+          consumePendingNotificationTap: async () => {
+            calls.push('route');
+            return { topicId: 'startup-topic', topicType: 'DM' };
+          }
+        },
+        LaunchStartup: {
+          reveal: async () => {
+            calls.push('reveal');
+          }
+        }
+      }
+    };
+    await import('/src/startup.ts');
+    await window.__chatNativeStartupCleanup;
+    return {
+      calls,
+      path: location.pathname,
+      token: window.__chatNativePreparedReads?.token
+    };
+  });
+  expect(result).toEqual({
+    calls: ['route', 'early-token', 'reveal'],
+    path: '/dialogs/startup-topic',
+    token: 'early-token'
+  });
+});
+
 for (const scenario of ['prepared', 'stalled'] as const) {
   test(`Android не ждёт зависший запрос стартовой истории: ${scenario}`, async ({
     page
@@ -109,6 +160,6 @@ for (const scenario of ['empty', 'notification', 'unavailable'] as const) {
         ? '/dialogs/startup-topic'
         : '/__native-startup'
     );
-    expect(result.reveals).toBe(scenario === 'notification' ? 1 : 0);
+    expect(result.reveals).toBe(1);
   });
 }

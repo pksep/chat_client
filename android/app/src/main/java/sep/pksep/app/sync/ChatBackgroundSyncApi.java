@@ -14,6 +14,8 @@ import java.net.HttpURLConnection;
 import java.net.URLEncoder;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import sep.pksep.app.BuildConfig;
 
 final class ChatBackgroundSyncApi {
@@ -62,9 +64,34 @@ final class ChatBackgroundSyncApi {
         );
     }
 
+    JSONArray fetchStartupTopics(int limit) throws IOException, JSONException {
+        int pageSize = Math.max(1, Math.min(limit, 50));
+        return requireRows(getJson("/topics?page=1&limit=" + pageSize + "&scope=chats"));
+    }
+
     JSONArray fetchTopics(int limit) throws IOException, JSONException {
-        Object payload = getJson("/topics?page=1&limit=" + Math.max(1, limit));
-        return requireRows(payload);
+        int pageSize = Math.max(1, Math.min(limit, 50));
+        Map<String, JSONObject> topics = new LinkedHashMap<>();
+        for (int page = 1; ; page++) {
+            Object payload = getJson("/topics?page=" + page + "&limit=" + pageSize + "&scope=sidebar");
+            JSONArray rows = requireRows(payload);
+            int previousSize = topics.size();
+            for (int index = 0; index < rows.length(); index++) {
+                JSONObject topic = rows.getJSONObject(index);
+                topics.put(topic.getString("id"), topic);
+            }
+            JSONObject response = payload instanceof JSONObject ? (JSONObject) payload : null;
+            JSONObject meta = response != null ? response.optJSONObject("meta") : null;
+            int totalPages = meta != null ? meta.optInt("totalPages", -1)
+                : response != null ? response.optInt("totalPages", -1) : -1;
+            int total = meta != null ? meta.optInt("totalItems", -1)
+                : response != null ? response.optInt("total", -1) : -1;
+            boolean hasNext = totalPages >= 0 ? page < totalPages
+                : total >= 0 ? (long) page * pageSize < total : rows.length() >= pageSize;
+            if (!hasNext) return new JSONArray(topics.values());
+            if (topics.size() == previousSize)
+                throw new IOException("Сервер вернул повторную или пустую страницу чатов");
+        }
     }
 
     JSONArray fetchLatestMessages(String topicId, int limit)
@@ -136,6 +163,13 @@ final class ChatBackgroundSyncApi {
             "/messages/topic/" + encodePathSegment(topicId) + "/read",
             payload
         );
+    }
+
+    JSONObject fetchStartupRead(String path) throws IOException, JSONException {
+        if (!ChatStartupReads.isAllowed(path)) throw new IOException("Недопустимый стартовый запрос");
+        Object result = getJson(path);
+        if (!(result instanceof JSONObject)) throw new IOException("Некорректный стартовый ответ");
+        return (JSONObject) result;
     }
 
     private Object getJson(String path) throws IOException, JSONException {

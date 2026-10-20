@@ -151,7 +151,7 @@ import {
 } from '../../composables/useSelectedMessages';
 import { RouteTypes } from '../../composables/navigation/useUrlRouting';
 import { parseCallMessage } from '../../utils/parseCallMessage';
-import { parseMessageEx } from '../../utils/messageReplyQuote';
+import { getMessageRenderKeys } from '../../utils/message-identity';
 import { parseUserEx } from '../../utils/parseUserEx';
 import { useResizeState } from '../../composables/useResizeState';
 import { MAX_W_MD } from '../../utils/constants';
@@ -554,10 +554,11 @@ const resolveMessageIsMeSender = (message?: IMessage) =>
     : getParsedCallMessage(message)?.isOutgoing ??
       props.authUserId === message?.senderUserId;
 
-const getMessageRenderKey = (message: IMessage): string => {
-  const { clientId } = parseMessageEx(message.ex);
-  return typeof clientId === 'string' && clientId ? clientId : message.id;
-};
+const messageRenderKeys = computed(() =>
+  getMessageRenderKeys(visibleMessages.value)
+);
+const getMessageRenderKey = (message: IMessage): string =>
+  messageRenderKeys.value.get(message.id) || message.id;
 
 const latestReadOutgoingMessageIndex = computed(() =>
   getLatestReadOutgoingMessageIndex(

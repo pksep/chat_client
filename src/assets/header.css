@@ -134,6 +134,10 @@ button.calls-bot__back {
   cursor: pointer;
 }
 
+.chat__header-profile .user-profile__ex:empty {
+  min-height: 1lh;
+}
+
 .chat__header-call-topic .user-profile__ex--typing {
   color: var(--primary-color);
 }

@@ -1,7 +1,13 @@
 import type { IMessage } from '../components/interfaces/interfaces';
 import { MessageStatus } from '../services/useChatSDK/types';
+import {
+  isSameMessage,
+  isTemporaryMessage,
+  type MessageIdentity
+} from './message-identity';
 
-type MessageStatusSnapshot = Pick<IMessage, 'id'> &
+type MessageStatusSnapshot = MessageIdentity &
+  Pick<IMessage, 'id'> &
   Partial<Pick<IMessage, 'status'>>;
 type TopicLastMessage = Pick<IMessage, 'createdAt'> & MessageStatusSnapshot;
 
@@ -9,31 +15,31 @@ export const resolveLastMessageStatus = (
   topicLastMessage?: MessageStatusSnapshot,
   clientMessage?: MessageStatusSnapshot
 ): IMessage['status'] | undefined => {
-  if (!topicLastMessage?.id || clientMessage?.id !== topicLastMessage.id) {
+  if (!isSameMessage(topicLastMessage, clientMessage)) {
     return topicLastMessage?.status;
   }
 
   // Подтверждённая доставка и прочтение не отменяются устаревшим снимком.
-  const statuses = [topicLastMessage.status, clientMessage.status];
+  const statuses = [topicLastMessage?.status, clientMessage?.status];
   if (statuses.includes(MessageStatus.Read)) return MessageStatus.Read;
   if (statuses.includes(MessageStatus.Delivery)) return MessageStatus.Delivery;
-  return clientMessage.status ?? topicLastMessage.status;
+  return clientMessage?.status ?? topicLastMessage?.status;
 };
 
 const preserveConfirmedStatus = <T extends MessageStatusSnapshot>(
   currentMessage: T | undefined,
   nextMessage: T | undefined
 ): T | undefined => {
-  if (
-    !nextMessage ||
-    !currentMessage?.id ||
-    currentMessage.id !== nextMessage.id
-  )
+  if (!nextMessage || !isSameMessage(currentMessage, nextMessage))
     return nextMessage;
   const status = resolveLastMessageStatus(currentMessage, nextMessage);
-  return status === nextMessage.status
-    ? nextMessage
-    : { ...nextMessage, status };
+  const canonical =
+    isTemporaryMessage(nextMessage) &&
+    currentMessage &&
+    !isTemporaryMessage(currentMessage)
+      ? currentMessage
+      : nextMessage;
+  return status === canonical.status ? canonical : { ...canonical, status };
 };
 
 const getCreatedAtTimestamp = (message?: TopicLastMessage): number => {
@@ -65,7 +71,15 @@ export const resolveTopicLastMessage = <T extends TopicLastMessage>(
     return serverLastMessage;
   }
 
-  if (!serverLastMessage || serverLastMessage.id === clientLastMessage.id) {
+  if (!serverLastMessage) return clientLastMessage;
+
+  if (isSameMessage(serverLastMessage, clientLastMessage)) {
+    if (
+      isTemporaryMessage(clientLastMessage) &&
+      !isTemporaryMessage(serverLastMessage)
+    ) {
+      return preserveConfirmedStatus(clientLastMessage, serverLastMessage);
+    }
     return preserveConfirmedStatus(serverLastMessage, clientLastMessage);
   }
 

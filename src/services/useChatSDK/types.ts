@@ -7,9 +7,12 @@ import {
   User,
   Group
 } from '@pksep/zod-shared-chat';
+import type { TopicSyncState } from '../../utils/topic-sync';
 
 export interface PaginatedResponse<T = any> {
   data: T[];
+  unreadTopics?: T[];
+  sync?: TopicSyncState;
   page: number;
   limit: number;
   total: number;

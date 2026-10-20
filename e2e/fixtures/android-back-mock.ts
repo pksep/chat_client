@@ -18,6 +18,10 @@ export async function installAndroidBackMock(page: Page) {
             const root = document.documentElement;
             root.dataset.androidExits = String(Number(root.dataset.androidExits || 0) + 1);
           },
+          async minimizeApp() {
+            const root = document.documentElement;
+            root.dataset.androidMinimizes = String(Number(root.dataset.androidMinimizes || 0) + 1);
+          },
           async getInfo() { return { name: 'Тест', id: 'test', build: '1', version: '1' }; },
           async getState() { return { isActive: true }; },
           async getLaunchUrl() { return undefined; },

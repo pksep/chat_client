@@ -76,8 +76,43 @@ import type { ShadowReadStateValue } from './useShadowChatSync';
 import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { compareMessages, getMessageTimestamp } from '../utils/messageOrder';
 import { parseMessageEx } from '../utils/messageReplyQuote';
+import { mergeMessageSnapshots } from '../utils/merge-message-snapshots';
+import {
+  isMessageIdDeleted,
+  pendingMessageTombstone
+} from '../utils/message-identity';
 import { recordTopicStateTelemetry } from './topic-state-telemetry';
 import { recordMessageDeletionTelemetry } from './message-deletion-telemetry';
+
+// Read может прийти до echo или загрузки истории. Сохраняем подтверждение
+// по серверному ID, чтобы последующий снимок не вернул WAIT/DELIVERED.
+const readReceiptsByMessage = new Map<string, Map<string, string>>();
+const readReceiptKey = (topicId: string, messageId: string): string =>
+  JSON.stringify([authedUser.value?.id, topicId, messageId]);
+const applyKnownReadReceipts = (
+  topicId: string,
+  message: IMessage
+): IMessage => {
+  const receipts = readReceiptsByMessage.get(
+    readReceiptKey(topicId, message.id)
+  );
+  if (!receipts?.size) return message;
+  let messageRead = message.messageRead;
+  receipts.forEach((readAt, userId) => {
+    messageRead = upsertMessageReadEntry(messageRead, {
+      messageId: message.id,
+      userId,
+      readAt
+    });
+  });
+  return {
+    ...message,
+    status: MessageStatus.Read,
+    isRead: true,
+    isReadByMe: receipts.has(authedUser.value?.id) || message.isReadByMe,
+    messageRead
+  };
+};
 
 // Store mutations replace message payloads. Deep Vue proxies make every field
 // of every cached message reactive and multiply the work of bulk merges; a
@@ -462,14 +497,6 @@ const schedulePendingOutgoingForwardBatchCleanup = (topicId: string): void => {
   pendingOutgoingForwardBatchTimeouts.set(topicId, timeoutId);
 };
 
-const getMessageVersionTimestamp = (message: IMessage): number => {
-  const timestamps = [message.updatedAt, message.deletedAt, message.createdAt]
-    .map(value => (value ? new Date(value).getTime() : 0))
-    .filter(value => !Number.isNaN(value));
-
-  return Math.max(0, ...timestamps);
-};
-
 const getPendingUploadKey = (topicId: string, messageId: string): string =>
   `${topicId}:${messageId}`;
 
@@ -638,7 +665,12 @@ const applyReactionOverlaysToMessages = (
   topicId: string,
   messages: IMessage[]
 ): IMessage[] =>
-  messages.map(message => applyReactionOverlayToMessage(topicId, message));
+  messages.map(message =>
+    applyKnownReadReceipts(
+      topicId,
+      applyReactionOverlayToMessage(topicId, message)
+    )
+  );
 
 export const rememberPersistedDeletedMessageIds = async (
   topicId: string,
@@ -677,7 +709,7 @@ const isDeletedMessageForTopic = (
   message: IMessage
 ): boolean => {
   const deletedIds = deletedMessageIdsByTopic.get(topicId);
-  if (deletedIds?.has(message.id)) return true;
+  if (isMessageIdDeleted(message, deletedIds)) return true;
 
   const clientId =
     message.senderUserId === authedUser.value?.id ? getClientId(message) : null;
@@ -695,7 +727,8 @@ export const reconcileDeletedMessage = (
     clientMessageId: getClientId(message),
     receivedStatus: message.status
   });
-  if (deletedMessageIdsByTopic.get(topicId)?.has(message.id)) return true;
+  if (isMessageIdDeleted(message, deletedMessageIdsByTopic.get(topicId)))
+    return true;
 
   // Отменённая отправка может подтвердиться уже после выхода из топика с новым ID.
   rememberDeletedMessageId(topicId, message.id);
@@ -1070,27 +1103,7 @@ const restoreMessagePendingUploadMediaState = async (
   };
 };
 
-const dedupeMessagesForTopic = (messages: IMessage[]): IMessage[] => {
-  const byStableKey = new Map<string, IMessage>();
-
-  messages.forEach(message => {
-    const stableKey = getClientId(message) || message.id;
-
-    if (stableKey) {
-      const existingMessage = byStableKey.get(stableKey);
-
-      if (
-        !existingMessage ||
-        getMessageVersionTimestamp(message) >=
-          getMessageVersionTimestamp(existingMessage)
-      ) {
-        byStableKey.set(stableKey, message);
-      }
-    }
-  });
-
-  return Array.from(byStableKey.values());
-};
+const dedupeMessagesForTopic = mergeMessageSnapshots;
 
 const resolveLocalTopicPage = (
   topicId: string,
@@ -1979,7 +1992,11 @@ export const prefetchAroundMessageContext = (
   return request;
 };
 
-export const addMessageToLocal = (topicId: string, message: IMessage): void => {
+export const addMessageToLocal = (
+  topicId: string,
+  incomingMessage: IMessage
+): void => {
+  const message = applyKnownReadReceipts(topicId, incomingMessage);
   if (reconcileDeletedMessage(topicId, message)) {
     return;
   }
@@ -2182,6 +2199,7 @@ export const deleteMessageFromLocal = (
     eventId?: string;
     pts?: string;
     traceId?: string;
+    clientId?: string;
   } = {}
 ): Promise<void> => {
   const message = getClientMessageById(topicId, messageId);
@@ -2197,13 +2215,18 @@ export const deleteMessageFromLocal = (
   const clientId =
     message && message.senderUserId === authedUser.value?.id
       ? getClientId(message)
-      : null;
+      : diagnostic.clientId || null;
   if (clientId && clientId !== messageId) {
-    rememberDeletedMessageId(topicId, clientId);
+    rememberDeletedMessageId(topicId, pendingMessageTombstone(clientId));
     clearPendingUploadMessage(topicId, clientId);
     cancelDelayedOutgoingMessage(topicId, clientId);
     cancelOutgoingDeliveryTimeout(topicId, clientId);
-    void deleteShadowTopicMessage(topicId, clientId, userId);
+    void deleteShadowTopicMessage(
+      topicId,
+      clientId,
+      userId,
+      pendingMessageTombstone(clientId)
+    );
   }
   rememberDeletedMessageId(topicId, messageId);
   clearReactionOverlayForMessage(topicId, messageId);
@@ -3208,6 +3231,15 @@ const applyLocalReadStatus = (
   messageIds: string[],
   userId: string
 ): void => {
+  messageIds.forEach(messageId => {
+    const key = readReceiptKey(topicId, messageId);
+    const readers = readReceiptsByMessage.get(key) || new Map<string, string>();
+    readers.set(userId, new Date().toISOString());
+    readReceiptsByMessage.set(key, readers);
+  });
+  while (readReceiptsByMessage.size > 10_000) {
+    readReceiptsByMessage.delete(readReceiptsByMessage.keys().next().value!);
+  }
   const existingMessages = getFullMessagesByTopicId(topicId);
   const readMessageIds = new Set(messageIds);
   const isReadByCurrentUser = userId === authedUser.value.id;

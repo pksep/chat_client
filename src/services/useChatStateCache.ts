@@ -3,12 +3,14 @@ import { reviveCachedDates as deserializeValue } from '../utils/revive-cached-da
 import { toRaw } from 'vue';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
+import { isTopicSyncState, type TopicSyncState } from '../utils/topic-sync';
 
 const DB_NAME = 'chat-offline-state-db';
 const STORE_NAME = 'entities';
 const FAST_TOPICS_CACHE_PREFIX = 'chat-offline-fast-topics-v1';
+const UNREAD_SUMMARIES_CACHE_PREFIX = 'chat-offline-unread-topics-v1';
 
-type CacheEntityType = 'topics' | 'users';
+type CacheEntityType = 'topics' | 'users' | 'topics-sync';
 
 interface CachedEntity<T> {
   cacheKey: string;
@@ -16,6 +18,7 @@ interface CachedEntity<T> {
   type: CacheEntityType;
   items: T[];
   updatedAt: string;
+  topicSync?: TopicSyncState;
 }
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
@@ -52,6 +55,37 @@ const getCacheKey = (type: CacheEntityType, userId = getResolvedUserId()) =>
 
 const getFastTopicsCacheKey = (userId = getResolvedUserId()) =>
   `${FAST_TOPICS_CACHE_PREFIX}:${userId || 'anonymous'}`;
+
+export const loadCachedUnreadTopicSummaries = (userId?: string): ITopic[] => {
+  if (typeof window === 'undefined' || !userId) return [];
+  try {
+    const items = JSON.parse(
+      window.localStorage.getItem(
+        `${UNREAD_SUMMARIES_CACHE_PREFIX}:${userId}`
+      ) || '[]'
+    );
+    return Array.isArray(items)
+      ? items.filter(item => typeof item?.id === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveCachedUnreadTopicSummaries = (
+  items: ITopic[],
+  userId?: string
+): void => {
+  if (typeof window === 'undefined' || !userId) return;
+  try {
+    window.localStorage.setItem(
+      `${UNREAD_SUMMARIES_CACHE_PREFIX}:${userId}`,
+      JSON.stringify(serializeValue(items))
+    );
+  } catch (error) {
+    console.warn('Не удалось сохранить счётчики непрочитанных чатов:', error);
+  }
+};
 
 export const loadFastCachedTopics = <T = ITopic>(
   userId = getResolvedUserId()
@@ -99,6 +133,39 @@ const saveFastCachedTopics = <T>(
 };
 
 const openDb = (): Promise<IDBDatabase | null> => openChatDatabase(DB_NAME);
+
+export const loadCachedTopicSyncSnapshot = async (userId?: string) => {
+  if (!userId) return null;
+  try {
+    const db = await openDb();
+    if (!db) return null;
+    return await new Promise<{ topics: ITopic[]; sync: TopicSyncState } | null>(
+      (resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const request = tx
+          .objectStore(STORE_NAME)
+          .get(getCacheKey('topics-sync', userId));
+        request.onsuccess = () => {
+          const cached = request.result as CachedEntity<ITopic> | undefined;
+          resolve(
+            cached &&
+              Array.isArray(cached.items) &&
+              isTopicSyncState(cached.topicSync)
+              ? {
+                  topics: deserializeValue(cached.items) as ITopic[],
+                  sync: cached.topicSync
+                }
+              : null
+          );
+        };
+        request.onerror = () => reject(request.error);
+      }
+    );
+  } catch (error) {
+    console.warn('Не удалось прочитать подтверждённый снимок чатов:', error);
+    return null;
+  }
+};
 
 const loadCachedEntity = async <T>(
   type: CacheEntityType,
@@ -153,7 +220,8 @@ const loadCachedEntity = async <T>(
 const saveCachedEntity = async <T>(
   type: CacheEntityType,
   items: T[],
-  userId = getResolvedUserId()
+  userId = getResolvedUserId(),
+  topicSync?: TopicSyncState | null
 ): Promise<void> => {
   if (!userId) {
     return;
@@ -178,13 +246,16 @@ const saveCachedEntity = async <T>(
       updatedAt: new Date().toISOString()
     };
 
+    if (topicSync) payload.topicSync = topicSync;
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
-      const request = store.put(payload);
-
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
+      // Подтверждённый снимок хранится отдельно: локальная запись из другой
+      // вкладки не должна связать старые карточки с более новым курсором.
+      store.put(payload);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
     });
   } catch (error) {
     console.warn(`Failed to save cached ${type}:`, error);
@@ -198,6 +269,13 @@ export const saveCachedTopics = async (
   topics: ITopic[],
   userId?: string
 ): Promise<void> => saveCachedEntity<ITopic>('topics', topics, userId);
+
+export const saveCachedTopicSyncSnapshot = (
+  topics: ITopic[],
+  sync: TopicSyncState | null,
+  userId?: string
+): Promise<void> =>
+  saveCachedEntity('topics-sync', sync ? topics : [], userId, sync);
 
 export const loadCachedUsers = async (userId?: string): Promise<IUser[]> =>
   loadCachedEntity<IUser>('users', userId);

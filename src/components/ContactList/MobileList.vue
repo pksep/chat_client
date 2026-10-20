@@ -63,7 +63,7 @@
                   mobile
                   :loading="isChatFoldersLoading"
                   :folders="chatFolders"
-                  :topics="allTopics"
+                  :topics="chatBadgeTopics"
                   :selected-folder-id="activeFolderId"
                   :is-managing="false"
                   is-active
@@ -76,6 +76,7 @@
 
             <div class="chat-list">
               <TopicList
+                paginated
                 :topics="contactList"
                 :data-testid="`${props.dataTestid}-ContactList`"
                 :selected-topic-id="selectedTopicId"
@@ -274,7 +275,13 @@ const props = withDefaults(defineProps<IMobileListProps>(), {
   dataTestid: () => 'MobileList'
 });
 
-const { getTopicList, loading: isTopicsLoading } = useTopics();
+const {
+  getTopicList,
+  getUnreadTopicList,
+  loadRemainingTopics,
+  hasMoreTopics,
+  loading: isTopicsLoading
+} = useTopics();
 const { state: toolbarState, setSearch } = useChatsToolbarState();
 const { activeSection, animateSectionChange, setActiveSection } = useChatMenu();
 const { allowed: managerAllowed } = useManagerInquiries();
@@ -283,6 +290,9 @@ const { isShareSelectionActive, selectedTopicIds, toggleShareTopic } =
   useShareSelection();
 const allTopics = computed(() =>
   getTopicList().filter(topic => !isClientTopic(topic))
+);
+const chatBadgeTopics = computed(() =>
+  getUnreadTopicList().filter(topic => !isClientTopic(topic))
 );
 const messageSearchResults = ref<IMessageSearchResult[]>([]);
 const isMessageSearchLoading = ref(false);
@@ -305,6 +315,10 @@ const {
   closeFolderManager
 } = useChatFolders();
 const dragEnterDepth = ref(0);
+watch([activeFolderId, isManagingFolders, hasMoreTopics], () => {
+  if (activeFolderId.value || isManagingFolders.value)
+    void loadRemainingTopics();
+});
 const isDragOverFiles = ref(false);
 const MENU_SECTION_ORDER: ChatMenuSection[] = [
   'chats',
@@ -322,7 +336,10 @@ let directSectionTransitionTimeoutId: number | null = null;
 const hiddenDirectTransitionSections = ref<Set<ChatMenuSection>>(new Set());
 
 const filterBadgeState = computed(() =>
-  getChatsToolbarFilterBadgeState(allTopics.value, authUserId.value)
+  getChatsToolbarFilterBadgeState(
+    getUnreadTopicList().filter(topic => !isClientTopic(topic)),
+    authUserId.value
+  )
 );
 
 const filterCounts = computed(() =>

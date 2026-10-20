@@ -2,9 +2,17 @@ package sep.pksep.app.sync;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNull;
 import org.junit.Test;
 
 public class ChatStartupHistoryTest {
+    @Test
+    public void topicListStartupDoesNotStartNativeNetworkRequest() throws Exception {
+        assertNull(ChatStartupHistory.start(null, "").get());
+        assertNull(ChatStartupHistory.start(null, null).get());
+        ChatStartupHistory.prefetch(null, "");
+    }
+
     @Test
     public void separatesUsersServersAndTopics() {
         assertTrue(matches("user", "https://chat.test/", "topic", 100));

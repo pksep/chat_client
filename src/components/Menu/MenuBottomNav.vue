@@ -240,7 +240,7 @@ import {
   useChatMenu
 } from '../../composables/useChatMenu';
 import { getAuthUser } from '../../composables/useAuth';
-import { getTopicList } from '../../composables/useTopics';
+import { getTopicList, useTopics } from '../../composables/useTopics';
 import { Icon, IconNameEnum } from '@pksep/yui';
 import {
   isClientTopic,
@@ -326,7 +326,8 @@ watch(
   { immediate: true }
 );
 
-const menuTopics = computed(() => getTopicList());
+const { getUnreadTopicList } = useTopics();
+const menuTopics = computed(() => getUnreadTopicList());
 const chatsBadgeState = computed(() =>
   getTopicsUnreadBadgeState(
     menuTopics.value.filter(

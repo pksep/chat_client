@@ -24,7 +24,8 @@ export function useBackButton() {
         );
         top.handler();
       } else {
-        void CapacitorApp.exitApp();
+        // На главном экране уходим в фон, сохраняя WebView для быстрого возврата.
+        void CapacitorApp.minimizeApp();
       }
     });
     initialized = true;

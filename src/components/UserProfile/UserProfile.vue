@@ -16,7 +16,7 @@
       :is-online="
         !isWaitingConnection &&
         !isDeletedAccount &&
-        (isBot || (!effectiveLastOnline && !isCurrentUser))
+        (isBot || (effectiveLastOnline === null && !isCurrentUser))
       "
     />
 
@@ -57,7 +57,7 @@
       class="user-profile__ex"
       :class="{
         'user-profile__ex--online':
-          !isDeletedAccount && !effectiveLastOnline && !isCurrentUser
+          !isDeletedAccount && effectiveLastOnline === null && !isCurrentUser
       }"
       :data-testid="`${dataTestid}-UserProfile-Ex`"
     >

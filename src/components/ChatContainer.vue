@@ -228,7 +228,7 @@ import {
   useBackButtonHandler
 } from '../composables/useBackButton';
 import { useShareSelection } from '../composables/useShareSelection';
-import { getTopicList, setTopics } from '../composables/useTopics';
+import { getTopicList, setTopics, useTopics } from '../composables/useTopics';
 import {
   isClientTopic,
   useManagerInquiries
@@ -339,21 +339,14 @@ watch(
   },
   { immediate: true }
 );
+const { loadClientTopics } = useTopics();
 watch(
-  () => chatAccess.value.client,
-  async (allowed, previous) => {
-    if (!allowed || previous) return;
-    const sdk = getChatSDK();
-    if (!sdk) return;
-    const userId = getAuthUser()?.id;
-    try {
-      const response = await sdk.getTopics();
-      if (chatAccess.value.client && getAuthUser()?.id === userId)
-        setTopics(response.data || []);
-    } catch (error) {
-      console.warn('Не удалось обновить список чатов:', error);
-    }
-  }
+  [() => chatAccess.value.client, activeSection, () => getAuthUser()?.id],
+  ([allowed, section]) => {
+    if (allowed && section === 'clients')
+      void loadClientTopics({ isAllowed: () => chatAccess.value.client });
+  },
+  { immediate: true }
 );
 watch(
   () => getAuthUser()?.id,

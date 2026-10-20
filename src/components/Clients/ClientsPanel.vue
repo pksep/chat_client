@@ -122,7 +122,7 @@ import {
   useManagerInquiries,
   type ManagerInquiry
 } from '../../composables/useManagerInquiries';
-import { getTopicList } from '../../composables/useTopics';
+import { getTopicList, useTopics } from '../../composables/useTopics';
 import { getAuthUser } from '../../composables/useAuth';
 import { navigateToGroup, useUrlWatcher } from '../../composables/navigation';
 import { useChatMenu } from '../../composables/useChatMenu';
@@ -136,7 +136,11 @@ import { useChatFolders } from '../../composables/useChatFolders';
 import ChatFolderRail from '../Menu/ChatFolderRail.vue';
 import ChatFoldersPanel from '../Menu/ChatFoldersPanel.vue';
 const props = defineProps<{ isCollapse?: boolean; isMobile?: boolean }>();
-const { inquiries, allowed, loading } = useManagerInquiries();
+const { inquiries, allowed, loading: inquiriesLoading } = useManagerInquiries();
+const { loadingClientTopics } = useTopics();
+const loading = computed(
+  () => inquiriesLoading.value || loadingClientTopics.value
+);
 const route = useUrlWatcher();
 const { setActiveSection } = useChatMenu();
 const {

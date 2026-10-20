@@ -106,7 +106,11 @@ themeStore.initTheme();
 // В Android оба модуля читаются из локального APK. Начинаем их разбор под
 // нативным логотипом, пока параллельно восстанавливаются сессия и свежие темы.
 // Тогда первое открытие переписки сразу получает историю и готовый редактор.
-if (Capacitor.isNativePlatform() && getChatAuthSession()?.token) {
+if (
+  Capacitor.isNativePlatform() &&
+  getChatAuthSession()?.token &&
+  /^\/(?:dialogs|group|favorites)\//.test(window.location.pathname)
+) {
   void prepareMessageExperience().catch(() => undefined);
 }
 

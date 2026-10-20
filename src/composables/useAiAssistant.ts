@@ -907,7 +907,8 @@ const deleteTask = async (taskId: string): Promise<void> => {
 const refreshAutomations = (): Promise<void> => {
   if (!useChatAccess().access.value.ai) return Promise.resolve();
   if (automationRefreshPromise) return automationRefreshPromise;
-  automationRefreshPromise = fetchAiAutomations()
+  automationRefreshPromise = afterStartupPaint()
+    .then(() => (useChatAccess().access.value.ai ? fetchAiAutomations() : null))
     .then(async automations => {
       if (!automations) return;
       const previous = new Map(persisted.tasks.map(task => [task.id, task]));
