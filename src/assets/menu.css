@@ -92,11 +92,11 @@
   gap: 10px;
 
   & > .connection-status {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
+    flex-shrink: 0;
     width: max-content;
+    margin-left: 5px;
     margin-top: 0;
+    white-space: nowrap;
   }
 }
 
@@ -133,16 +133,6 @@
 }
 
 @media screen and (min-width: 769px) {
-  .chats-toolbar__headline > .connection-status {
-    position: relative;
-    left: auto;
-    transform: none;
-    margin-left: auto;
-    flex-shrink: 0;
-    order: 1;
-    white-space: nowrap;
-  }
-
   .menu--collapse .menu__contact-list {
     padding-left: 0;
   }

@@ -15,11 +15,6 @@
         {{ props.title }}
       </h4>
 
-      <ConnectionStatus
-        v-if="!props.isCollapse && !!isWaitingConnection"
-        :refresh-failed="getTopicsRefreshFailed()"
-      />
-
       <Button
         v-if="props.showCreate"
         class="chats-toolbar__create-button"
@@ -34,6 +29,11 @@
           :data-testid="`${props.dataTestid}-ChatsToolbar-PlusIcon`"
         />
       </Button>
+
+      <ConnectionStatus
+        v-if="!props.isCollapse && !!isWaitingConnection"
+        :refresh-failed="getTopicsRefreshFailed()"
+      />
 
       <ContextMenu
         v-if="props.showCreate"

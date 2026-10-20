@@ -10,7 +10,9 @@
       @click.stop="handleHeaderCallClick"
     >
       <LeaveIcon />
-      <span>{{ resolvedHeaderCallLabel }}</span>
+      <span class="chat__header-active-call__label">
+        {{ resolvedHeaderCallLabel }}
+      </span>
 
       <span v-if="showHeaderCallTime" class="chat__header-active-call__time">
         {{ headerCallTimeLabel }}
@@ -19,7 +21,9 @@
 
     <div
       v-if="
-        !!isMobile || route.type === 'ai' || isCallTopicRoute || !!currentTopic
+        (isMobile && !!route.id) ||
+        route.type === 'ai' ||
+        (!!route.id && (isCallTopicRoute || !!currentTopic))
       "
       class="chat__header-main"
       @click="handleClickHeader"
@@ -875,7 +879,9 @@ const hasInvitedCall = computed(
 );
 const showRegularCallBanner = computed(
   () =>
-    (isCallActive.value && !isAnyCallModalVisible.value) ||
+    (isCallActive.value &&
+      (!isAnyCallModalVisible.value ||
+        (!route.value.id && route.value.type !== RouteTypes.AI))) ||
     !!currentHeaderCallEntry.value ||
     hasInvitedCall.value
 );

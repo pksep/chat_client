@@ -3,12 +3,16 @@
     v-if="isCallMessage && !props.loader"
     v-bind="props"
     @navigate-message="$emit('navigate-message')"
-  />
+  >
+    <template #quick-reply><slot name="quick-reply" /></template>
+  </MessageBubbleCall>
   <MessageBubbleEmoji
     v-else-if="isSingleEmojiMessage && !props.loader && !$slots.reference"
     v-bind="props"
     @navigate-message="$emit('navigate-message')"
-  />
+  >
+    <template #quick-reply><slot name="quick-reply" /></template>
+  </MessageBubbleEmoji>
   <div v-else class="message-bubble-stack">
     <MessageReferenceBlock
       v-if="showExternalForward"
@@ -22,6 +26,7 @@
       :class="messageArticleStyles"
       :data-testid="`${props.dataTestid}-Article`"
     >
+      <slot name="quick-reply" />
       <MessageBubbleTail
         v-if="!props.continuesWithNext"
         :is-me-sender="props.isMeSender"
