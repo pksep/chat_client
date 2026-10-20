@@ -192,7 +192,7 @@
           :aria-label="unreadIndicatorLabel"
         >
           <template v-if="unreadBadgeCount">
-            {{ unreadBadgeCount }}
+            {{ unreadBadgeLabel(unreadBadgeCount) }}
           </template>
         </div>
         <div
@@ -209,6 +209,7 @@
 </template>
 
 <script setup lang="ts">
+import { unreadBadgeLabel } from '../../utils/unread-badge-label';
 import { computed, watch } from 'vue';
 import { Tooltip } from '@pksep/yui';
 import { MediaType } from '@pksep/zod-shared-chat';

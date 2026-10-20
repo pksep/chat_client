@@ -168,7 +168,11 @@ import {
   managerMessageChannel,
   type ManagerMessageChannel
 } from '../../utils/managerMessageChannel';
-import { useManagerInquiries } from '../../composables/useManagerInquiries';
+import {
+  isClientTopic,
+  useManagerInquiries
+} from '../../composables/useManagerInquiries';
+import { visibleInquiryMessages } from '../../utils/inquiry-message-visibility';
 import { channelLabel } from '../../composables/useManagerRoutes';
 
 interface Props {
@@ -514,7 +518,16 @@ const getParsedCallMessage = (message?: IMessage) => {
   return value;
 };
 
-const visibleMessages = computed(() => props.messages);
+const visibleMessages = computed(() => {
+  const selectedTopic = getSelectedTopic();
+
+  return visibleInquiryMessages(
+    props.messages,
+    (topicId: string): boolean =>
+      managerInquiriesByTopic.value.has(topicId) ||
+      (selectedTopic?.id === topicId && isClientTopic(selectedTopic))
+  );
+});
 const pinnedMessageIdsByTopic = computed(() => {
   const topicIds = new Set(
     visibleMessages.value.map(message => message.topicId).filter(Boolean)

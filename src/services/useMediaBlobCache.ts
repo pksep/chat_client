@@ -1,5 +1,6 @@
 import { getConfig } from './useConfig';
-import { getAuthToken } from '../composables/useLogin';
+import { getAuthToken, subscribeAuthToken } from '../composables/useLogin';
+import { readonly, shallowReactive, shallowRef } from 'vue';
 import { getStoredChatAccessToken } from '../composables/useAuth';
 import {
   buildBrowserCompatibleImageUrl,
@@ -12,28 +13,105 @@ import {
   withMediaCacheVersion
 } from '../utils/media-url';
 
-const isInquiryFile = (path: string) =>
+export const isInquiryFile = (path: string): boolean =>
   /^manager-private\/[0-9a-f-]{36}$/i.test(path);
-const inquiryObjectUrls = new Map<string, string>();
+const inquiryObjectUrls = shallowReactive(new Map<string, string>());
+const pendingInquiryRequests = new Map<string, Promise<string | null>>();
+let inquiryScope = '';
+const inquiryRevision = shallowRef(0);
+export const inquiryMediaRevision = readonly(inquiryRevision);
+
+const clearInquiryObjectUrls = (): void => {
+  inquiryRevision.value++;
+  inquiryObjectUrls.forEach(url => URL.revokeObjectURL(url));
+  inquiryObjectUrls.clear();
+  pendingInquiryRequests.clear();
+  inquiryScope = '';
+};
+
+const getInquiryScope = (): string => {
+  const token = getAuthToken() || getStoredChatAccessToken();
+  const base = getConfig().CHAT_API_DOMAIN?.replace(/\/+$/, '');
+  const scope = token && base ? `${base}\0${token}` : '';
+
+  if (scope !== inquiryScope) {
+    clearInquiryObjectUrls();
+    inquiryScope = scope;
+  }
+
+  return scope;
+};
+
+const unsubscribeInquiryAuth = subscribeAuthToken(token => {
+  if (token) getInquiryScope();
+  else clearInquiryObjectUrls();
+});
+
+if (import.meta.hot) {
+  import.meta.hot.dispose((): void => {
+    unsubscribeInquiryAuth();
+    clearInquiryObjectUrls();
+  });
+}
 
 // Файлы обращений проверяются сервером при каждом открытии и не попадают в общий кеш браузера.
-const loadInquiryFile = async (path: string): Promise<string | null> => {
+const loadInquiryFile = (path: string): Promise<string | null> => {
+  const scope = getInquiryScope();
+  if (!scope) return Promise.resolve(null);
+  const revision = inquiryRevision.value;
+
+  const pending = pendingInquiryRequests.get(path);
+  if (pending) return pending;
+
   const token = getAuthToken() || getStoredChatAccessToken();
-  if (!token) return null;
-  const response = await fetch(
-    `${getConfig().CHAT_API_DOMAIN.replace(/\/$/, '')}/media/object/${path}`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: 'no-store',
-      redirect: 'error'
+  const base = getConfig().CHAT_API_DOMAIN.replace(/\/+$/, '');
+  const request = (async (): Promise<string | null> => {
+    try {
+      const response = await fetch(`${base}/media/object/${path}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+        redirect: 'error',
+        signal: AbortSignal.timeout(60000)
+      });
+
+      if (scope !== getInquiryScope() || revision !== inquiryRevision.value) {
+        await response.body?.cancel();
+        return null;
+      }
+
+      if (!response.ok) {
+        if ([401, 403, 404].includes(response.status)) {
+          const previous = inquiryObjectUrls.get(path);
+          if (previous) URL.revokeObjectURL(previous);
+          inquiryObjectUrls.delete(path);
+        }
+        return null;
+      }
+
+      // Содержимое по ID неизменно. Повторная проверка доступа не должна
+      // отзывать URL, который уже используют сообщение и просмотрщик.
+      const previous = inquiryObjectUrls.get(path);
+      if (previous) {
+        await response.body?.cancel();
+        return previous;
+      }
+
+      const blob = await response.blob();
+      if (scope !== getInquiryScope() || revision !== inquiryRevision.value)
+        return null;
+
+      const objectUrl = URL.createObjectURL(blob);
+      inquiryObjectUrls.set(path, objectUrl);
+      return objectUrl;
+    } finally {
+      if (pendingInquiryRequests.get(path) === request) {
+        pendingInquiryRequests.delete(path);
+      }
     }
-  );
-  if (!response.ok) return null;
-  const objectUrl = URL.createObjectURL(await response.blob());
-  const previous = inquiryObjectUrls.get(path);
-  inquiryObjectUrls.set(path, objectUrl);
-  if (previous) setTimeout(() => URL.revokeObjectURL(previous), 60000);
-  return objectUrl;
+  })();
+
+  pendingInquiryRequests.set(path, request);
+  return request;
 };
 
 const DB_NAME = 'chat-media-blob-cache-db';
@@ -306,6 +384,10 @@ export const getCachedMediaObjectUrl = (
     return null;
   }
 
+  if (isInquiryFile(path)) {
+    return getInquiryScope() ? inquiryObjectUrls.get(path) || null : null;
+  }
+
   return objectUrlCache.get(getMediaCacheKey(path)) || null;
 };
 
@@ -313,6 +395,8 @@ export const loadCachedMediaObjectUrl = async (
   path?: string | null
 ): Promise<string | null> => {
   if (!path || typeof window === 'undefined') return null;
+
+  if (isInquiryFile(path)) return null;
 
   const cacheKey = getMediaCacheKey(path);
   const cachedObjectUrl = objectUrlCache.get(cacheKey);

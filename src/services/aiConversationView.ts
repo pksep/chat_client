@@ -170,7 +170,8 @@ export function createAiConversationView(
     const display = { ...message, loading: false };
     delete display.pendingToolApproval;
     delete display.actionTask;
-    result.push(display);
+    if (requestId && requests.has(requestId)) insertForRequest(display);
+    else result.push(display);
   }
   return result;
 }

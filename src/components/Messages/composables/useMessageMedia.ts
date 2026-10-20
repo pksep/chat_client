@@ -1,18 +1,37 @@
 import { getConfig } from '../../../services/useConfig';
 import {
   ensureMediaObjectUrl,
-  getCachedMediaObjectUrl
+  getCachedMediaObjectUrl,
+  isInquiryFile
 } from '../../../services/useMediaBlobCache';
 import type { IMedia } from '../../interfaces/interfaces';
 import { buildBrowserCompatibleImageUrl } from '../../../utils/media-format';
 import { buildMediaObjectUrl } from '../../../utils/media-url';
 
-export function useMessageMedia() {
+interface MessageMediaHelpers {
+  getFullMediaPath: (media: IMedia, isThumb?: boolean) => string;
+  getSliderMediaPath: (media: IMedia) => string;
+  isSliderContentUrl: (
+    fileUrl: string,
+    options?: { includePdf?: boolean }
+  ) => boolean;
+  handleDragStart: (event: DragEvent, media: IMedia) => void;
+  canDragMedia: (media: IMedia) => boolean;
+  primeMediaCache: (
+    media: IMedia,
+    opts?: { includeOriginal?: boolean }
+  ) => void;
+  isMediaPathReady: (media: IMedia, isThumb?: boolean) => boolean;
+  getRemoteThumbnailUrl: (media: IMedia) => string | undefined;
+  EMPTY_MEDIA_SRC: string;
+}
+
+export function useMessageMedia(): MessageMediaHelpers {
   const config = getConfig();
   const EMPTY_MEDIA_SRC =
     'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 
-  const getPreferredMediaPath = (media: IMedia, isThumb = true) =>
+  const getPreferredMediaPath = (media: IMedia, isThumb = true): string =>
     isThumb ? media.thumbnailPath || media.path : media.path;
 
   const setCachedObjectUrlOnMedia = (
@@ -20,10 +39,9 @@ export function useMessageMedia() {
     path: string,
     objectUrl: string,
     isThumb: boolean
-  ) => {
+  ): void => {
     if (isThumb && (media.thumbnailPath || media.path) === path) {
       media.localThumbnailPath = objectUrl;
-      return;
     }
 
     if (media.path === path) {
@@ -31,7 +49,12 @@ export function useMessageMedia() {
     }
   };
 
-  const isMediaPathReady = (media: IMedia, isThumb = true) => {
+  const isMediaPathReady = (media: IMedia, isThumb = true): boolean => {
+    const preferredPath = getPreferredMediaPath(media, isThumb);
+    if (preferredPath && isInquiryFile(preferredPath)) {
+      return Boolean(getCachedMediaObjectUrl(preferredPath));
+    }
+
     if (isThumb && media.localThumbnailPath) {
       return true;
     }
@@ -40,14 +63,13 @@ export function useMessageMedia() {
       return true;
     }
 
-    const preferredPath = getPreferredMediaPath(media, isThumb);
     return Boolean(preferredPath && getCachedMediaObjectUrl(preferredPath));
   };
 
   const primeMediaCache = (
     media: IMedia,
     opts?: { includeOriginal?: boolean }
-  ) => {
+  ): void => {
     const thumbnailPath = media.thumbnailPath || media.path;
 
     if (thumbnailPath) {
@@ -67,7 +89,15 @@ export function useMessageMedia() {
     }
   };
 
-  const getFullMediaPath = (media: IMedia, isThumb = true) => {
+  const getFullMediaPath = (media: IMedia, isThumb = true): string => {
+    const preferredPath = getPreferredMediaPath(media, isThumb);
+
+    // Приватный файл нельзя открывать через CDN или прямой src без Bearer.
+    // Не используем старые blob-ссылки из восстановленного сообщения.
+    if (preferredPath && isInquiryFile(preferredPath)) {
+      return getCachedMediaObjectUrl(preferredPath) || EMPTY_MEDIA_SRC;
+    }
+
     if (isThumb && media.localThumbnailPath) {
       return media.localThumbnailPath;
     }
@@ -89,7 +119,7 @@ export function useMessageMedia() {
     return isThumb ? buildBrowserCompatibleImageUrl(sourceUrl) : sourceUrl;
   };
 
-  const getSliderMediaPath = (media: IMedia) => {
+  const getSliderMediaPath = (media: IMedia): string => {
     const sliderPath = buildBrowserCompatibleImageUrl(
       getFullMediaPath(media, false)
     );
@@ -107,7 +137,7 @@ export function useMessageMedia() {
   const isSliderContentUrl = (
     fileUrl: string,
     options?: { includePdf?: boolean }
-  ) => {
+  ): boolean => {
     const cleanUrl = fileUrl?.split(/[?#]/)[0] || '';
     const extensions =
       options?.includePdf === false
@@ -117,7 +147,11 @@ export function useMessageMedia() {
     return new RegExp(`\\.(${extensions})$`, 'i').test(cleanUrl);
   };
 
-  const getOriginalMediaUrl = (media: IMedia) => {
+  const getOriginalMediaUrl = (media: IMedia): string => {
+    if (isInquiryFile(media.path || '')) {
+      return getFullMediaPath(media, false);
+    }
+
     if (media.localPath) {
       return media.localPath;
     }
@@ -135,21 +169,26 @@ export function useMessageMedia() {
     );
   };
 
-  const canDragMedia = (media: IMedia) =>
+  const canDragMedia = (media: IMedia): boolean =>
     Boolean(
-      !media.isLoading && !media.uploadError && (media.localPath || media.path)
+      !media.isLoading &&
+        !media.uploadError &&
+        (media.localPath || media.path) &&
+        (!isInquiryFile(media.path || '') ||
+          getCachedMediaObjectUrl(media.path))
     );
 
-  const handleDragStart = (event: DragEvent, media: IMedia) => {
+  const handleDragStart = (event: DragEvent, media: IMedia): void => {
     if (!event.dataTransfer || !canDragMedia(media)) {
       event.preventDefault();
       return;
     }
 
     const originalUrl = getOriginalMediaUrl(media);
-    const fallbackUrl = media.path
-      ? buildMediaObjectUrl(config.CHAT_PATH_TO_FILE_CDN, media.path)
-      : originalUrl;
+    const fallbackUrl =
+      media.path && !isInquiryFile(media.path)
+        ? buildMediaObjectUrl(config.CHAT_PATH_TO_FILE_CDN, media.path)
+        : originalUrl;
 
     event.dataTransfer.effectAllowed = 'copy';
     event.dataTransfer.dropEffect = 'copy';

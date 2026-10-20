@@ -41,6 +41,7 @@ import {
   preloadAvatarImage
 } from '../../services/avatar-image-verification';
 import { observeViewportVisibility } from '../../services/useSharedViewportObserver';
+import { directAvatarUrl } from '../../utils/direct-avatar-url';
 
 const props = withDefaults(
   defineProps<{
@@ -99,10 +100,8 @@ let avatarRequestVersion = 0;
 let isUnmounted = false;
 const AVATAR_LOAD_ROOT_MARGIN_PX = 1800;
 
-const isLocalUrl = (path?: string | null): boolean =>
-  !!path && /^(blob:|data:|file:\/\/)/i.test(path);
 const canRenderAvatarSynchronously = (url: string): boolean =>
-  hasVerifiedAvatarUrl(url) || isLocalUrl(url);
+  hasVerifiedAvatarUrl(url) || !!directAvatarUrl(url);
 
 const resolveAvatar = async (
   path: string | null | undefined,
@@ -127,9 +126,10 @@ const resolveAvatar = async (
     return;
   }
 
-  const synchronousCandidateUrl = isLocalUrl(path)
-    ? path
-    : getCachedMediaObjectUrl(path) || (hasVerifiedAvatarUrl(path) ? path : '');
+  const synchronousCandidateUrl =
+    directAvatarUrl(path) ||
+    getCachedMediaObjectUrl(path) ||
+    (hasVerifiedAvatarUrl(path) ? path : '');
 
   if (
     synchronousCandidateUrl &&

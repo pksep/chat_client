@@ -11,6 +11,7 @@ import { clearManagerRoutes } from './useManagerRoutes';
 import { showErrorNotification } from './useNotifications';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
 import { useChatAccess } from './useChatAccess';
+import { hasInquiryTopicMarker } from '../utils/inquiry-message-visibility';
 
 export interface ManagerInquiry {
   id: string;
@@ -158,7 +159,7 @@ export async function managerRequest<T>(
 
 export function isClientTopic(topic?: ITopic | null): boolean {
   return (
-    topic?.group?.description === 'sep-chat:external-inquiry:v1' ||
+    hasInquiryTopicMarker(topic) ||
     !!inquiries.value.find(item => item.topic_id === topic?.id)
   );
 }

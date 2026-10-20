@@ -498,6 +498,106 @@ await test('Ошибка связи не исчезает, пока сервер
   ]);
   assert.equal(view[1].content, 'Соединение прервалось');
 });
+
+await test('Новые вопросы не перемещаются перед локальными ошибками предыдущих запросов', async () => {
+  const users = [
+    user,
+    {
+      ...user,
+      id: 'second-user',
+      requestId: 'second-request',
+      content: 'Второй вопрос',
+      timestamp: 2000
+    },
+    {
+      ...user,
+      id: 'third-user',
+      requestId: 'third-request',
+      content: 'Третий вопрос',
+      timestamp: 3000
+    }
+  ];
+  let local: ReturnType<typeof createAiConversationView> = [];
+
+  for (const [index, source] of users.entries()) {
+    const snapshot = await loadAiConversationTranscript(
+      async () => page({ messages: users.slice(0, index + 1) }),
+      0
+    );
+    local = createAiConversationView(snapshot, [
+      ...local,
+      {
+        id: `local-error-${index}`,
+        requestId: source.requestId,
+        role: 'assistant',
+        content: 'Соединение прервалось',
+        timestamp: source.timestamp + 1
+      }
+    ]);
+
+    assert.deepEqual(
+      local.map(message => message.id),
+      users
+        .slice(0, index + 1)
+        .flatMap((message, position) => [message.id, `local-error-${position}`])
+    );
+    assert.deepEqual(createAiConversationView(snapshot, local), local);
+  }
+});
+
+await test('Порядок сервера сохраняется при разных часах, а готовый ответ заменяет локальную ошибку', async () => {
+  const snapshot = await loadAiConversationTranscript(
+    async () =>
+      page({
+        messages: [
+          { ...user, timestamp: 3000 },
+          {
+            ...assistant,
+            content: 'Готовый ответ',
+            timestamp: 1000,
+            pendingToolApprovals: [],
+            outputAttachments: []
+          },
+          {
+            ...user,
+            id: 'second-user',
+            requestId: 'second-request',
+            timestamp: 500
+          }
+        ]
+      }),
+    0
+  );
+  const view = createAiConversationView(snapshot, [
+    {
+      id: 'old-error',
+      requestId: 'request',
+      role: 'assistant',
+      content: 'Соединение прервалось'
+    },
+    {
+      id: 'second-error',
+      requestId: 'second-request',
+      role: 'assistant',
+      content: 'Вторая ошибка',
+      timestamp: 1
+    },
+    { id: 'draft', role: 'user', content: 'Неотправленный вопрос' }
+  ]);
+
+  assert.deepEqual(
+    view.map(message => message.id),
+    [
+      'user-message',
+      'assistant-message',
+      'second-user',
+      'second-error',
+      'draft'
+    ]
+  );
+  assert.equal(view[1].content, 'Готовый ответ');
+});
+
 await test('Серверное открепление имеет приоритет над старым кэшем и восстанавливается без кэша', async () => {
   const snapshot = await loadAiConversationTranscript(
     async () => page({ messages: [{ ...user, pinned: false, pinVersion: 2 }] }),
