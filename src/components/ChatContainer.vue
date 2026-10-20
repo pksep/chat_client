@@ -9,7 +9,7 @@
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
   >
     <Header
-      v-if="state.isActiveHeader"
+      v-if="shouldShowHeader"
       class="chat__header"
       :display-route="headerDisplayRoute"
       :data-testid="`${props.dataTestid}-ChatContainer-Header`"
@@ -19,7 +19,7 @@
     />
     <HeaderMenu
       class="chat__header-menu"
-      v-else-if="!state.isActiveHeader"
+      v-else
       :dataTestid="`${props.dataTestid}-ChatContainer-HeaderMenu`"
     />
     <Menu
@@ -211,6 +211,7 @@ import {
   isAnyCallModalVisible
 } from '../services/useCallState';
 import { useChatWallpaper } from '../composables/useChatWallpaper';
+import { useAiAssistant } from '../composables/useAiAssistant';
 import { useUserInfoModal } from '../composables/useUserInfoModal';
 import VpnConfirmModal from './UI/VpnConfirmModal.vue';
 import { useVpnStatus } from '../services/useVpnStatus';
@@ -436,6 +437,11 @@ const shouldRenderCallModal = computed(
     isAnyCallModalVisible.value ||
     isAnyCallDialing.value ||
     isAnyCallIncoming.value
+);
+const { isVoiceModeOpen: isAiVoiceCallActive } = useAiAssistant();
+const shouldShowHeader = computed(
+  () =>
+    state.isActiveHeader || isCallActive.value || isAiVoiceCallActive.value
 );
 
 const users = computed(() => getUsersList());

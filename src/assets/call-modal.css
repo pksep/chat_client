@@ -1012,7 +1012,7 @@ body .tooltip-yui-kit__hint[data-testid^='CallModal-'][data-testid$='Tooltip'] {
   gap: 8px;
   flex: 0 1 auto;
   min-width: 0;
-  color: var(--chat-secondary);
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 17px;
   white-space: nowrap;
@@ -1026,14 +1026,6 @@ body .tooltip-yui-kit__hint[data-testid^='CallModal-'][data-testid$='Tooltip'] {
 
 .call-modal__connection-status--overlay {
   color: rgba(255, 255, 255, 0.78);
-}
-
-.call-modal__connection-status--degraded {
-  color: #b46900;
-}
-
-.call-modal__connection-status--overlay.call-modal__connection-status--degraded {
-  color: #ffd59a;
 }
 
 .call-modal__connection-status-spinner {

@@ -1257,9 +1257,48 @@ div.message-content__file {
 }
 
 .message__content__articles {
+  position: relative;
   display: grid;
   gap: 5px;
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.message__reply-button {
+  position: absolute;
+  top: -18px;
+  right: 0;
+  z-index: 1;
+  padding: 5px;
+  border-radius: 5px;
+  background-color: var(--surface-input-secondary);
+  color: var(--text-brand);
+  font-size: 12px;
+  line-height: 14px;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .message__article:hover > .message__reply-button,
+  .message-sticker__image:hover > .message__reply-button,
+  .message__content__articles:has(.message__article__media:hover)
+    > .message__reply-button,
+  .message__content__articles > .message__reply-button:hover {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.message__reply-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  outline: 1px solid var(--text-link);
+}
+
+.message[data-is-me-sender='false'] .message__reply-button {
+  right: -20px;
 }
 
 .message.message--selection-active .message__content__articles {

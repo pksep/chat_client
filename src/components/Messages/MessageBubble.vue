@@ -33,13 +33,26 @@
       />
     </div>
     <div :class="messageArticlesStyles">
+      <MessageQuickReply
+        v-if="canQuickReply && mediaFiles.length > 0 && docFiles.length === 0"
+        :data-testid="dataTestid"
+        @reply="emits('unmount-reply-message-id', props.messageId)"
+      />
       <MessageBubbleText
         v-if="shouldRenderStandaloneText"
         v-bind="props"
         :is-read="hasExternalChannel ? false : props.isRead"
         :message-status="hasExternalChannel ? undefined : props.messageStatus"
         @navigate-message="handleNavigateMessage"
-      />
+      >
+        <template #quick-reply>
+          <MessageQuickReply
+            v-if="canQuickReply"
+            :data-testid="dataTestid"
+            @reply="emits('unmount-reply-message-id', props.messageId)"
+          />
+        </template>
+      </MessageBubbleText>
 
       <MessageBubbleSticker
         v-if="sticker && !props.loader"
@@ -47,7 +60,15 @@
         :sticker="sticker"
         @navigate-message="handleNavigateMessage"
         @activate="handleStickerClick"
-      />
+      >
+        <template #quick-reply>
+          <MessageQuickReply
+            v-if="canQuickReply"
+            :data-testid="dataTestid"
+            @reply="emits('unmount-reply-message-id', props.messageId)"
+          />
+        </template>
+      </MessageBubbleSticker>
 
       <MessageBubbleFiles
         v-if="!props.loader && docFiles.length > 0"
@@ -56,7 +77,15 @@
         :message-status="hasExternalChannel ? undefined : props.messageStatus"
         @navigate-message="handleNavigateMessage"
         @set-slider="setSliderElement"
-      />
+      >
+        <template #quick-reply>
+          <MessageQuickReply
+            v-if="canQuickReply"
+            :data-testid="dataTestid"
+            @reply="emits('unmount-reply-message-id', props.messageId)"
+          />
+        </template>
+      </MessageBubbleFiles>
 
       <MessageBubbleMedia
         v-if="!props.loader && mediaFiles.length > 0"
@@ -119,6 +148,7 @@ import { MediaType } from '@pksep/zod-shared-chat';
 import { IMedia } from '../interfaces/interfaces';
 import MessageContextMenu from './MessageContextMenu.vue';
 import MessageBubbleText from './MessageBubbleText.vue';
+import MessageQuickReply from './MessageQuickReply.vue';
 import MessageBubbleSticker from './MessageBubbleSticker.vue';
 import { getMessageSticker } from '../../utils/stickers';
 import { hasExternalMessageChannel } from '../../utils/managerMessageChannel';
@@ -154,6 +184,7 @@ import {
   isInquiryFile
 } from '../../services/useMediaBlobCache';
 import { showErrorNotification } from '../../composables/useNotifications';
+import { MessageStatus } from '../../services/useChatSDK/types';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -192,6 +223,18 @@ const isContextMenuOpen = computed(
 const contextMediaId = ref<string | null>(null);
 const isCallTopicDefaultMessageEx = computed(() =>
   Boolean(parseCallTopicDefaultMessageEx(props.messageEx))
+);
+const canQuickReply = computed(
+  () =>
+    !props.isMobile &&
+    !props.isSelectionMode &&
+    !props.loader &&
+    !!props.messageId &&
+    !!props.topicId &&
+    !isCallTopicDefaultMessageEx.value &&
+    props.messageStatus !== MessageStatus.NotDelivered &&
+    props.messageStatus !== MessageStatus.Wait &&
+    !props.media.some(media => media.uploadError)
 );
 
 const sliderElements = ref<
