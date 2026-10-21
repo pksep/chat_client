@@ -22,7 +22,13 @@ final class ChatBackgroundSyncApi {
     private static final int CONNECT_TIMEOUT_MS = 15000;
     private static final int READ_TIMEOUT_MS = 20000;
 
-    private final ChatBackgroundSyncStore.Session session;
+    interface SessionRefresher {
+        ChatBackgroundSyncStore.Session current(ChatBackgroundSyncStore.Session expected) throws IOException;
+        ChatBackgroundSyncStore.Session refresh(ChatBackgroundSyncStore.Session expired) throws IOException;
+    }
+
+    private ChatBackgroundSyncStore.Session session;
+    private SessionRefresher sessionRefresher;
     private final int connectTimeoutMs;
     private final int readTimeoutMs;
 
@@ -34,6 +40,11 @@ final class ChatBackgroundSyncApi {
         this.session = session;
         this.connectTimeoutMs = connectTimeoutMs;
         this.readTimeoutMs = readTimeoutMs;
+    }
+
+    ChatBackgroundSyncApi(ChatBackgroundSyncStore.Session session, SessionRefresher refresher) {
+        this(session);
+        sessionRefresher = refresher;
     }
 
     SyncEventsResult fetchSyncEvents(String pts, int limit)
@@ -192,6 +203,18 @@ final class ChatBackgroundSyncApi {
 
     private String request(String method, String path, String body)
         throws IOException {
+        if (sessionRefresher != null) session = sessionRefresher.current(session);
+        try {
+            return requestOnce(method, path, body);
+        } catch (ApiException error) {
+            if (error.statusCode != 401 || sessionRefresher == null) throw error;
+            session = sessionRefresher.refresh(session);
+            session = sessionRefresher.current(session);
+            return requestOnce(method, path, body);
+        }
+    }
+
+    private String requestOnce(String method, String path, String body) throws IOException {
         HttpURLConnection connection = null;
 
         try {
@@ -265,10 +288,12 @@ final class ChatBackgroundSyncApi {
 
     static final class ApiException extends IOException {
         final int statusCode;
+        final String responseBody;
 
         ApiException(int statusCode, String body) {
             super("HTTP " + statusCode + (body == null || body.isEmpty() ? "" : ": " + body));
             this.statusCode = statusCode;
+            this.responseBody = body;
         }
 
         boolean isAuthError() {

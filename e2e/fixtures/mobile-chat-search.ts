@@ -117,7 +117,10 @@ useAiAssistant().sessions.value[0].messages = Array.from(
 
 createApp({
   setup() {
-    return () =>
+    return () => [
+      params.has('beta')
+        ? h('div', { class: 'chat_container_alert' }, 'beta')
+        : null,
       h('main', { class: 'chat-container' }, [
         h(Header, { class: 'chat__header', dataTestid: 'Fixture' }),
         h('aside', { hidden: true }, [
@@ -152,7 +155,8 @@ createApp({
                 )
               ]
         )
-      ]);
+      ])
+    ];
   }
 })
   .use(createPinia())

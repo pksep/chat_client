@@ -1,7 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { onBeforeUnmount, ref, watch, type Ref } from 'vue';
 import { BackButtonPriority, useBackButtonHandler } from './useBackButton';
-import { isIosStandalonePwa } from '../utils/ios-pwa-viewport';
+import { isIosWeb } from '../utils/ios-pwa-viewport';
 
 // Фокус, нужный редактору для вставки эмодзи, не должен открывать клавиатуру.
 export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
@@ -54,7 +54,7 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
     if (target.closest('.smile-button') && !target.closest('.emoji-picker')) {
       if (!picker()) closeKeyboard();
       // WebKit после preventDefault на touch pointerdown теряет клик по кнопке.
-      if (!isIosStandalonePwa()) event.preventDefault();
+      if (!isIosWeb() || event.pointerType !== 'touch') event.preventDefault();
       event.stopPropagation();
       return true;
     }
@@ -85,6 +85,7 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
       closeKeyboard();
   };
   const preserveFocus = (event: PointerEvent) => {
+    if (isIosWeb() && event.pointerType === 'touch') return;
     if (!isMobile() || mode === 'closed' || !(event.target instanceof Element))
       return;
     const focused = mode === 'search' ? search() : editor;

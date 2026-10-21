@@ -1,20 +1,25 @@
 import { Capacitor } from '@capacitor/core';
 
-export const isIosStandalonePwa = (): boolean => {
+export const isIosWeb = (): boolean => {
   const isIos =
     /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  return isIos && !Capacitor.isNativePlatform();
+};
+
+export const isIosStandalonePwa = (): boolean => {
   return (
-    isIos &&
-    !Capacitor.isNativePlatform() &&
+    isIosWeb() &&
     ((navigator as Navigator & { standalone?: boolean }).standalone === true ||
       window.matchMedia('(display-mode: standalone)').matches)
   );
 };
 
 export function initIosPwaViewport(): () => void {
-  if (!isIosStandalonePwa()) return () => {};
+  if (!isIosWeb()) return () => {};
   const root = document.documentElement;
+  root.classList.add('chat-ios-web');
+  if (!isIosStandalonePwa()) return () => root.classList.remove('chat-ios-web');
   const viewport = window.visualViewport;
   let frame = 0;
   const update = () => {
@@ -22,15 +27,13 @@ export function initIosPwaViewport(): () => void {
     // При увеличении страницы сохраняем масштабирование и панорамирование iOS.
     if (viewport && Math.abs(viewport.scale - 1) > 0.01) return;
     const height = viewport?.height || window.innerHeight;
+    const keyboardOpen = window.innerHeight - height > 100;
     root.style.setProperty('--ios-viewport-height', `${height}px`);
     root.style.setProperty(
       '--ios-viewport-top',
-      `${viewport?.offsetTop || 0}px`
+      `${keyboardOpen ? Math.max(0, viewport?.offsetTop || 0) : 0}px`
     );
-    root.classList.toggle(
-      'chat-ios-keyboard-open',
-      window.innerHeight - height > 100
-    );
+    root.classList.toggle('chat-ios-keyboard-open', keyboardOpen);
   };
   const schedule = () => {
     if (!frame) frame = requestAnimationFrame(update);
@@ -49,7 +52,11 @@ export function initIosPwaViewport(): () => void {
     window.removeEventListener('resize', schedule);
     window.removeEventListener('pageshow', schedule);
     document.removeEventListener('visibilitychange', schedule);
-    root.classList.remove('chat-ios-pwa', 'chat-ios-keyboard-open');
+    root.classList.remove(
+      'chat-ios-web',
+      'chat-ios-pwa',
+      'chat-ios-keyboard-open'
+    );
     root.style.removeProperty('--ios-viewport-height');
     root.style.removeProperty('--ios-viewport-top');
   };

@@ -13,7 +13,9 @@
     :data-role="props.author"
     :data-is-loading="!!props.loader"
     :data-is-me-sender="props.isMeSender"
+    :data-message-id="props.messageId"
     @contextmenu="handleContextMenu"
+    @pointerdown="startLongPress"
     @click="handleMessageClick"
     @dblclick="handleDoubleTap"
   >
@@ -134,11 +136,14 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { isIosWeb } from '../../utils/ios-pwa-viewport';
 import { Capacitor } from '@capacitor/core';
 import { Checkbox, CheckboxCircularEnum } from '@pksep/yui';
 import {
   isOpen,
   position,
+  contextMediaId,
+  startTouchLongPress,
   openActivePopover
 } from '../../composables/useContextMenu';
 import type { IMessageBubbleProps } from './interface/interface';
@@ -220,7 +225,6 @@ const {
 const isContextMenuOpen = computed(
   () => !!props.messageId && isOpen.value[props.messageId] === true
 );
-const contextMediaId = ref<string | null>(null);
 const isCallTopicDefaultMessageEx = computed(() =>
   Boolean(parseCallTopicDefaultMessageEx(props.messageEx))
 );
@@ -481,14 +485,25 @@ const handleContextMenu = (event: MouseEvent) => {
     return;
   }
 
-  const target = event.target;
-  contextMediaId.value =
-    target instanceof Element
-      ? target
-          .closest('[data-message-media-id]')
-          ?.getAttribute('data-message-media-id') || null
-      : null;
   openActivePopover(props.messageId, event);
+};
+
+const startLongPress = (event: PointerEvent) => {
+  if (
+    !isIosWeb() ||
+    !props.messageId ||
+    event.pointerType !== 'touch' ||
+    !event.isPrimary ||
+    props.isSelectionMode ||
+    props.loader ||
+    !(event.target instanceof Element) ||
+    !(event.currentTarget instanceof HTMLElement) ||
+    event.target.closest(
+      'button, a, input, textarea, [contenteditable="true"], .reactions'
+    )
+  )
+    return;
+  startTouchLongPress(props.messageId, event);
 };
 
 const handleToggleSelection = () => {

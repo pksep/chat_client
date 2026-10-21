@@ -42,7 +42,12 @@ export default defineConfig({
     },
     {
       name: 'webkit-iphone-pwa',
-      testMatch: 'ios-pwa.spec.ts',
+      testMatch: [
+        'ios-pwa.spec.ts',
+        'pts-snapshot-recovery.spec.ts',
+        'unread-and-pinned-history.spec.ts',
+        'external-avatar.spec.ts'
+      ],
       use: { ...devices['iPhone 13'] }
     }
   ],

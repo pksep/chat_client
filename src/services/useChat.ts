@@ -144,6 +144,8 @@ import {
   type NativeNetworkStatus
 } from './useTelemetryDevice';
 import type { PluginListenerHandle } from '@capacitor/core';
+import { createPtsReplayBudget, isPtsReplayStale } from '../utils/pts-replay';
+import type { TopicSyncState } from '../utils/topic-sync';
 
 let chatSDK: ChatSDK | null = null;
 type ChatSDKReadyWaiter = (sdk: ChatSDK) => void;
@@ -199,6 +201,67 @@ const messageChangeCallbacks: Array<(topicId?: string) => void> = [];
 let areChatListenersBound = false;
 let latestProcessedPts = 0;
 const processedPts = new Set<number>();
+const ptsReplayBudget = createPtsReplayBudget();
+let ptsSnapshotRefresh: Promise<void> | null = null;
+let ptsSnapshotRefreshNeeded = false;
+let minimumReplayPts = 0;
+let replayPtsWrites: Map<string, PtsMeta> | null = null;
+
+const refreshPtsFromSnapshot = (reason: string): Promise<void> => {
+  if (ptsSnapshotRefresh) return ptsSnapshotRefresh;
+  const sdk = chatSDK;
+  const userId = currentUserId.value;
+  if (!sdk || !userId) return Promise.resolve();
+  ptsSnapshotRefreshNeeded = true;
+  const isCurrent = () => chatSDK === sdk && currentUserId.value === userId;
+  const task = (async () => {
+    let sync: TopicSyncState | undefined;
+    await fetchAllTopics({
+      forceFull: true,
+      onNetworkApplied: state => {
+        sync = state;
+      }
+    });
+    if (!isCurrent()) return;
+    // Без серверного курсора нельзя считать пропущенные события обработанными.
+    if (!sync) throw new Error('Сервер не вернул PTS свежего снимка чатов');
+    minimumReplayPts = normalizePts(sync.pts);
+    // GET мог перекрыть изменения сокета: replay после его границы применяем заново.
+    processedPts.clear();
+    latestProcessedPts = minimumReplayPts;
+    await saveShadowSyncMeta(
+      'pts:last',
+      {
+        pts: sync.pts,
+        timestamp: sync.syncedAt
+      },
+      userId
+    );
+    if (!isCurrent()) return;
+    ptsSnapshotRefreshNeeded = false;
+    ptsReplayBudget.reset();
+    // События, пришедшие во время GET, догоняем уже от границы нового снимка.
+    sdk.sendWebSocketEvent(WebSocketEventType.SYNC_STATE, { pts: sync.pts });
+    void runActiveTopicRefreshAfterReconnect();
+    recordTelemetryEvent({
+      category: 'chat',
+      name: 'chat.sync.snapshot_reset',
+      payload: { reason, pts: sync.pts }
+    });
+  })()
+    .catch(error => {
+      if (isCurrent())
+        console.warn(
+          'Не удалось восстановить синхронизацию свежим списком чатов:',
+          error
+        );
+    })
+    .finally(() => {
+      if (ptsSnapshotRefresh === task) ptsSnapshotRefresh = null;
+    });
+  ptsSnapshotRefresh = task;
+  return task;
+};
 
 type MessageHandlingOptions = {
   silent?: boolean;
@@ -272,6 +335,18 @@ const shouldProcessPtsMeta = (ptsMeta?: PtsMeta): boolean => {
   return true;
 };
 
+const writePtsMeta = (ptsMeta: PtsMeta, writeCursor = true): void => {
+  const value = {
+    pts: ptsMeta.pts,
+    eventId: ptsMeta.eventId,
+    topicId: ptsMeta.topicId,
+    timestamp: new Date().toISOString()
+  };
+  if (writeCursor) void saveShadowSyncMeta('pts:last', value);
+  if (ptsMeta.topicId)
+    void saveShadowSyncMeta(`pts:topic:${ptsMeta.topicId}`, value);
+};
+
 const persistPtsMeta = (ptsMeta?: PtsMeta, topicStateOnly = false): void => {
   if (ptsMeta?.topicId)
     recordNativeStartupTopicEvent(topicStateOnly ? ptsMeta.topicId : undefined);
@@ -279,20 +354,31 @@ const persistPtsMeta = (ptsMeta?: PtsMeta, topicStateOnly = false): void => {
     return;
   }
 
-  void saveShadowSyncMeta('pts:last', {
-    pts: ptsMeta.pts,
-    eventId: ptsMeta.eventId,
-    topicId: ptsMeta.topicId,
-    timestamp: new Date().toISOString()
-  });
+  if (replayPtsWrites) {
+    replayPtsWrites.set(ptsMeta.topicId || '', ptsMeta);
+    return;
+  }
+  writePtsMeta(ptsMeta);
+};
 
-  if (ptsMeta.topicId) {
-    void saveShadowSyncMeta(`pts:topic:${ptsMeta.topicId}`, {
-      pts: ptsMeta.pts,
-      eventId: ptsMeta.eventId,
-      topicId: ptsMeta.topicId,
-      timestamp: new Date().toISOString()
+const batchReplayPtsWrites = (apply: () => void): void => {
+  const pending = new Map<string, PtsMeta>();
+  replayPtsWrites = pending;
+  try {
+    apply();
+  } finally {
+    replayPtsWrites = null;
+    let last: PtsMeta | undefined;
+    // Курсор и PTS топика сохраняются один раз за страницу, а не за каждое событие.
+    pending.forEach(meta => {
+      if (!last || normalizePts(meta.pts) > normalizePts(last.pts)) last = meta;
+      writePtsMeta(meta, false);
     });
+    if (last)
+      void saveShadowSyncMeta('pts:last', {
+        ...last,
+        timestamp: new Date().toISOString()
+      });
   }
 };
 
@@ -301,11 +387,23 @@ const syncPtsStateToServer = async (): Promise<void> => {
     return;
   }
 
-  const lastPtsMeta = await loadShadowSyncMeta<{ pts?: string }>('pts:last');
+  const sdk = chatSDK;
+  const lastPtsMeta = await loadShadowSyncMeta<{
+    pts?: string;
+    timestamp?: string;
+  }>('pts:last');
+  if (chatSDK !== sdk) return;
 
   if (!lastPtsMeta?.pts) {
     return;
   }
+
+  if (ptsSnapshotRefreshNeeded || isPtsReplayStale(lastPtsMeta.timestamp)) {
+    await refreshPtsFromSnapshot('stale-cursor');
+    return;
+  }
+  ptsReplayBudget.reset();
+  minimumReplayPts = normalizePts(lastPtsMeta.pts);
 
   latestProcessedPts = Math.max(
     latestProcessedPts,
@@ -992,67 +1090,78 @@ const setupChatListeners = (): void => {
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.SYNC_REPLAY, ({ payload }) => {
-    payload.events.forEach(event => {
-      const ptsMeta: PtsMeta = {
-        eventId: event.eventId,
-        pts: event.pts,
-        topicId: event.topicId
-      };
+    if (
+      ptsSnapshotRefreshNeeded ||
+      normalizePts(payload.fromPts) < minimumReplayPts
+    )
+      return;
+    const hasMore = payload.hasMore ?? payload.events.length >= 200;
+    if (ptsReplayBudget.needsSnapshot(payload.events.length, hasMore)) {
+      void refreshPtsFromSnapshot('replay-budget');
+      return;
+    }
+    batchReplayPtsWrites(() =>
+      payload.events.forEach(event => {
+        const ptsMeta: PtsMeta = {
+          eventId: event.eventId,
+          pts: event.pts,
+          topicId: event.topicId
+        };
 
-      switch (event.eventType) {
-        case 'message.new':
-        case 'message.change':
-        case 'message.delete':
-        case 'message.clear':
-        case 'message.pin':
-          handleChangeMessagePayload(
-            {
+        switch (event.eventType) {
+          case 'message.new':
+          case 'message.change':
+          case 'message.delete':
+          case 'message.clear':
+          case 'message.pin':
+            handleChangeMessagePayload(
+              {
+                ...(event.payload as any),
+                ptsMeta
+              },
+              { silent: true, source: 'replay' }
+            );
+            break;
+          case 'message.read':
+            handleReadMessagePayload({
               ...(event.payload as any),
               ptsMeta
-            },
-            { silent: true, source: 'replay' }
-          );
-          break;
-        case 'message.read':
-          handleReadMessagePayload({
-            ...(event.payload as any),
-            ptsMeta
-          });
-          break;
-        case 'message.reaction':
-          handleReactionPayload({
-            ...(event.payload as any),
-            ptsMeta
-          });
-          break;
-        case 'message.reaction_seen':
-          handleReactionSeenPayload({
-            ...(event.payload as any),
-            ptsMeta
-          });
-          break;
-        case 'topic.update':
-        case 'topic.create':
-        case 'topic.delete':
-          handleTopicChangePayload({
-            ...(event.payload as any),
-            ptsMeta
-          });
-          break;
-        case 'user.updated':
-          handleUserUpdatedPayload({
-            ...(event.payload as any),
-            ptsMeta
-          });
-          break;
-        default:
-          if (shouldProcessPtsMeta(ptsMeta)) {
-            persistPtsMeta(ptsMeta);
-          }
-          break;
-      }
-    });
-    const hasMore = payload.hasMore ?? payload.events.length >= 200;
+            });
+            break;
+          case 'message.reaction':
+            handleReactionPayload({
+              ...(event.payload as any),
+              ptsMeta
+            });
+            break;
+          case 'message.reaction_seen':
+            handleReactionSeenPayload({
+              ...(event.payload as any),
+              ptsMeta
+            });
+            break;
+          case 'topic.update':
+          case 'topic.create':
+          case 'topic.delete':
+            handleTopicChangePayload({
+              ...(event.payload as any),
+              ptsMeta
+            });
+            break;
+          case 'user.updated':
+            handleUserUpdatedPayload({
+              ...(event.payload as any),
+              ptsMeta
+            });
+            break;
+          default:
+            if (shouldProcessPtsMeta(ptsMeta)) {
+              persistPtsMeta(ptsMeta);
+            }
+            break;
+        }
+      })
+    );
     let continuationSent: boolean | undefined;
     if (
       hasMore &&
@@ -2353,6 +2462,10 @@ export const initializeChat = async (options: {
   cacheReady?: Promise<void>;
 }): Promise<void> => {
   const previousSDK = chatSDK;
+  ptsSnapshotRefresh = null;
+  ptsSnapshotRefreshNeeded = false;
+  minimumReplayPts = 0;
+  ptsReplayBudget.reset();
   const backgroundSession = saveAnyChatBackgroundSyncSession({
     token: options.token,
     userId: options.userId,

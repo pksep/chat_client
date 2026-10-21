@@ -10,6 +10,21 @@ test.use({
 
 test.beforeEach(async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'chromium-desktop');
+  await page.route('**/e2e/ios-api/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('avatar.svg'))
+      return route.fulfill({
+        contentType: 'image/svg+xml',
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="coral"/></svg>'
+      });
+    if (path.endsWith('/packs'))
+      return route.fulfill({
+        json: { packs: [{ id: 'sep', label: 'SEP', previewPath: '' }] }
+      });
+    return route.fulfill({
+      json: { data: [], items: [], folders: [], nextCursor: null }
+    });
+  });
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'standalone', {
       value: true,
@@ -42,7 +57,7 @@ for (const kind of ['group', 'ai']) {
   test(`${kind}: заголовок, история и редактор остаются в видимой области iPhone`, async ({
     page
   }, testInfo) => {
-    await page.goto(`/e2e/fixtures/ios-pwa.html?kind=${kind}&no-pinned`);
+    await page.goto(`/e2e/fixtures/ios-pwa.html?kind=${kind}&no-pinned&beta`);
     const header = page.locator('.chat__header-wrapper');
     const composer = page.locator('.chat__input');
     const editor = composer.locator('.ProseMirror');
@@ -54,7 +69,7 @@ for (const kind of ['group', 'ai']) {
     const checkGeometry = async (height: number, top: number) => {
       await expect
         .poll(async () => (await header.boundingBox())!.y)
-        .toBeCloseTo(top + 47, 0);
+        .toBeCloseTo(top + 47 + 18, 0);
       const head = (await header.boundingBox())!;
       const input = (await composer.boundingBox())!;
       const history = (await page
@@ -163,7 +178,7 @@ test('настройки фона не исчезают после раскры�
     await expect(profile.getByText('Размытие', { exact: true })).toBeVisible();
     await background.tap();
     await expect(profile.getByText('Размытие', { exact: true })).toBeHidden();
-    await page.getByRole('button', { name: 'Чаты', exact: true }).tap();
+    await page.locator('[data-testid$="MenuBottomNav-Chats"]').tap();
     await page.locator('[data-testid$="MenuBottomNav-Profile"]').tap();
     await expect(
       profile.getByText('Тёмная тема', { exact: true })
@@ -220,3 +235,195 @@ test('обычная вкладка Safari не получает фиксаци�
   });
   await expect(page.locator('html')).not.toHaveClass(/chat-ios-pwa/);
 });
+
+for (const standalone of [true, false]) {
+  const mode = standalone ? 'PWA' : 'Safari';
+  test(`${mode}: точные нажатия в длинном списке, стабильное меню и настройки профиля`, async ({
+    page
+  }, testInfo) => {
+    await page.addInitScript(standalone => {
+      Object.defineProperty(navigator, 'standalone', {
+        value: standalone,
+        configurable: true
+      });
+      // Safari может загрузить файл, но отказать в записи кеша или зависнуть на decode.
+      IDBObjectStore.prototype.put = () => {
+        throw new DOMException('Нет места', 'QuotaExceededError');
+      };
+      HTMLImageElement.prototype.decode = () => new Promise(() => {});
+    }, standalone);
+    await page.goto('/e2e/fixtures/ios-pwa.html?kind=menu');
+    const nav = page.locator('.mobile-list-container > .menu-bottom-nav');
+    await expect(nav).toBeVisible({ timeout: 60_000 });
+    if (standalone)
+      await page.evaluate(() => {
+        document.documentElement.style.setProperty('--ios-safe-top', '47px');
+        document.documentElement.style.setProperty('--ios-safe-bottom', '34px');
+      });
+    const navBox = (await nav.boundingBox())!;
+    expect(navBox.y + navBox.height).toBeCloseTo(
+      844 - 16 - (standalone ? 34 : 0),
+      0
+    );
+    const avatar = nav.locator('.cached-avatar');
+    await expect(avatar).toHaveClass(/cached-avatar--image-ready/);
+    expect(
+      await avatar
+        .locator('img')
+        .evaluate((img: HTMLImageElement) => img.naturalWidth)
+    ).toBe(32);
+    const badge = nav.locator('.menu-bottom-nav__unread-count');
+    await expect(badge).toBeVisible();
+    const badgeBox = (await badge.boundingBox())!;
+    expect(badgeBox.height).toBe(18);
+    expect(badgeBox.width).toBe(18);
+    const chats = page.locator('.mobile-list-container__section--chats');
+    for (const index of [3, 17, 30]) {
+      const row = chats.locator(
+        `[data-topic-id="iphone-chat-${index}"] .contact-list__item`
+      );
+      await row.scrollIntoViewIfNeeded();
+      await expect(row.locator('.cached-avatar')).toHaveClass(
+        /cached-avatar--image-ready/
+      );
+      await row.tap();
+      await expect(page).toHaveURL(
+        new RegExp(`/group/iphone-chat-${index}(?:\\?|$)`)
+      );
+      await page.locator('[data-testid$="MenuBottomNav-Profile"]').tap();
+      const profile = page.locator('.mobile-list-container__section--profile');
+      await expect(profile).toHaveAttribute('aria-hidden', 'false');
+      const stickers = profile.getByRole('button', {
+        name: 'Отображение стикеров',
+        exact: true
+      });
+      expect(await stickers.evaluate(el => getComputedStyle(el).color)).toBe(
+        await profile.evaluate(el => getComputedStyle(el).color)
+      );
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await stickers.tap();
+        await expect(
+          profile.getByRole('checkbox', { name: 'SEP', exact: true })
+        ).toBeVisible();
+        await stickers.tap();
+        await expect(
+          profile.getByText('Тёмная тема', { exact: true })
+        ).toBeVisible();
+      }
+      expect((await nav.boundingBox())!.y).toBeCloseTo(navBox.y, 0);
+      await page.locator('[data-testid$="MenuBottomNav-Chats"]').tap();
+      await expect(profile).toBeHidden();
+      await expect(
+        profile.getByRole('button', { name: 'Выйти', exact: true })
+      ).toBeHidden();
+    }
+    await page.screenshot({ path: testInfo.outputPath(`menu-${mode}.png`) });
+  });
+
+  test(`${mode}: долгое нажатие открывает действия сообщения, прокрутка отменяет зажатие`, async ({
+    page,
+    browserName
+  }) => {
+    await page.addInitScript(
+      standalone =>
+        Object.defineProperty(navigator, 'standalone', {
+          value: standalone,
+          configurable: true
+        }),
+      standalone
+    );
+    await page.goto('/e2e/fixtures/ios-pwa.html?kind=group&no-pinned');
+    await expect(page.locator('.chat__input .ProseMirror')).toBeVisible({
+      timeout: 60_000
+    });
+    const message = page.locator('.message').last();
+    await expect(message).toBeVisible({ timeout: 60_000 });
+    await message.scrollIntoViewIfNeeded();
+    const bounds = (await message.boundingBox())!;
+    const point = {
+      pointerId: 1,
+      pointerType: 'touch',
+      isPrimary: true,
+      clientX: bounds.x + 40,
+      clientY: bounds.y + 12
+    };
+    const text = message.locator('.message-content--text');
+    const touch =
+      browserName === 'chromium'
+        ? await page.context().newCDPSession(page)
+        : null;
+    if (touch)
+      await touch.send('Input.dispatchTouchEvent', {
+        type: 'touchStart',
+        touchPoints: [{ x: point.clientX, y: point.clientY }]
+      });
+    else await text.dispatchEvent('pointerdown', point);
+    const menu = page.locator('.message-context-menu:visible');
+    await expect(menu).toBeVisible();
+    if (touch) {
+      await touch.send('Input.dispatchTouchEvent', {
+        type: 'touchEnd',
+        touchPoints: []
+      });
+      await touch.detach();
+    } else {
+      await text.dispatchEvent('pointerup', point);
+      await expect(menu).toBeVisible();
+      await text.dispatchEvent('click', { ...point, detail: 1 });
+    }
+    await expect(menu.getByText('Ответить', { exact: true })).toBeVisible();
+    await expect(menu.getByText('Переслать', { exact: true })).toBeVisible();
+    await menu.getByText('Ответить', { exact: true }).tap();
+    await expect(menu).toHaveCount(0);
+    await expect(page.locator('.chat__input__action')).toBeVisible();
+    await expect(message).toHaveCSS('-webkit-user-select', 'none');
+    await text.dispatchEvent('pointerdown', point);
+    await text.dispatchEvent('pointermove', {
+      ...point,
+      clientY: point.clientY - 30
+    });
+    await text.dispatchEvent('pointerup', point);
+    // Проверяем после порога long press, чтобы увидеть ошибочно оставшийся таймер.
+    await page.waitForTimeout(500);
+    await expect(menu).toHaveCount(0);
+  });
+
+  test(`${mode}: скрепка и редактор работают после повторного открытия клавиатуры`, async ({
+    page
+  }) => {
+    await page.addInitScript(
+      standalone =>
+        Object.defineProperty(navigator, 'standalone', {
+          value: standalone,
+          configurable: true
+        }),
+      standalone
+    );
+    await page.goto('/e2e/fixtures/ios-pwa.html?kind=group&no-pinned');
+    const editor = page.locator('.chat__input .ProseMirror');
+    await expect(editor).toBeVisible({ timeout: 60_000 });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await editor.tap();
+      await expect(editor).not.toHaveAttribute('inputmode', 'none');
+      await editor.fill(`Черновик ${attempt}`);
+      await page.evaluate(() => (window as any).setIosViewport(500, 180));
+      await page.locator('.chat__input .attach-file-button:visible').tap();
+      const option = page
+        .locator('.attach-file-popover .popover-yui-kit__content:visible')
+        .getByText('Файл', { exact: true });
+      await expect(option).toBeVisible();
+      const selection = page.waitForEvent('filechooser');
+      await option.tap();
+      await (await selection).setFiles([]);
+      await page.evaluate(() => (window as any).setIosViewport(844, 100));
+      if (standalone)
+        await expect
+          .poll(
+            async () =>
+              (await page.locator('.chat__header-wrapper').boundingBox())!.y
+          )
+          .toBe(0);
+      await expect(editor).toHaveText(`Черновик ${attempt}`);
+    }
+  });
+}

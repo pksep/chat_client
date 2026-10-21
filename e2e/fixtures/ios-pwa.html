@@ -18,7 +18,11 @@
     <script type="module">
       import { initIosPwaViewport } from '../../src/utils/ios-pwa-viewport';
       initIosPwaViewport();
-      if (new URLSearchParams(location.search).get('kind') === 'profile')
+      if (
+        ['profile', 'menu'].includes(
+          new URLSearchParams(location.search).get('kind')
+        )
+      )
         import('./ios-pwa-profile.ts');
       else import('./mobile-chat-search.ts');
     </script>

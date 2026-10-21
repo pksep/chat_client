@@ -3,7 +3,8 @@ html.chat-ios-pwa {
   --ios-safe-top: env(safe-area-inset-top, 0px);
   --ios-safe-bottom: env(safe-area-inset-bottom, 0px);
   --default-height: calc(
-    var(--ios-viewport-height, 100dvh) - var(--ios-safe-top)
+    var(--ios-viewport-height, 100dvh) - var(--ios-safe-top) -
+      var(--ios-banner-height, 0px)
   );
   height: 100%;
   overflow: hidden;
@@ -15,23 +16,48 @@ html.chat-ios-keyboard-open {
 }
 
 .chat-ios-pwa body {
-  position: fixed;
-  inset: 0;
+  height: 100%;
   margin: 0;
   overflow: hidden;
   overscroll-behavior: none;
 }
 
 .chat-ios-pwa #app {
-  position: absolute;
+  position: fixed;
   top: var(--ios-viewport-top, 0px);
   width: 100%;
   height: var(--ios-viewport-height, 100dvh);
   min-height: 0;
   box-sizing: border-box;
-  padding-top: var(--ios-safe-top);
+  padding-top: calc(var(--ios-safe-top) + var(--ios-banner-height, 0px));
   overflow: hidden;
   transition: none;
+}
+
+.chat-ios-web:has(#app > .chat_container_alert) {
+  --ios-banner-height: 18px;
+}
+
+.chat-ios-web .chat_container_alert {
+  position: absolute;
+  top: var(--ios-safe-top, 0px);
+  height: var(--ios-banner-height);
+  line-height: var(--ios-banner-height);
+  pointer-events: none;
+}
+
+.chat-ios-web:not(.chat-ios-pwa) {
+  --default-height: calc(100dvh - var(--ios-banner-height, 0px));
+}
+
+.chat-ios-web:not(.chat-ios-pwa) #app {
+  position: relative;
+  padding-top: var(--ios-banner-height, 0px);
+  box-sizing: border-box;
+}
+
+.chat-ios-pwa .mobile-list-container {
+  --menu-section-safe-top: 10px;
 }
 
 .chat-ios-pwa .chat-container {
@@ -66,16 +92,16 @@ html.chat-ios-keyboard-open {
 }
 
 /* Поля меньше 16px заставляют iOS увеличивать и сдвигать весь экран. */
-.chat-ios-pwa
+.chat-ios-web
   :is(input:not([type='file']), textarea, [contenteditable='true']) {
   font-size: 16px !important;
 }
 
-.chat-ios-pwa .chat__input .attach-file-popover {
+.chat-ios-web .chat__input .attach-file-popover {
   position: relative;
 }
 
-.chat-ios-pwa .chat__input .attach-file-popover .popover-yui-kit__content {
+.chat-ios-web .chat__input .attach-file-popover .popover-yui-kit__content {
   position: absolute !important;
   inset: auto auto calc(100% + 8px) 0 !important;
   transform: none !important;
@@ -90,14 +116,47 @@ html.chat-ios-keyboard-open {
   max-height: min(400px, calc(var(--ios-viewport-height, 100dvh) - 160px));
 }
 
-/* WebKit теряет перерисовку раскрывающихся настроек внутри 3D-слоя. */
-.chat-ios-pwa .mobile-list-container__section-track {
-  transform: translateX(var(--mobile-menu-section-offset, 0%));
+/* Прокрутка внутри сдвинутого слоя WebKit рассинхронизирует отрисовку и hit testing. */
+.chat-ios-web .mobile-list-container__section-track {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  transform: none;
+  transition: none;
   transform-style: flat;
   backface-visibility: visible;
   will-change: auto;
 }
 
-.chat-ios-pwa .mobile-list-container > .menu-bottom-nav {
+.chat-ios-web .mobile-list-container__section {
+  grid-area: 1 / 1;
+}
+
+.chat-ios-web .mobile-list-container__section[aria-hidden='true'] {
+  display: none;
+}
+
+.chat-ios-web
+  .chat--mobile-route:has(
+    > .chat__mobile-list-layer:not(.chat__mobile-list-layer--hidden)
+  ) {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.chat-ios-web .mobile-list-container {
+  grid-row: 1 / -1;
+}
+
+.chat-ios-web .mobile-list-container > .menu-bottom-nav {
   position: absolute;
+  bottom: calc(16px + var(--ios-safe-bottom, env(safe-area-inset-bottom, 0px)));
+}
+
+.chat-ios-web .mobile-list-container__content {
+  animation: none;
+}
+
+.chat-ios-web .message {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }

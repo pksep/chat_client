@@ -700,6 +700,7 @@ const renderItems = computed<RenderItem[]>(() => {
     while (
       endIndex + 1 < visibleMessages.value.length &&
       groupMessages.length < MAX_MESSAGES_PER_RENDER_GROUP &&
+      !shouldShowUnreadMarker(visibleMessages.value[endIndex + 1]) &&
       isSameMessageGroup(
         visibleMessages.value[endIndex],
         visibleMessages.value[endIndex + 1]

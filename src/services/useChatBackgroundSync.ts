@@ -2,11 +2,15 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import type { IMessage, ITopic } from '../components/interfaces/interfaces';
 import { getIdForRouteType } from '../composables/navigation/useUrlRouting';
 import { getIsTopicNearBottom } from './useTopicViewportState';
+import { getConfig } from './useConfig';
+import { getChatAuthSession } from '../utils/stored-chat-session';
 
 export interface ChatBackgroundSyncSession {
   token: string;
   userId?: string;
   apiUrl: string;
+  authSource?: string;
+  erpUrl?: string;
 }
 
 export interface ChatBackgroundSyncRequest {
@@ -392,7 +396,11 @@ export const saveNativeChatBackgroundSyncSession = async (
   }
 
   try {
-    await ChatBackgroundSync.saveSession(session);
+    await ChatBackgroundSync.saveSession({
+      ...session,
+      authSource: getChatAuthSession()?.source || 'unknown_shared',
+      erpUrl: getConfig().CHAT_ERP_URL || ''
+    });
     console.info('[ChatBackgroundSync] native-сессия сохранена', {
       userId: session.userId
     });

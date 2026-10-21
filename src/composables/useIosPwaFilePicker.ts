@@ -1,5 +1,5 @@
 import { watch, type Ref } from 'vue';
-import { isIosStandalonePwa } from '../utils/ios-pwa-viewport';
+import { isIosWeb } from '../utils/ios-pwa-viewport';
 
 export function useIosPwaFilePicker(
   host: Ref<HTMLElement | null>,
@@ -8,7 +8,7 @@ export function useIosPwaFilePicker(
   watch(
     host,
     (element, _previous, onCleanup) => {
-      if (!element || !isIosStandalonePwa()) return;
+      if (!element || !isIosWeb()) return;
       let pendingInput: HTMLInputElement | undefined;
       const handleClick = (event: MouseEvent) => {
         if (!(event.target instanceof Element)) return;

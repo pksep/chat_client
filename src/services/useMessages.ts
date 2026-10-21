@@ -47,10 +47,7 @@ import {
   VIDEO_FALLBACK_THUMBNAIL
 } from '../utils/mediaPreview';
 import { MediaType } from '@pksep/zod-shared-chat';
-import {
-  playNativeNotificationSound,
-  shouldPlayNotificationSound
-} from './useNotificationSoundPolicy';
+import { playMessageNotificationSound } from './notification-sound';
 import { getIsAppActivelyVisible } from './useAppVisibility';
 import {
   appendShadowSyncMetaList,
@@ -3032,7 +3029,8 @@ const loadMessagesFromCache = async (
 export const hydrateMessageContextFromShadow = async (
   topicId: string,
   messageId: string,
-  userId?: string
+  userId?: string,
+  opts?: { isCurrent?: () => boolean }
 ): Promise<IMessage[]> => {
   if (!topicId || !messageId || !isShadowSyncEnabled()) {
     return [];
@@ -3064,7 +3062,8 @@ export const hydrateMessageContextFromShadow = async (
   mergeMessagesForTopic(topicId, normalizedShadowMessages, 'replace', {
     syncLastMessage: false,
     windowMode: 'around-anchor',
-    anchorMessageId: messageId
+    anchorMessageId: messageId,
+    updateVisible: opts?.isCurrent?.() ?? true
   });
   void saveShadowLoadedRange(topicId, normalizedShadowMessages);
 
@@ -3083,6 +3082,7 @@ export const mergeMessagesForTopic = (
     persistDelayMs?: number;
     skipPersist?: boolean;
     updateVisible?: boolean;
+    visibleMessages?: IMessage[];
   }
 ): IMessage[] => {
   const existing = getFullMessagesByTopicId(topicId) || [];
@@ -3125,7 +3125,7 @@ export const mergeMessagesForTopic = (
           ? 'preserve-end'
           : 'latest'),
     anchorMessageId: opts?.anchorMessageId,
-    visibleMessages: visibleCombined,
+    visibleMessages: opts?.visibleMessages || visibleCombined,
     visibleLimit: opts?.visibleLimit,
     persistDelayMs: opts?.persistDelayMs,
     skipPersist: opts?.skipPersist,
@@ -3984,48 +3984,7 @@ const playNotificationSoundInternal = async (
     return;
   }
 
-  if (!(await shouldPlayNotificationSound())) {
-    return;
-  }
-
-  if (await playNativeNotificationSound()) {
-    return;
-  }
-
-  try {
-    const audio = new Audio();
-    audio.src = '/audio/new-message.mp3';
-    audio.preload = 'auto';
-
-    audio.addEventListener(
-      'canplaythrough',
-      () => {
-        audio.play().catch(err => {
-          console.warn('Failed to play notification sound:', err.message);
-        });
-      },
-      { once: true }
-    );
-
-    audio.addEventListener(
-      'error',
-      e => {
-        console.warn('Notification sound failed to load:', e);
-
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('New Message', {
-            silent: false,
-            requireInteraction: false
-          });
-        }
-      },
-      { once: true }
-    );
-
-    audio.load();
-  } catch (err) {
-    console.warn('Audio not supported in this browser');
-  }
+  await playMessageNotificationSound();
 };
 
 export const playNotificationSound = (

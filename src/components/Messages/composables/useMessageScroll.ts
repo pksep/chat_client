@@ -1073,6 +1073,15 @@ export function useMessageScroll(
     });
   };
 
+  const hasReachedLatestMessage = (): boolean => {
+    const latestMessageId = getSelectedTopic(route.value.id)?.lastMessage?.id;
+    return (
+      !!latestMessageId &&
+      state.messages.at(-1)?.id === latestMessageId &&
+      scrollAnchor.isNearBottom.value
+    );
+  };
+
   const submitReadMessages = async (messageIds: string[]) => {
     if (!messageIds.length || !route.value?.id) return;
     if (!canTrackVisibleMessages()) return;
@@ -1103,7 +1112,7 @@ export function useMessageScroll(
       await markAsRead({
         messageIds: uniqueMessageIds,
         topicId: route.value.id,
-        reachedEnd: scrollAnchor.isNearBottom.value
+        reachedEnd: hasReachedLatestMessage()
       });
       if (props.user?.id) {
         changeLocalReadStatus(route.value.id, uniqueMessageIds, props.user.id);
@@ -1199,7 +1208,7 @@ export function useMessageScroll(
       await markAsRead({
         messageIds,
         topicId: route.value.id,
-        reachedEnd: scrollAnchor.isNearBottom.value
+        reachedEnd: hasReachedLatestMessage()
       });
       if (props.user?.id) {
         changeLocalReadStatus(route.value.id, messageIds, props.user.id);
@@ -1240,7 +1249,7 @@ export function useMessageScroll(
       await markAsRead({
         messageIds: unreadMessages.map((message: IMessage) => message.id),
         topicId: route.value.id,
-        reachedEnd: scrollAnchor.isNearBottom.value
+        reachedEnd: hasReachedLatestMessage()
       });
       if (props.user?.id) {
         changeLocalReadStatus(
@@ -1438,6 +1447,8 @@ export function useMessageScroll(
     ) {
       isScrollLoading = true;
 
+      const topicId = route.value.id;
+      const revision = scrollStateRevision;
       try {
         const lastMessage = state.messages[state.messages.length - 1];
         const latestKnownTopicMessageId =
@@ -1452,11 +1463,17 @@ export function useMessageScroll(
           syncNewerMessagesLoadingState();
           preserveViewportForDownPagination = true;
 
-          const result = await fetchMessagesForTopic(route.value.id, {
+          const result = await fetchMessagesForTopic(topicId, {
             afterMessageId: lastMessage.id,
             skipSave: true,
             forceNetwork: !isMobileViewport
           });
+          if (
+            route.value.id !== topicId ||
+            revision !== scrollStateRevision ||
+            state.messages.at(-1)?.id !== lastMessage.id
+          )
+            return;
           hasNewMessage = result.length > 0;
 
           if (result.length > 0) {
@@ -1478,8 +1495,10 @@ export function useMessageScroll(
           }
         }
       } finally {
-        completeNewerMessagesLoading();
-        isScrollLoading = false;
+        if (revision === scrollStateRevision) {
+          completeNewerMessagesLoading();
+          isScrollLoading = false;
+        }
       }
     }
   };
@@ -1487,22 +1506,36 @@ export function useMessageScroll(
   const scrollToBottom = async (opts?: {
     preferUnreadMarker?: boolean;
     smooth?: boolean;
+    isCurrent?: () => boolean;
   }) => {
     if (!chatWrapperRef.value) return;
+    const topicId = route.value.id;
+    const isCurrent = () =>
+      route.value.id === topicId && (opts?.isCurrent?.() ?? true);
+    if (!isCurrent()) return;
 
     isShowScrollToBottomButton.value = false;
 
-    if (opts?.preferUnreadMarker !== false) {
+    if (opts?.preferUnreadMarker === true) {
+      if (!state.hideUnreadMarker && state.unreadMarkerMessageId) {
+        await messageListUserItemsRef.value?.ensureMessageRendered?.(
+          state.unreadMarkerMessageId
+        );
+        await nextTick();
+        if (!isCurrent()) return;
+      }
       const unreadRef = messageListUserItemsRef.value?.unreadMessageStartRef;
       if (unreadRef?.length > 0) {
         const firstUnread = unreadRef[0];
         const container = chatWrapperRef.value;
 
         if (container && firstUnread) {
+          scrollAnchor.prepareJumpMutation();
           scrollAnchor.setViewportMode('history', { pin: false });
           container.scrollTop +=
             firstUnread.getBoundingClientRect().top -
-            container.getBoundingClientRect().top;
+            container.getBoundingClientRect().top -
+            8;
           requestAnimationFrame(() => {
             void flushQueuedReadMessages();
             flushVisibleUnreadMessages();
@@ -1517,6 +1550,7 @@ export function useMessageScroll(
         await messageListUserItemsRef.value?.ensureMessageRendered?.(
           state.unreadMarkerMessageId
         );
+        if (!isCurrent()) return;
 
         const currentMarkerKey = route.value?.id
           ? `${route.value.id}:${state.unreadMarkerMessageId}`
@@ -1530,7 +1564,8 @@ export function useMessageScroll(
           state.unreadMarkerMessageId,
           {
             block: 'start',
-            behavior: 'auto'
+            behavior: 'auto',
+            isCurrent
           }
         );
 
@@ -1560,89 +1595,87 @@ export function useMessageScroll(
     });
   };
 
-  const handleScrollToButton = async () => {
+  let scrollStateRevision = 0;
+
+  const handleScrollToButton = async (isCurrentNavigation = () => true) => {
+    const topicId = route.value.id;
+    if (!topicId) return;
+    resetScrollState();
+    const revision = scrollStateRevision;
+    const isCurrentTopic = () =>
+      route.value.id === topicId &&
+      revision === scrollStateRevision &&
+      isCurrentNavigation();
     scrollAnchor.setViewportMode('live', { pin: false });
     isShowScrollToBottomButton.value = false;
     hasOldMessage = true;
     hasNewMessage = true;
 
     if (getMessagesByTopicId(route.value.id).length === 0) {
-      await hydrateMessagesFromCache(route.value.id);
+      await hydrateMessagesFromCache(topicId);
+      if (!isCurrentTopic()) return;
     }
 
-    const bufferedIncomingMessages = consumeBufferedIncomingMessagesForTopic(
-      route.value.id
-    );
+    const bufferedIncomingMessages =
+      consumeBufferedIncomingMessagesForTopic(topicId);
 
     if (bufferedIncomingMessages.length > 0) {
-      mergeMessagesForTopic(
-        route.value.id,
-        bufferedIncomingMessages,
-        'append',
-        {
-          syncLastMessage: false
-        }
-      );
+      mergeMessagesForTopic(topicId, bufferedIncomingMessages, 'append', {
+        syncLastMessage: false
+      });
     }
 
-    const localLatestMessages = getFullMessagesByTopicId(route.value.id).slice(
-      -50
-    );
+    const localLatestMessages = getFullMessagesByTopicId(topicId).slice(-50);
 
     if (localLatestMessages.length > 0) {
       scrollAnchor.prepareJumpMutation();
-      mergeMessagesForTopic(route.value.id, localLatestMessages, 'replace', {
+      mergeMessagesForTopic(topicId, localLatestMessages, 'replace', {
         syncLastMessage: false,
-        windowMode: 'latest'
+        windowMode: 'latest',
+        visibleMessages: localLatestMessages
       });
     }
 
     await nextTick();
-    await scrollAnchor.scrollToBottomSmooth();
+    if (!isCurrentTopic()) return;
+    await scrollAnchor.scrollToBottomSmooth(isCurrentTopic);
+    if (!isCurrentTopic()) return;
     schedulePersistScrollMeta();
     markAllVisibleAsRead();
 
-    const latestKnownTopicMessageId =
-      getSelectedTopic(route.value.id)?.lastMessage?.id || null;
-    const localLatestMessageId =
-      getFullMessagesByTopicId(route.value.id).at(-1)?.id || null;
-    const shouldForceNetworkLatest =
-      !!latestKnownTopicMessageId &&
-      latestKnownTopicMessageId !== localLatestMessageId;
-
-    const latestMessages = await fetchMessagesForTopic(route.value.id, {
+    const latestMessages = await fetchMessagesForTopic(topicId, {
       limit: 50,
+      newMessages: true,
       syncLastMessage: false,
       skipSave: true,
       forceRefresh: true,
-      forceNetwork: shouldForceNetworkLatest
+      forceNetwork: true
     });
+    if (!isCurrentTopic()) return;
 
     if (latestMessages.length > 0) {
-      mergeMessagesForTopic(route.value.id, latestMessages, 'append', {
+      scrollAnchor.prepareJumpMutation();
+      mergeMessagesForTopic(topicId, latestMessages, 'replace', {
+        syncLastMessage: false,
+        windowMode: 'latest',
+        visibleMessages: latestMessages
+      });
+    }
+
+    const bufferedMessagesAfterFetch =
+      consumeBufferedIncomingMessagesForTopic(topicId);
+
+    if (bufferedMessagesAfterFetch.length > 0) {
+      mergeMessagesForTopic(topicId, bufferedMessagesAfterFetch, 'append', {
         syncLastMessage: false,
         windowMode: 'latest'
       });
     }
 
-    const bufferedMessagesAfterFetch = consumeBufferedIncomingMessagesForTopic(
-      route.value.id
-    );
-
-    if (bufferedMessagesAfterFetch.length > 0) {
-      mergeMessagesForTopic(
-        route.value.id,
-        bufferedMessagesAfterFetch,
-        'append',
-        {
-          syncLastMessage: false,
-          windowMode: 'latest'
-        }
-      );
-    }
-
     await nextTick();
-    await scrollAnchor.scrollToBottomSmooth();
+    if (!isCurrentTopic()) return;
+    await scrollAnchor.scrollToBottomSmooth(isCurrentTopic);
+    if (!isCurrentTopic()) return;
     isShowScrollToBottomButton.value = false;
     markAllVisibleAsRead();
     schedulePersistScrollMeta();
@@ -1910,6 +1943,8 @@ export function useMessageScroll(
   );
 
   const resetScrollState = () => {
+    scrollStateRevision += 1;
+    isScrollLoading = false;
     hasOldMessage = true;
     hasNewMessage = true;
     isHistoryScrollLoading = false;

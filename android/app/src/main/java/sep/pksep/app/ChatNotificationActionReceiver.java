@@ -112,14 +112,7 @@ public final class ChatNotificationActionReceiver extends BroadcastReceiver {
                 emoji
             );
 
-            if (enqueued) {
-                ChatNotificationHelper.dismissTopicNotifications(
-                    context,
-                    topicId
-                );
-            } else {
-                showEnqueueError(context);
-            }
+            if (!enqueued) showEnqueueError(context);
         }
     }
 
