@@ -15,6 +15,7 @@ import {
 import { buildGroupCallInviteAuthorizationUrl } from '../utils/groupCallInviteUrl';
 import { withNetworkTimeout } from '../utils/network-timeout';
 import { fetchAuthWithCookies } from '../utils/auth-http';
+import { getAccessTokenFromResponse } from '../utils/auth-response-token';
 export {
   CHAT_AUTH_SESSION_KEY,
   getChatAuthSession
@@ -121,28 +122,6 @@ const inferSessionSource = (
   return session?.token && isSharedAccessToken(session.token)
     ? 'unknown_shared'
     : 'legacy';
-};
-
-const getAccessTokenFromResponse = (data: Record<string, unknown>): string => {
-  const sharedAccessTokenCandidate = data.erpToken;
-  if (
-    typeof sharedAccessTokenCandidate === 'string' &&
-    sharedAccessTokenCandidate
-  ) {
-    return sharedAccessTokenCandidate;
-  }
-
-  const accessTokenCandidate = data.accessToken;
-  if (typeof accessTokenCandidate === 'string' && accessTokenCandidate) {
-    return accessTokenCandidate;
-  }
-
-  const tokenCandidate = data.token;
-  if (typeof tokenCandidate === 'string' && tokenCandidate) {
-    return tokenCandidate;
-  }
-
-  return '';
 };
 
 const normalizeAuthResponse = (
