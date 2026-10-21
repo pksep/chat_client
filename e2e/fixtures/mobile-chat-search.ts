@@ -1,5 +1,6 @@
 import { createApp, h, nextTick } from 'vue';
 import { createPinia } from 'pinia';
+import NotificationStack from '../../src/components/UI/NotificationStack.vue';
 import '../../src/assets/chat-container.css';
 import type {
   IMessage,
@@ -142,12 +143,14 @@ createApp({
   setup() {
     if (fullShell)
       return () => [
+        h(NotificationStack),
         params.has('beta')
           ? h('div', { class: 'chat_container_alert' }, 'beta')
           : null,
         h(ChatContainer!, { dataTestid: 'Fixture' })
       ];
     return () => [
+      h(NotificationStack),
       params.has('beta')
         ? h('div', { class: 'chat_container_alert' }, 'beta')
         : null,

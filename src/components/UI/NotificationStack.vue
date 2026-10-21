@@ -102,7 +102,7 @@ onBeforeUnmount(() => observer?.disconnect());
 
 const getNotificationStyle = (index: number) => ({
   position: 'fixed',
-  top: `${16 + index * 88}px`,
+  top: `calc(var(--notification-viewport-top, 0px) + ${16 + index * 88}px)`,
   right: '16px',
   left: 'auto',
   bottom: 'auto',

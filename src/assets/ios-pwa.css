@@ -2,6 +2,9 @@
 html.chat-ios-pwa {
   --ios-safe-top: env(safe-area-inset-top, 0px);
   --ios-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --notification-viewport-top: calc(
+    var(--ios-viewport-top, 0px) + var(--ios-safe-top)
+  );
   --default-height: calc(
     var(--ios-viewport-height, 100dvh) - var(--ios-safe-top) -
       var(--ios-banner-height, 0px)
@@ -85,6 +88,70 @@ html.chat-ios-keyboard-open {
   padding-bottom: calc(10px + var(--ios-safe-bottom));
 }
 
+.chat-ios-pwa .chat__header-mobile-search-controls {
+  grid-area: chat;
+  min-width: 0;
+}
+
+.chat-ios-pwa .chat__header-mobile-search-controls-content {
+  grid-template-columns: minmax(0, 1fr) auto minmax(34px, 1fr);
+  column-gap: 12px;
+  min-width: 0;
+}
+
+.chat-ios-pwa .chat__header-mobile-search-controls__nav {
+  position: static;
+  transform: none;
+}
+
+/* Native dialog и fixed-окна находятся вне области раскладки #app. */
+.chat-ios-pwa dialog.mobile__modal.modal-yui-kit {
+  box-sizing: border-box;
+  top: calc(var(--ios-viewport-top, 0px) + var(--ios-safe-top));
+  bottom: calc(
+    max(
+        0px,
+        calc(
+          100% - var(--ios-viewport-top, 0px) -
+            var(--ios-viewport-height, 100dvh)
+        )
+      ) + var(--ios-safe-bottom)
+  );
+  height: calc(
+    var(--ios-viewport-height, 100dvh) - var(--ios-safe-top) -
+      var(--ios-safe-bottom)
+  );
+  max-height: calc(
+    var(--ios-viewport-height, 100dvh) - var(--ios-safe-top) -
+      var(--ios-safe-bottom)
+  );
+}
+
+.chat-ios-pwa .call-modal {
+  top: calc(var(--ios-viewport-top, 0px) + var(--ios-safe-top));
+  bottom: auto;
+  height: calc(
+    var(--ios-viewport-height, 100dvh) - var(--ios-safe-top) -
+      var(--ios-safe-bottom)
+  );
+}
+
+.chat-ios-pwa .call-modal__video-overlay-bar--top {
+  top: var(--ios-viewport-top, 0px);
+  padding-top: calc(24px + var(--ios-safe-top));
+}
+
+.chat-ios-pwa .call-modal__video-overlay-bar--bottom {
+  top: auto;
+  bottom: max(
+    0px,
+    calc(
+      100% - var(--ios-viewport-top, 0px) - var(--ios-viewport-height, 100dvh)
+    )
+  );
+  padding-bottom: calc(24px + var(--ios-safe-bottom));
+}
+
 .chat-ios-pwa .chat__input .editor-content {
   max-height: min(250px, calc(var(--ios-viewport-height, 100dvh) * 0.3));
 }
@@ -110,12 +177,25 @@ html.chat-ios-keyboard-open {
 }
 
 .chat-ios-pwa .chat__input .emoji-picker {
+  top: var(--ios-emoji-picker-top) !important;
+  bottom: auto !important;
   max-width: calc(100vw - 20px);
 }
 
 .chat-ios-pwa .chat__input .v3-emoji-picker {
   width: min(350px, calc(100vw - 20px)) !important;
-  max-height: min(400px, calc(var(--ios-viewport-height, 100dvh) - 160px));
+  max-height: min(
+    400px,
+    var(
+      --ios-emoji-picker-max-height,
+      calc(var(--ios-viewport-height, 100dvh) - 160px)
+    )
+  );
+}
+
+/* Запасной веб-шрифт Noto в WebKit может отображать эмодзи квадратами. */
+.chat-ios-web .v3-emoji-picker .v3-emojis button span {
+  font-family: 'Apple Color Emoji', 'Noto Color Emoji', sans-serif !important;
 }
 
 /* Прокрутка внутри сдвинутого слоя WebKit рассинхронизирует отрисовку и hit testing. */

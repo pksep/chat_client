@@ -1,7 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { onBeforeUnmount, ref, watch, type Ref } from 'vue';
 import { BackButtonPriority, useBackButtonHandler } from './useBackButton';
-import { isIosWeb } from '../utils/ios-pwa-viewport';
+import { isIosStandalonePwa, isIosWeb } from '../utils/ios-pwa-viewport';
 
 // Фокус, нужный редактору для вставки эмодзи, не должен открывать клавиатуру.
 export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
@@ -11,6 +11,8 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
   let editor: HTMLElement | null = null;
   let originalInputMode: string | null = null;
   let observer: MutationObserver | undefined;
+  let pickerResizeObserver: ResizeObserver | undefined;
+  let pickerLayoutFrame = 0;
   let viewportHeight = 0;
   let viewportWidth = 0;
   const isMobile = () =>
@@ -23,6 +25,29 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
     ].find(element => element.getClientRects().length > 0);
   const search = () =>
     picker()?.querySelector<HTMLInputElement>('.v3-search input');
+  const scheduleIosPickerLayout = () => {
+    if (!isIosStandalonePwa() || pickerLayoutFrame) return;
+    pickerLayoutFrame = requestAnimationFrame(() => {
+      pickerLayoutFrame = 0;
+      const element = host.value;
+      const openPicker = picker();
+      if (!element || !openPicker) return;
+      const viewport = window.visualViewport;
+      const visibleTop = Math.max(0, viewport?.offsetTop || 0);
+      const visibleBottom =
+        visibleTop + (viewport?.height || window.innerHeight);
+      const anchorTop =
+        Math.min(element.getBoundingClientRect().top, visibleBottom) - 5;
+      element.style.setProperty(
+        '--ios-emoji-picker-max-height',
+        `${Math.max(0, anchorTop - visibleTop - 8)}px`
+      );
+      element.style.setProperty(
+        '--ios-emoji-picker-top',
+        `${Math.max(visibleTop + 8, anchorTop - openPicker.getBoundingClientRect().height)}px`
+      );
+    });
+  };
   const restoreInputMode = () => {
     if (!editor) return;
     if (originalInputMode === null) editor.removeAttribute('inputmode');
@@ -41,6 +66,7 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
       editor?.setAttribute('inputmode', 'none');
     else restoreInputMode();
     pickerOpen.value = !!picker();
+    if (pickerOpen.value) scheduleIosPickerLayout();
   };
   const closeKeyboard = () => {
     mode = 'closed';
@@ -53,6 +79,15 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
   const handlePointerDown = (event: PointerEvent): boolean => {
     if (!isMobile() || !(event.target instanceof Element)) return false;
     const target = event.target;
+    if (
+      isIosWeb() &&
+      event.pointerType === 'touch' &&
+      target.closest('.emoji-picker .v3-emojis button')
+    ) {
+      // Вложенная кнопка редактора отменяет pointerdown и теряет touch-клик в WebKit.
+      event.stopPropagation();
+      return true;
+    }
     if (target.closest('.smile-button') && !target.closest('.emoji-picker')) {
       if (!picker()) closeKeyboard();
       // WebKit после preventDefault на touch pointerdown теряет клик по кнопке.
@@ -122,6 +157,7 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
     event.stopPropagation();
   };
   const measureKeyboard = () => {
+    scheduleIosPickerLayout();
     const viewport = window.visualViewport;
     if (!viewport || !isMobile()) return;
     if (viewportWidth !== viewport.width) {
@@ -164,6 +200,16 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
       document.addEventListener('pointerdown', preserveFocus, true);
       document.addEventListener('click', preserveSearchPicker);
       window.visualViewport?.addEventListener('resize', measureKeyboard);
+      window.visualViewport?.addEventListener(
+        'scroll',
+        scheduleIosPickerLayout
+      );
+      if (isIosStandalonePwa()) {
+        pickerResizeObserver = new ResizeObserver(scheduleIosPickerLayout);
+        pickerResizeObserver.observe(element);
+        const chat = element.closest('.chat');
+        if (chat) pickerResizeObserver.observe(chat);
+      }
       sync();
       measureKeyboard();
       onCleanup(() => {
@@ -172,6 +218,15 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
         document.removeEventListener('pointerdown', preserveFocus, true);
         document.removeEventListener('click', preserveSearchPicker);
         window.visualViewport?.removeEventListener('resize', measureKeyboard);
+        window.visualViewport?.removeEventListener(
+          'scroll',
+          scheduleIosPickerLayout
+        );
+        pickerResizeObserver?.disconnect();
+        cancelAnimationFrame(pickerLayoutFrame);
+        pickerLayoutFrame = 0;
+        element.style.removeProperty('--ios-emoji-picker-max-height');
+        element.style.removeProperty('--ios-emoji-picker-top');
         restoreInputMode();
         editor = null;
         mode = 'closed';

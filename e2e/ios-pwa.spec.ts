@@ -83,6 +83,157 @@ test.afterEach(async ({ page }) => {
   expect(pageErrors.get(page) || []).toEqual([]);
 });
 
+test('PWA: информация группы и кнопка назад остаются ниже системной строки', async ({
+  page
+}, testInfo) => {
+  await page.goto('/e2e/fixtures/ios-pwa.html?kind=group&no-pinned&shell&beta');
+  const editor = page.locator('.chat__input .ProseMirror');
+  await expect(editor).toBeVisible({ timeout: 60_000 });
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--ios-safe-top', '47px');
+    document.documentElement.style.setProperty('--ios-safe-bottom', '34px');
+  });
+  await editor.fill('Черновик');
+  await page.evaluate(() => (window as any).setIosViewport(500, 180));
+  await expect
+    .poll(
+      async () => (await page.locator('.chat__header-wrapper').boundingBox())!.y
+    )
+    .toBe(180 + 47 + 18);
+  await page.locator('.chat__header-profile').tap();
+  const dialog = page.getByRole('dialog');
+  const back = dialog.getByRole('button', { name: 'Назад', exact: true });
+  await expect(back).toBeVisible();
+  await expect(
+    dialog.getByRole('textbox', { name: 'Название группы', exact: true })
+  ).toBeVisible();
+  for (const [height, top] of [
+    [500, 180],
+    [844, 0]
+  ]) {
+    await page.evaluate(
+      ([height, top]) => (window as any).setIosViewport(height, top),
+      [height, top]
+    );
+    await expect
+      .poll(async () => Math.round((await back.boundingBox())!.y))
+      .toBeGreaterThanOrEqual(top + 47);
+    await expect
+      .poll(async () => {
+        const box = (await dialog.boundingBox())!;
+        return Math.round(box.y + box.height);
+      })
+      .toBeLessThanOrEqual(top + height - 34);
+  }
+  await page.screenshot({
+    path: testInfo.outputPath('group-info-safe-area.png')
+  });
+  await back.tap();
+  await expect(dialog).toBeHidden();
+  await expect(editor).toHaveText('Черновик');
+});
+
+test('PWA: счётчик поиска, стрелки и закрытие занимают отдельные области', async ({
+  page
+}, testInfo) => {
+  await page.goto('/e2e/fixtures/ios-pwa.html?kind=group&no-pinned&theme=dark');
+  await expect(page.locator('.chat__input .ProseMirror')).toBeVisible({
+    timeout: 60_000
+  });
+  await page.getByTestId('Fixture-Header-PopoverIcon').tap();
+  await page.getByRole('button', { name: 'Поиск в чате', exact: true }).tap();
+  const search = page
+    .getByTestId('Fixture-Header-MobileSearchInput')
+    .locator('input');
+  await search.fill('Сообщение');
+  const count = page.getByTestId('Fixture-Header-MobileSearchCount');
+  await expect(count).toHaveText('1 из 40');
+  for (const height of [500, 844]) {
+    await page.evaluate(
+      height => (window as any).setIosViewport(height),
+      height
+    );
+    const controls = page.locator(
+      '.chat__header-mobile-search-controls-content'
+    );
+    await expect
+      .poll(async () => Math.round((await controls.boundingBox())!.width))
+      .toBe(370);
+    const counterBox = (await count.boundingBox())!;
+    const navBox = (await page
+      .locator('.chat__header-mobile-search-controls__nav')
+      .boundingBox())!;
+    const closeBox = (await page
+      .getByTestId('Fixture-Header-MobileSearchBottomClose')
+      .boundingBox())!;
+    expect(counterBox.x + counterBox.width).toBeLessThanOrEqual(navBox.x);
+    expect(navBox.x + navBox.width).toBeLessThanOrEqual(closeBox.x);
+    expect(
+      (await controls.boundingBox())!.y + (await controls.boundingBox())!.height
+    ).toBeLessThanOrEqual(height);
+  }
+  await page.getByTestId('Fixture-Header-MobileSearchPrev').tap();
+  await expect(count).toHaveText('2 из 40');
+  await page.screenshot({ path: testInfo.outputPath('search-safe-area.png') });
+});
+
+test('PWA: уведомление появляется ниже системной строки и сдвига visualViewport', async ({
+  page
+}, testInfo) => {
+  await page.goto('/e2e/fixtures/ios-pwa.html?kind=group&no-pinned&theme=dark');
+  await expect(page.locator('.chat__input .ProseMirror')).toBeVisible({
+    timeout: 60_000
+  });
+  await page.evaluate(async () => {
+    document.documentElement.style.setProperty('--ios-safe-top', '47px');
+    (window as any).setIosViewport(500, 180);
+    const path = '/src/composables/useNotifications.ts';
+    const { showErrorNotification } = await import(/* @vite-ignore */ path);
+    showErrorNotification('Обновите историю звонков и попробуйте снова.');
+  });
+  const notification = page.getByRole('alert');
+  await expect(notification).toBeVisible();
+  await expect
+    .poll(async () => Math.round((await notification.boundingBox())!.y))
+    .toBe(180 + 47 + 16);
+  await page.screenshot({
+    path: testInfo.outputPath('notification-safe-area.png')
+  });
+});
+
+test('PWA: верхние кнопки звонка остаются ниже системной строки', async ({
+  page
+}, testInfo) => {
+  await page.goto('/e2e/fixtures/ios-pwa.html?kind=group&no-pinned&shell');
+  await expect(page.locator('.chat__input .ProseMirror')).toBeVisible({
+    timeout: 60_000
+  });
+  await page.evaluate(async () => {
+    document.documentElement.style.setProperty('--ios-safe-top', '47px');
+    document.documentElement.style.setProperty('--ios-safe-bottom', '34px');
+    const path = '/src/services/useCallState.ts';
+    const call = await import(/* @vite-ignore */ path);
+    call.user.value = { id: 'fixture-call-peer', initials: 'Проверка звонка' };
+    call.open.value = true;
+    call.isModalVisible.value = true;
+  });
+  const minimize = page.getByRole('button', {
+    name: 'Свернуть звонок',
+    exact: true
+  });
+  await expect(minimize).toBeVisible();
+  await expect
+    .poll(async () => Math.round((await minimize.boundingBox())!.y))
+    .toBeGreaterThanOrEqual(47);
+  const controls = page.locator(
+    '.call-modal__control-button-wrapper--call-controls'
+  );
+  await expect(controls).toBeVisible();
+  const box = (await controls.boundingBox())!;
+  expect(box.y + box.height).toBeLessThanOrEqual(844 - 34);
+  await page.screenshot({ path: testInfo.outputPath('call-safe-area.png') });
+});
+
 for (const kind of ['group', 'ai']) {
   test(`${kind}: заголовок, история и редактор остаются в видимой области iPhone`, async ({
     page
@@ -244,10 +395,44 @@ test('эмодзи помещаются на узком iPhone, поиск не 
   await expect(search).toHaveCSS('font-size', '16px');
   await search.tap();
   await search.fill('smile');
-  await page.evaluate(() => (window as any).setIosViewport(500));
-  await expect(page.locator('.chat__header-wrapper')).toBeInViewport();
-  await expect(search).toBeFocused();
+  for (const [height, top] of [
+    [500, 0],
+    [500, 180],
+    [844, 0]
+  ]) {
+    await page.evaluate(
+      ([nextHeight, nextTop]) =>
+        (window as any).setIosViewport(nextHeight, nextTop),
+      [height, top]
+    );
+    await expect(page.locator('.chat__header-wrapper')).toBeInViewport();
+    await expect(search).toBeFocused();
+    await expect
+      .poll(async () => {
+        const pickerBox = (await picker.boundingBox())!;
+        const inputBox = (await page.locator('.chat__input').boundingBox())!;
+        return {
+          gap: Math.round(inputBox.y - pickerBox.y - pickerBox.height),
+          visibleTop: pickerBox.y >= top + 8
+        };
+      })
+      .toEqual({ gap: 5, visibleTop: true });
+    await expect(picker.locator('.v3-body')).toBeInViewport();
+    await expect(
+      picker.getByRole('button', { name: 'Стикеры', exact: true })
+    ).toBeInViewport();
+  }
   await page.screenshot({ path: testInfo.outputPath('emoji-iphone-pwa.png') });
+  const emoji = picker.locator('.v3-emojis button:visible').first();
+  await expect(emoji.locator('span')).toHaveCSS(
+    'font-family',
+    /Apple Color Emoji/
+  );
+  const selectedEmoji = (await emoji.innerText()).trim();
+  await emoji.tap();
+  await expect(page.locator('.chat__input .ProseMirror')).toContainText(
+    selectedEmoji
+  );
 });
 
 test('обычная вкладка Safari не получает фиксацию экрана PWA', async ({
