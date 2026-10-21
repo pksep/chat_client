@@ -88,11 +88,7 @@ import type { MediaPreviewDimensions } from '../utils/mediaPreview';
 import { isDeletedBotUser } from '../utils/bot';
 import { useUrlWatcher } from '../composables/navigation';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
-import {
-  getStoredChatAccessToken,
-  isAuthError,
-  mergeAuthUser
-} from '../composables/useAuth';
+import { mergeAuthUser } from '../composables/useAuth';
 import {
   loadShadowSyncMeta,
   recordShadowChatEvent,
@@ -100,7 +96,6 @@ import {
   saveShadowReadState,
   saveShadowSyncMeta
 } from './useShadowChatSync';
-import { getAuthToken } from '../composables/useLogin';
 import { getConfig } from './useConfig';
 import {
   bootstrapCallHistory,
@@ -2997,56 +2992,17 @@ export const setReactionMessage = async (params: {
     return;
   }
 
+  // После запуска/возврата PWA соединение может ещё восстанавливаться.
+  // HTTP toggle endpoint на сервере отсутствует; ждём тот же Socket.IO,
+  // через который приходят подтверждённые обновления реакции.
   try {
-    await sdk.toggleMessageReaction(
-      params.topicId,
-      params.messageId,
-      params.emoji
-    );
-  } catch (error) {
-    if (isAuthError(error)) {
-      const token = getAuthToken() || getStoredChatAccessToken();
-
-      if (!token) {
-        console.warn(
-          '[ChatSDK] Skipping reaction REST fallback because auth token is missing'
-        );
-        return;
-      }
-
-      try {
-        const config = getConfig();
-        const response = await fetch(
-          `${config.CHAT_API_DOMAIN}/topics/${params.topicId}/messages/${params.messageId}/reactions`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify({ emoji: params.emoji })
-          }
-        );
-
-        if (!response.ok) {
-          console.warn(
-            '[ChatSDK] Reaction REST fallback returned non-OK status:',
-            response.status
-          );
-        }
-      } catch (fallbackError) {
-        console.error(
-          '[ChatSDK] Failed to toggle reaction via REST fallback:',
-          fallbackError
-        );
-      }
-
-      return;
-    }
-
+    await sdk.connect();
+    if (getChatSDK() !== sdk) return;
     if (!sendReactionOverSocket()) {
-      console.error('[ChatSDK] Failed to toggle message reaction:', error);
+      throw new Error('Нет соединения. Попробуйте поставить реакцию ещё раз.');
     }
+  } catch (error) {
+    showErrorNotification(error);
   }
 };
 

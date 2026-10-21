@@ -35,7 +35,9 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
       editor = next;
       originalInputMode = next?.getAttribute('inputmode') ?? null;
     }
-    if (isMobile() && mode !== 'editor')
+    // На iOS editor с inputmode=none при первом тапе может остаться без
+    // клавиатуры. Подавляем её только пока открывается/открыт пикер.
+    if (isMobile() && mode !== 'editor' && (!isIosWeb() || !!picker()))
       editor?.setAttribute('inputmode', 'none');
     else restoreInputMode();
     pickerOpen.value = !!picker();

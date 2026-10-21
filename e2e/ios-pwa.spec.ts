@@ -1,4 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+const pageErrors = new WeakMap<Page, string[]>();
 
 test.use({
   viewport: { width: 390, height: 844 },
@@ -10,8 +12,32 @@ test.use({
 
 test.beforeEach(async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'chromium-desktop');
+  const errors: string[] = [];
+  pageErrors.set(page, errors);
+  page.on('pageerror', error => errors.push(error.message));
   await page.route('**/e2e/ios-api/**', route => {
     const path = new URL(route.request().url()).pathname;
+    if (/\/messages\/topic\/[^/]+(?:\/pinned)?$/.test(path))
+      return route.fulfill({ json: [] });
+    if (path.endsWith('/groups/fixture-group-id'))
+      return route.fulfill({
+        json: {
+          group: { id: 'fixture-group-id', title: 'Проверка поиска' },
+          members: { data: [] }
+        }
+      });
+    if (path.endsWith('/topics/mobile-search-fixture'))
+      return route.fulfill({
+        json: {
+          id: 'mobile-search-fixture',
+          type: 'GROUP',
+          name: 'Проверка поиска',
+          group: { id: 'fixture-group-id', title: 'Проверка поиска' },
+          isAdmin: true,
+          members: [],
+          info: {}
+        }
+      });
     if (path.endsWith('avatar.svg'))
       return route.fulfill({
         contentType: 'image/svg+xml',
@@ -51,6 +77,10 @@ test.beforeEach(async ({ page }, testInfo) => {
       viewport.dispatchEvent(new Event('scroll'));
     };
   });
+});
+
+test.afterEach(async ({ page }) => {
+  expect(pageErrors.get(page) || []).toEqual([]);
 });
 
 for (const kind of ['group', 'ai']) {
@@ -236,6 +266,158 @@ test('обычная вкладка Safari не получает фиксаци�
   await expect(page.locator('html')).not.toHaveClass(/chat-ios-pwa/);
 });
 
+test('PWA: сдвиг документа с клавиатурой сохраняет доступ к редактору', async ({
+  page
+}) => {
+  await page.goto('/e2e/fixtures/ios-pwa.html?kind=group&no-pinned');
+  const editor = page.locator('.chat__input .ProseMirror');
+  await expect(editor).toBeVisible({ timeout: 60_000 });
+  await page.evaluate(() => {
+    (window as any).setIosViewport(500, 180);
+    document.documentElement.style.overflow = 'auto';
+    document.body.style.height = '1500px';
+    window.scrollTo(0, 80);
+  });
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(80);
+  await expect
+    .poll(
+      async () => (await page.locator('.chat__header-wrapper').boundingBox())!.y
+    )
+    .toBe(180);
+  await editor.tap();
+  await expect(editor).toBeFocused();
+  await editor.pressSequentially('После сдвига');
+  await expect(editor).toHaveText('После сдвига');
+  await page.evaluate(() => (window as any).setIosViewport(844));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await expect
+    .poll(
+      async () => (await page.locator('.chat__header-wrapper').boundingBox())!.y
+    )
+    .toBe(0);
+});
+
+test('PWA: инпут, вложения, стикеры и хэдер работают после переходов и закрытия профиля', async ({
+  page
+}) => {
+  await page.addInitScript(() => (window as any).setIosViewport(844, 100));
+  await page.goto('/e2e/fixtures/ios-pwa.html?kind=group&no-pinned&shell&beta');
+  const editor = page.locator('.chat__input .ProseMirror');
+  await expect(editor).toBeVisible({ timeout: 60_000 });
+  await expect(editor).not.toHaveAttribute('inputmode', 'none');
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--ios-safe-top', '47px');
+    document.documentElement.style.setProperty('--ios-safe-bottom', '34px');
+  });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    // Кнопки должны работать сразу, до первого фокуса/ввода в редактор.
+    await page.locator('.chat__input .attach-file-button:visible').tap();
+    await expect(
+      page.locator('.attach-file-popover .popover-yui-kit__content:visible')
+    ).toBeVisible();
+    await page.locator('.chat__input .attach-file-button:visible').tap();
+    await page.locator('.chat__input .smile-button:visible').tap();
+    await expect(
+      page.locator('.chat__input .emoji-picker--open:visible')
+    ).toBeVisible();
+    await expect(
+      page.locator('.chat__input .emoji-picker--open:visible .v3-emoji-picker')
+    ).toBeVisible();
+    await page
+      .getByTestId('StickerPickerMode')
+      .getByRole('button', { name: 'Стикеры', exact: true })
+      .tap();
+    await expect(
+      page.getByRole('region', { name: 'Каталог стикеров' })
+    ).toBeVisible();
+    await page.locator('.chat__input .smile-button:visible').tap();
+    await editor.tap();
+    await expect(editor).toBeFocused();
+    await editor.pressSequentially(`Текст ${attempt}`);
+    await expect(editor).toContainText(`Текст ${attempt}`);
+    await page.evaluate(() => (window as any).setIosViewport(500, 180));
+    await page.locator('.chat__input .smile-button:visible').tap();
+    await expect(
+      page.locator('.chat__input .emoji-picker--open:visible')
+    ).toBeVisible();
+    await page.locator('.chat__input .smile-button:visible').tap();
+    await page.locator('.chat__input .attach-file-button:visible').tap();
+    const option = page
+      .locator('.attach-file-popover .popover-yui-kit__content:visible')
+      .getByText('Файл', { exact: true });
+    const selection = page.waitForEvent('filechooser');
+    await option.tap();
+    await (await selection).setFiles([]);
+    await page.evaluate(() => (window as any).setIosViewport(844, 100));
+    await page.locator('.chat__header-profile').tap();
+    const profile = page.getByRole('dialog');
+    await expect(
+      profile.getByText('Информация о группе', { exact: true })
+    ).toBeVisible();
+    await profile.getByRole('button', { name: 'Назад', exact: true }).tap();
+    await expect(profile).toBeHidden();
+    await page.locator('.chat__header-back').tap();
+    const row = page.locator(
+      '[data-topic-id="mobile-search-fixture"] .contact-list__item'
+    );
+    await expect(row).toBeVisible();
+    await row.tap();
+    await expect(editor).toBeVisible();
+  }
+});
+
+test('PWA: реакция из долгого нажатия дожидается восстановления соединения', async ({
+  page
+}) => {
+  await page.goto('/e2e/fixtures/ios-pwa.html?kind=group&no-pinned&shell');
+  await expect(page.locator('.chat__input .ProseMirror')).toBeVisible({
+    timeout: 60_000
+  });
+  await page.evaluate(() => {
+    const fixture = (window as any).iosPwaFixture;
+    fixture.sent = [];
+    fixture.connected = false;
+    fixture.connections = 0;
+    fixture.sdk.connect = async () => {
+      fixture.connections++;
+      fixture.connected = true;
+    };
+    fixture.sdk.sendWebSocketEvent = (type: string, payload: any) => {
+      if (!fixture.connected) return false;
+      fixture.sent.push({ type, payload });
+      return true;
+    };
+  });
+  const message = page.locator('.message').last();
+  await message.scrollIntoViewIfNeeded();
+  const bounds = (await message.boundingBox())!;
+  const point = {
+    pointerId: 1,
+    pointerType: 'touch',
+    isPrimary: true,
+    clientX: bounds.x + 40,
+    clientY: bounds.y + 12
+  };
+  const text = message.locator('.message-content--text');
+  await text.dispatchEvent('pointerdown', point);
+  const menu = page.locator('.message-context-menu:visible');
+  await expect(menu).toBeVisible();
+  await text.dispatchEvent('pointerup', point);
+  await text.dispatchEvent('click', { ...point, detail: 1 });
+  await menu.locator('.select-reactions-item').first().tap();
+  await expect(menu).toHaveCount(0);
+  const result = await page.evaluate(() => {
+    const { sent, connections } = (window as any).iosPwaFixture;
+    return { sent, connections };
+  });
+  expect(result.connections).toBe(1);
+  expect(result.sent).toHaveLength(1);
+  expect(result.sent[0].payload.messageId).toBe(
+    await message.getAttribute('data-message-id')
+  );
+  expect(result.sent[0].payload.emoji).toBeTruthy();
+});
+
 for (const standalone of [true, false]) {
   const mode = standalone ? 'PWA' : 'Safari';
   test(`${mode}: точные нажатия в длинном списке, стабильное меню и настройки профиля`, async ({
@@ -255,6 +437,8 @@ for (const standalone of [true, false]) {
     await page.goto('/e2e/fixtures/ios-pwa.html?kind=menu');
     const nav = page.locator('.mobile-list-container > .menu-bottom-nav');
     await expect(nav).toBeVisible({ timeout: 60_000 });
+    await expect(nav).toHaveCSS('backdrop-filter', 'none');
+    await expect(nav).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
     if (standalone)
       await page.evaluate(() => {
         document.documentElement.style.setProperty('--ios-safe-top', '47px');

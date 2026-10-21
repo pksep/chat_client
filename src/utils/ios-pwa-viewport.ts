@@ -28,10 +28,15 @@ export function initIosPwaViewport(): () => void {
     if (viewport && Math.abs(viewport.scale - 1) > 0.01) return;
     const height = viewport?.height || window.innerHeight;
     const keyboardOpen = window.innerHeight - height > 100;
+    // После клавиатуры/возврата в PWA iOS может сохранить прокрутку документа.
+    // Скроллится только история внутри приложения, а не корневой viewport.
+    if (!keyboardOpen && (window.scrollX || window.scrollY)) {
+      window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
+    }
     root.style.setProperty('--ios-viewport-height', `${height}px`);
     root.style.setProperty(
       '--ios-viewport-top',
-      `${keyboardOpen ? Math.max(0, viewport?.offsetTop || 0) : 0}px`
+      `${keyboardOpen ? window.scrollY + Math.max(0, viewport?.offsetTop || 0) : 0}px`
     );
     root.classList.toggle('chat-ios-keyboard-open', keyboardOpen);
   };
@@ -43,15 +48,19 @@ export function initIosPwaViewport(): () => void {
   viewport?.addEventListener('resize', schedule);
   viewport?.addEventListener('scroll', schedule);
   window.addEventListener('resize', schedule);
+  window.addEventListener('scroll', schedule, { passive: true });
   window.addEventListener('pageshow', schedule);
   document.addEventListener('visibilitychange', schedule);
+  document.addEventListener('focusout', schedule);
   return () => {
     cancelAnimationFrame(frame);
     viewport?.removeEventListener('resize', schedule);
     viewport?.removeEventListener('scroll', schedule);
     window.removeEventListener('resize', schedule);
+    window.removeEventListener('scroll', schedule);
     window.removeEventListener('pageshow', schedule);
     document.removeEventListener('visibilitychange', schedule);
+    document.removeEventListener('focusout', schedule);
     root.classList.remove(
       'chat-ios-web',
       'chat-ios-pwa',
