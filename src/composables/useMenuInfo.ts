@@ -6,7 +6,6 @@ import { useTopics } from './useTopics';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
 import { TopicType } from '../services/useChatSDK/types';
 import { RouteType } from './navigation/useUrlRouting';
-import { showErrorNotification } from './useNotifications';
 
 type IMenuInfoProps = {
   open: boolean;
@@ -52,20 +51,17 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
     state.openAddUser = true;
   };
 
-  const handleUpdateInformation = async (value: IMenuInfoInformation) => {
+  const handleUpdateInformation = (value: IMenuInfoInformation) => {
+    state.information = value;
+
     if (value?.groupId) {
       const { setGroupInfo } = useGroup();
-      try {
-        await setGroupInfo(value.groupId, {
-          groupName: value.name,
-          avatarUrl: value.avatarUrl || undefined,
-          notification: null,
-          ex: undefined
-        });
-      } catch (error) {
-        showErrorNotification(error);
-        return;
-      }
+      setGroupInfo(value.groupId, {
+        groupName: value.name,
+        avatarUrl: value.avatarUrl || undefined,
+        notification: null,
+        ex: undefined
+      });
     } else if (value?.topicId) {
       const { topics } = useTopics();
       const topicIndex = topics.value.findIndex(t => t.id === value.topicId);
@@ -79,7 +75,6 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
         topics.value = updatedTopics;
       }
     }
-    state.information = value;
   };
 
   const initializeMenuInfo = async (

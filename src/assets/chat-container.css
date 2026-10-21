@@ -31,7 +31,6 @@
 @import url('./menu-layout.css');
 @import url('./chat-folders.css');
 @import url('./menu-list-items.css');
-@import url('./ios-pwa.css');
 
 .chat_container_alert {
   background-color: var(--error-dark-color);

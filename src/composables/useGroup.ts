@@ -189,34 +189,17 @@ export const useGroup = () => {
       avatarUrl: groupInfo.avatarUrl
     });
 
-    const update = (topic: ITopic): ITopic => ({
-      ...topic,
-      ...(groupInfo.groupName !== undefined
-        ? { name: groupInfo.groupName }
-        : {}),
-      ...(groupInfo.avatarUrl !== undefined
-        ? { avatarUrl: groupInfo.avatarUrl }
-        : {}),
-      group: {
-        ...topic.group,
-        ...(groupInfo.groupName !== undefined
-          ? { title: groupInfo.groupName }
-          : {}),
-        ...(groupInfo.avatarUrl !== undefined
-          ? { avatarUrl: groupInfo.avatarUrl }
-          : {}),
-        ...(groupInfo.description !== undefined
-          ? { description: groupInfo.description }
-          : {})
-      }
-    });
-    setTopics(
-      topics.value.map(topic =>
-        topic.group?.id === groupId ? update(topic) : topic
-      )
-    );
-    if (currentGroup.value?.group?.id === groupId) {
-      currentGroup.value = update(currentGroup.value);
+    const index = topics.value.findIndex(group => group.id === groupId);
+    if (index !== -1) {
+      const existing = topics.value[index];
+      const updatedGroup = {
+        ...existing,
+        nickname: groupInfo.groupName,
+        avatarUrl: groupInfo.avatarUrl
+      };
+      const next = [...topics.value];
+      next[index] = updatedGroup;
+      topics.value = next;
     }
   };
 
@@ -306,9 +289,6 @@ export const useGroup = () => {
       }
     }
     topics.value = [...topics.value];
-    if (topic && currentGroup.value?.id === topicId) {
-      currentGroup.value = { ...topic };
-    }
   };
 
   const updateLocalGroupInfo = (topicId: string, info: ITopicInfo): void => {

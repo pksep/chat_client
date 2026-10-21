@@ -33,8 +33,6 @@ public final class ChatNotificationActionWorker extends Worker {
     private static final String KEY_MESSAGE_ID = "messageId";
     private static final String KEY_REPLY_TEXT = "replyText";
     private static final String KEY_CLIENT_ID = "clientId";
-    private static final String KEY_USER_ID = "userId";
-    private static final String KEY_API_URL = "apiUrl";
     private static final String KEY_EMOJI = "emoji";
 
     public ChatNotificationActionWorker(
@@ -110,11 +108,7 @@ public final class ChatNotificationActionWorker extends Worker {
         String uniqueWorkName
     ) {
         try {
-            ChatBackgroundSyncStore.Session session = ChatBackgroundSyncStore.getSession(context);
-            if (!session.isValid() || isBlank(session.userId)) return false;
             Data input = new Data.Builder()
-                .putString(KEY_USER_ID, session.userId)
-                .putString(KEY_API_URL, session.apiUrl)
                 .putString(KEY_ACTION, action)
                 .putString(KEY_TOPIC_ID, topicId)
                 .putString(KEY_MESSAGE_ID, messageId)
@@ -167,16 +161,13 @@ public final class ChatNotificationActionWorker extends Worker {
 
         if (
             !session.isValid() ||
-            !session.userId.equals(getInputData().getString(KEY_USER_ID)) ||
-            !session.apiUrl.equals(getInputData().getString(KEY_API_URL)) ||
             isBlank(topicId) ||
             isBlank(action)
         ) {
             return Result.failure();
         }
 
-        ChatBackgroundSyncApi api = new ChatBackgroundSyncApi(session,
-            new ChatNotificationSessionRefresher(getApplicationContext()));
+        ChatBackgroundSyncApi api = new ChatBackgroundSyncApi(session);
 
         try {
             if (ACTION_REPLY.equals(action)) {

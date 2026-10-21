@@ -47,7 +47,10 @@ import {
   VIDEO_FALLBACK_THUMBNAIL
 } from '../utils/mediaPreview';
 import { MediaType } from '@pksep/zod-shared-chat';
-import { playMessageNotificationSound } from './notification-sound';
+import {
+  playNativeNotificationSound,
+  shouldPlayNotificationSound
+} from './useNotificationSoundPolicy';
 import { getIsAppActivelyVisible } from './useAppVisibility';
 import {
   appendShadowSyncMetaList,
@@ -3029,8 +3032,7 @@ const loadMessagesFromCache = async (
 export const hydrateMessageContextFromShadow = async (
   topicId: string,
   messageId: string,
-  userId?: string,
-  opts?: { isCurrent?: () => boolean }
+  userId?: string
 ): Promise<IMessage[]> => {
   if (!topicId || !messageId || !isShadowSyncEnabled()) {
     return [];
@@ -3062,8 +3064,7 @@ export const hydrateMessageContextFromShadow = async (
   mergeMessagesForTopic(topicId, normalizedShadowMessages, 'replace', {
     syncLastMessage: false,
     windowMode: 'around-anchor',
-    anchorMessageId: messageId,
-    updateVisible: opts?.isCurrent?.() ?? true
+    anchorMessageId: messageId
   });
   void saveShadowLoadedRange(topicId, normalizedShadowMessages);
 
@@ -3082,7 +3083,6 @@ export const mergeMessagesForTopic = (
     persistDelayMs?: number;
     skipPersist?: boolean;
     updateVisible?: boolean;
-    visibleMessages?: IMessage[];
   }
 ): IMessage[] => {
   const existing = getFullMessagesByTopicId(topicId) || [];
@@ -3125,7 +3125,7 @@ export const mergeMessagesForTopic = (
           ? 'preserve-end'
           : 'latest'),
     anchorMessageId: opts?.anchorMessageId,
-    visibleMessages: opts?.visibleMessages || visibleCombined,
+    visibleMessages: visibleCombined,
     visibleLimit: opts?.visibleLimit,
     persistDelayMs: opts?.persistDelayMs,
     skipPersist: opts?.skipPersist,
@@ -3208,44 +3208,14 @@ export const unpinLocalMessageForMe = (
   messageId: string
 ): void => {
   const existingPinnedMessages = pinnedMessagesStore[topicId] || [];
-  const pinnedMessage = existingPinnedMessages.find(
-    message => message.id === messageId
-  );
-  const localMessage = getClientMessageById(topicId, messageId);
 
-  if (!pinnedMessage && !localMessage) {
+  if (!existingPinnedMessages.some(message => message.id === messageId)) {
     return;
   }
 
-  const isPinnedForAll =
-    localMessage?.isPinnedForAll ??
-    pinnedMessage?.isPinnedForAll ??
-    (Boolean(localMessage?.isPin) &&
-      !localMessage?.isPinnedOnlyMe &&
-      !pinnedMessage?.isPinnedOnlyMe);
-  const pinState = {
-    isPin: isPinnedForAll,
-    isPinnedForAll,
-    isPinnedForMe: isPinnedForAll,
-    isPinnedOnlyMe: false
-  };
-
-  updateTopicMessageStores(topicId, messages =>
-    messages.map(message =>
-      message.id === messageId ? { ...message, ...pinState } : message
-    )
-  );
-  if (localMessage) schedulePersistMessages(topicId);
-
   savePinnedMessagesToLocal(
     topicId,
-    existingPinnedMessages.flatMap(message =>
-      message.id !== messageId
-        ? [message]
-        : isPinnedForAll
-          ? [{ ...message, ...pinState }]
-          : []
-    )
+    existingPinnedMessages.filter(message => message.id !== messageId)
   );
 };
 
@@ -4014,7 +3984,48 @@ const playNotificationSoundInternal = async (
     return;
   }
 
-  await playMessageNotificationSound();
+  if (!(await shouldPlayNotificationSound())) {
+    return;
+  }
+
+  if (await playNativeNotificationSound()) {
+    return;
+  }
+
+  try {
+    const audio = new Audio();
+    audio.src = '/audio/new-message.mp3';
+    audio.preload = 'auto';
+
+    audio.addEventListener(
+      'canplaythrough',
+      () => {
+        audio.play().catch(err => {
+          console.warn('Failed to play notification sound:', err.message);
+        });
+      },
+      { once: true }
+    );
+
+    audio.addEventListener(
+      'error',
+      e => {
+        console.warn('Notification sound failed to load:', e);
+
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('New Message', {
+            silent: false,
+            requireInteraction: false
+          });
+        }
+      },
+      { once: true }
+    );
+
+    audio.load();
+  } catch (err) {
+    console.warn('Audio not supported in this browser');
+  }
 };
 
 export const playNotificationSound = (

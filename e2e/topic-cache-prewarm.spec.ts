@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
 import { createAndroidPerformanceServer } from './fixtures/android-performance-server';
-import { MEDIA_CACHE_VERSION } from '../src/utils/media-url';
 
 let fixture: Awaited<ReturnType<typeof createAndroidPerformanceServer>>;
 
@@ -88,15 +87,7 @@ test('видимая группа прогревает только IndexedDB и
   });
   await page.goto('/__cache-seed');
   await page.evaluate(
-    async ({
-      origin,
-      config,
-      user,
-      topics,
-      topicId,
-      messages,
-      mediaCacheVersion
-    }) => {
+    async ({ origin, config, user, topics, topicId, messages }) => {
       localStorage.setItem(
         'chat_auth_session',
         JSON.stringify({ token: 'chat-294-local-fixture', user })
@@ -115,13 +106,12 @@ test('видимая группа прогревает только IndexedDB и
         'chat-client-indexeddb-reset-2026-04-29-v1'
       );
       await new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open('chat-sync-shadow-db', 3);
+        const request = indexedDB.open('chat-sync-shadow-db', 2);
         request.onupgradeneeded = () => {
           const db = request.result;
           for (const [name, keyPath] of [
             ['eventLog', 'id'],
             ['topicSnapshots', 'cacheKey'],
-            ['topicPreviews', 'cacheKey'],
             ['readStates', 'cacheKey'],
             ['syncMeta', 'key']
           ]) {
@@ -132,20 +122,15 @@ test('видимая группа прогревает только IndexedDB и
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
           const db = request.result;
-          const transaction = db.transaction(
-            ['topicSnapshots', 'topicPreviews'],
-            'readwrite'
-          );
-          const record = {
+          const transaction = db.transaction('topicSnapshots', 'readwrite');
+          transaction.objectStore('topicSnapshots').put({
             cacheKey: `${user.id}:${topicId}`,
             userId: user.id,
             topicId,
             messages,
             updatedAt: new Date().toISOString(),
             source: 'local'
-          };
-          transaction.objectStore('topicSnapshots').put(record);
-          transaction.objectStore('topicPreviews').put(record);
+          });
           transaction.oncomplete = () => {
             db.close();
             resolve();
@@ -154,7 +139,7 @@ test('видимая группа прогревает только IndexedDB и
         };
       });
       await new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open('chat-media-blob-cache-db', 3);
+        const request = indexedDB.open('chat-media-blob-cache-db', 2);
         request.onupgradeneeded = () => {
           const db = request.result;
           if (!db.objectStoreNames.contains('mediaBlobs')) {
@@ -172,7 +157,7 @@ test('видимая группа прогревает только IndexedDB и
           const svg =
             '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><rect width="24" height="24" fill="blue"/></svg>';
           transaction.objectStore('mediaBlobs').put({
-            key: `${mediaCacheVersion}:/cached-message-avatar.svg`,
+            key: '/cached-message-avatar.svg',
             path: '/cached-message-avatar.svg',
             blob: new Blob([svg], { type: 'image/svg+xml' }),
             mimeType: 'image/svg+xml',
@@ -194,8 +179,7 @@ test('видимая группа прогревает только IndexedDB и
       user: fixture.user,
       topics: fixture.topics,
       topicId: fixture.topics[1].id,
-      messages: fixture.histories.get(fixture.topics[1].id)!,
-      mediaCacheVersion: MEDIA_CACHE_VERSION
+      messages: fixture.histories.get(fixture.topics[1].id)!
     }
   );
 
@@ -205,26 +189,6 @@ test('видимая группа прогревает только IndexedDB и
     .filter({ hasText: 'Группа быстрого кеша' })
     .first();
   await expect(topic).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('#startup-shell')).toHaveCount(0);
-  await expect
-    .poll(() =>
-      page.evaluate(async topicId => {
-        const messages = await import('/src/services/useMessages.ts');
-        const media = await import('/src/services/useMediaBlobCache.ts');
-        const avatars = await import(
-          '/src/services/avatar-image-verification.ts'
-        );
-        const avatar = media.getCachedMediaObjectUrl(
-          '/cached-message-avatar.svg'
-        );
-        return {
-          messages: messages.hasKnownTopicMessagesState(topicId),
-          media: !!avatar,
-          avatar: !!avatar && avatars.hasVerifiedAvatarUrl(avatar)
-        };
-      }, fixture.topics[1].id)
-    )
-    .toEqual({ messages: true, media: true, avatar: true });
   expect(getTopicHistoryRequests()).toEqual([]);
   expect(getAvatarRequests()).toEqual([]);
 

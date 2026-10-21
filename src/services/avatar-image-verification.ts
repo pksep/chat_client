@@ -43,18 +43,25 @@ export const preloadAvatarImage = (url: string): Promise<boolean> => {
 
   const pending = new Promise<boolean>(resolve => {
     let settled = false;
-    const finish = (loaded: boolean): void => {
+    const finish = async (loaded: boolean): Promise<void> => {
       if (settled) return;
       settled = true;
 
-      // load и naturalWidth уже подтверждают картинку; decode() в WebKit может зависнуть.
+      if (loaded && typeof image.decode === 'function') {
+        try {
+          await image.decode();
+        } catch {
+          loaded = image.complete && image.naturalWidth > 0;
+        }
+      }
+
       const ready = loaded && image.naturalWidth > 0;
       if (ready) retainReadyAvatarImage(url, image);
       resolve(ready);
     };
 
-    image.onload = () => finish(true);
-    image.onerror = () => finish(false);
+    image.onload = () => void finish(true);
+    image.onerror = () => void finish(false);
     image.src = url;
     if (image.complete && image.naturalWidth > 0) void finish(true);
   }).finally(() => {

@@ -440,7 +440,8 @@ const shouldRenderCallModal = computed(
 );
 const { isVoiceModeOpen: isAiVoiceCallActive } = useAiAssistant();
 const shouldShowHeader = computed(
-  () => state.isActiveHeader || isCallActive.value || isAiVoiceCallActive.value
+  () =>
+    state.isActiveHeader || isCallActive.value || isAiVoiceCallActive.value
 );
 
 const users = computed(() => getUsersList());

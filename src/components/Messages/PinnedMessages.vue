@@ -132,8 +132,7 @@ const handleCloseUnpinModal = () => {
 };
 
 const handleConfirmUnpinMessage = async () => {
-  const message = currentPinnedMessage.value;
-  if (!message) {
+  if (!currentPinnedMessage.value) {
     handleCloseUnpinModal();
     return;
   }
@@ -145,26 +144,26 @@ const handleConfirmUnpinMessage = async () => {
     return;
   }
 
-  handleCloseUnpinModal();
-
-  if (!message.isPinnedOnlyMe) {
+  if (!currentPinnedMessage.value.isPinnedOnlyMe) {
     editMessageFromLocal(topicId, {
-      ...message,
+      ...currentPinnedMessage.value,
       isPin: false
     });
 
     await togglePinMessageChat({
       topicId,
-      messageId: message.id,
+      messageId: currentPinnedMessage.value.id,
       scope: 'ALL'
     });
   } else {
-    unpinLocalMessageForMe(topicId, message.id);
+    unpinLocalMessageForMe(topicId, currentPinnedMessage.value.id);
     await togglePinMessageChat({
       topicId,
-      messageId: message.id,
+      messageId: currentPinnedMessage.value.id,
       scope: 'SELF'
     });
   }
+
+  handleCloseUnpinModal();
 };
 </script>

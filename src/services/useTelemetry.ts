@@ -1,20 +1,9 @@
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
-import { getAuthUser, getStoredChatAccessToken } from '../composables/useAuth';
+import { getStoredChatAccessToken } from '../composables/useAuth';
 import { getAuthToken } from '../composables/useLogin';
 import { getConfig } from './useConfig';
 import { withNetworkTimeout } from '../utils/network-timeout';
-import {
-  createTelemetryTabs,
-  TELEMETRY_TAB_HEARTBEAT_MS,
-  TELEMETRY_TAB_KEY_PREFIX
-} from './telemetry-tabs';
-import {
-  isCalling,
-  isIncoming,
-  open as isCallOpen,
-  roomId as callRoomId
-} from './useCallState';
 import {
   getTelemetryDeviceContext,
   getTelemetryInstallationId,
@@ -77,11 +66,6 @@ const shouldPersistTelemetry = (
     Partial<Pick<TelemetryEvent, 'level'>>
 ): boolean =>
   event.category === 'network' ||
-  (event.category === 'call' &&
-    (event.name.startsWith('call.livekit.') ||
-      event.level === 'warn' ||
-      event.level === 'error')) ||
-  (event.category === 'lifecycle' && event.name.startsWith('app.page.')) ||
   (event.category === 'app' && event.name.startsWith('app.update.')) ||
   (event.category === 'chat' &&
     (event.name.startsWith('chat.message_delete.') ||
@@ -170,46 +154,6 @@ const createUuid = (): string => {
   });
 };
 
-// sessionStorage переживает refresh и копируется при дублировании вкладки.
-const telemetryPageInstanceId = `page-${createUuid()}`;
-const telemetryTabs = createTelemetryTabs({
-  pageInstanceId: telemetryPageInstanceId,
-  getStorage: () =>
-    typeof window !== 'undefined' && window === window.top
-      ? window.localStorage
-      : null,
-  getState: () => ({
-    userId: getAuthUser()?.id ?? null,
-    visibility:
-      typeof document !== 'undefined' ? document.visibilityState : 'unknown',
-    hasFocus: typeof document !== 'undefined' && document.hasFocus(),
-    callRoomId: callRoomId.value,
-    callState: isIncoming.value
-      ? 'incoming'
-      : isCalling.value
-        ? 'dialing'
-        : isCallOpen.value
-          ? 'active'
-          : 'none'
-  })
-});
-
-const getTelemetryPageContext = (): Record<string, unknown> => {
-  const perf = typeof performance !== 'undefined' ? performance : undefined;
-  const navigation = perf?.getEntriesByType?.('navigation')[0] as
-    | PerformanceNavigationTiming
-    | undefined;
-
-  return {
-    instanceId: telemetryPageInstanceId,
-    timeOrigin: perf?.timeOrigin,
-    uptimeMs: perf ? Math.round(perf.now()) : undefined,
-    navigationType: navigation?.type,
-    isTopLevel:
-      typeof window !== 'undefined' ? window === window.top : undefined
-  };
-};
-
 const getTelemetrySessionId = (): string => {
   if (typeof sessionStorage === 'undefined') {
     return `session-${createUuid()}`;
@@ -286,8 +230,6 @@ const buildDefaultTelemetryContext = (): Record<string, unknown> => {
     platform: Capacitor.getPlatform(),
     isNative: Capacitor.isNativePlatform(),
     installationId: getTelemetryInstallationId(),
-    page: getTelemetryPageContext(),
-    tabs: telemetryTabs.snapshot(),
     device,
     location: getTelemetryLocationContext(),
     visibility:
@@ -411,7 +353,7 @@ export const recordTelemetryEvent = (input: TelemetryEventInput): void => {
       : undefined;
   telemetryQueue = [...telemetryQueue, event].slice(-TELEMETRY_MAX_QUEUE_SIZE);
 
-  // Сохраняем диагностику сбоев до обновления страницы или перезапуска APK.
+  // Сохраняем диагностику сети, обновлений и сбоев чата до перезапуска APK.
   if (
     shouldPersistTelemetry(event) ||
     (evictedEvent && shouldPersistTelemetry(evictedEvent))
@@ -519,33 +461,7 @@ if (typeof window !== 'undefined') {
   });
 
   window.addEventListener('beforeunload', () => {
-    recordTelemetryEvent({
-      category: 'lifecycle',
-      name: 'app.page.before_unload',
-      entityType: 'app'
-    });
     void flushTelemetryEvents();
-  });
-
-  window.addEventListener('pagehide', event => {
-    telemetryTabs.suspend();
-    recordTelemetryEvent({
-      category: 'lifecycle',
-      name: 'app.page.hide',
-      entityType: 'app',
-      payload: { persisted: event.persisted }
-    });
-    void flushTelemetryEvents();
-  });
-
-  window.addEventListener('pageshow', event => {
-    telemetryTabs.resume();
-    recordTelemetryEvent({
-      category: 'lifecycle',
-      name: 'app.page.show',
-      entityType: 'app',
-      payload: { persisted: event.persisted }
-    });
   });
 
   window.addEventListener('error', event => {
@@ -573,69 +489,6 @@ if (typeof window !== 'undefined') {
       payload: getTelemetryErrorPayload(event.reason)
     });
   });
-}
-
-if (typeof window !== 'undefined' && window === window.top) {
-  let previousTabsSignature = '';
-  let lastTabsSnapshotAt = 0;
-  let tabsChangeTimer: ReturnType<typeof setTimeout> | null = null;
-  const recordTabsSnapshot = () => {
-    const snapshot = telemetryTabs.snapshot();
-    if (snapshot.status !== 'available') return;
-    const signature = JSON.stringify({
-      userId: getAuthUser()?.id,
-      tabs: snapshot.tabs
-        ?.map(
-          ({
-            pageInstanceId,
-            visibility,
-            hasFocus,
-            callRoomId,
-            callState,
-            presence
-          }) => ({
-            pageInstanceId,
-            visibility,
-            hasFocus,
-            callRoomId,
-            callState,
-            presence
-          })
-        )
-        .sort((a, b) => a.pageInstanceId.localeCompare(b.pageInstanceId))
-    });
-    if (
-      signature === previousTabsSignature &&
-      Date.now() - lastTabsSnapshotAt < 60_000
-    )
-      return;
-    previousTabsSignature = signature;
-    lastTabsSnapshotAt = Date.now();
-    recordTelemetryEvent({
-      category: 'lifecycle',
-      name: 'app.page.tabs_snapshot',
-      entityType: 'app',
-      payload: snapshot
-    });
-  };
-  const scheduleTabsSnapshot = () => {
-    if (tabsChangeTimer) return;
-    tabsChangeTimer = setTimeout(() => {
-      tabsChangeTimer = null;
-      recordTabsSnapshot();
-    }, 100);
-  };
-  window.addEventListener('storage', event => {
-    if (event.key?.startsWith(TELEMETRY_TAB_KEY_PREFIX) || event.key === null) {
-      scheduleTabsSnapshot();
-    }
-  });
-  window.addEventListener('focus', scheduleTabsSnapshot);
-  window.addEventListener('blur', scheduleTabsSnapshot);
-  window.addEventListener('pageshow', scheduleTabsSnapshot);
-  document.addEventListener('visibilitychange', scheduleTabsSnapshot);
-  setInterval(recordTabsSnapshot, TELEMETRY_TAB_HEARTBEAT_MS);
-  scheduleTabsSnapshot();
 }
 
 void hydrateTelemetryDeviceContext().then(() => {

@@ -489,7 +489,7 @@ export const ensureMediaObjectUrl = async (
 
       objectUrlCache.set(cacheKey, objectUrl);
 
-      void putRecord({
+      await putRecord({
         key: cacheKey,
         path,
         blob,
@@ -497,12 +497,8 @@ export const ensureMediaObjectUrl = async (
         size: blob.size || 0,
         createdAt: now,
         accessedAt: now
-      })
-        .then(() => ensureCacheWithinLimit())
-        .catch(error => {
-          // Ошибка квоты/хранилища Safari не отменяет уже загруженное изображение.
-          console.warn('Failed to persist loaded media:', error);
-        });
+      });
+      await ensureCacheWithinLimit();
 
       return objectUrl;
     } catch (error) {

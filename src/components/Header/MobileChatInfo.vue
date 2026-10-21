@@ -132,7 +132,6 @@ import { uploadFile } from '../../services/useChat';
 import { currentGroup, setGroupInfo } from '../../composables/useGroup';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 import { isDeletedBotUser } from '../../utils/bot';
-import { showErrorNotification } from '../../composables/useNotifications';
 
 interface IMobileChatInfoProps {
   creating?: boolean;
@@ -223,36 +222,30 @@ const handleCloseImageCrop = (): void => {
 };
 
 const handleImageCropSave = async (croppedFile: File) => {
-  try {
-    const file = await uploadFile(croppedFile);
+  const file = await uploadFile(croppedFile);
 
-    if (!file) return;
+  if (!file) return;
 
-    if (!props.creating && currentGroup.value) {
-      await setGroupInfo(currentGroup.value.group.id, {
-        avatarUrl: file.path
-      });
-    }
-
-    if (props.creating) information.value.avatarUrl = file.path;
-    closeEditProfileIcon();
-    resetAvatarInput();
-  } catch (error) {
-    showErrorNotification(error);
+  if (!props.creating && currentGroup.value) {
+    await setGroupInfo(currentGroup.value.group.id, {
+      avatarUrl: file.path
+    });
   }
+
+  information.value.avatarUrl = file.path;
+  closeEditProfileIcon();
+  resetAvatarInput();
 };
 
 const handleSaveFromForm = async (value: { name: string }) => {
-  if (!currentGroup.value?.group?.id) return;
-  try {
-    await setGroupInfo(currentGroup.value.group.id, { groupName: value.name });
-  } catch (error) {
-    showErrorNotification(error);
-  }
+  await setGroupInfo(currentGroup.value.group.id, {
+    avatarUrl: currentGroup.value.group.avatarUrl,
+    groupName: value.name
+  });
 };
 
 const handleChangeFromForm = async (value: { name: string }) => {
-  if (props.creating) information.value.name = value.name;
+  information.value.name = value.name;
 };
 
 const handleContactClick = (newUsers: IUser[]): void => {

@@ -229,51 +229,6 @@ test('повторный запуск применяет дельту из Index
   expect(errors).toEqual([]);
 });
 
-test('месячный снимок сразу обновляется через GetTopics без запроса дельты', async ({
-  page
-}) => {
-  const errors = await prepare(page);
-  const fullRequests = await bootstrap(page);
-  await page.evaluate(
-    userId =>
-      new Promise<void>((resolve, reject) => {
-        const open = indexedDB.open('chat-offline-state-db');
-        open.onerror = () => reject(open.error);
-        open.onsuccess = () => {
-          const db = open.result;
-          const tx = db.transaction('entities', 'readwrite');
-          const store = tx.objectStore('entities');
-          const request = store.get(`${userId}:topics-sync`);
-          request.onsuccess = () => {
-            const record = request.result;
-            record.topicSync.syncedAt = new Date(
-              Date.now() - 31 * 86400_000
-            ).toISOString();
-            store.put(record);
-          };
-          tx.oncomplete = () => {
-            db.close();
-            resolve();
-          };
-          tx.onerror = () => reject(tx.error);
-        };
-      }),
-    fixture.user.id
-  );
-  let deltas = 0;
-  await page.route('**/api/topics/sync?*', route => {
-    deltas++;
-    return route.fulfill({ json: { reset: true } });
-  });
-  await page.reload();
-  await expect(page.locator('#startup-shell')).toHaveCount(0, {
-    timeout: 20_000
-  });
-  await expect.poll(fullRequests).toBe(2);
-  expect(deltas).toBe(0);
-  expect(errors).toEqual([]);
-});
-
 for (const fallback of [
   'reset',
   'missing-card',

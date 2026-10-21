@@ -19,8 +19,6 @@ public final class ChatBackgroundSyncStore {
     private static final String KEY_TOKEN = "session.token";
     private static final String KEY_USER_ID = "session.userId";
     private static final String KEY_API_URL = "session.apiUrl";
-    private static final String KEY_AUTH_SOURCE = "session.authSource";
-    private static final String KEY_ERP_URL = "session.erpUrl";
     private static final String KEY_LAST_PTS = "sync.lastPts";
     private static final String KEY_SYNC_EVENTS = "snapshot.syncEvents";
     private static final String KEY_SYNC_FROM_PTS = "snapshot.syncFromPts";
@@ -43,19 +41,11 @@ public final class ChatBackgroundSyncStore {
         public final String token;
         public final String userId;
         public final String apiUrl;
-        public final String authSource;
-        public final String erpUrl;
 
         Session(String token, String userId, String apiUrl) {
-            this(token, userId, apiUrl, "unknown_shared", "");
-        }
-
-        Session(String token, String userId, String apiUrl, String authSource, String erpUrl) {
             this.token = token;
             this.userId = userId;
             this.apiUrl = apiUrl;
-            this.authSource = authSource;
-            this.erpUrl = erpUrl;
         }
 
         public boolean isValid() {
@@ -83,23 +73,15 @@ public final class ChatBackgroundSyncStore {
         String userId,
         String apiUrl
     ) {
-        return saveSession(context, token, userId, apiUrl, "unknown_shared", "");
-    }
-
-    public static boolean saveSession(Context context, String token, String userId, String apiUrl,
-                                      String authSource, String erpUrl) {
         synchronized (SESSION_LOCK) {
-            Session next = new Session(trimToEmpty(token), trimToEmpty(userId), normalizeApiUrl(apiUrl),
-                trimToEmpty(authSource), normalizeApiUrl(erpUrl));
+            Session next = new Session(trimToEmpty(token), trimToEmpty(userId), normalizeApiUrl(apiUrl));
             if (sameSession(getSession(context), next)) return false;
             saveFastSession(context, next);
             prefs(context)
                 .edit()
                 .putString(KEY_TOKEN, trimToEmpty(token))
                 .putString(KEY_USER_ID, trimToEmpty(userId))
-                .putString(KEY_API_URL, next.apiUrl)
-                .putString(KEY_AUTH_SOURCE, next.authSource)
-                .putString(KEY_ERP_URL, next.erpUrl)
+                .putString(KEY_API_URL, normalizeApiUrl(apiUrl))
                 .apply();
 
             JSONObject status = newStatus("session_saved");
@@ -112,17 +94,7 @@ public final class ChatBackgroundSyncStore {
 
     static boolean sameSession(Session current, Session next) {
         return current.token.equals(next.token) && current.userId.equals(next.userId)
-            && current.apiUrl.equals(next.apiUrl) && current.authSource.equals(next.authSource)
-            && current.erpUrl.equals(next.erpUrl);
-    }
-
-    static Session saveRefreshedSession(Context context, Session expected, String token) {
-        synchronized (SESSION_LOCK) {
-            Session current = getSession(context);
-            if (!sameSession(current, expected)) return current;
-            saveSession(context, token, expected.userId, expected.apiUrl, expected.authSource, expected.erpUrl);
-            return getSession(context);
-        }
+            && current.apiUrl.equals(next.apiUrl);
     }
 
     public static void clearSession(Context context) {
@@ -132,8 +104,6 @@ public final class ChatBackgroundSyncStore {
                 .edit()
                 .remove(KEY_TOKEN)
                 .remove(KEY_USER_ID)
-                .remove(KEY_AUTH_SOURCE)
-                .remove(KEY_ERP_URL)
                 .remove(KEY_API_URL)
                 .remove(KEY_LAST_PTS)
                 .remove(KEY_SYNC_EVENTS)
@@ -165,8 +135,7 @@ public final class ChatBackgroundSyncStore {
 
     private static Session readSession(SharedPreferences preferences) {
         return new Session(preferences.getString(KEY_TOKEN, ""), preferences.getString(KEY_USER_ID, ""),
-            preferences.getString(KEY_API_URL, ""),
-            preferences.getString(KEY_AUTH_SOURCE, "unknown_shared"), preferences.getString(KEY_ERP_URL, ""));
+            preferences.getString(KEY_API_URL, ""));
     }
 
     private static void saveFastSession(Context context, Session session) {
@@ -175,8 +144,6 @@ public final class ChatBackgroundSyncStore {
             .putString(KEY_TOKEN, session.token)
             .putString(KEY_USER_ID, session.userId)
             .putString(KEY_API_URL, session.apiUrl)
-            .putString(KEY_AUTH_SOURCE, session.authSource)
-            .putString(KEY_ERP_URL, session.erpUrl)
             .apply();
     }
 

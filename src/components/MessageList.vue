@@ -467,7 +467,6 @@ import { Capacitor } from '@capacitor/core';
 import { MediaType } from '@pksep/zod-shared-chat';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
-import { isIosWeb } from '../utils/ios-pwa-viewport';
 import SelectedMessagesContent from './Header/SelectedMessagesContent.vue';
 import CallTopicActions from './Calls/CallTopicActions.vue';
 import CallTopicDefaultMessage from './Calls/CallTopicDefaultMessage.vue';
@@ -589,7 +588,9 @@ const PINNED_VIEWPORT_SNAPSHOT_INTERVAL_MS = 80;
 const unreadMarkerMessageIdsByTopic = reactive<Record<string, string | null>>(
   {}
 );
-let messageNavigationRevision = 0;
+const seenUnreadMarkerStateByTopic = reactive<
+  Record<string, { markerId: string; unreadCount: number }>
+>({});
 const { pendingForwardMessages, pendingForwardTopicId } =
   usePendingForwardMessages();
 const { pendingDraftTopicId, pendingDraftText, consumePendingMessageDraft } =
@@ -1974,16 +1975,12 @@ const shouldKeepTopicSwitchBottomPosition = (
   topicSwitchToken: number
 ): boolean =>
   scrollAnchor.viewportMode.value !== 'jump' &&
-  (!state.unreadMarkerMessageId ||
-    scrollAnchor.viewportMode.value === 'live') &&
   !hasTopicSwitchUserScrollIntent(topicSwitchToken) &&
   (completedTopicSwitchToken !== topicSwitchToken ||
     isCurrentTopicNearBottomNow());
 
 const shouldKeepCurrentTopicBottomPosition = (): boolean =>
   scrollAnchor.viewportMode.value !== 'jump' &&
-  (!state.unreadMarkerMessageId ||
-    scrollAnchor.viewportMode.value === 'live') &&
   !hasTopicSwitchUserScrollIntent(activeTopicSwitchToken) &&
   isCurrentTopicNearBottomNow();
 
@@ -2425,21 +2422,38 @@ const scheduleVisibleTopicMediaWarm = (
   });
 };
 
-const refreshUnreadMarkerState = (force = false) => {
-  if (isLoadingInitialMessages.value && !force) return;
+const refreshUnreadMarkerState = () => {
   if (!route.value?.id) {
     state.unreadMarkerMessageId = null;
     state.hideUnreadMarker = true;
     return;
   }
 
-  // Граница относится к текущему открытию чата и не сдвигается от read-receipt.
-  // Контекст закрепа/поиска не устанавливает новую границу непрочитанных.
-  const canDiscoverUnread =
-    topicUnreadCount.value > 0 && scrollAnchor.viewportMode.value !== 'jump';
-  const firstUnreadMessageId =
-    unreadMarkerMessageIdsByTopic[route.value.id] ||
-    (canDiscoverUnread ? getFirstUnreadMessageId() : null);
+  const firstUnreadMessageId = getFirstUnreadMessageId();
+  const unreadCount = getCurrentTopicUnreadCount();
+  const seenState = seenUnreadMarkerStateByTopic[route.value.id];
+
+  if (
+    firstUnreadMessageId &&
+    seenState &&
+    seenState.markerId === firstUnreadMessageId &&
+    unreadCount <= seenState.unreadCount
+  ) {
+    state.unreadMarkerMessageId = null;
+    state.hideUnreadMarker = true;
+    return;
+  }
+
+  if (
+    state.unreadMarkerMessageId &&
+    firstUnreadMessageId &&
+    state.unreadMarkerMessageId !== firstUnreadMessageId &&
+    unreadCount > 0
+  ) {
+    state.hideUnreadMarker = false;
+    return;
+  }
+
   unreadMarkerMessageIdsByTopic[route.value.id] = firstUnreadMessageId;
   state.unreadMarkerMessageId = firstUnreadMessageId;
   state.hideUnreadMarker = !firstUnreadMessageId;
@@ -2812,19 +2826,16 @@ const jumpToMessageWithHighlight = async (
   messageId: string,
   quoteText: string,
   quoteOccurrenceIndex?: number,
-  behavior: MessageScrollBehavior = 'smooth',
-  isCurrent = () => true
+  behavior: MessageScrollBehavior = 'smooth'
 ): Promise<boolean> => {
   await messageListUserItemsRef.value?.ensureMessageRendered?.(messageId);
 
-  if (!isCurrent()) return false;
   const didJump = await scrollAnchor.jumpToMessage(messageId, {
     block: 'center',
-    behavior,
-    isCurrent
+    behavior
   });
 
-  if (!didJump || !isCurrent()) {
+  if (!didJump) {
     return false;
   }
 
@@ -2836,20 +2847,14 @@ const jumpToMessageWithHighlight = async (
 
 const refreshAroundMessageAfterOptimisticJump = async (
   topicId: string,
-  messageId: string,
-  isCurrent: () => boolean
+  messageId: string
 ): Promise<void> => {
   const anchor = scrollAnchor.captureViewportAnchor(messageId);
   const mutation = scrollAnchor.beginViewportMutation('replace', {
     forcePreserve: true,
     preferredMessageId: messageId
   });
-  const messages = await fetchAroundMessage(messageId, topicId, {
-    updateVisible: false,
-    forceNetwork: getHasBrowserNetwork()
-  });
-
-  if (!isCurrent()) return;
+  const messages = await fetchAroundMessage(messageId, topicId);
 
   if (route.value.id !== topicId) {
     scrollAnchor.commitViewportMutation(mutation.revision, {
@@ -2865,32 +2870,23 @@ const refreshAroundMessageAfterOptimisticJump = async (
     return;
   }
 
-  mergeMessagesForTopic(topicId, messages, 'replace', {
-    syncLastMessage: false,
-    windowMode: 'around-anchor',
-    anchorMessageId: messageId,
-    visibleMessages: messages
-  });
   await nextTick();
-  if (!isCurrent()) return;
   scrollAnchor.commitViewportMutation(mutation.revision, {
     forceAnchor: anchor
   });
   await messageListUserItemsRef.value?.ensureMessageRendered?.(messageId);
   await scrollAnchor.jumpToMessage(messageId, {
     block: 'center',
-    behavior: 'auto',
-    isCurrent
+    behavior: 'auto'
   });
-  if (isCurrent()) highlightWholeMessage(messageId);
+  highlightWholeMessage(messageId);
 };
 
 const jumpToOptimisticTarget = async (
   message: IMessage,
   quoteText: string,
   quoteOccurrenceIndex?: number,
-  behavior: MessageScrollBehavior = 'smooth',
-  isCurrent = () => true
+  behavior: MessageScrollBehavior = 'smooth'
 ): Promise<boolean> => {
   const topicId = route.value.id;
 
@@ -2912,16 +2908,11 @@ const jumpToOptimisticTarget = async (
     message.id,
     quoteText,
     quoteOccurrenceIndex,
-    behavior,
-    isCurrent
+    behavior
   );
 
   if (didJump) {
-    void refreshAroundMessageAfterOptimisticJump(
-      topicId,
-      message.id,
-      isCurrent
-    );
+    void refreshAroundMessageAfterOptimisticJump(topicId, message.id);
   }
 
   return didJump;
@@ -2934,10 +2925,6 @@ const navigateToMessageId = async (
   optimisticMessage?: IMessage | null,
   behavior: MessageScrollBehavior = 'smooth'
 ): Promise<boolean> => {
-  const topicId = route.value.id;
-  const revision = ++messageNavigationRevision;
-  const isCurrent = () =>
-    route.value.id === topicId && revision === messageNavigationRevision;
   clearVisibleMessagesExpansionSchedule();
   scrollAnchor.prepareJumpMutation();
 
@@ -2945,49 +2932,37 @@ const navigateToMessageId = async (
     messageId,
     quoteText,
     quoteOccurrenceIndex,
-    behavior,
-    isCurrent
+    behavior
   );
 
-  if (!isCurrent()) return false;
   if (didJump) {
-    void refreshAroundMessageAfterOptimisticJump(topicId, messageId, isCurrent);
     return true;
   }
 
   const memoryMessages = await hydrateMessageContextFromMemory(
-    topicId,
+    route.value.id,
     messageId
   );
 
-  if (!isCurrent()) return false;
   if (memoryMessages.some(m => m.id === messageId)) {
     const didMemoryJump = await jumpToMessageWithHighlight(
       messageId,
       quoteText,
       quoteOccurrenceIndex,
-      behavior,
-      isCurrent
+      behavior
     );
 
     if (didMemoryJump) {
-      void refreshAroundMessageAfterOptimisticJump(
-        topicId,
-        messageId,
-        isCurrent
-      );
       return true;
     }
   }
 
-  if (!isCurrent()) return false;
   if (optimisticMessage) {
     const didOptimisticJump = await jumpToOptimisticTarget(
       optimisticMessage,
       quoteText,
       quoteOccurrenceIndex,
-      behavior,
-      isCurrent
+      behavior
     );
 
     if (didOptimisticJump) {
@@ -2997,21 +2972,18 @@ const navigateToMessageId = async (
 
   scrollAnchor.prepareJumpMutation();
   const shadowMessages = await hydrateMessageContextFromShadow(
-    topicId,
+    route.value.id,
     messageId,
-    authUser.value?.id,
-    { isCurrent }
+    authUser.value?.id
   );
 
-  if (!isCurrent()) return false;
   if (shadowMessages.some(m => m.id === messageId)) {
     await nextTick();
     const didShadowJump = await jumpToMessageWithHighlight(
       messageId,
       quoteText,
       quoteOccurrenceIndex,
-      behavior,
-      isCurrent
+      behavior
     );
 
     if (didShadowJump) {
@@ -3019,19 +2991,9 @@ const navigateToMessageId = async (
     }
   }
 
-  if (!isCurrent()) return false;
   resetScrollState();
   scrollAnchor.prepareJumpMutation();
-  const messages = await fetchAroundMessage(messageId, topicId, {
-    updateVisible: false
-  });
-  if (!isCurrent()) return false;
-  mergeMessagesForTopic(topicId, messages, 'replace', {
-    syncLastMessage: false,
-    windowMode: 'around-anchor',
-    anchorMessageId: messageId,
-    visibleMessages: messages
-  });
+  const messages = await fetchAroundMessage(messageId);
 
   if (!messages.some(m => m.id === messageId)) {
     return false;
@@ -3042,8 +3004,7 @@ const navigateToMessageId = async (
     messageId,
     quoteText,
     quoteOccurrenceIndex,
-    behavior,
-    isCurrent
+    behavior
   );
 };
 
@@ -3185,8 +3146,12 @@ const bootstrapPendingSearchNavigation = async (): Promise<void> => {
 };
 
 const handleArrowDownClick = async (): Promise<void> => {
-  const revision = ++messageNavigationRevision;
-  await handleScrollToButton(() => revision === messageNavigationRevision);
+  if (showUnreadCountOnScrollButton.value) {
+    await handleScrollToButton();
+    return;
+  }
+
+  await handleScrollToButton();
 };
 
 const handleUnreadReactionClick = async (): Promise<void> => {
@@ -3267,6 +3232,49 @@ const getFirstUnreadMessageId = (): string | null => {
   return firstUnreadMessage?.id || null;
 };
 
+const getCurrentTopicUnreadCount = (): number => {
+  return visibleTopicUnreadCount.value || 0;
+};
+
+const rememberCurrentUnreadMarkerState = (topicId: string) => {
+  if (!state.unreadMarkerMessageId) {
+    return;
+  }
+
+  seenUnreadMarkerStateByTopic[topicId] = {
+    markerId: state.unreadMarkerMessageId,
+    unreadCount: getCurrentTopicUnreadCount()
+  };
+};
+
+const hideUnreadMarkerIfPassed = (): void => {
+  if (
+    !route.value?.id ||
+    !state.unreadMarkerMessageId ||
+    state.hideUnreadMarker ||
+    !getCanSendReadReceipts() ||
+    !chatWrapperRef.value
+  ) {
+    return;
+  }
+
+  const markerElement = chatWrapperRef.value.querySelector(
+    `[data-message-id="${state.unreadMarkerMessageId}"]`
+  );
+
+  if (!(markerElement instanceof HTMLElement)) {
+    return;
+  }
+
+  const containerRect = chatWrapperRef.value.getBoundingClientRect();
+  const markerRect = markerElement.getBoundingClientRect();
+
+  if (markerRect.bottom <= containerRect.top + 8) {
+    rememberCurrentUnreadMarkerState(route.value.id);
+    state.hideUnreadMarker = true;
+  }
+};
+
 const resetUnreadIfViewingBottom = (): void => {
   if (!route.value?.id || !chatWrapperRef.value) {
     return;
@@ -3276,8 +3284,7 @@ const resetUnreadIfViewingBottom = (): void => {
     return;
   }
 
-  const latestMessageId = getSelectedTopic(route.value.id)?.lastMessage?.id;
-  if (!latestMessageId || state.messages.at(-1)?.id !== latestMessageId) {
+  if (state.unreadMarkerMessageId && !state.hideUnreadMarker) {
     return;
   }
 
@@ -3289,6 +3296,11 @@ const resetUnreadIfViewingBottom = (): void => {
     resetTopicUnreadState(route.value.id);
     void markAllVisibleAsRead();
   }
+
+  unreadMarkerMessageIdsByTopic[route.value.id] = null;
+  delete seenUnreadMarkerStateByTopic[route.value.id];
+  state.unreadMarkerMessageId = null;
+  state.hideUnreadMarker = true;
 };
 
 const syncVisibleUnreadAfterAutoScroll = (): void => {
@@ -3322,6 +3334,7 @@ const schedulePostScrollUiSync = (): void => {
     }
 
     scheduleFloatingDateDividerSync();
+    hideUnreadMarkerIfPassed();
     resetUnreadIfViewingBottom();
   });
 };
@@ -3631,9 +3644,6 @@ watch(
     visibleMessagesExpansionAppliedToken = 0;
     suppressNotificationSoundForTopic(topicId, TOPIC_SWITCH_AUTO_READ_GRACE_MS);
     state.errorMessage = '';
-    messageNavigationRevision += 1;
-    const initialNavigationRevision = messageNavigationRevision;
-    unreadMarkerMessageIdsByTopic[topicId] = null;
     state.hideUnreadMarker = true;
     state.unreadMarkerMessageId = null;
     if (
@@ -3924,30 +3934,6 @@ watch(
       );
     }
 
-    const initialUnreadMessage = initialMessages.find(
-      message =>
-        isUnreadTrackableMessage(message) &&
-        message.senderUserId !== authUser.value?.id &&
-        message.isReadByMe !== true
-    );
-    const shouldPositionToUnread =
-      topicUnreadCount > 0 &&
-      !shouldScrollToBottomForNotification &&
-      !shouldBootstrapAroundMessage &&
-      !hasTopicSwitchUserScrollIntent(topicSwitchToken) &&
-      scrollAnchor.viewportMode.value !== 'jump' &&
-      !!initialUnreadMessage;
-    if (shouldPositionToUnread) {
-      mergeMessagesForTopic(topicId, initialMessages, 'replace', {
-        syncLastMessage: false,
-        windowMode: 'around-anchor',
-        anchorMessageId: initialUnreadMessage.id,
-        visibleMessages: initialMessages,
-        visibleLimit: Math.max(fastInitialMessagesLimit, 48)
-      });
-      unreadMarkerMessageIdsByTopic[topicId] = initialUnreadMessage.id;
-    }
-
     // Если сообщение удалено или сеть недоступна, оставляем доступную историю.
     pendingInitialNotificationMessageId.value = '';
     isAwaitingNotificationHistory.value = false;
@@ -4008,7 +3994,7 @@ watch(
       releaseBootstrapScrollLockAfterPaint(topicSwitchToken);
     }
 
-    refreshUnreadMarkerState(true);
+    refreshUnreadMarkerState();
 
     if (state.unreadMarkerMessageId) {
       suspendAutoRead(TOPIC_SWITCH_AUTO_READ_GRACE_MS);
@@ -4017,6 +4003,9 @@ watch(
 
     if (shouldResetUnreadForCurrentTopic()) {
       resetTopicUnreadState(topicId);
+      unreadMarkerMessageIdsByTopic[topicId] = null;
+      delete seenUnreadMarkerStateByTopic[topicId];
+      applyUnreadMarkerStateForTopic(topicId);
     }
 
     applyPendingForwardMessages();
@@ -4032,16 +4021,11 @@ watch(
       (shouldScrollToBottomForNotification ||
         shouldKeepTopicSwitchBottomPosition(topicSwitchToken));
 
-    if (shouldPositionToUnread) {
-      await scrollToBottom({
-        preferUnreadMarker: true,
-        smooth: false,
-        isCurrent: () =>
-          initialNavigationRevision === messageNavigationRevision &&
-          !isStaleTopicSwitch()
+    if (shouldKeepInitialBottomPosition) {
+      scrollToBottom({
+        preferUnreadMarker: false,
+        smooth: false
       });
-    } else if (shouldKeepInitialBottomPosition) {
-      await scrollToBottom({ preferUnreadMarker: false, smooth: false });
     }
 
     if (
@@ -4082,6 +4066,7 @@ watch(
     if (shouldPositionToPendingSearch) {
       releaseSearchNavigationPositioningAfterPaint(topicSwitchToken);
     }
+    rememberCurrentUnreadMarkerState(topicId);
     setReadReceiptsEnabled(true);
     setupIntersectionObserver();
     syncVisibleUnreadAfterAutoScroll();
@@ -4187,13 +4172,6 @@ const isEditableEventTarget = (e: Event) => {
 };
 
 const preserveMobileMessageInputFocus = (event: Event): void => {
-  // Отмена touch pointerdown в WebKit может поглотить клик по скрепке и меню.
-  if (
-    isIosWeb() &&
-    event instanceof PointerEvent &&
-    event.pointerType === 'touch'
-  )
-    return;
   if (!isMobile.value || !event.cancelable || isEditableEventTarget(event)) {
     return;
   }
@@ -4382,6 +4360,7 @@ watch(
   () => {
     nextTick(() => {
       syncVisibleUnreadAfterAutoScroll();
+      hideUnreadMarkerIfPassed();
       resetUnreadIfViewingBottom();
       schedulePinnedViewportSnapshotSync();
     });
@@ -4435,9 +4414,6 @@ watch(
           renderedTopicId.value !== topicMessagesId ||
           !isUserMessagesRoute.value ||
           shouldRenderUserMessageSkeleton.value ||
-          !(isReactionLayoutChange
-            ? scrollAnchor.viewportMode.value === 'live'
-            : shouldKeepCurrentTopicBottomPosition()) ||
           !chatWrapperRef.value
         ) {
           return;
@@ -4504,6 +4480,7 @@ watch(
   () => {
     nextTick(() => {
       refreshUnreadMarkerState();
+      hideUnreadMarkerIfPassed();
       resetUnreadIfViewingBottom();
     });
   }

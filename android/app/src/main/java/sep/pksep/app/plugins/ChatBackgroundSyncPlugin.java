@@ -88,8 +88,7 @@ public class ChatBackgroundSyncPlugin extends Plugin {
             return;
         }
 
-        boolean changed = ChatBackgroundSyncStore.saveSession(getContext(), token, userId, apiUrl,
-            call.getString("authSource", "unknown_shared"), call.getString("erpUrl", ""));
+        boolean changed = ChatBackgroundSyncStore.saveSession(getContext(), token, userId, apiUrl);
 
         JSObject result = new JSObject();
         result.put("saved", true);
