@@ -257,6 +257,7 @@ import {
 } from '../../utils/searchMatch';
 import { useManagerRouteSubscription } from '../../composables/useManagerRoutes';
 import { useComposerKeyboard } from '../../composables/useComposerKeyboard';
+import { useIosPwaFilePicker } from '../../composables/useIosPwaFilePicker';
 import { getStickerReference } from '../../utils/stickers';
 
 interface Props {
@@ -513,6 +514,9 @@ const contentEditorRef =
   useTemplateRef<typeof ContentEditor>('contentEditorRef');
 const inputContainerRef = useTemplateRef<HTMLElement>('inputContainerRef');
 const composerKeyboard = useComposerKeyboard(inputContainerRef);
+useIosPwaFilePicker(inputContainerRef, (files, onlyMedia) => {
+  void contentEditorRef.value?.emitAttachFiles(files, onlyMedia);
+});
 const isTauriFileDragging = ref(false);
 const isEditorReady = ref(false);
 let shouldFocusEditorWhenReady = false;

@@ -1,0 +1,103 @@
+/* В установленном WebKit клавиатура меняет visualViewport, а не 100dvh. */
+html.chat-ios-pwa {
+  --ios-safe-top: env(safe-area-inset-top, 0px);
+  --ios-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --default-height: calc(
+    var(--ios-viewport-height, 100dvh) - var(--ios-safe-top)
+  );
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.chat-ios-keyboard-open {
+  --ios-safe-bottom: 0px;
+}
+
+.chat-ios-pwa body {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.chat-ios-pwa #app {
+  position: absolute;
+  top: var(--ios-viewport-top, 0px);
+  width: 100%;
+  height: var(--ios-viewport-height, 100dvh);
+  min-height: 0;
+  box-sizing: border-box;
+  padding-top: var(--ios-safe-top);
+  overflow: hidden;
+  transition: none;
+}
+
+.chat-ios-pwa .chat-container {
+  min-height: 0;
+  grid-template-rows: var(--header-height, 0px) minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.chat-ios-pwa .chat-container:has(> .chat__header-wrapper) {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.chat-ios-pwa .chat {
+  --basic-height: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.chat-ios-pwa
+  :is(.chat__input, .chat__header-mobile-search-controls, .selected-messages) {
+  position: relative;
+  bottom: auto;
+  padding-bottom: calc(10px + var(--ios-safe-bottom));
+}
+
+.chat-ios-pwa .chat__input .editor-content {
+  max-height: min(250px, calc(var(--ios-viewport-height, 100dvh) * 0.3));
+}
+
+.chat-ios-pwa .chat__message-bubble::after {
+  content: none;
+}
+
+/* Поля меньше 16px заставляют iOS увеличивать и сдвигать весь экран. */
+.chat-ios-pwa
+  :is(input:not([type='file']), textarea, [contenteditable='true']) {
+  font-size: 16px !important;
+}
+
+.chat-ios-pwa .chat__input .attach-file-popover {
+  position: relative;
+}
+
+.chat-ios-pwa .chat__input .attach-file-popover .popover-yui-kit__content {
+  position: absolute !important;
+  inset: auto auto calc(100% + 8px) 0 !important;
+  transform: none !important;
+}
+
+.chat-ios-pwa .chat__input .emoji-picker {
+  max-width: calc(100vw - 20px);
+}
+
+.chat-ios-pwa .chat__input .v3-emoji-picker {
+  width: min(350px, calc(100vw - 20px)) !important;
+  max-height: min(400px, calc(var(--ios-viewport-height, 100dvh) - 160px));
+}
+
+/* WebKit теряет перерисовку раскрывающихся настроек внутри 3D-слоя. */
+.chat-ios-pwa .mobile-list-container__section-track {
+  transform: translateX(var(--mobile-menu-section-offset, 0%));
+  transform-style: flat;
+  backface-visibility: visible;
+  will-change: auto;
+}
+
+.chat-ios-pwa .mobile-list-container > .menu-bottom-nav {
+  position: absolute;
+}

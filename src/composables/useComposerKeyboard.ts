@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { onBeforeUnmount, ref, watch, type Ref } from 'vue';
 import { BackButtonPriority, useBackButtonHandler } from './useBackButton';
+import { isIosStandalonePwa } from '../utils/ios-pwa-viewport';
 
 // Фокус, нужный редактору для вставки эмодзи, не должен открывать клавиатуру.
 export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
@@ -52,7 +53,8 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
     const target = event.target;
     if (target.closest('.smile-button') && !target.closest('.emoji-picker')) {
       if (!picker()) closeKeyboard();
-      event.preventDefault();
+      // WebKit после preventDefault на touch pointerdown теряет клик по кнопке.
+      if (!isIosStandalonePwa()) event.preventDefault();
       event.stopPropagation();
       return true;
     }

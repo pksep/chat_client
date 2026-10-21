@@ -307,6 +307,7 @@
       ]"
     >
       <div
+        ref="iosPwaEditorHost"
         class="ai-assistant__editor"
         @change.capture="validateAttachmentSelection"
         @drop.capture="validateAttachmentSelection"
@@ -633,6 +634,7 @@ import {
   useAiForwardDraft
 } from '../../composables/useAiForwardDraft';
 import { useAiMessageSearch } from '../../composables/useAiMessageSearch';
+import { useIosPwaFilePicker } from '../../composables/useIosPwaFilePicker';
 import { stageAiAttachments } from '../../services/aiAttachments';
 import { validateAiAttachments } from '../../services/aiAttachmentLimits';
 import { MediaType } from '@pksep/zod-shared-chat';
@@ -757,6 +759,10 @@ const { pendingAiForwardDraft } = useAiForwardDraft();
 const draft = ref('');
 const assistantRoot = ref<HTMLElement | null>(null);
 const contentEditorRef = ref<InstanceType<typeof ContentEditor> | null>(null);
+const iosPwaEditorHost = ref<HTMLElement | null>(null);
+useIosPwaFilePicker(iosPwaEditorHost, (files, onlyMedia) => {
+  void contentEditorRef.value?.queueAttachFiles(files, onlyMedia);
+});
 const scrollRef = ref<HTMLElement | null>(null);
 const isShowScrollToBottomButton = ref(false);
 const highlightedMessageId = ref<string | null>(null);

@@ -10,8 +10,11 @@ import { initFastNativeNotificationNavigation } from './services/usePushNotifica
 import { LaunchStartup } from './services/launchStartup';
 import { NATIVE_STARTUP_READY_EVENT } from './utils/nativeStartup';
 import { createPinia } from 'pinia';
+import { initIosPwaViewport } from './utils/ios-pwa-viewport';
 
 performance.mark('chat-startup:modules-ready');
+const disposeIosPwaViewport = initIosPwaViewport();
+import.meta.hot?.dispose(disposeIosPwaViewport);
 
 const INDEXED_DB_RESET_EPOCH = 'chat-client-indexeddb-reset-2026-04-29-v1';
 const INDEXED_DB_RESET_DONE_KEY = 'chat.indexeddb.reset.done';

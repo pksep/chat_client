@@ -39,6 +39,11 @@ export default defineConfig({
     {
       name: 'chromium-mobile',
       use: { ...devices['Pixel 5'] }
+    },
+    {
+      name: 'webkit-iphone-pwa',
+      testMatch: 'ios-pwa.spec.ts',
+      use: { ...devices['iPhone 13'] }
     }
   ],
 
