@@ -5,6 +5,7 @@ import {
 } from '../utils/startup-topic-records';
 import { reviveCachedDates as deserializeValue } from '../utils/revive-cached-dates';
 import type { IMessage } from '../components/interfaces/interfaces';
+import { mergeMessageSnapshots } from '../utils/merge-message-snapshots';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
 
 const DB_NAME = 'chat-topic-messages-db';
@@ -549,23 +550,6 @@ const deletePendingUploadFileFromOpfs = async (
     .catch(() => undefined);
 };
 
-const getMessageTimestamp = (message: IMessage): number => {
-  const candidates = [message.updatedAt, message.deletedAt, message.createdAt];
-
-  for (const candidate of candidates) {
-    const timestamp =
-      candidate instanceof Date
-        ? candidate.getTime()
-        : new Date(candidate || 0).getTime();
-
-    if (!Number.isNaN(timestamp) && timestamp > 0) {
-      return timestamp;
-    }
-  }
-
-  return 0;
-};
-
 const getMessageCreatedTimestamp = (message: IMessage): number => {
   const timestamp =
     message.createdAt instanceof Date
@@ -586,72 +570,13 @@ const compareMessagesByPosition = (left: IMessage, right: IMessage): number => {
   return (left.id || '').localeCompare(right.id || '');
 };
 
-const parseMessageEx = (
-  message: Pick<IMessage, 'ex'>
-): Record<string, unknown> | null => {
-  if (!message.ex) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(message.ex);
-  } catch {
-    return null;
-  }
-};
-
-const getMessageStableKey = (message: IMessage): string | null => {
-  if (!message?.id) {
-    return null;
-  }
-
-  const clientId = parseMessageEx(message)?.clientId;
-
-  if (typeof clientId === 'string' && clientId.length > 0) {
-    return `client:${clientId}`;
-  }
-
-  return `id:${message.id}`;
-};
-
 const mergeCachedMessages = (
   existingMessages: IMessage[],
   incomingMessages: IMessage[]
-): IMessage[] => {
-  const mergedByKey = new Map<string, IMessage>();
-
-  existingMessages.forEach(message => {
-    const stableKey = getMessageStableKey(message);
-
-    if (stableKey) {
-      mergedByKey.set(stableKey, message);
-    }
-  });
-
-  incomingMessages.forEach(message => {
-    const stableKey = getMessageStableKey(message);
-
-    if (!stableKey) {
-      return;
-    }
-
-    const existingMessage = mergedByKey.get(stableKey);
-
-    if (!existingMessage) {
-      mergedByKey.set(stableKey, message);
-      return;
-    }
-
-    if (getMessageTimestamp(message) >= getMessageTimestamp(existingMessage)) {
-      mergedByKey.set(stableKey, {
-        ...existingMessage,
-        ...message
-      });
-    }
-  });
-
-  return Array.from(mergedByKey.values()).sort(compareMessagesByPosition);
-};
+): IMessage[] =>
+  mergeMessageSnapshots([...existingMessages, ...incomingMessages]).sort(
+    compareMessagesByPosition
+  );
 
 const openDb = (): Promise<IDBDatabase | null> => openChatDatabase(DB_NAME);
 

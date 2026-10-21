@@ -43,6 +43,8 @@
 </template>
 
 <script setup lang="ts">
+import { watch } from 'vue';
+import { useTopics } from '../../composables/useTopics';
 import Modal from '../UI/Modal.vue';
 import {
   Icon,
@@ -65,6 +67,14 @@ const props = withDefaults(defineProps<IForwardModalProps>(), {
   excludedContactIds: () => new Set<string | number>(),
   dataTestid: 'NewContactModal'
 });
+const { loadRemainingTopics } = useTopics();
+watch(
+  () => props.open,
+  open => {
+    if (open) void loadRemainingTopics();
+  },
+  { immediate: true }
+);
 
 const emits = defineEmits<{
   (e: 'unmount-close'): void;

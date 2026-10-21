@@ -15,7 +15,9 @@
       :scope="activeSection === 'clients' ? 'clients' : 'chats'"
       :loading="isChatFoldersLoading"
       :folders="activeSection === 'clients' ? clientFolders : chatFolders"
-      :topics="activeSection === 'clients' ? clientFolderTopics : allTopics"
+      :topics="
+        activeSection === 'clients' ? clientFolderTopics : chatBadgeTopics
+      "
       :selected-folder-id="
         activeSection === 'clients' ? activeClientFolderId : activeFolderId
       "
@@ -81,6 +83,7 @@
           />
 
           <TopicList
+            paginated
             class="menu__contact-list"
             :topics="topicGroups"
             @unmount-topic="unmountTopicClick"
@@ -238,7 +241,13 @@ const props = withDefaults(defineProps<IMenuProps>(), {
   dataTestid: 'Menu'
 });
 
-const { getTopicList, loading: isTopicsLoading } = useTopics();
+const {
+  getTopicList,
+  getUnreadTopicList,
+  loadRemainingTopics,
+  hasMoreTopics,
+  loading: isTopicsLoading
+} = useTopics();
 const route = useUrlWatcher();
 const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 const selectedContactId = computed(() => route.value?.id);
@@ -284,7 +293,16 @@ const {
   selectFolder: selectClientFolder,
   openFolderManager: openClientFolderManager
 } = useChatFolders('clients');
-const clientFolderTopics = computed(() => getTopicList().filter(isClientTopic));
+const clientFolderTopics = computed(() =>
+  getUnreadTopicList().filter(isClientTopic)
+);
+const chatBadgeTopics = computed(() =>
+  getUnreadTopicList().filter(topic => !isClientTopic(topic))
+);
+watch([activeFolderId, isManagingFolders, hasMoreTopics], () => {
+  if (activeFolderId.value || isManagingFolders.value)
+    void loadRemainingTopics();
+});
 const pendingShareSummaryLabel = computed(() =>
   getShareSelectionSummaryLabel(
     pendingShareBatches.value.flatMap(batch => batch.files)
@@ -327,7 +345,10 @@ const matchesActiveFolder = (topic?: ITopic | null): boolean =>
   (!activeFolder.value || activeFolder.value.topicIds.includes(topic.id));
 
 const filterBadgeState = computed(() =>
-  getChatsToolbarFilterBadgeState(allTopics.value, authUserId.value)
+  getChatsToolbarFilterBadgeState(
+    getUnreadTopicList().filter(topic => !isClientTopic(topic)),
+    authUserId.value
+  )
 );
 
 const filterCounts = computed(() =>

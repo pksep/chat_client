@@ -266,7 +266,11 @@ export const importChatBackgroundSnapshot = async (
   }
 
   if (topics.length > 0) {
-    topicsApi.applyNativeTopicSnapshot(topics, resolvedUserId);
+    topicsApi.applyNativeTopicSnapshot(
+      topics,
+      resolvedUserId,
+      snapshot.updatedAt
+    );
   }
 
   // Фоновый снимок содержит события удаления даже для неоткрытых топиков.

@@ -1,19 +1,32 @@
 <template>
   <ChatContainer
+    v-if="shouldMountChat"
     v-bind="props"
     @rendered-topic-change="handleRenderedTopicChange"
   />
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeMount, onUnmounted, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeMount,
+  onUnmounted,
+  ref,
+  watch
+} from 'vue';
 import ChatContainer from './components/ChatContainer.vue';
 
 import type {
   IChatContainerProps,
+  ITopic,
   IMessageRenderedTopicState
 } from './components/interfaces/interfaces';
-import { initializeChat, setCurrentUserId } from './services/useChat';
+import {
+  getChatSDK,
+  initializeChat,
+  setCurrentUserId
+} from './services/useChat';
 import {
   saveUserIdToSession,
   hasUserIdInSession
@@ -39,11 +52,19 @@ import {
 import { setAuthToken } from './composables/useLogin';
 import {
   fetchAllUsers,
+  getUsersRefreshFailed,
   getUserById,
   hydrateUsersFromCache
 } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
-import { hydrateTopicsFromCache, useTopics } from './composables/useTopics';
+import { finishNativeStartupReads } from './services/native-startup-reads';
+import {
+  getSelectedTopic,
+  getTopicList,
+  setTopics,
+  hydrateTopicsFromCache,
+  useTopics
+} from './composables/useTopics';
 import { getGroupById } from './composables/useGroup';
 import { useUrlWatcher } from './composables/navigation';
 import { fetchPinnedMessagesForTopic } from './services/useMessages';
@@ -279,7 +300,10 @@ const hydrateCriticalCache = async (userId?: string): Promise<void> => {
         console.warn('Не удалось восстановить сообщение уведомления:', error)
       );
   }
-  const usersHydration = canDeferUsers ? null : hydrateUsersFromCache(userId);
+  const shouldDeferUsers = canDeferUsers && !getActiveChatTopicId();
+  const usersHydration = shouldDeferUsers
+    ? null
+    : hydrateUsersFromCache(userId);
   const topicsHydration = hydrateTopicsFromCache(userId).then(() => {
     performance.mark('chat-startup:topic-cache-ready');
   });
@@ -299,7 +323,7 @@ const hydrateCriticalCache = async (userId?: string): Promise<void> => {
   hydratedCacheUserId = userId;
   performance.mark('chat-startup:cache-ready');
 
-  if (canDeferUsers) {
+  if (shouldDeferUsers) {
     runDeferredStartupTask('cached users', async () => {
       if (getAuthUser()?.id !== userId) return;
       await hydrateUsersFromCache(userId);
@@ -324,22 +348,50 @@ const hydrateFreshChatContent = async (
     };
   }
 
+  const freshContentState: FreshChatContentState = {
+    usersRefreshed: false,
+    topicsRefreshed: false
+  };
+  const usersRefresh = fetchAllUsers().then(() => {
+    freshContentState.usersRefreshed = !getUsersRefreshFailed();
+    performance.mark('chat-startup:users-resolved', {
+      detail: { isFresh: freshContentState.usersRefreshed }
+    });
+  });
+
   if (hasPriorityMessageTopicRoute()) {
-    return {
-      usersRefreshed: false,
-      topicsRefreshed: false
-    };
+    await cacheReady;
+    const topicId = getActiveChatTopicId();
+    const sdk = getChatSDK();
+    if (topicId && sdk && !getSelectedTopic(topicId)) {
+      try {
+        const topic = await sdk.getTopicById(topicId);
+        if (
+          getChatSDK() === sdk &&
+          getAuthUser()?.id === userId &&
+          route.value.id === topicId
+        )
+          setTopics([
+            ...getTopicList().filter(item => item.id !== topicId),
+            topic as unknown as ITopic
+          ]);
+      } catch (error) {
+        console.warn('Не удалось загрузить выбранный чат:', error);
+      }
+    }
+    // Присутствие обновляется параллельно переписке; отложенный запуск
+    // увидит результат этого же запроса и не загрузит справочник повторно.
+    if (!isMobile.value) return freshContentState;
   }
 
-  const usersRefreshed = !getAuthUser();
-  if (usersRefreshed) {
+  if (!getAuthUser()) {
     await Promise.allSettled([fetchAuthUser(), fetchAllUsers()]);
     if (!getAuthUser() && userId) {
       applyCachedAuthUser(userId);
     }
   }
 
-  const shouldDeferTopicsRefresh = !!getActiveChatTopicId();
+  const shouldDeferTopicsRefresh = !!getActiveChatTopicId() && !isMobile.value;
   let topicsRefreshed = false;
 
   if (!shouldDeferTopicsRefresh) {
@@ -355,9 +407,11 @@ const hydrateFreshChatContent = async (
     });
   }
 
+  await usersRefresh;
+
   hydratedCacheUserId = userId;
   return {
-    usersRefreshed,
+    usersRefreshed: freshContentState.usersRefreshed,
     topicsRefreshed
   };
 };
@@ -380,12 +434,27 @@ const hasPriorityMessageTopicRoute = (): boolean =>
   Boolean(
     route.value.id &&
       (route.value.type === RouteTypes.DIALOGS ||
-        route.value.type === RouteTypes.GROUP)
+        route.value.type === RouteTypes.GROUP ||
+        route.value.type === RouteTypes.CALL ||
+        route.value.type === RouteTypes.FAVORITES)
   );
+
+const isInitialDataResolved = ref(false);
+// На главной не строим скрытый список сначала с пустыми, затем со старыми
+// и свежими данными: это занимало главный поток перед получением ответов.
+const shouldMountChat = computed(
+  () =>
+    !isMobile.value ||
+    hasPriorityMessageTopicRoute() ||
+    isInitialDataResolved.value
+);
 
 let isAppInitializationComplete = false;
 let isActiveTopicRenderReady = false;
 let isStartupReadyScheduled = false;
+let allowPendingStartupTopic = false;
+let startupTopicReadyTimeout: ReturnType<typeof setTimeout> | undefined;
+onUnmounted(() => clearTimeout(startupTopicReadyTimeout));
 let resolveStartupReady: (() => void) | null = null;
 const startupReadyPromise = new Promise<void>(resolve => {
   resolveStartupReady = resolve;
@@ -409,13 +478,16 @@ const scheduleStartupReady = (): void => {
 
   if (
     isStartupReadyScheduled ||
-    !isAppInitializationComplete ||
-    (activeTopicId && !isActiveTopicRenderReady)
+    (!isAppInitializationComplete &&
+      !(!isMobile.value && activeTopicId && isActiveTopicRenderReady)) ||
+    (activeTopicId && !isActiveTopicRenderReady && !allowPendingStartupTopic)
   ) {
     return;
   }
 
   isStartupReadyScheduled = true;
+  finishNativeStartupReads();
+  clearTimeout(startupTopicReadyTimeout);
   performance.mark('chat-startup:content-ready');
   void nextTick(() => {
     emit('ready');
@@ -746,8 +818,18 @@ onBeforeMount(async () => {
   try {
     await runAppInitialization();
   } finally {
+    isInitialDataResolved.value = true;
     isAppInitializationComplete = true;
     scheduleStartupReady();
+    if (!isStartupReadyScheduled) {
+      // Поле ввода и позиционирование истории не должны навсегда перекрывать
+      // весь чат. Оставляем ожидание внутри переписки и запускаем фоновые задачи.
+      startupTopicReadyTimeout = setTimeout(() => {
+        allowPendingStartupTopic = true;
+        performance.mark('chat-startup:topic-ready-timeout');
+        scheduleStartupReady();
+      }, 5000);
+    }
   }
 });
 

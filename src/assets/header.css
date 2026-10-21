@@ -134,6 +134,10 @@ button.calls-bot__back {
   cursor: pointer;
 }
 
+.chat__header-profile .user-profile__ex:empty {
+  min-height: 1lh;
+}
+
 .chat__header-call-topic .user-profile__ex--typing {
   color: var(--primary-color);
 }
@@ -295,6 +299,37 @@ button.button-yui-kit {
 }
 
 @media screen and (width <=768px) {
+  .chat__header-active-call {
+    min-width: 0;
+    padding-inline: 16px;
+    margin-inline: 0;
+    font-size: 16px;
+  }
+
+  .chat__header-wrapper:not(:has(.chat__header-main)) {
+    border-bottom: 0;
+  }
+
+  .chat__header-wrapper:not(:has(.chat__header-main)) .chat__header-active-call {
+    flex-basis: var(--mobile-active-call-height);
+    height: var(--mobile-active-call-height);
+    padding-block: 10px;
+    border-top: 0.5px solid var(--border-table);
+    border-bottom-width: 0.5px;
+  }
+
+  .chat__header-active-call__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chat__header-active-call > svg,
+  .chat__header-active-call__time {
+    flex-shrink: 0;
+  }
+
   .chat__header-main {
     justify-content: start;
     gap: 10px;

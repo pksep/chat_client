@@ -12,6 +12,7 @@
       :class="messageArticleStyles"
       :data-testid="`${props.dataTestid}-Article`"
     >
+      <slot name="quick-reply" />
       <MessageBubbleTail
         v-if="!props.continuesWithNext"
         :is-me-sender="props.isMeSender"

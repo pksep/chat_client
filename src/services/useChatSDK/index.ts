@@ -32,7 +32,12 @@ import type {
   CustomBackgroundKind
 } from '../customBackgroundLibrary';
 import type { UserStatusValue } from '../../utils/userStatus';
-import { ChatTopic, ChatTopicInterface } from './topic';
+import {
+  ChatTopic,
+  ChatTopicInterface,
+  type TopicQuery,
+  type TopicPagesOptions
+} from './topic';
 import {
   ChatFolderApi,
   ChatFolderInterface,
@@ -252,7 +257,7 @@ export class ChatSDK {
       };
     }
 
-    configureJsonReads(reqi, () => getAuthToken() || this.token);
+    configureJsonReads(reqi, () => getAuthToken() || this.token, this.apiUrl);
     return reqi;
   }
 
@@ -1408,8 +1413,16 @@ export class ChatSDK {
     return result;
   }
 
-  async getTopics(): Promise<PaginatedResponse<ITopic>> {
-    return this.topic.getTopics();
+  async getTopics(params?: TopicQuery): Promise<PaginatedResponse<ITopic>> {
+    return this.topic.getTopics(params);
+  }
+
+  syncTopics(state: import('../../utils/topic-sync').TopicSyncState) {
+    return this.topic.syncTopics(state);
+  }
+
+  getAllTopics(options?: TopicPagesOptions): Promise<ITopic[]> {
+    return this.topic.getAllTopics(options);
   }
 
   async getChatFolders(): Promise<ChatFolder[]> {

@@ -7,10 +7,22 @@ setInterval(() => {
   now.value = new Date();
 }, 60000);
 
-export const formatLastSeen = (lastOnline: string | Date | null): string => {
-  if (!lastOnline) return 'Онлайн';
+if (typeof window !== 'undefined') {
+  const refresh = () => {
+    now.value = new Date();
+  };
+  window.addEventListener('focus', refresh);
+  document.addEventListener('visibilitychange', refresh);
+}
+
+export const formatLastSeen = (
+  lastOnline: string | Date | null | undefined
+): string => {
+  if (lastOnline === null) return 'Онлайн';
+  if (lastOnline === undefined) return '';
 
   const date = lastOnline instanceof Date ? lastOnline : new Date(lastOnline);
+  if (Number.isNaN(date.getTime())) return '';
   const diffInSeconds = Math.floor(
     (now.value.getTime() - date.getTime()) / 1000
   );

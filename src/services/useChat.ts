@@ -44,6 +44,8 @@ import {
 } from '../composables/useGroup';
 import {
   fetchAllUsers,
+  getUsersRefreshFailed,
+  invalidateUserPresence,
   getUserById,
   upsertLocalUser,
   updateLocalUserStatus
@@ -133,6 +135,8 @@ import {
 import { recordMessageDeletionTelemetry } from './message-deletion-telemetry';
 import { recordTopicStateTelemetry } from './topic-state-telemetry';
 import { parseMessageEx } from '../utils/messageReplyQuote';
+import { outgoingSendGate, outgoingSendKey } from '../utils/outgoing-send-gate';
+import { recordNativeStartupTopicEvent } from './native-startup-reads';
 import {
   addNativeNetworkStatusListener,
   getNativeNetworkStatus,
@@ -268,7 +272,9 @@ const shouldProcessPtsMeta = (ptsMeta?: PtsMeta): boolean => {
   return true;
 };
 
-const persistPtsMeta = (ptsMeta?: PtsMeta): void => {
+const persistPtsMeta = (ptsMeta?: PtsMeta, topicStateOnly = false): void => {
+  if (ptsMeta?.topicId)
+    recordNativeStartupTopicEvent(topicStateOnly ? ptsMeta.topicId : undefined);
   if (!ptsMeta?.pts) {
     return;
   }
@@ -617,7 +623,11 @@ const setupChatListeners = (): void => {
         {
           source: opts?.source || 'ws',
           eventId: payload.ptsMeta?.eventId,
-          pts: payload.ptsMeta?.pts
+          pts: payload.ptsMeta?.pts,
+          clientId:
+            payload.data.senderUserId === currentUserId.value
+              ? (parseMessageEx(payload.data.ex).clientId as string | undefined)
+              : undefined
         }
       );
       if (deletedLastMessage) {
@@ -676,7 +686,7 @@ const setupChatListeners = (): void => {
       return;
     }
 
-    persistPtsMeta(payload.ptsMeta);
+    persistPtsMeta(payload.ptsMeta, true);
 
     void recordShadowChatEvent({
       topicId: payload.topicId,
@@ -741,7 +751,7 @@ const setupChatListeners = (): void => {
       return;
     }
 
-    persistPtsMeta(payload.ptsMeta);
+    persistPtsMeta(payload.ptsMeta, true);
 
     void recordShadowChatEvent({
       topicId: payload.topicId,
@@ -809,7 +819,7 @@ const setupChatListeners = (): void => {
       return;
     }
 
-    persistPtsMeta(payload.ptsMeta);
+    persistPtsMeta(payload.ptsMeta, true);
 
     void recordShadowChatEvent({
       topicId: payload.topicId,
@@ -832,7 +842,7 @@ const setupChatListeners = (): void => {
     avatarUrl?: string | null;
     ex?: unknown;
     isBot?: boolean;
-    lastOnline: Date | string | null;
+    lastOnline?: Date | string | null;
     status?: {
       icon: string;
       text: string;
@@ -844,7 +854,10 @@ const setupChatListeners = (): void => {
     }
 
     persistPtsMeta(payload.ptsMeta);
-    const normalizedLastOnline = normalizeDateValue(payload.lastOnline);
+    const normalizedLastOnline =
+      payload.lastOnline === undefined
+        ? undefined
+        : normalizeDateValue(payload.lastOnline);
 
     const normalizedStatus =
       payload.status === undefined
@@ -864,7 +877,9 @@ const setupChatListeners = (): void => {
     updateLocalUserStatus(payload.id, normalizedLastOnline, normalizedStatus);
     updateLocalTopicUser(payload.id, {
       ...profileChanges,
-      lastOnline: normalizedLastOnline,
+      ...(normalizedLastOnline !== undefined
+        ? { lastOnline: normalizedLastOnline }
+        : {}),
       ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {})
     });
 
@@ -884,7 +899,9 @@ const setupChatListeners = (): void => {
       upsertLocalUser({
         ...existingUser,
         ...profileChanges,
-        lastOnline: normalizedLastOnline,
+        ...(normalizedLastOnline !== undefined
+          ? { lastOnline: normalizedLastOnline }
+          : {}),
         ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {})
       });
     }
@@ -892,7 +909,9 @@ const setupChatListeners = (): void => {
     if (payload.id === currentUserId.value) {
       mergeAuthUser({
         ...profileChanges,
-        lastOnline: normalizedLastOnline,
+        ...(normalizedLastOnline !== undefined
+          ? { lastOnline: normalizedLastOnline }
+          : {}),
         ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {})
       });
     }
@@ -2347,6 +2366,7 @@ export const initializeChat = async (options: {
   // Предыдущие сокеты и отложенные повторы не должны обновлять новую сессию.
   previousSDK?.setConnectionStateListener();
   previousSDK?.disconnect();
+  invalidateUserPresence();
   networkReachabilityCheck.invalidate();
   chatSDK = new ChatSDK({
     apiUrl: options.apiUrl,
@@ -2387,6 +2407,7 @@ export const initializeChat = async (options: {
     });
 
     if (!connected) {
+      invalidateUserPresence();
       if (wasConnected) reconnectRefresh.invalidate();
       return;
     }
@@ -2409,7 +2430,7 @@ export const initializeChat = async (options: {
 
     if (!hasCompletedInitialConnection) {
       hasCompletedInitialConnection = true;
-      if (getTopicsRefreshFailed()) {
+      if (getTopicsRefreshFailed() || getUsersRefreshFailed()) {
         requestFreshDataRefresh('websocket-reconnect', { force: true });
       }
       return;
@@ -2666,7 +2687,7 @@ export const generateNewMessage = (params: {
   };
 };
 
-export const sendMessageChat = async (params: {
+const sendMessageChatOnce = async (params: {
   topicId: string;
   text?: string;
   messageId?: string;
@@ -2728,6 +2749,19 @@ export const sendMessageChat = async (params: {
     console.error('[ChatSDK] Failed to send message via WebSocket:', error);
     return false;
   }
+};
+
+export const sendMessageChat = (
+  params: Parameters<typeof sendMessageChatOnce>[0]
+): Promise<boolean> => {
+  const clientId = parseMessageEx(params.ex).clientId;
+  if (params.messageId || typeof clientId !== 'string' || !clientId) {
+    return sendMessageChatOnce(params);
+  }
+  return outgoingSendGate.send(
+    outgoingSendKey(authedUser.value?.id || '', params.topicId, clientId),
+    () => sendMessageChatOnce(params)
+  );
 };
 
 export const sendTypingStatus = async (params: {

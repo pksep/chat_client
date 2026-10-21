@@ -12,6 +12,7 @@
         @click="handleFileSurfaceClick"
         @dblclick.stop
       >
+        <slot name="quick-reply" />
         <MessageBubbleTail
           v-if="!props.continuesWithNext"
           :is-me-sender="props.isMeSender"

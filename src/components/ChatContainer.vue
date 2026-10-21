@@ -9,7 +9,7 @@
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
   >
     <Header
-      v-if="state.isActiveHeader"
+      v-if="shouldShowHeader"
       class="chat__header"
       :display-route="headerDisplayRoute"
       :data-testid="`${props.dataTestid}-ChatContainer-Header`"
@@ -19,7 +19,7 @@
     />
     <HeaderMenu
       class="chat__header-menu"
-      v-else-if="!state.isActiveHeader"
+      v-else
       :dataTestid="`${props.dataTestid}-ChatContainer-HeaderMenu`"
     />
     <Menu
@@ -211,6 +211,7 @@ import {
   isAnyCallModalVisible
 } from '../services/useCallState';
 import { useChatWallpaper } from '../composables/useChatWallpaper';
+import { useAiAssistant } from '../composables/useAiAssistant';
 import { useUserInfoModal } from '../composables/useUserInfoModal';
 import VpnConfirmModal from './UI/VpnConfirmModal.vue';
 import { useVpnStatus } from '../services/useVpnStatus';
@@ -228,7 +229,7 @@ import {
   useBackButtonHandler
 } from '../composables/useBackButton';
 import { useShareSelection } from '../composables/useShareSelection';
-import { getTopicList, setTopics } from '../composables/useTopics';
+import { getTopicList, setTopics, useTopics } from '../composables/useTopics';
 import {
   isClientTopic,
   useManagerInquiries
@@ -339,21 +340,14 @@ watch(
   },
   { immediate: true }
 );
+const { loadClientTopics } = useTopics();
 watch(
-  () => chatAccess.value.client,
-  async (allowed, previous) => {
-    if (!allowed || previous) return;
-    const sdk = getChatSDK();
-    if (!sdk) return;
-    const userId = getAuthUser()?.id;
-    try {
-      const response = await sdk.getTopics();
-      if (chatAccess.value.client && getAuthUser()?.id === userId)
-        setTopics(response.data || []);
-    } catch (error) {
-      console.warn('Не удалось обновить список чатов:', error);
-    }
-  }
+  [() => chatAccess.value.client, activeSection, () => getAuthUser()?.id],
+  ([allowed, section]) => {
+    if (allowed && section === 'clients')
+      void loadClientTopics({ isAllowed: () => chatAccess.value.client });
+  },
+  { immediate: true }
 );
 watch(
   () => getAuthUser()?.id,
@@ -443,6 +437,11 @@ const shouldRenderCallModal = computed(
     isAnyCallModalVisible.value ||
     isAnyCallDialing.value ||
     isAnyCallIncoming.value
+);
+const { isVoiceModeOpen: isAiVoiceCallActive } = useAiAssistant();
+const shouldShowHeader = computed(
+  () =>
+    state.isActiveHeader || isCallActive.value || isAiVoiceCallActive.value
 );
 
 const users = computed(() => getUsersList());

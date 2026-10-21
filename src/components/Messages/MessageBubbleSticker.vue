@@ -28,6 +28,7 @@
       @keydown.space.stop.prevent="canOpenPack && emit('activate')"
       @dblclick.stop
     >
+      <slot name="quick-reply" />
       <img
         v-if="props.sticker.previewSrc"
         v-show="!imageLoaded"

@@ -17,6 +17,7 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
+import com.getcapacitor.CapConfig;
 
 import java.util.Arrays;
 
@@ -42,6 +43,21 @@ final class LaunchAppearance {
 
     static int statusBarColor(Context context) {
         return isDark(context) ? DARK_STATUS_BAR : LIGHT_STATUS_BAR;
+    }
+
+    static void configureSystemBarPlugin(Context context, CapConfig config) {
+        try {
+            org.json.JSONObject bars = config.getPluginConfiguration("EdgeToEdge").getConfigJSON();
+            bars.put("backgroundColor", colorHex(backgroundColor(context)));
+            bars.put("navigationBarColor", colorHex(backgroundColor(context)));
+            bars.put("statusBarColor", colorHex(statusBarColor(context)));
+        } catch (org.json.JSONException invalidConfig) {
+            throw new IllegalStateException("Не удалось настроить цвет системных панелей", invalidConfig);
+        }
+    }
+
+    private static String colorHex(int color) {
+        return String.format(java.util.Locale.ROOT, "#%06X", color & 0xFFFFFF);
     }
 
     static void setDark(Context context, boolean dark) {
@@ -180,13 +196,14 @@ final class LaunchAppearance {
 
     private static void updateLauncherIcon(Context context, boolean dark) {
         PackageManager manager = context.getPackageManager();
+        String componentPackage = MainActivity.class.getPackage().getName();
         ComponentName light = new ComponentName(
             context,
-            context.getPackageName() + ".LightLauncherActivity"
+            componentPackage + ".LightLauncherActivity"
         );
         ComponentName darkIcon = new ComponentName(
             context,
-            context.getPackageName() + ".DarkLauncherActivity"
+            componentPackage + ".DarkLauncherActivity"
         );
         ComponentName enabled = dark ? darkIcon : light;
         ComponentName disabled = dark ? light : darkIcon;

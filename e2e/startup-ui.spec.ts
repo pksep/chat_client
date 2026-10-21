@@ -30,6 +30,14 @@ test('запуск не монтирует скрытое меню и окна �
       ? route.continue()
       : route.abort()
   );
+  await page.route('**/users/me/access', route =>
+    route.fulfill({
+      json: {
+        userId: fixture.user.id,
+        effective: { client: false, ai: true }
+      }
+    })
+  );
   await page.route('**/ai/automations', async route => {
     automationRequests.push(
       await page.evaluate(

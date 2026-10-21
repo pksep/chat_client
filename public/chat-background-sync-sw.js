@@ -261,6 +261,30 @@
     return [];
   };
 
+  const fetchTopics = async session => {
+    const limit = 50;
+    const topics = new Map();
+    for (let page = 1; ; page++) {
+      const payload = await fetchJson(
+        session,
+        `/topics?page=${page}&limit=${limit}&scope=sidebar`
+      );
+      const rows = asArray(payload);
+      const previousSize = topics.size;
+      rows.forEach(topic => topics.set(topic.id, topic));
+      const totalPages = payload?.meta?.totalPages ?? payload?.totalPages;
+      const total = payload?.meta?.totalItems ?? payload?.total;
+      const hasNext = Number.isFinite(totalPages)
+        ? page < totalPages
+        : Number.isFinite(total)
+          ? page * limit < total
+          : rows.length >= limit;
+      if (!hasNext) return [...topics.values()];
+      if (topics.size === previousSize)
+        throw new Error('Сервер вернул повторную или пустую страницу чатов');
+    }
+  };
+
   const fetchPtsDelta = async (session, lastPts) => {
     const query = lastPts ? `?from=${encodeURIComponent(lastPts)}` : '';
 
@@ -432,11 +456,7 @@
     try {
       const lastPts = await getLastPts();
       const delta = await fetchPtsDelta(session, lastPts);
-      const topicsPayload = await fetchJson(
-        session,
-        '/topics?page=1&limit=999'
-      );
-      const topics = asArray(topicsPayload);
+      const topics = await fetchTopics(session);
       const topicIds = resolvePriorityTopicIds(hints, delta, topics);
       const messagesByTopic = await fetchMessagesByTopic(session, topicIds);
       const nextPts = chooseMaxPts(

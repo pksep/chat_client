@@ -54,17 +54,48 @@ try {
   if (/^\s+showing=true\s*$/m.test(policy))
     throw new Error('Разблокируйте телефон перед замером видимого интерфейса');
   await adb('shell', 'input', 'keyevent', 'KEYCODE_WAKEUP');
+  const launcher = await adb(
+    'shell',
+    'cmd',
+    'package',
+    'resolve-activity',
+    '--brief',
+    '-a',
+    'android.intent.action.MAIN',
+    '-c',
+    'android.intent.category.LAUNCHER',
+    packageId
+  );
+  // Ярлык тёмной темы имеет собственный starting window ещё до onCreate.
+  const launchComponent =
+    launcher
+      .trim()
+      .split(/\r?\n/)
+      .find(line => {
+        const [pkg, activity] = line.trim().split('/');
+        const name = activity
+          ?.replace(/^sep\.pksep\.app\./, '')
+          .replace(/^\./, '');
+        return (
+          pkg === packageId &&
+          ['DarkLauncherActivity', 'LightLauncherActivity'].includes(name)
+        );
+      })
+      ?.trim() || `${packageId}/sep.pksep.app.NotificationLaunchActivity`;
   for (
     let iteration = 0;
     iteration < Number(process.env.ANDROID_PERFORMANCE_ITERATIONS || 3);
     iteration++
   ) {
     await adb('shell', 'am', 'force-stop', packageId);
+    // ActivityTaskManager удаляет окно асинхронно: особенно на AVD немедленный
+    // am start ещё может попасть в завершающуюся Activity. Это вне замера.
+    await sleep(500);
     const started = performance.now();
     const nativeLaunch = await adb(
       'shell',
       // Оба времени принадлежат телефону: подключение CDP не входит в результат.
-      `date +%s%3N; am start -W -n ${packageId}/sep.pksep.app.NotificationLaunchActivity`
+      `date +%s%3N; am start -W -n ${launchComponent}`
     );
     const deviceLaunchStartedAt = Number(nativeLaunch.trim().split(/\r?\n/)[0]);
     if (!Number.isFinite(deviceLaunchStartedAt))
@@ -73,7 +104,9 @@ try {
     let devtoolsReady = false;
     try {
       await adb('forward', '--remove', 'tcp:9229');
-    } catch {}
+    } catch {
+      // На первом прогоне проброса порта ещё нет.
+    }
     while (!devtoolsReady && Date.now() < deadline) {
       try {
         const pid = await getMainProcessId();
@@ -89,7 +122,9 @@ try {
             /^https?:/.test(target.url || '')
           );
         }
-      } catch {}
+      } catch {
+        // Сокет появляется асинхронно после создания процесса WebView.
+      }
       if (!devtoolsReady) await sleep(100);
     }
     if (!devtoolsReady) throw new Error('WebView не доступен для замера');
@@ -173,6 +208,14 @@ try {
                 ? performance.timeOrigin + mark.startTime
                 : null;
             })(),
+            freshUsersEpochMs: (() => {
+              const mark = performance.getEntriesByName(
+                'chat-startup:users-resolved'
+              )[0] as PerformanceMark | undefined;
+              return mark?.detail?.isFresh
+                ? performance.timeOrigin + mark.startTime
+                : null;
+            })(),
             expectedTopicVisible:
               !expectedText ||
               [
@@ -189,7 +232,13 @@ try {
             marks: performance
               .getEntriesByType('mark')
               .filter(x => x.name.startsWith('chat-startup:'))
-              .map(x => ({ name: x.name, at: x.startTime })),
+              .map(x => ({
+                name: x.name,
+                at: x.startTime,
+                ...((x as PerformanceMark).detail?.reason
+                  ? { reason: (x as PerformanceMark).detail.reason }
+                  : {})
+              })),
             topicRows: document.querySelectorAll(
               '[data-testid*="-ContactList-Item"]'
             ).length,
@@ -233,6 +282,9 @@ try {
       const nativeLogoMark = nativeMarks.find(
         mark => mark.stage === 'native-logo-visible'
       );
+      const logoHiddenMark = nativeMarks.find(
+        mark => mark.stage === 'content-visible'
+      );
       const finalWebViewContentMs =
         contentEpoch === null
           ? null
@@ -246,18 +298,32 @@ try {
         deviceLaunchToLogoMs: nativeLogoMark
           ? nativeLogoMark.epochMs - deviceLaunchStartedAt
           : null,
+        deviceLaunchToLogoHiddenMs: logoHiddenMark
+          ? logoHiddenMark.epochMs - deviceLaunchStartedAt
+          : null,
         deviceLaunchToContentMs,
         finalWebViewContentMs,
         readinessMetric:
           sample.contentPaintedEpochMs === null
             ? 'shell-removed'
             : 'content-painted',
+        meetsTwoSecondFreshContentTarget:
+          deviceLaunchToContentMs !== null &&
+          deviceLaunchToContentMs <= 2000 &&
+          sample.freshTopicsEpochMs !== null &&
+          sample.freshUsersEpochMs !== null &&
+          contentEpoch !== null &&
+          sample.freshTopicsEpochMs <= contentEpoch &&
+          sample.freshUsersEpochMs <= contentEpoch &&
+          sample.expectedTopicVisible,
         meetsOneSecondTarget:
           deviceLaunchToContentMs !== null &&
           deviceLaunchToContentMs <= 1000 &&
           sample.freshTopicsEpochMs !== null &&
+          sample.freshUsersEpochMs !== null &&
           contentEpoch !== null &&
           sample.freshTopicsEpochMs <= contentEpoch &&
+          sample.freshUsersEpochMs <= contentEpoch &&
           sample.expectedTopicVisible
       });
       samples.push(sample);
@@ -273,5 +339,7 @@ try {
 } finally {
   try {
     await adb('forward', '--remove', 'tcp:9229');
-  } catch {}
+  } catch {
+    // Устройство могло отключиться после завершения замера.
+  }
 }

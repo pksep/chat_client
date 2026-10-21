@@ -166,12 +166,46 @@ export async function createAndroidPerformanceServer({
     }
     if (pathname === '/topics') {
       await delay('topics');
-      const visibleTopics = state.missingFavorite ? topics.slice(1) : topics;
+      const scope = url.searchParams.get('scope') || 'all';
+      const visibleTopics = (
+        state.missingFavorite ? topics.slice(1) : topics
+      ).filter(topic => {
+        const description = (topic as any).group?.description || '';
+        if (
+          scope !== 'all' &&
+          description.startsWith('sep-chat:call-topic:v1:')
+        )
+          return false;
+        const client = description === 'sep-chat:external-inquiry:v1';
+        return scope === 'chats'
+          ? !client
+          : scope === 'clients'
+            ? client
+            : true;
+      });
+      const page = Math.max(1, Number(url.searchParams.get('page') || 1));
+      const limit = Math.max(1, Number(url.searchParams.get('limit') || 20));
       json({
-        data: visibleTopics,
+        data: visibleTopics.slice((page - 1) * limit, page * limit),
         total: visibleTopics.length,
-        page: 1,
-        limit: topics.length
+        page,
+        limit,
+        ...(url.searchParams.get('includeUnread') === 'true'
+          ? {
+              unreadTopics: topics.filter(
+                topic =>
+                  topic.unreadMessageCount > 0 &&
+                  !(topic as any).group?.description?.startsWith(
+                    'sep-chat:call-topic:v1:'
+                  )
+              )
+            }
+          : {}),
+        meta: {
+          totalItems: visibleTopics.length,
+          totalPages: Math.ceil(visibleTopics.length / limit),
+          currentPage: page
+        }
       });
       return;
     }

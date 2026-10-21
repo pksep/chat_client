@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { withNetworkTimeout } from '../utils/network-timeout';
+import { collectTopicPages } from '../utils/topic-pagination';
 import type {
   ChatBackgroundSnapshotImportOptions,
   ChatBackgroundSyncRequest,
@@ -25,7 +26,6 @@ const FOREGROUND_MESSAGE_LIMIT = 20;
 const DEFAULT_SYNC_EVENTS_LIMIT = 150;
 const TARGETED_SYNC_EVENTS_LIMIT = 300;
 const FOREGROUND_SYNC_EVENTS_LIMIT = 75;
-const TOPICS_LIMIT = 999;
 const SYNC_TAG = 'chat-background-sync';
 let sessionRevision = 0;
 let sessionUpdate = Promise.resolve();
@@ -529,11 +529,16 @@ const runDirectWebChatBackgroundSync = async (
       lastPts,
       getSyncEventsLimit(request)
     );
-    const topicsPayload = await fetchJson(
-      session,
-      `/topics?page=1&limit=${TOPICS_LIMIT}`
-    );
-    const topics = asArray<Record<string, unknown>>(topicsPayload);
+    const topics = await collectTopicPages(async (page, limit) => {
+      const payload = await fetchJson(
+        session,
+        `/topics?page=${page}&limit=${limit}&scope=sidebar`
+      );
+      return {
+        ...(payload as object),
+        data: asArray<{ id: string } & Record<string, unknown>>(payload)
+      };
+    });
     const topicIds = resolvePriorityTopicIds(
       request,
       delta,

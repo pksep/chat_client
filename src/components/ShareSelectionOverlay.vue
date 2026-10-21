@@ -25,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref } from 'vue';
+import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import { useTopics } from '../composables/useTopics';
 import { useChatsToolbarState } from '../composables/useChatsToolbarState';
 import { getAuthUser } from '../composables/useAuth';
@@ -47,7 +47,7 @@ const ShareSelectionModal = defineAsyncComponent(
   () => import('./Menu/ShareSelectionModal.vue')
 );
 
-const { getTopicList } = useTopics();
+const { getTopicList, loadRemainingTopics } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const {
   pendingShareBatches,
@@ -61,6 +61,13 @@ const {
   updateShareMessage,
   sendSharedFiles
 } = useShareSelection();
+watch(
+  isShareSelectionActive,
+  active => {
+    if (active) void loadRemainingTopics();
+  },
+  { immediate: true }
+);
 
 const allTopics = computed(() => getTopicList());
 const authUserId = computed(() => getAuthUser()?.id || '');

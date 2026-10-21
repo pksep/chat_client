@@ -16,6 +16,7 @@
       ]"
       :data-testid="`${props.dataTestid}-Article`"
     >
+      <slot name="quick-reply" />
       <MessageBubbleTail
         v-if="!props.continuesWithNext && !hasReplyReference"
         :is-me-sender="props.isMeSender"
