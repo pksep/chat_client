@@ -56,6 +56,7 @@ import { createMediapipeMulticlassBackgroundTrackProcessor } from './mediapipeMu
 import { copyTextToClipboard } from '../utils/copyTextToClipboard';
 import { parseGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
 import { mergeRemoteParticipantsDuringReconnect } from './call-reconnect-participants';
+import { createCallConnectionDiagnostics } from './call-connection-diagnostics';
 import {
   playNativeCallRingtone,
   stopNativeCallRingtone
@@ -208,6 +209,9 @@ let localAcceptRoomId: string | null = null;
 let localAcceptTopicId: string | null = null;
 let connectPromise: Promise<void> | null = null;
 let connectAttemptId = 0;
+const callConnectionDiagnostics = createCallConnectionDiagnostics(() =>
+  createTelemetryTraceId('livekit-room')
+);
 let invitedGroupCallJoinPromise: Promise<boolean | void> | null = null;
 let invitedGroupCallJoinRoomId: string | null = null;
 let activeCallTraceId: string | null = null;
@@ -628,6 +632,9 @@ const buildCallTelemetryPayload = (
   screenShareActive: state.isScreenSharingActive,
   audioOutputRoute: state.audioOutputRoute,
   audioOutputDiagnostics: lastAudioOutputDiagnostics,
+  callConnection: callConnectionDiagnostics.snapshot(room, room),
+  connectAttemptGeneration: connectAttemptId,
+  connectInFlight: Boolean(connectPromise),
   elapsedCallMs: getElapsedCallDurationMs(),
   ...payload
 });
@@ -689,9 +696,24 @@ const buildCallHealthTelemetryPayload = (
       hasLiveTrack(participant.screenShareStream, 'video') ||
       hasLiveTrack(participant.videoStream, 'video')
   ).length;
+  const remotePublications = Array.from(
+    activeRoom?.remoteParticipants.values() ?? []
+  ).flatMap(participant => Array.from(participant.trackPublications.values()));
 
   return {
     liveKitState: activeRoom?.state ?? null,
+    canPlaybackAudio: activeRoom?.canPlaybackAudio ?? null,
+    canPlaybackVideo: activeRoom?.canPlaybackVideo ?? null,
+    remotePublishedTrackCount: remotePublications.length,
+    remoteSubscribedAudioTrackCount: remotePublications.filter(
+      publication =>
+        publication.kind === Track.Kind.Audio && publication.isSubscribed
+    ).length,
+    remoteSubscribedVideoTrackCount: remotePublications.filter(
+      publication =>
+        publication.kind === Track.Kind.Video && publication.isSubscribed
+    ).length,
+    chatSocketConnected: getChatSDK()?.isConnected() ?? false,
     hasRoom: Boolean(activeRoom),
     roomRemoteParticipantCount: activeRoom?.remoteParticipants.size ?? 0,
     visibleRemoteParticipantCount: remoteParticipants.value.length,
@@ -839,27 +861,55 @@ const buildCallRecoveryTelemetryPayload = (
 const recordCallTelemetryEvent = (
   name: string,
   payload?: Record<string, unknown>,
-  level: 'debug' | 'info' | 'warn' | 'error' = 'info'
+  level: 'debug' | 'info' | 'warn' | 'error' = 'info',
+  eventRoom?: Room | null
 ): void => {
-  const traceId =
-    activeCallTraceId ||
-    (roomId.value || topicId.value || open.value
-      ? ensureCallTelemetryTraceId()
-      : null);
+  try {
+    const connection = eventRoom
+      ? callConnectionDiagnostics.snapshot(eventRoom, room)
+      : null;
+    const traceId =
+      connection?.traceId ||
+      activeCallTraceId ||
+      (roomId.value || topicId.value || open.value
+        ? ensureCallTelemetryTraceId()
+        : null);
 
-  if (!traceId) {
-    return;
+    if (!traceId) {
+      return;
+    }
+
+    recordTelemetryEvent({
+      category: 'call',
+      name,
+      level,
+      traceId,
+      entityType: 'call',
+      entityId: connection?.roomId || roomId.value || topicId.value,
+      payload: buildCallTelemetryPayload({
+        ...payload,
+        ...(connection
+          ? {
+              roomId: connection.roomId,
+              topicId: connection.topicId,
+              callConnection: connection
+            }
+          : {})
+      })
+    });
+  } catch {
+    // Диагностика не должна прерывать подключение или восстановление звонка.
   }
+};
 
-  recordTelemetryEvent({
-    category: 'call',
-    name,
-    level,
-    traceId,
-    entityType: 'call',
-    entityId: roomId.value || topicId.value,
-    payload: buildCallTelemetryPayload(payload)
-  });
+const recordCallDisconnectRequested = (activeRoom: Room, reason: string) => {
+  callConnectionDiagnostics.markDisconnectRequested(activeRoom, reason);
+  recordCallTelemetryEvent(
+    'call.livekit.disconnect.requested',
+    { reason, ...buildCallHealthTelemetryPayload(activeRoom) },
+    'info',
+    activeRoom
+  );
 };
 
 const buildAudioOutputDiagnosticsPayload = (
@@ -1871,7 +1921,7 @@ const recoverDirectCallConnection = async (
 
     if (!room && !connectPromise) {
       try {
-        await connectToRoom();
+        await connectToRoom({ reason: 'direct-recovery' });
       } catch (error) {
         console.warn('[LiveKit] Failed to reconnect direct call:', error);
         if (shouldRecordDirectCallRecoveryAttemptTelemetry()) {
@@ -3959,7 +4009,49 @@ const showGroupCallPresenceNotification = (
 };
 
 const setupRoomListeners = (activeRoom: Room) => {
+  const recordRoomTelemetryEvent = (
+    name: string,
+    payload?: Record<string, unknown>,
+    level: 'debug' | 'info' | 'warn' | 'error' = 'info'
+  ) => recordCallTelemetryEvent(name, payload, level, activeRoom);
+  let previousConnectionState = activeRoom.state;
   activeRoom
+    .on(RoomEvent.SignalConnected, () => {
+      recordRoomTelemetryEvent('call.livekit.signal_connected');
+    })
+    .on(RoomEvent.ConnectionStateChanged, connectionState => {
+      recordRoomTelemetryEvent('call.livekit.connection_state_changed', {
+        previousConnectionState,
+        connectionState,
+        ...buildCallHealthTelemetryPayload(activeRoom)
+      });
+      previousConnectionState = connectionState;
+    })
+    .on(RoomEvent.SignalReconnecting, () => {
+      recordRoomTelemetryEvent(
+        'call.livekit.signal_reconnecting',
+        buildCallHealthTelemetryPayload(activeRoom),
+        'warn'
+      );
+    })
+    .on(RoomEvent.AudioPlaybackStatusChanged, () => {
+      recordRoomTelemetryEvent('call.livekit.audio_playback_changed', {
+        canPlaybackAudio: activeRoom.canPlaybackAudio
+      });
+    })
+    .on(RoomEvent.TrackSubscriptionFailed, (trackSid, participant, reason) => {
+      recordRoomTelemetryEvent(
+        'call.livekit.track_subscription_failed',
+        {
+          trackSid,
+          participantId: participant.identity,
+          participantSid: participant.sid,
+          reason,
+          ...buildCallHealthTelemetryPayload(activeRoom)
+        },
+        'warn'
+      );
+    })
     .on(RoomEvent.TrackPublished, (publication, participant) => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
@@ -4033,8 +4125,9 @@ const setupRoomListeners = (activeRoom: Room) => {
       syncRemoteParticipantState();
       syncConnectionState(activeRoom);
       persistActiveCallSession();
-      recordCallTelemetryEvent('call.participant.connected', {
+      recordRoomTelemetryEvent('call.participant.connected', {
         participantId: participant.identity,
+        participantSid: participant.sid,
         remoteParticipantCount: activeRoom.remoteParticipants.size
       });
       syncRemoteVideoSubscriptionPreferences();
@@ -4065,10 +4158,11 @@ const setupRoomListeners = (activeRoom: Room) => {
         });
       }
 
-      recordCallTelemetryEvent(
+      recordRoomTelemetryEvent(
         'call.participant.disconnected',
         {
           participantId: participant.identity,
+          participantSid: participant.sid,
           remoteParticipantCount: activeRoom.remoteParticipants.size,
           ...buildCallHealthTelemetryPayload(activeRoom)
         },
@@ -4098,7 +4192,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       }
       syncLocalTrackState();
       if (publication.source === Track.Source.ScreenShare) {
-        recordCallTelemetryEvent('call.screen_share.local_published', {
+        recordRoomTelemetryEvent('call.screen_share.local_published', {
           trackSid: publication.trackSid,
           mediaTrackId: publication.track?.mediaStreamTrack?.id ?? null,
           mediaTrackReadyState:
@@ -4135,7 +4229,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       }
       syncLocalTrackState();
       if (publication.source === Track.Source.ScreenShare) {
-        recordCallTelemetryEvent(
+        recordRoomTelemetryEvent(
           'call.screen_share.local_unpublished',
           {
             trackSid: publication.trackSid,
@@ -4178,7 +4272,7 @@ const setupRoomListeners = (activeRoom: Room) => {
         if (quality === ConnectionQuality.Lost) {
           markCallIssueSignal('call.connection_quality.lost', 'soft');
           showReconnectCallStatusNotice();
-          recordCallTelemetryEvent(
+          recordRoomTelemetryEvent(
             'call.connection_quality.lost',
             buildCallHealthTelemetryPayload(activeRoom),
             'warn'
@@ -4201,7 +4295,7 @@ const setupRoomListeners = (activeRoom: Room) => {
           (quality === ConnectionQuality.Good ||
             quality === ConnectionQuality.Excellent)
         ) {
-          recordCallTelemetryEvent('call.connection_quality.recovered', {
+          recordRoomTelemetryEvent('call.connection_quality.recovered', {
             previousConnectionQuality: previousLocalConnectionQuality,
             connectionQuality: quality,
             ...buildCallHealthTelemetryPayload(activeRoom)
@@ -4218,7 +4312,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       isRoomReconnectInProgress = true;
       preserveRemoteParticipantsForReconnect();
       markCallIssueSignal('call.livekit.reconnecting', 'soft');
-      recordCallTelemetryEvent(
+      recordRoomTelemetryEvent(
         'call.livekit.reconnecting',
         buildCallHealthTelemetryPayload(activeRoom),
         'warn'
@@ -4253,20 +4347,37 @@ const setupRoomListeners = (activeRoom: Room) => {
       scheduleLocalScreenShareRecovery('livekit-reconnected');
       resolveDirectCallRecoverySuccess(activeRoom);
       void ensureLocalMicrophoneState(activeRoom);
-      recordCallTelemetryEvent(
+      recordRoomTelemetryEvent(
         'call.livekit.reconnected',
         buildCallHealthTelemetryPayload(activeRoom)
       );
       clearCallIssueSignal('soft');
     })
     .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
+      const expectedDisconnect =
+        ignoredDisconnectedRoom === activeRoom ||
+        isExplicitHangupInProgress ||
+        Boolean(
+          callConnectionDiagnostics.snapshot(activeRoom, room)
+            ?.disconnectRequestedBy
+        );
+      recordRoomTelemetryEvent(
+        'call.livekit.disconnected.observed',
+        {
+          reason,
+          reasonName: reason === undefined ? null : DisconnectReason[reason],
+          ignoredForRoom: ignoredDisconnectedRoom === activeRoom,
+          ...buildCallHealthTelemetryPayload(activeRoom)
+        },
+        expectedDisconnect ? 'info' : 'warn'
+      );
       isRoomReconnectInProgress = false;
       if (ignoredDisconnectedRoom === activeRoom) {
         if (room === activeRoom) {
           room = null;
         }
         ignoredDisconnectedRoom = null;
-        recordCallTelemetryEvent('call.livekit.disconnected.ignored', {
+        recordRoomTelemetryEvent('call.livekit.disconnected.ignored', {
           reason
         });
         return;
@@ -4276,7 +4387,7 @@ const setupRoomListeners = (activeRoom: Room) => {
         if (room === activeRoom) {
           room = null;
         }
-        recordCallTelemetryEvent('call.livekit.disconnected.explicit', {
+        recordRoomTelemetryEvent('call.livekit.disconnected.explicit', {
           reason
         });
         cleanup(false);
@@ -4291,7 +4402,7 @@ const setupRoomListeners = (activeRoom: Room) => {
           user.value,
           OTHER_DEVICE_CONNECTED_NOTICE
         );
-        recordCallTelemetryEvent(
+        recordRoomTelemetryEvent(
           'call.livekit.disconnected.duplicate_identity',
           { reason },
           'warn'
@@ -4300,7 +4411,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       }
 
       if (matchesPendingEndCall(roomId.value, topicId.value)) {
-        recordCallTelemetryEvent('call.livekit.disconnected.pending_end', {
+        recordRoomTelemetryEvent('call.livekit.disconnected.pending_end', {
           reason
         });
         return;
@@ -4316,7 +4427,7 @@ const setupRoomListeners = (activeRoom: Room) => {
           reason: 'livekit-disconnected'
         })
       ) {
-        recordCallTelemetryEvent(
+        recordRoomTelemetryEvent(
           'call.livekit.disconnected.recovery_started',
           {
             reason,
@@ -4330,7 +4441,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       markCallIssueSignal('call.livekit.disconnected', 'hard', {
         reason: reason ? String(reason) : null
       });
-      recordCallTelemetryEvent(
+      recordRoomTelemetryEvent(
         'call.livekit.disconnected',
         {
           reason,
@@ -4391,8 +4502,15 @@ const isExpectedConnectAbort = (
   );
 };
 
-const connectToRoom = async (options: { inviteToken?: string } = {}) => {
+const connectToRoom = async (options: {
+  inviteToken?: string;
+  reason: string;
+}) => {
   if (connectPromise) {
+    recordCallTelemetryEvent('call.livekit.connect.reused', {
+      requestedReason: options.reason,
+      attemptId: connectAttemptId
+    });
     return connectPromise;
   }
 
@@ -4423,6 +4541,7 @@ const connectToRoom = async (options: { inviteToken?: string } = {}) => {
     const tokenStartedAt = Date.now();
     recordCallTelemetryEvent('call.token.start', {
       attemptId: currentAttemptId,
+      connectReason: options.reason,
       roomId: activeRoomId,
       topicId: activeTopicId
     });
@@ -4461,6 +4580,7 @@ const connectToRoom = async (options: { inviteToken?: string } = {}) => {
     if (previousRoom) {
       isRoomReconnectInProgress = false;
       ignoredDisconnectedRoom = previousRoom;
+      recordCallDisconnectRequested(previousRoom, 'replace-room');
       await previousRoom.disconnect();
 
       if (ignoredDisconnectedRoom === previousRoom) {
@@ -4478,7 +4598,26 @@ const connectToRoom = async (options: { inviteToken?: string } = {}) => {
         pixelDensity: 'screen'
       },
       dynacast: true,
-      reconnectPolicy: LIVEKIT_RECONNECT_POLICY,
+      reconnectPolicy: {
+        nextRetryDelayInMs(context: ReconnectContext) {
+          const retryDelayMs =
+            LIVEKIT_RECONNECT_POLICY.nextRetryDelayInMs(context);
+          recordCallTelemetryEvent(
+            'call.livekit.reconnect.scheduled',
+            {
+              retryCount: context.retryCount,
+              elapsedMs: context.elapsedMs,
+              retryDelayMs,
+              ...(context.retryReason
+                ? getTelemetryErrorPayload(context.retryReason)
+                : {})
+            },
+            'warn',
+            nextRoom
+          );
+          return retryDelayMs;
+        }
+      },
       publishDefaults: {
         ...CAMERA_PUBLISH_DEFAULTS,
         ...SCREEN_SHARE_PUBLISH_DEFAULTS
@@ -4487,26 +4626,47 @@ const connectToRoom = async (options: { inviteToken?: string } = {}) => {
       videoCaptureDefaults: CAMERA_CAPTURE_DEFAULTS
     });
     room = nextRoom;
+    callConnectionDiagnostics.register(nextRoom, {
+      attemptId: currentAttemptId,
+      connectReason: options.reason,
+      roomId: activeRoomId,
+      topicId: activeTopicId,
+      traceId: ensureCallTelemetryTraceId()
+    });
 
     setupRoomListeners(nextRoom);
 
     try {
       const connectStartedAt = Date.now();
-      recordCallTelemetryEvent('call.livekit.connect.start', {
-        attemptId: currentAttemptId,
-        liveKitUrl: config.CHAT_LIVEKIT_URL
-      });
+      recordCallTelemetryEvent(
+        'call.livekit.connect.start',
+        {
+          attemptId: currentAttemptId,
+          liveKitUrl: config.CHAT_LIVEKIT_URL
+        },
+        'info',
+        nextRoom
+      );
 
       await nextRoom.connect(config.CHAT_LIVEKIT_URL, token, {
         maxRetries: 3,
         peerConnectionTimeout: 20_000,
         websocketTimeout: 20_000
       });
-      recordCallTelemetryEvent('call.livekit.connect.success', {
-        attemptId: currentAttemptId,
-        elapsedMs: Date.now() - connectStartedAt
-      });
+      recordCallTelemetryEvent(
+        'call.livekit.connect.success',
+        {
+          attemptId: currentAttemptId,
+          elapsedMs: Date.now() - connectStartedAt
+        },
+        'info',
+        nextRoom
+      );
     } catch (error) {
+      const abortContext = {
+        attemptSuperseded: currentAttemptId !== connectAttemptId,
+        roomReplaced: room !== nextRoom
+      };
       const isExpectedAbort = isExpectedConnectAbort(
         error,
         activeRoomId,
@@ -4524,9 +4684,12 @@ const connectToRoom = async (options: { inviteToken?: string } = {}) => {
           'call.livekit.connect.aborted',
           {
             attemptId: currentAttemptId,
+            ...abortContext,
+            ...buildCallHealthTelemetryPayload(nextRoom),
             ...getTelemetryErrorPayload(error)
           },
-          'warn'
+          'warn',
+          nextRoom
         );
         return;
       }
@@ -4552,14 +4715,17 @@ const connectToRoom = async (options: { inviteToken?: string } = {}) => {
           : 'call.livekit.connect.preserved_failed',
         {
           attemptId: currentAttemptId,
+          ...buildCallHealthTelemetryPayload(nextRoom),
           ...getTelemetryErrorPayload(error)
         },
-        'error'
+        'error',
+        nextRoom
       );
       throw error;
     }
 
     if (currentAttemptId !== connectAttemptId || room !== nextRoom) {
+      recordCallDisconnectRequested(nextRoom, 'stale-connect-attempt');
       nextRoom.disconnect();
       return;
     }
@@ -4662,7 +4828,10 @@ const connectInvitedGroupCallWithRetry = async (
   let connectError: unknown = null;
 
   try {
-    await connectToRoom({ inviteToken: invite.inviteToken });
+    await connectToRoom({
+      inviteToken: invite.inviteToken,
+      reason: 'join-invited-group-call'
+    });
   } catch (error) {
     connectError = error;
   }
@@ -4869,7 +5038,7 @@ const recoverActiveCallAfterNetworkChangeInternal = async (
     }
 
     try {
-      await connectToRoom();
+      await connectToRoom({ reason: `network-recovery:${reason}` });
     } catch (error) {
       if (!shouldPreserveOutgoingDialing) {
         showReconnectCallStatusNotice();
@@ -5087,7 +5256,7 @@ export const startLiveKitCall = async (
     acceptedRoomId: startAck?.roomId
   });
 
-  await connectToRoom();
+  await connectToRoom({ reason: 'start-direct-call' });
 };
 
 export const startLiveKitGroupCall = async (currentTopicId: string) => {
@@ -5195,7 +5364,7 @@ export const startLiveKitGroupCall = async (currentTopicId: string) => {
       : topic
   );
 
-  await connectToRoom();
+  await connectToRoom({ reason: 'start-group-call' });
 };
 
 export const startStandaloneMeetingCall = async () => {
@@ -5259,7 +5428,7 @@ export const startStandaloneMeetingCall = async () => {
     acceptedRoomId: startAck?.roomId
   });
 
-  await connectToRoom();
+  await connectToRoom({ reason: 'start-meeting' });
 };
 
 export const createStandaloneMeetingInviteLink = async (): Promise<boolean> => {
@@ -5471,7 +5640,7 @@ export const acceptCall = async () => {
   localAcceptTopicId = topicId.value;
 
   try {
-    await connectToRoom();
+    await connectToRoom({ reason: 'answer-call' });
     recordCallTelemetryEvent('call.answer.connected', {
       direction: 'incoming'
     });
@@ -5587,7 +5756,7 @@ export const joinPendingGroupCall = async (
   localAcceptTopicId = topicId.value;
 
   try {
-    await connectToRoom();
+    await connectToRoom({ reason: 'join-group-call' });
     recordCallTelemetryEvent('call.join.connected', {
       groupMode: true
     });
@@ -5909,6 +6078,7 @@ const showEndedCallNoticeAndReleaseMedia = (
 
   if (activeRoom) {
     ignoredDisconnectedRoom = activeRoom;
+    recordCallDisconnectRequested(activeRoom, 'ended-notice');
     activeRoom.disconnect();
   }
 
@@ -6987,6 +7157,7 @@ export const leaveCall = () => {
   releaseNativeCallAudio();
 
   if (activeRoom) {
+    recordCallDisconnectRequested(activeRoom, 'user-leave');
     activeRoom.disconnect();
   }
 
@@ -7033,6 +7204,7 @@ export const cleanup = (disconnectRoom = true) => {
   releaseNativeCallAudio();
 
   if (disconnectRoom && activeRoom) {
+    recordCallDisconnectRequested(activeRoom, 'cleanup');
     activeRoom.disconnect();
   }
 
