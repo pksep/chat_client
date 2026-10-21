@@ -1,5 +1,6 @@
 import { createApp, h, nextTick } from 'vue';
 import { createPinia } from 'pinia';
+import NotificationStack from '../../src/components/UI/NotificationStack.vue';
 import '../../src/assets/chat-container.css';
 import type {
   IMessage,
@@ -70,13 +71,36 @@ const [
   import('../../src/services/useCallState'),
   import('../../src/components/Menu/ChatsToolbar.vue')
 ]);
+const fullShell = params.has('shell');
+const { default: ChatContainer } = fullShell
+  ? await import('../../src/components/ChatContainer.vue')
+  : { default: null };
+if (fullShell) {
+  const { setConfig } = await import('../../src/services/useConfig');
+  const { initializeChat } = await import('../../src/services/useChat');
+  const { ChatSDK } = await import('../../src/services/useChatSDK');
+  setConfig({ CHAT_API_DOMAIN: '/e2e/ios-api' } as any);
+  ChatSDK.prototype.connect = () => new Promise<void>(() => {});
+  await initializeChat({
+    userId: 'mobile-search-user',
+    token: 'ios-test',
+    apiUrl: `${location.origin}/e2e/ios-api`,
+    wsUrl: 'ws://127.0.0.1:65530'
+  });
+  const { getChatSDK } = await import('../../src/services/useChat');
+  const { topics } = await import('../../src/composables/useTopics');
+  const { currentGroup } = await import('../../src/composables/useGroup');
+  (window as any).iosPwaFixture = { sdk: getChatSDK(), topics, currentGroup };
+}
 authedUser.value = { id: 'mobile-search-user', initials: 'Тест' } as IUser;
 setTopics([
   {
     id: topicId,
     type: 'GROUP',
     name: 'Проверка поиска',
-    group: { id: topicId, name: 'Проверка поиска' },
+    isAdmin: true,
+    members: [],
+    group: { id: 'fixture-group-id', title: 'Проверка поиска' },
     info: { unreadCount: 0 }
   } as ITopic
 ]);
@@ -117,7 +141,19 @@ useAiAssistant().sessions.value[0].messages = Array.from(
 
 createApp({
   setup() {
-    return () =>
+    if (fullShell)
+      return () => [
+        h(NotificationStack),
+        params.has('beta')
+          ? h('div', { class: 'chat_container_alert' }, 'beta')
+          : null,
+        h(ChatContainer!, { dataTestid: 'Fixture' })
+      ];
+    return () => [
+      h(NotificationStack),
+      params.has('beta')
+        ? h('div', { class: 'chat_container_alert' }, 'beta')
+        : null,
       h('main', { class: 'chat-container' }, [
         h(Header, { class: 'chat__header', dataTestid: 'Fixture' }),
         h('aside', { hidden: true }, [
@@ -152,7 +188,8 @@ createApp({
                 )
               ]
         )
-      ]);
+      ])
+    ];
   }
 })
   .use(createPinia())

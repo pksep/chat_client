@@ -24,7 +24,7 @@
         :type="ButtonTypeEnum.primary"
         :size="SizesEnum.little"
         :disabled="!isFormValid"
-        @click="onSave"
+        @click.prevent="onSave"
       >
         Сохранить
       </Button>
@@ -62,13 +62,6 @@ const isFormValid = computed(() => {
 
 const onSave = () => {
   if (isFormValid.value) {
-    if (!props.creating) {
-      currentGroup.value = {
-        ...currentGroup.value,
-        name: newName.value
-      };
-    }
-    oldName.value = newName.value;
     emits('unmount-save', { name: newName.value });
   }
 };

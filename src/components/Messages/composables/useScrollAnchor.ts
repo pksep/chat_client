@@ -396,7 +396,8 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
 
   const scrollWithSmoothTail = async (
     requestedTop: number,
-    behavior: ScrollBehavior = 'smooth'
+    behavior: ScrollBehavior = 'smooth',
+    isCurrent = () => true
   ): Promise<void> => {
     const metrics = getContainerMetrics();
     if (!metrics) {
@@ -406,6 +407,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     const finalTop = Math.min(metrics.maxScroll, Math.max(0, requestedTop));
     const delta = finalTop - metrics.container.scrollTop;
     const scrollToTop = (top: number, scrollBehavior: ScrollBehavior): void => {
+      if (!isCurrent()) return;
       setInternalScrollLock();
       metrics.container.scrollTo({ top, behavior: scrollBehavior });
     };
@@ -427,6 +429,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     await new Promise<void>(resolve =>
       setTimeout(resolve, smoothSettleDelayMs)
     );
+    if (!isCurrent()) return;
     scrollToTop(finalTop, 'auto');
     updateBottomState();
   };
@@ -462,10 +465,12 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     );
   };
 
-  const scrollToBottomSmooth = async (): Promise<void> => {
+  const scrollToBottomSmooth = async (
+    isCurrent = () => true
+  ): Promise<void> => {
     viewportMode.value = 'live';
     const metrics = getContainerMetrics();
-    await scrollWithSmoothTail(metrics?.maxScroll || 0, 'smooth');
+    await scrollWithSmoothTail(metrics?.maxScroll || 0, 'smooth', isCurrent);
   };
 
   const scrollToBottomInstant = (): void => {
@@ -708,6 +713,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       behavior?: ScrollBehavior;
       highlightClassName?: string;
       highlightDurationMs?: number;
+      isCurrent?: () => boolean;
     }
   ): Promise<boolean> => {
     if (!containerRef.value) {
@@ -715,7 +721,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     }
 
     const messageElement = await waitForMessageElement(messageId);
-    if (!messageElement) {
+    if (!messageElement || jumpOptions?.isCurrent?.() === false) {
       return false;
     }
 
@@ -729,7 +735,12 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       return false;
     }
 
-    await scrollWithSmoothTail(targetTop, jumpOptions?.behavior || 'auto');
+    await scrollWithSmoothTail(
+      targetTop,
+      jumpOptions?.behavior || 'auto',
+      jumpOptions?.isCurrent
+    );
+    if (jumpOptions?.isCurrent?.() === false) return false;
 
     if (jumpOptions?.highlightClassName) {
       messageElement.classList.add(jumpOptions.highlightClassName);

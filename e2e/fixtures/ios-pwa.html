@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Проверка iPhone PWA</title>
+    <style>
+      body {
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { initIosPwaViewport } from '../../src/utils/ios-pwa-viewport';
+      initIosPwaViewport();
+      if (
+        ['profile', 'menu'].includes(
+          new URLSearchParams(location.search).get('kind')
+        )
+      )
+        import('./ios-pwa-profile.ts');
+      else import('./mobile-chat-search.ts');
+    </script>
+  </body>
+</html>

@@ -76,6 +76,7 @@ import { hasNextTopicPage, TOPICS_PAGE_SIZE } from '../utils/topic-pagination';
 import { isCallTopic } from '../utils/call-topic';
 import type { PaginatedResponse } from '../services/useChatSDK/types';
 import { isTopicSyncState, type TopicSyncState } from '../utils/topic-sync';
+import { isPtsReplayStale } from '../utils/pts-replay';
 import { rememberNativeTopicSync } from '../services/native-startup-reads';
 
 const topics = ref<ITopic[]>([]);
@@ -904,12 +905,14 @@ const createTopicsApi = () => {
   };
 
   const fetchAllTopics = (options?: {
+    forceFull?: boolean;
     deferMaintenanceUntil?: Promise<void>;
     cacheReady?: Promise<void>;
-    onNetworkApplied?: () => void;
+    onNetworkApplied?: (sync?: TopicSyncState) => void;
   }): Promise<ITopic[]> => {
     if (
       refreshPromise &&
+      !options?.forceFull &&
       (!paginationSession ||
         (paginationSession.sdk === getChatSDK() &&
           paginationSession.userId === authedUser.value?.id))
@@ -919,7 +922,7 @@ const createTopicsApi = () => {
           !topicsRefreshFailed.value &&
           paginationSession?.sdk === getChatSDK()
         )
-          options?.onNetworkApplied?.();
+          options?.onNetworkApplied?.(paginationSession?.sync);
         return items;
       });
     morePromise = undefined;
@@ -943,11 +946,18 @@ const createTopicsApi = () => {
         authedUser.value?.id === userId;
       await options?.cacheReady;
       if (!isCurrent()) return topics.value;
-      const confirmed = await loadCachedTopicSyncSnapshot(userId);
+      // Новый session отменит применение запоздалой дельты, не ожидая её ответа.
+      const confirmed = options?.forceFull
+        ? null
+        : await loadCachedTopicSyncSnapshot(userId);
       if (!isCurrent()) return topics.value;
       let response: PaginatedResponse<ITopic> | undefined;
       let isDelta = false;
-      if (confirmed) {
+      if (
+        confirmed &&
+        !options?.forceFull &&
+        !isPtsReplayStale(confirmed.sync.syncedAt)
+      ) {
         try {
           const delta = await sdk.syncTopics(confirmed.sync);
           if (!isCurrent()) return topics.value;
@@ -1031,7 +1041,7 @@ const createTopicsApi = () => {
       // или сбрасывать. Запись пустого снимка задерживала первый экран.
       if (session.sync || confirmed) await persistTopicSyncSession(session);
       if (!isCurrent()) return topics.value;
-      options?.onNetworkApplied?.();
+      options?.onNetworkApplied?.(session.sync);
       const maintenance = async () => {
         if (isCurrent()) await finishTopicMaintenance();
       };

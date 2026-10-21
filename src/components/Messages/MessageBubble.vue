@@ -13,9 +13,11 @@
     :data-role="props.author"
     :data-is-loading="!!props.loader"
     :data-is-me-sender="props.isMeSender"
+    :data-message-id="props.messageId"
     @contextmenu="handleContextMenu"
+    @pointerdown="startLongPress"
     @click="handleMessageClick"
-    @dblclick="handleDoubleTap"
+    @dblclick="handleDoubleClick"
   >
     <div
       :class="{
@@ -134,11 +136,14 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { isIosWeb } from '../../utils/ios-pwa-viewport';
 import { Capacitor } from '@capacitor/core';
 import { Checkbox, CheckboxCircularEnum } from '@pksep/yui';
 import {
   isOpen,
   position,
+  contextMediaId,
+  startTouchLongPress,
   openActivePopover
 } from '../../composables/useContextMenu';
 import type { IMessageBubbleProps } from './interface/interface';
@@ -184,7 +189,8 @@ import {
   isInquiryFile
 } from '../../services/useMediaBlobCache';
 import { showErrorNotification } from '../../composables/useNotifications';
-import { MessageStatus } from '../../services/useChatSDK/types';
+import { MessageStatus, TopicType } from '../../services/useChatSDK/types';
+import { getSelectedTopic } from '../../composables/useTopics';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -220,13 +226,11 @@ const {
 const isContextMenuOpen = computed(
   () => !!props.messageId && isOpen.value[props.messageId] === true
 );
-const contextMediaId = ref<string | null>(null);
 const isCallTopicDefaultMessageEx = computed(() =>
   Boolean(parseCallTopicDefaultMessageEx(props.messageEx))
 );
-const canQuickReply = computed(
+const canReplyToMessage = computed(
   () =>
-    !props.isMobile &&
     !props.isSelectionMode &&
     !props.loader &&
     !!props.messageId &&
@@ -235,6 +239,13 @@ const canQuickReply = computed(
     props.messageStatus !== MessageStatus.NotDelivered &&
     props.messageStatus !== MessageStatus.Wait &&
     !props.media.some(media => media.uploadError)
+);
+const canQuickReply = computed(
+  () =>
+    !props.isMobile &&
+    !props.isMeSender &&
+    getSelectedTopic(props.topicId)?.type === TopicType.Group &&
+    canReplyToMessage.value
 );
 
 const sliderElements = ref<
@@ -481,14 +492,25 @@ const handleContextMenu = (event: MouseEvent) => {
     return;
   }
 
-  const target = event.target;
-  contextMediaId.value =
-    target instanceof Element
-      ? target
-          .closest('[data-message-media-id]')
-          ?.getAttribute('data-message-media-id') || null
-      : null;
   openActivePopover(props.messageId, event);
+};
+
+const startLongPress = (event: PointerEvent) => {
+  if (
+    !isIosWeb() ||
+    !props.messageId ||
+    event.pointerType !== 'touch' ||
+    !event.isPrimary ||
+    props.isSelectionMode ||
+    props.loader ||
+    !(event.target instanceof Element) ||
+    !(event.currentTarget instanceof HTMLElement) ||
+    event.target.closest(
+      'button, a, input, textarea, [contenteditable="true"], .reactions'
+    )
+  )
+    return;
+  startTouchLongPress(props.messageId, event);
 };
 
 const handleToggleSelection = () => {
@@ -510,6 +532,26 @@ const handleMessageClick = () => {
 const handleStickerClick = () => {
   if (props.isSelectionMode) handleMessageClick();
   else if (sticker.value?.pack) emits('open-sticker-pack', sticker.value.pack);
+};
+
+const handleDoubleClick = (event: MouseEvent): void => {
+  if (props.isMobile) {
+    handleDoubleTap(event);
+    return;
+  }
+  const target = event.target;
+  if (
+    !canReplyToMessage.value ||
+    isSliderOpen.value ||
+    !(target instanceof Element) ||
+    target.closest(
+      'button, a, input, textarea, select, [role="button"], [contenteditable="true"], img, video, audio, canvas, .message-content__html, .message-content--media, .message-content__file, .message__article__file, .message-sticker__image, .message-emoji__symbol, .message__author-meta, .message-reference-block, .message-reference-forward, .message-time, .reactions, .message-selection-toggle'
+    )
+  )
+    return;
+  event.preventDefault();
+  event.stopPropagation();
+  emits('unmount-reply-message-id', props.messageId);
 };
 
 const handleDoubleTap = (event: MouseEvent): void => {

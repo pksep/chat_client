@@ -44,14 +44,34 @@ test('действия сообщений работают при открыто
   page
 }) => {
   await page.setViewportSize({ width: 392, height: 832 });
-  const { requests, errors } = await openFixture(page, { shell: true });
+  const { errors } = await openFixture(page, { shell: true });
   await openTopic(page, 0);
+  await page.evaluate(() => {
+    (window as any).reactionEvents = [];
+    (window as any).topicPerformance.sdk.sendWebSocketEvent = (
+      type: string,
+      payload: unknown
+    ) => {
+      (window as any).reactionEvents.push({ type, payload });
+      return true;
+    };
+  });
   const editor = page.locator('.chat__input [contenteditable="true"]');
   await editor.fill('Черновик');
   await message(page, 0).locator('.message-content__html').dblclick();
   await expect
-    .poll(() => requests.filter(request => request.endsWith('/reactions')))
-    .toHaveLength(1);
+    .poll(() => page.evaluate(() => (window as any).reactionEvents))
+    .toEqual([
+      {
+        type: 'toggleReaction',
+        payload: {
+          messageId: 'performance-0-message-19',
+          topicId: 'performance-0',
+          emoji: '❤️'
+        }
+      }
+    ]);
+  await expect(page.locator('.chat__input__action')).toHaveCount(0);
   await expect(editor).toBeFocused();
   await expect(editor).toHaveText('Черновик');
 
