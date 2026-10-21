@@ -189,7 +189,8 @@ import {
   isInquiryFile
 } from '../../services/useMediaBlobCache';
 import { showErrorNotification } from '../../composables/useNotifications';
-import { MessageStatus } from '../../services/useChatSDK/types';
+import { MessageStatus, TopicType } from '../../services/useChatSDK/types';
+import { getSelectedTopic } from '../../composables/useTopics';
 
 const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
@@ -231,6 +232,8 @@ const isCallTopicDefaultMessageEx = computed(() =>
 const canQuickReply = computed(
   () =>
     !props.isMobile &&
+    !props.isMeSender &&
+    getSelectedTopic(props.topicId)?.type === TopicType.Group &&
     !props.isSelectionMode &&
     !props.loader &&
     !!props.messageId &&
