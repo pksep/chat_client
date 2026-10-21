@@ -17,7 +17,7 @@
     @contextmenu="handleContextMenu"
     @pointerdown="startLongPress"
     @click="handleMessageClick"
-    @dblclick="handleDoubleTap"
+    @dblclick="handleDoubleClick"
   >
     <div
       :class="{
@@ -229,11 +229,8 @@ const isContextMenuOpen = computed(
 const isCallTopicDefaultMessageEx = computed(() =>
   Boolean(parseCallTopicDefaultMessageEx(props.messageEx))
 );
-const canQuickReply = computed(
+const canReplyToMessage = computed(
   () =>
-    !props.isMobile &&
-    !props.isMeSender &&
-    getSelectedTopic(props.topicId)?.type === TopicType.Group &&
     !props.isSelectionMode &&
     !props.loader &&
     !!props.messageId &&
@@ -242,6 +239,13 @@ const canQuickReply = computed(
     props.messageStatus !== MessageStatus.NotDelivered &&
     props.messageStatus !== MessageStatus.Wait &&
     !props.media.some(media => media.uploadError)
+);
+const canQuickReply = computed(
+  () =>
+    !props.isMobile &&
+    !props.isMeSender &&
+    getSelectedTopic(props.topicId)?.type === TopicType.Group &&
+    canReplyToMessage.value
 );
 
 const sliderElements = ref<
@@ -528,6 +532,26 @@ const handleMessageClick = () => {
 const handleStickerClick = () => {
   if (props.isSelectionMode) handleMessageClick();
   else if (sticker.value?.pack) emits('open-sticker-pack', sticker.value.pack);
+};
+
+const handleDoubleClick = (event: MouseEvent): void => {
+  if (props.isMobile) {
+    handleDoubleTap(event);
+    return;
+  }
+  const target = event.target;
+  if (
+    !canReplyToMessage.value ||
+    isSliderOpen.value ||
+    !(target instanceof Element) ||
+    target.closest(
+      'button, a, input, textarea, select, [role="button"], [contenteditable="true"], img, video, audio, canvas, .message-content__html, .message-content--media, .message-content__file, .message__article__file, .message-sticker__image, .message-emoji__symbol, .message__author-meta, .message-reference-block, .message-reference-forward, .message-time, .reactions, .message-selection-toggle'
+    )
+  )
+    return;
+  event.preventDefault();
+  event.stopPropagation();
+  emits('unmount-reply-message-id', props.messageId);
 };
 
 const handleDoubleTap = (event: MouseEvent): void => {
