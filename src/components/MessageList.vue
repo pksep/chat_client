@@ -2434,8 +2434,12 @@ const refreshUnreadMarkerState = (force = false) => {
   }
 
   // Граница относится к текущему открытию чата и не сдвигается от read-receipt.
+  // Контекст закрепа/поиска не устанавливает новую границу непрочитанных.
+  const canDiscoverUnread =
+    topicUnreadCount.value > 0 && scrollAnchor.viewportMode.value !== 'jump';
   const firstUnreadMessageId =
-    unreadMarkerMessageIdsByTopic[route.value.id] || getFirstUnreadMessageId();
+    unreadMarkerMessageIdsByTopic[route.value.id] ||
+    (canDiscoverUnread ? getFirstUnreadMessageId() : null);
   unreadMarkerMessageIdsByTopic[route.value.id] = firstUnreadMessageId;
   state.unreadMarkerMessageId = firstUnreadMessageId;
   state.hideUnreadMarker = !firstUnreadMessageId;
@@ -3927,6 +3931,7 @@ watch(
         message.isReadByMe !== true
     );
     const shouldPositionToUnread =
+      topicUnreadCount > 0 &&
       !shouldScrollToBottomForNotification &&
       !shouldBootstrapAroundMessage &&
       !hasTopicSwitchUserScrollIntent(topicSwitchToken) &&

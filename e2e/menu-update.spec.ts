@@ -1,6 +1,10 @@
 import { expect, test, type Page } from './fixtures/ai-history';
 
-async function openMenu(page: Page, seenVersion: number) {
+async function openMenu(
+  page: Page,
+  seenVersion: number,
+  availableVersion: number | string = 2
+) {
   await page.addInitScript(
     ({ seenVersion }) => {
       const url = 'http://127.0.0.1:65530';
@@ -40,7 +44,7 @@ async function openMenu(page: Page, seenVersion: number) {
     { seenVersion }
   );
   await page.route('**/web-update.json', route =>
-    route.fulfill({ json: { version: 2 } })
+    route.fulfill({ json: { version: availableVersion } })
   );
   await page.route('**/manager/access', route =>
     route.fulfill({ json: { allowed: true } })
@@ -95,6 +99,38 @@ test('При актуальной версии кнопка обновления
   await checked;
   await expect(page.locator('.menu-update-button')).toHaveCount(0);
   await expect(page.locator('.menu-bottom-nav:visible')).toBeVisible();
+});
+
+for (const seenVersion of [79, 79.4]) {
+  test(`Дробное обновление ${seenVersion} → 79.5 применяется и сохраняется целиком`, async ({
+    page
+  }) => {
+    await openMenu(page, seenVersion, '79.5');
+    const button = page.locator('.menu-update-button:visible');
+    await expect(button).toBeVisible();
+    await Promise.all([
+      page.waitForEvent('framenavigated', frame => frame === page.mainFrame()),
+      button.click()
+    ]);
+    await expect(page.locator('.menu-bottom-nav:visible')).toBeVisible({
+      timeout: 30_000
+    });
+    await expect(page.locator('.menu-update-button')).toHaveCount(0);
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem('chat_web_seen_update_version')
+      )
+    ).toBe('79.5');
+  });
+}
+
+test('Актуальная дробная версия не предлагает повторное обновление', async ({
+  page
+}) => {
+  const checked = page.waitForResponse('**/web-update.json');
+  await openMenu(page, 79.5, 79.5);
+  await checked;
+  await expect(page.locator('.menu-update-button')).toHaveCount(0);
 });
 
 test('В свернутом меню доступна кнопка обновления с понятным названием', async ({

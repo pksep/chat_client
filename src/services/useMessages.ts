@@ -3208,14 +3208,44 @@ export const unpinLocalMessageForMe = (
   messageId: string
 ): void => {
   const existingPinnedMessages = pinnedMessagesStore[topicId] || [];
+  const pinnedMessage = existingPinnedMessages.find(
+    message => message.id === messageId
+  );
+  const localMessage = getClientMessageById(topicId, messageId);
 
-  if (!existingPinnedMessages.some(message => message.id === messageId)) {
+  if (!pinnedMessage && !localMessage) {
     return;
   }
 
+  const isPinnedForAll =
+    localMessage?.isPinnedForAll ??
+    pinnedMessage?.isPinnedForAll ??
+    (Boolean(localMessage?.isPin) &&
+      !localMessage?.isPinnedOnlyMe &&
+      !pinnedMessage?.isPinnedOnlyMe);
+  const pinState = {
+    isPin: isPinnedForAll,
+    isPinnedForAll,
+    isPinnedForMe: isPinnedForAll,
+    isPinnedOnlyMe: false
+  };
+
+  updateTopicMessageStores(topicId, messages =>
+    messages.map(message =>
+      message.id === messageId ? { ...message, ...pinState } : message
+    )
+  );
+  if (localMessage) schedulePersistMessages(topicId);
+
   savePinnedMessagesToLocal(
     topicId,
-    existingPinnedMessages.filter(message => message.id !== messageId)
+    existingPinnedMessages.flatMap(message =>
+      message.id !== messageId
+        ? [message]
+        : isPinnedForAll
+          ? [{ ...message, ...pinState }]
+          : []
+    )
   );
 };
 

@@ -302,7 +302,7 @@ export function useMobileApp() {
     const payload = (await response.json()) as {
       version?: number | string;
     };
-    const parsedVersion = Number.parseInt(String(payload.version || ''), 10);
+    const parsedVersion = Number.parseFloat(String(payload.version ?? ''));
 
     return Number.isFinite(parsedVersion) ? parsedVersion : null;
   };
@@ -319,9 +319,8 @@ export function useMobileApp() {
 
     latestWebUpdateVersion.value = nextVersion;
 
-    const storedVersion = Number.parseInt(
-      localStorage.getItem(WEB_UPDATE_VERSION_STORAGE_KEY) || '',
-      10
+    const storedVersion = Number.parseFloat(
+      localStorage.getItem(WEB_UPDATE_VERSION_STORAGE_KEY) || ''
     );
 
     if (!Number.isFinite(storedVersion)) {

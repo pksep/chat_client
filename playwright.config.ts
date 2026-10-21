@@ -44,6 +44,7 @@ export default defineConfig({
       name: 'webkit-iphone-pwa',
       testMatch: [
         'ios-pwa.spec.ts',
+        'menu-update.spec.ts',
         'pts-snapshot-recovery.spec.ts',
         'unread-and-pinned-history.spec.ts',
         'external-avatar.spec.ts'

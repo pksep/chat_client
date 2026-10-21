@@ -6,6 +6,126 @@ import {
   openTopic
 } from './fixtures/topic-performance-page';
 
+for (const readFlag of [false, undefined]) {
+  test(`переход к старому закрепу не создаёт непрочитанные из isReadByMe=${readFlag}`, async ({
+    page
+  }) => {
+    const state = await openFixture(page, {
+      shell: true,
+      count: 240,
+      pinOutsideHistory: true
+    });
+    const rows = makeMessages('performance-0', 240);
+    await page.route('**/messages/performance-0-message-0/around*', route =>
+      route.fulfill({
+        json: rows.slice(0, 40).map(row => ({ ...row, isReadByMe: readFlag }))
+      })
+    );
+    await openTopic(page, 0);
+    await expect(message(page, 0, 239)).toBeInViewport();
+    const divider = page.locator('.chat__message-unread_messages_start');
+    await expect(divider).toHaveCount(0);
+    await page
+      .getByTestId('Pinned-Messages')
+      .locator('.chat__input__action__blog')
+      .click();
+    await expect(message(page, 0, 0)).toBeInViewport();
+    await expect(message(page, 0, 39)).toBeAttached();
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event('focus'));
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await expect(divider).toHaveCount(0);
+    await page
+      .getByRole('button', { name: 'Перейти к новым сообщениям', exact: true })
+      .click();
+    await expect(message(page, 0, 239)).toBeInViewport();
+    await expect(divider).toHaveCount(0);
+    expect(state.errors).toEqual([]);
+  });
+}
+
+test('прочитанный чат не создаёт плашку из старых флагов начальной страницы', async ({
+  page
+}) => {
+  const state = await openFixture(page, { count: 40 });
+  const rows = makeMessages('performance-0', 40).map(row => ({
+    ...row,
+    isReadByMe: false
+  }));
+  await page.route('**/messages/topic/performance-0?*', route =>
+    route.fulfill({ json: rows })
+  );
+  await openTopic(page, 0);
+  await expect(message(page, 0, 39)).toBeInViewport();
+  await expect(
+    page.locator('.chat__message-unread_messages_start')
+  ).toHaveCount(0);
+  expect(state.errors).toEqual([]);
+});
+
+for (const pinCount of [1, 2]) {
+  test(`SELF-открепление сразу убирает значок и отправляет исходный ID: ${pinCount} закрепов`, async ({
+    page
+  }) => {
+    const state = await openFixture(page, { shell: true, count: 20 });
+    const rows = makeMessages('performance-0', 20).map((row, index) => ({
+      ...row,
+      isPin: index >= 20 - pinCount,
+      isPinnedOnlyMe: index >= 20 - pinCount,
+      isPinnedForMe: index >= 20 - pinCount,
+      isPinnedForAll: false
+    }));
+    await page.route('**/messages/topic/performance-0?*', route =>
+      route.fulfill({ json: rows })
+    );
+    await page.route('**/messages/topic/performance-0/pinned', route =>
+      route.fulfill({ json: rows.filter(row => row.isPin) })
+    );
+    await page.evaluate(() => {
+      const fixture = (window as any).topicPerformance;
+      fixture.pinEvents = [];
+      fixture.sdk.sendWebSocketEvent = (type: string, payload: unknown) => {
+        if (type === 'togglePinMessage') fixture.pinEvents.push(payload);
+        return true;
+      };
+    });
+    await openTopic(page, 0);
+    await expect(message(page, 0, 19)).toBeInViewport();
+    const pinIcon = message(page, 0, 19).locator('[data-testid$="-PinIcon"]');
+    await expect(pinIcon).toBeVisible();
+    await expect(page.getByTestId('Pinned-Messages')).toContainText(
+      'Сообщение 19 в performance-0'
+    );
+    await page.getByTestId('Pinned-Messages-CloseButton').click();
+    await page.getByRole('button', { name: 'Да', exact: true }).click();
+    await expect(pinIcon).toHaveCount(0);
+    await expect
+      .poll(() =>
+        page.evaluate(() => (window as any).topicPerformance.pinEvents)
+      )
+      .toEqual([
+        {
+          topicId: 'performance-0',
+          messageId: 'performance-0-message-19',
+          userId: 'performance-user',
+          scope: 'SELF'
+        }
+      ]);
+    if (pinCount === 1) {
+      await expect(page.getByTestId('Pinned-Messages')).toHaveCount(0);
+    } else {
+      await expect(page.getByTestId('Pinned-Messages')).toContainText(
+        'Сообщение 18 в performance-0'
+      );
+      await expect(
+        message(page, 0, 18).locator('[data-testid$="-PinIcon"]')
+      ).toBeVisible();
+    }
+    expect(state.errors).toEqual([]);
+  });
+}
+
 for (const unreadCount of [3, 180]) {
   test(`плашка непрочитанных видна при открытии и сохраняется после чтения: ${unreadCount}`, async ({
     page
