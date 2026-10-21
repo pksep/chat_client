@@ -1,6 +1,7 @@
 import { fetchWithAiAccess } from '../composables/useChatAccess';
 import { z } from 'zod';
 import { getAuthToken } from '../composables/useLogin';
+import { getStoredChatAccessToken } from '../composables/useAuth';
 import { getConfig } from './useConfig';
 
 const automationRunResultSchema = z.object({
@@ -33,7 +34,7 @@ export type AiAutomationSummary = z.infer<typeof automationSummarySchema>;
 export const fetchAiAutomations = async (): Promise<
   AiAutomationSummary[] | null
 > => {
-  const token = getAuthToken();
+  const token = getAuthToken() || getStoredChatAccessToken();
   const baseUrl = getConfig().CHAT_MASTRA_URL?.replace(/\/+$/, '');
   // До завершения авторизации сохраняем показанный список, а не принимаем
   // отсутствие токена за отсутствие серверных расписаний.
