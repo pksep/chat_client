@@ -721,6 +721,7 @@ const reportInputHeight = (): void => {
   }
 
   lastReportedInputHeight = nextHeight;
+  element.style.setProperty('--composer-height', `${nextHeight}px`);
   emit('heightChange', nextHeight);
 };
 

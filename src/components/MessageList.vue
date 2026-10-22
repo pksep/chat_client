@@ -1,225 +1,234 @@
 <template>
-  <div
-    :class="[
-      'chat__message-wrapper',
-      'chat-scrollbar',
-      {
-        'chat__message-wrapper--content-deferred': shouldRenderAiMessageSkeleton
-      }
-    ]"
-    ref="chatWrapperRef"
-    v-if="isAiRoute"
-    :style="chatMessageWrapperStyle"
-    @pointerdown.capture="preserveMobileMessageInputFocus"
-    @mousedown.capture="preserveMobileMessageInputFocus"
-    @wheel.passive="handleFloatingDateDividerUserScroll"
-    @touchmove.passive="handleFloatingDateDividerUserScroll"
-    @touchstart="onTouchStart"
-    @touchend="onTouchEnd"
-    @scroll="handleAiScroll"
-    @vue:mounted="scrollAiToBottom"
-    :data-testid="`${props.dataTestid}-MessageList-AIMessagesWrapper`"
-  >
-    <MessageListAIItems
-      v-if="!shouldRenderAiMessageSkeleton"
-      :messages="state.aiMessages"
-      :data-testid="props.dataTestid"
-    />
+  <div class="chat__message-viewport">
     <div
-      v-else
       :class="[
-        'chat__message-skeleton',
-        { 'chat__message-skeleton--group': route.type === RouteTypes.GROUP }
+        'chat__message-wrapper',
+        'chat-scrollbar',
+        {
+          'chat__message-wrapper--content-deferred':
+            shouldRenderAiMessageSkeleton
+        }
       ]"
-      aria-hidden="true"
-      :data-testid="`${props.dataTestid}-MessageList-Skeleton`"
+      ref="chatWrapperRef"
+      v-if="isAiRoute"
+      :style="chatMessageWrapperStyle"
+      @pointerdown.capture="preserveMobileMessageInputFocus"
+      @mousedown.capture="preserveMobileMessageInputFocus"
+      @wheel.passive="handleFloatingDateDividerUserScroll"
+      @touchmove.passive="handleFloatingDateDividerUserScroll"
+      @touchstart="onTouchStart"
+      @touchend="onTouchEnd"
+      @scroll="handleAiScroll"
+      @vue:mounted="scrollAiToBottom"
+      :data-testid="`${props.dataTestid}-MessageList-AIMessagesWrapper`"
     >
-      <span
-        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-      >
-        <span class="chat__message-skeleton-avatar" />
-        <span
-          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--short"
-        />
-      </span>
-      <span
-        class="chat__message-skeleton-media chat__message-skeleton-media--outgoing"
-      >
-        <span class="chat__message-skeleton-media-icon" />
-      </span>
-      <span
-        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-      >
-        <span class="chat__message-skeleton-avatar" />
-        <span
-          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
-        />
-      </span>
-      <span
-        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing chat__message-skeleton-bubble--wide"
+      <MessageListAIItems
+        v-if="!shouldRenderAiMessageSkeleton"
+        :messages="state.aiMessages"
+        :data-testid="props.dataTestid"
       />
-      <span
-        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-      >
-        <span class="chat__message-skeleton-avatar" />
-        <span
-          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--tiny"
-        />
-      </span>
-      <span
-        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing"
-      />
-      <span
-        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-      >
-        <span class="chat__message-skeleton-avatar" />
-        <span
-          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
-        />
-      </span>
-    </div>
-    <Transition name="chat-floating-date" mode="out-in">
       <div
-        v-if="!shouldRenderAiMessageSkeleton && shouldShowFloatingDateDivider"
-        :key="floatingDateDividerLabel"
+        v-else
         :class="[
-          'chat__floating-date-divider',
-          { 'chat__floating-date-divider--hidden': isFloatingDateDividerHidden }
+          'chat__message-skeleton',
+          { 'chat__message-skeleton--group': route.type === RouteTypes.GROUP }
         ]"
-        :data-testid="`${props.dataTestid}-MessageList-FloatingDateDivider`"
+        aria-hidden="true"
+        :data-testid="`${props.dataTestid}-MessageList-Skeleton`"
       >
-        <div class="date-divider">
-          <span>{{ floatingDateDividerLabel }}</span>
-        </div>
-      </div>
-    </Transition>
-  </div>
-
-  <div
-    :class="[
-      'chat__message-wrapper',
-      'chat-scrollbar',
-      {
-        'chat__message-wrapper--content-deferred':
-          shouldDeferUserMessageContentLayout,
-        'chat__message-wrapper--bootstrap-scroll-locked':
-          shouldLockUserMessageBootstrapScroll,
-        'chat__message-wrapper--search-positioning':
-          isSearchNavigationPositioning,
-        'chat__message-wrapper--favorite': isFavoriteMessageTopic,
-        'chat__message-wrapper--call-topic': isActiveCallTopic
-      }
-    ]"
-    v-if="!isAiRoute && !isDefaultRoute"
-    ref="chatWrapperRef"
-    :style="chatMessageWrapperStyle"
-    @vue:mounted="scrollToBottom"
-    @pointerdown.capture="preserveMobileMessageInputFocus"
-    @mousedown.capture="preserveMobileMessageInputFocus"
-    @scroll="handleScroll"
-    @wheel.passive="handleFloatingDateDividerUserScroll"
-    @touchmove.passive="handleUserMessageTouchMove"
-    @touchstart="handleUserMessageTouchStart"
-    @touchend="handleUserMessageTouchEnd"
-    @touchcancel="handleUserMessageTouchCancel"
-    @scrollend="handleMessageScrollEnd"
-    :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
-  >
-    <MessageListUserItems
-      v-if="shouldMountUserMessageItems"
-      :key="renderedTopicId"
-      ref="messageListUserItemsRef"
-      :class="{
-        'chat__message-bubble--warming': shouldCoverUserMessagesWithSkeleton
-      }"
-      :messages="renderedUserMessages"
-      :auth-user-id="authUserId"
-      :hide-unread-marker="state.hideUnreadMarker"
-      :unread-marker-message-id="state.unreadMarkerMessageId"
-      :data-testid="props.dataTestid"
-      @set-edit-message="handleSetEditMessage"
-      @set-reply-message="handleSetReplyMessage"
-      @set-forward-message="handleSetForwardMessage"
-      @retry-message="handleRetryMessage"
-      @scroll-to-message="handleScrollToMessage"
-      @open-sticker-pack="messageListInputRef?.openStickerPack?.($event)"
-      @content-ready="handleUserMessagesContentReady"
-    >
-      <template
-        v-if="activeTopic && isActiveCallTopic && !hasCallTopicDefaultMessage"
-        #before
-      >
-        <CallTopicDefaultMessage
-          :topic="activeTopic"
-          :data-testid="`${props.dataTestid}-CallTopicDefaultMessage`"
-        />
-      </template>
-      <template #after>
-        <CallTopicActions
-          v-if="activeTopic && shouldShowInlineCallTopicActions"
-          class="call-topic-actions--message-inline"
-          :topic="activeTopic"
-          :data-testid="`${props.dataTestid}-CallTopicActionsInline`"
-        />
-        <div
-          v-if="isDeletedAccountTopic"
-          class="top-element"
-          :data-testid="`${props.dataTestid}-MessageList-DeletedAccountMessage`"
+        <span
+          class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
         >
-          <div class="system-message chat__deleted-account-message">
-            <span class="system-message-text"
-              >Чат с этим пользователем недоступен</span
-            >
+          <span class="chat__message-skeleton-avatar" />
+          <span
+            class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--short"
+          />
+        </span>
+        <span
+          class="chat__message-skeleton-media chat__message-skeleton-media--outgoing"
+        >
+          <span class="chat__message-skeleton-media-icon" />
+        </span>
+        <span
+          class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+        >
+          <span class="chat__message-skeleton-avatar" />
+          <span
+            class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
+          />
+        </span>
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing chat__message-skeleton-bubble--wide"
+        />
+        <span
+          class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+        >
+          <span class="chat__message-skeleton-avatar" />
+          <span
+            class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--tiny"
+          />
+        </span>
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing"
+        />
+        <span
+          class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+        >
+          <span class="chat__message-skeleton-avatar" />
+          <span
+            class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
+          />
+        </span>
+      </div>
+      <Transition name="chat-floating-date" mode="out-in">
+        <div
+          v-if="!shouldRenderAiMessageSkeleton && shouldShowFloatingDateDivider"
+          :key="floatingDateDividerLabel"
+          :class="[
+            'chat__floating-date-divider',
+            {
+              'chat__floating-date-divider--hidden': isFloatingDateDividerHidden
+            }
+          ]"
+          :data-testid="`${props.dataTestid}-MessageList-FloatingDateDivider`"
+        >
+          <div class="date-divider">
+            <span>{{ floatingDateDividerLabel }}</span>
           </div>
         </div>
-      </template>
-    </MessageListUserItems>
-    <div
-      v-if="shouldRenderEmptyUserMessageState"
-      class="chat__message-empty-state"
-      :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
-    >
-      <span>
-        {{
-          isFavoriteMessageTopic
-            ? 'Здесь пока ничего нет...'
-            : 'Сообщений пока нет'
-        }}
-      </span>
+      </Transition>
     </div>
-    <Transition name="chat-floating-date" mode="out-in">
-      <div
-        v-if="!shouldRenderUserMessageSkeleton && shouldShowFloatingDateDivider"
-        :key="floatingDateDividerLabel"
-        :class="[
-          'chat__floating-date-divider',
-          { 'chat__floating-date-divider--hidden': isFloatingDateDividerHidden }
-        ]"
-        :data-testid="`${props.dataTestid}-MessageList-FloatingDateDivider`"
+
+    <div
+      :class="[
+        'chat__message-wrapper',
+        'chat-scrollbar',
+        {
+          'chat__message-wrapper--content-deferred':
+            shouldDeferUserMessageContentLayout,
+          'chat__message-wrapper--bootstrap-scroll-locked':
+            shouldLockUserMessageBootstrapScroll,
+          'chat__message-wrapper--search-positioning':
+            isSearchNavigationPositioning,
+          'chat__message-wrapper--favorite': isFavoriteMessageTopic,
+          'chat__message-wrapper--call-topic': isActiveCallTopic
+        }
+      ]"
+      v-if="!isAiRoute && !isDefaultRoute"
+      ref="chatWrapperRef"
+      :style="chatMessageWrapperStyle"
+      @vue:mounted="scrollToBottom"
+      @pointerdown.capture="preserveMobileMessageInputFocus"
+      @mousedown.capture="preserveMobileMessageInputFocus"
+      @scroll="handleScroll"
+      @wheel.passive="handleFloatingDateDividerUserScroll"
+      @touchmove.passive="handleUserMessageTouchMove"
+      @touchstart="handleUserMessageTouchStart"
+      @touchend="handleUserMessageTouchEnd"
+      @touchcancel="handleUserMessageTouchCancel"
+      @scrollend="handleMessageScrollEnd"
+      :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
+    >
+      <MessageListUserItems
+        v-if="shouldMountUserMessageItems"
+        :key="renderedTopicId"
+        ref="messageListUserItemsRef"
+        :class="{
+          'chat__message-bubble--warming': shouldCoverUserMessagesWithSkeleton
+        }"
+        :messages="renderedUserMessages"
+        :auth-user-id="authUserId"
+        :hide-unread-marker="state.hideUnreadMarker"
+        :unread-marker-message-id="state.unreadMarkerMessageId"
+        :data-testid="props.dataTestid"
+        @set-edit-message="handleSetEditMessage"
+        @set-reply-message="handleSetReplyMessage"
+        @set-forward-message="handleSetForwardMessage"
+        @retry-message="handleRetryMessage"
+        @scroll-to-message="handleScrollToMessage"
+        @open-sticker-pack="messageListInputRef?.openStickerPack?.($event)"
+        @content-ready="handleUserMessagesContentReady"
       >
-        <div class="date-divider">
-          <span>{{ floatingDateDividerLabel }}</span>
+        <template
+          v-if="activeTopic && isActiveCallTopic && !hasCallTopicDefaultMessage"
+          #before
+        >
+          <CallTopicDefaultMessage
+            :topic="activeTopic"
+            :data-testid="`${props.dataTestid}-CallTopicDefaultMessage`"
+          />
+        </template>
+        <template #after>
+          <CallTopicActions
+            v-if="activeTopic && shouldShowInlineCallTopicActions"
+            class="call-topic-actions--message-inline"
+            :topic="activeTopic"
+            :data-testid="`${props.dataTestid}-CallTopicActionsInline`"
+          />
+          <div
+            v-if="isDeletedAccountTopic"
+            class="top-element"
+            :data-testid="`${props.dataTestid}-MessageList-DeletedAccountMessage`"
+          >
+            <div class="system-message chat__deleted-account-message">
+              <span class="system-message-text"
+                >Чат с этим пользователем недоступен</span
+              >
+            </div>
+          </div>
+        </template>
+      </MessageListUserItems>
+      <div
+        v-if="shouldRenderEmptyUserMessageState"
+        class="chat__message-empty-state"
+        :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
+      >
+        <span>
+          {{
+            isFavoriteMessageTopic
+              ? 'Здесь пока ничего нет...'
+              : 'Сообщений пока нет'
+          }}
+        </span>
+      </div>
+      <Transition name="chat-floating-date" mode="out-in">
+        <div
+          v-if="
+            !shouldRenderUserMessageSkeleton && shouldShowFloatingDateDivider
+          "
+          :key="floatingDateDividerLabel"
+          :class="[
+            'chat__floating-date-divider',
+            {
+              'chat__floating-date-divider--hidden': isFloatingDateDividerHidden
+            }
+          ]"
+          :data-testid="`${props.dataTestid}-MessageList-FloatingDateDivider`"
+        >
+          <div class="date-divider">
+            <span>{{ floatingDateDividerLabel }}</span>
+          </div>
         </div>
-      </div>
-    </Transition>
-    <Transition name="chat-pagination-loading">
-      <div
-        v-if="shouldShowOlderMessagesLoading"
-        class="chat__pagination-loading chat__pagination-loading--top"
-        :data-testid="`${props.dataTestid}-MessageList-OlderMessagesLoading`"
-      >
-        <span class="chat__pagination-loading-text">загрузка...</span>
-      </div>
-    </Transition>
-    <Transition name="chat-pagination-loading">
-      <div
-        v-if="shouldShowNewerMessagesLoading"
-        class="chat__pagination-loading chat__pagination-loading--bottom"
-        :data-testid="`${props.dataTestid}-MessageList-NewerMessagesLoading`"
-      >
-        <span class="chat__pagination-loading-text">загрузка...</span>
-      </div>
-    </Transition>
+      </Transition>
+      <Transition name="chat-pagination-loading">
+        <div
+          v-if="shouldShowOlderMessagesLoading"
+          class="chat__pagination-loading chat__pagination-loading--top"
+          :data-testid="`${props.dataTestid}-MessageList-OlderMessagesLoading`"
+        >
+          <span class="chat__pagination-loading-text">загрузка...</span>
+        </div>
+      </Transition>
+      <Transition name="chat-pagination-loading">
+        <div
+          v-if="shouldShowNewerMessagesLoading"
+          class="chat__pagination-loading chat__pagination-loading--bottom"
+          :data-testid="`${props.dataTestid}-MessageList-NewerMessagesLoading`"
+        >
+          <span class="chat__pagination-loading-text">загрузка...</span>
+        </div>
+      </Transition>
+    </div>
   </div>
 
   <div
@@ -390,9 +399,11 @@ import {
   nextTick,
   onUnmounted,
   onMounted,
+  onBeforeUnmount,
   computed
 } from 'vue';
 import MessageListAIItems from './Messages/MessageListAIItems.vue';
+import { initAndroidKeyboardViewport } from '../utils/android-keyboard-viewport';
 import MessageListUserItems from './Messages/MessageListUserItems.vue';
 import MessageListInput from './Messages/MessageListInput.vue';
 import ReactionHeartIcon from './UI/ReactionHeartIcon.vue';
@@ -517,6 +528,12 @@ export interface IMessageListExtendedProps extends IMessageListProps {
   deferContentRender?: boolean;
   suppressInitialSkeleton?: boolean;
 }
+
+let cleanupAndroidKeyboardViewport = () => {};
+onMounted(() => {
+  cleanupAndroidKeyboardViewport = initAndroidKeyboardViewport();
+});
+onBeforeUnmount(() => cleanupAndroidKeyboardViewport());
 
 const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
   dataTestid: 'MessageList',

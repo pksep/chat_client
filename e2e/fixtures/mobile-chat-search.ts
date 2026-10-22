@@ -9,6 +9,10 @@ import type {
 } from '../../src/components/interfaces/interfaces';
 
 const params = new URLSearchParams(location.search);
+if (params.has('native-platform')) {
+  const { Capacitor } = await import('@capacitor/core');
+  Capacitor.getPlatform = () => params.get('native-platform')!;
+}
 const isAi = params.get('kind') === 'ai';
 const hasPinnedMessage = !params.has('no-pinned');
 const topicId = 'mobile-search-fixture';
@@ -106,16 +110,19 @@ setTopics([
 ]);
 saveMessagesToLocal(
   topicId,
-  Array.from({ length: 40 }, (_, index) => ({
-    id: `message-${index}`,
-    topicId,
-    senderUserId: 'mobile-search-user',
-    senderUser: { id: 'mobile-search-user', initials: 'Тест' },
-    text: `Сообщение ${index + 1}: проверка поиска и сохранения прокрутки`,
-    createdAt: new Date(2026, 9, 5, 10, index).toISOString(),
-    media: [],
-    isReadByMe: true
-  })) as IMessage[],
+  Array.from(
+    { length: Number(params.get('message-count') || 40) },
+    (_, index) => ({
+      id: `message-${index}`,
+      topicId,
+      senderUserId: 'mobile-search-user',
+      senderUser: { id: 'mobile-search-user', initials: 'Тест' },
+      text: `Сообщение ${index + 1}: проверка поиска и сохранения прокрутки`,
+      createdAt: new Date(2026, 9, 5, 10, index).toISOString(),
+      media: [],
+      isReadByMe: true
+    })
+  ) as IMessage[],
   { skipPersist: true, syncLastMessage: false }
 );
 history.replaceState({}, '', `/${isAi ? 'ai' : 'group'}/${topicId}`);

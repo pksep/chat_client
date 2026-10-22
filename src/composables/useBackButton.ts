@@ -5,7 +5,8 @@ export enum BackButtonPriority {
   navigation = 0,
   screen = 10,
   overlay = 20,
-  keyboard = 30
+  keyboard = 30,
+  composerPopover = 40
 }
 
 const backButtonHandlers: Array<{

@@ -5,9 +5,13 @@
   <main
     id="chat-container-image"
     :class="chatContainerClasses"
-    :style="chatWallpaperStyle"
+    :style="chatContainerStyle"
     :data-testid="`${props.dataTestid}-ChatContainer-Container`"
   >
+    <ChatWallpaperLayer
+      v-if="isAndroid"
+      :wallpaper-style="chatWallpaperStyle"
+    />
     <Header
       v-if="shouldShowHeader"
       class="chat__header"
@@ -168,6 +172,7 @@
 </template>
 
 <script setup lang="ts">
+import { Capacitor } from '@capacitor/core';
 import {
   computed,
   defineAsyncComponent,
@@ -180,6 +185,7 @@ import {
 import Header from './Header/Header.vue';
 import HeaderMenu from './Header/HeaderMenu.vue';
 import Chat from './Chat.vue';
+import ChatWallpaperLayer from './ChatWallpaperLayer.vue';
 import {
   MobilePlatformEnum,
   type IChatContainerProps,
@@ -419,6 +425,12 @@ const resolveAppMode = (): string | null => {
 const appMode = resolveAppMode();
 const { currentWallpaperStyle: chatWallpaperStyle, isWallpaperApplied } =
   useChatWallpaper();
+const isAndroid = Capacitor.getPlatform() === 'android';
+const chatContainerStyle = computed(() =>
+  isAndroid
+    ? { ...chatWallpaperStyle.value, background: undefined }
+    : chatWallpaperStyle.value
+);
 
 const chatContainerClasses = computed(() => [
   'chat-container',

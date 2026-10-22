@@ -53,6 +53,7 @@ import sep.pksep.app.plugins.CallScreenPlugin;
 import sep.pksep.app.plugins.ChatBackgroundSyncPlugin;
 import sep.pksep.app.plugins.LaunchStartupPlugin;
 import sep.pksep.app.plugins.KeyboardMediaPlugin;
+import sep.pksep.app.plugins.KeyboardViewportPlugin;
 import sep.pksep.app.plugins.NativeFilePlugin;
 import sep.pksep.app.plugins.NotificationAudioPlugin;
 import sep.pksep.app.plugins.NotificationTapPlugin;
@@ -81,6 +82,7 @@ public class MainActivity extends BridgeActivity {
     private static final int LAUNCH_BACKGROUND_DARK_COLOR = 0xFF212531;
     private static final long LAUNCH_SPLASH_FALLBACK_TIMEOUT_MS = 6000L;
     private android.animation.ValueAnimator themeColorAnimator;
+    private ChatKeyboardViewport keyboardViewport;
     private static final long STARTUP_OVERLAY_FALLBACK_TIMEOUT_MS = 30000L;
     private static final int STARTUP_RUNTIME_PERMISSIONS_REQUEST_CODE = 4101;
     private boolean startupRuntimePermissionsPending = false;
@@ -227,9 +229,25 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onDestroy() {
+        if (keyboardViewport != null) keyboardViewport.close();
         if (themeColorAnimator != null) themeColorAnimator.cancel();
         activityCreated = false;
         super.onDestroy();
+    }
+
+    public void setChatKeyboardViewportEnabled(boolean enabled) {
+        if (!enabled) {
+            if (keyboardViewport != null) keyboardViewport.close();
+            keyboardViewport = null;
+        } else if (keyboardViewport == null && bridge != null && bridge.getWebView() != null) {
+            keyboardViewport = ChatKeyboardViewport.attach(this, bridge.getWebView());
+        } else if (keyboardViewport != null) {
+            keyboardViewport.sync();
+        }
+    }
+
+    public void setChatKeyboardOverlayOpen(boolean open) {
+        if (keyboardViewport != null) keyboardViewport.setOverlayOpen(open);
     }
 
     public static boolean isAppInForeground() {
@@ -1333,6 +1351,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(RuStoreUpdatePlugin.class);
         registerPlugin(ShareIntentPlugin.class);
         registerPlugin(KeyboardMediaPlugin.class);
+        registerPlugin(KeyboardViewportPlugin.class);
         registerPlugin(TelemetryDevicePlugin.class);
         registerPlugin(VpnStatusPlugin.class);
         customPluginsRegistered = true;
