@@ -8,16 +8,6 @@ const group = {
   avatarUrl: '',
   members: []
 };
-const topic = {
-  id: 'mobile-search-fixture',
-  type: 'GROUP',
-  name: group.title,
-  group,
-  isAdmin: true,
-  members: [],
-  info: {}
-};
-
 test.beforeEach(async ({ page }, testInfo) => {
   const errors: string[] = [];
   pageErrors.set(page, errors);
@@ -34,7 +24,10 @@ test.beforeEach(async ({ page }, testInfo) => {
     if (path.endsWith('/groups/fixture-group-id'))
       return route.fulfill({ json: { group, members: { data: [] } } });
     if (path.endsWith('/topics/mobile-search-fixture'))
-      return route.fulfill({ json: topic });
+      return route.fulfill({
+        status: 404,
+        json: { message: 'Топик недоступен по этому адресу' }
+      });
     return route.fulfill({ json: { data: [], items: [], folders: [] } });
   });
   await page.goto('/e2e/fixtures/ios-pwa.html?kind=group&no-pinned&shell');
@@ -49,7 +42,7 @@ test.beforeEach(async ({ page }, testInfo) => {
   await page.locator('.chat__header-profile').click();
   await expect(
     page.getByRole('textbox', { name: 'Название группы', exact: true })
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15_000 });
 });
 
 test.afterEach(async ({ page }) => {
@@ -107,18 +100,43 @@ test('аватар сохраняется после выбора и обрез�
   page
 }, testInfo) => {
   const patches: any[] = [];
+  // Размер редактора должен быть точным и во время анимации открытия.
+  await page.addStyleTag({
+    content:
+      '.modal-cropped-avatar.fade-and-scale-enter-active { transition-duration: 2s; }'
+  });
   await page.route('**/e2e/ios-api/groups/fixture-group-id', route => {
     if (route.request().method() !== 'PATCH')
       return route.fulfill({ json: { group, members: { data: [] } } });
     patches.push(route.request().postDataJSON());
     return route.fulfill({ json: { ...group, ...patches.at(-1) } });
   });
+  const uploads: any[] = [];
+  await page.route('**/e2e/ios-api/media/upload-target', route => {
+    uploads.push(route.request().postDataJSON());
+    return route.fulfill({
+      json: {
+        objectName: 'group-avatar.png',
+        uploadUrl: 'http://localhost:5173/e2e/avatar-storage'
+      }
+    });
+  });
   await page.evaluate(() => {
-    (window as any).iosPwaFixture.sdk.uploadFile = async (file: File) => {
-      if (!file.size) throw new Error('Пустое изображение');
-      return { objectName: 'group-avatar.png', thumbnailObjectName: null };
+    const fixture = (window as any).iosPwaFixture;
+    const uploadFile = fixture.sdk.uploadFile.bind(fixture.sdk);
+    fixture.sdk.uploadFile = (file: File, ...args: any[]) => {
+      fixture.lastUploadedAvatar = file;
+      return uploadFile(file, ...args);
     };
   });
+  await page.route('**/e2e/avatar-storage', route =>
+    route.fulfill({ status: 200 })
+  );
+  await page.route('**/e2e/ios-api/media/upload', route =>
+    route.fulfill({
+      json: { objectName: 'group-avatar.png', thumbnailObjectName: null }
+    })
+  );
   const chooser = page.waitForEvent('filechooser');
   await page
     .locator(
@@ -139,8 +157,40 @@ test('аватар сохраняется после выбора и обрез�
   const crop = page.locator('.modal-cropped-avatar:visible');
   await expect(crop).toBeVisible();
   await expect(crop.locator('canvas')).toBeVisible();
+  await expect
+    .poll(() =>
+      crop.locator('canvas').evaluate(canvas => {
+        const element = canvas as HTMLCanvasElement;
+        return element
+          .getContext('2d')!
+          .getImageData(element.width / 2, element.height / 2, 1, 1).data[3];
+      })
+    )
+    .toBe(255);
   await crop.getByRole('button', { name: 'Сохранить', exact: true }).click();
   await expect.poll(() => patches.length).toBe(1);
+  expect(uploads).toHaveLength(1);
+  expect(uploads[0].size).toBeGreaterThan(0);
+  expect(uploads[0].contentType).toBe('image/png');
+  const edges = await page.evaluate(async () => {
+    const image = await createImageBitmap(
+      (window as any).iosPwaFixture.lastUploadedAvatar
+    );
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext('2d')!;
+    context.drawImage(image, 0, 0);
+    const alphaAt = (x: number, y: number) =>
+      context.getImageData(x, y, 1, 1).data[3];
+    return [
+      alphaAt(0, image.height / 2),
+      alphaAt(image.width - 1, image.height / 2),
+      alphaAt(image.width / 2, 0),
+      alphaAt(image.width / 2, image.height - 1)
+    ];
+  });
+  expect(edges).toEqual([255, 255, 255, 255]);
   await expect(crop).toBeHidden();
   expect(patches[0].avatarUrl).toBe('group-avatar.png');
   const saved = await page.evaluate(
@@ -154,4 +204,44 @@ test('аватар сохраняется после выбора и обрез�
       () => (window as any).iosPwaFixture.currentGroup.value.group.avatarUrl
     )
   ).toBe('group-avatar.png');
+});
+
+test('ошибка загрузки фото видна и повторный выбор того же файла работает', async ({
+  page
+}, testInfo) => {
+  let uploads = 0;
+  await page.route('**/e2e/ios-api/media/upload-target', route => {
+    uploads++;
+    return route.fulfill({
+      status: 500,
+      json: { message: 'Не удалось загрузить фото' }
+    });
+  });
+  const avatar = page.locator(
+    testInfo.project.name === 'chromium-desktop'
+      ? '.menu-info__avatar-button'
+      : '.modal-info-mobile__avatar-button'
+  );
+  const file = {
+    name: 'avatar.svg',
+    mimeType: 'image/svg+xml',
+    buffer: Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="coral"/></svg>'
+    )
+  };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const chooser = page.waitForEvent('filechooser');
+    await avatar.click();
+    await (await chooser).setFiles(file);
+    const crop = page.locator('.modal-cropped-avatar:visible');
+    await expect(crop).toBeVisible();
+    await crop.getByRole('button', { name: 'Сохранить', exact: true }).click();
+    await expect.poll(() => uploads).toBe(attempt + 1);
+    await expect(
+      page
+        .getByRole('alert')
+        .filter({ hasText: 'Не удалось загрузить фото' })
+        .last()
+    ).toBeVisible();
+  }
 });

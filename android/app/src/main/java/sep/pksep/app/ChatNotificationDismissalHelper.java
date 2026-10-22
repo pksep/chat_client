@@ -90,11 +90,22 @@ public final class ChatNotificationDismissalHelper {
             return false;
         }
 
-        preferences
-            .edit()
-            .putLong(latestAtKey(normalizedTopicId), eventAt)
-            .apply();
         return true;
+    }
+
+    public static void recordDisplayed(Context context, String topicId, String stateAt, String sentAt) {
+        long eventAt = parseTimestamp(stateAt, parseTimestamp(sentAt, 0L));
+        if (eventAt <= 0L || isBlank(topicId)) return;
+        SharedPreferences preferences = prefs(context);
+        String key = latestAtKey(topicId.trim());
+        preferences.edit().putLong(key, Math.max(eventAt, preferences.getLong(key, 0L))).apply();
+    }
+
+    public static boolean canRefreshDisplayed(Context context, String topicId, String stateAt) {
+        long eventAt = parseTimestamp(stateAt, 0L);
+        SharedPreferences preferences = prefs(context);
+        return eventAt > preferences.getLong(clearedAtKey(topicId), 0L)
+            && eventAt == preferences.getLong(latestAtKey(topicId), 0L);
     }
 
     public static void dismissTopicNotificationIfMessageMatches(

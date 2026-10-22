@@ -3,11 +3,13 @@ import { useGroup } from '../composables/useGroup';
 import { uploadFile } from '../services/useChat';
 import { IMenuInfoInformation } from './useMenuInfo';
 import { navigateToGroupsList } from './navigation/useUrlRouting';
+import { showErrorNotification } from './useNotifications';
 
 export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
   const state = reactive({
     fileImage: null as File | null,
-    isEditAvatar: false
+    isEditAvatar: false,
+    isSavingAvatar: false
   });
 
   const pathToFile = async (path: string): Promise<File | null> => {
@@ -31,7 +33,9 @@ export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
   };
 
   const onOpenEditAvatar = (e: Event): File | void => {
-    const file = (e.target as HTMLInputElement).files?.[0];
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
     if (!file) return;
     state.fileImage = file;
     state.isEditAvatar = true;
@@ -43,8 +47,22 @@ export function useInformationMenu(model: Ref<IMenuInfoInformation>) {
   };
 
   const onSaveAvatar = async (file: File): Promise<void> => {
-    const { path } = await uploadFile(file);
-    model.value = { ...model.value, avatarUrl: path };
+    if (state.isSavingAvatar) return;
+    const information = model.value;
+    state.isSavingAvatar = true;
+    try {
+      const { path } = await uploadFile(file);
+      if (
+        model.value?.groupId !== information?.groupId ||
+        model.value?.topicId !== information?.topicId
+      )
+        return;
+      model.value = { ...model.value, avatarUrl: path };
+    } catch (error) {
+      showErrorNotification(error);
+    } finally {
+      state.isSavingAvatar = false;
+    }
   };
 
   const handleSave = async (config: { name: string }): Promise<void> => {

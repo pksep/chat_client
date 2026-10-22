@@ -90,6 +90,7 @@ public class ChatBackgroundSyncPlugin extends Plugin {
 
         boolean changed = ChatBackgroundSyncStore.saveSession(getContext(), token, userId, apiUrl,
             call.getString("authSource", "unknown_shared"), call.getString("erpUrl", ""));
+        if (changed) sep.pksep.app.sync.ChatNotificationRecoveryScheduler.start(getContext());
 
         JSObject result = new JSObject();
         result.put("saved", true);
@@ -106,6 +107,7 @@ public class ChatBackgroundSyncPlugin extends Plugin {
     @PluginMethod
     public void clearSession(PluginCall call) {
         ChatBackgroundSyncStore.clearSession(getContext());
+        sep.pksep.app.sync.ChatNotificationRecoveryScheduler.stop(getContext());
 
         JSObject result = new JSObject();
         result.put("cleared", true);

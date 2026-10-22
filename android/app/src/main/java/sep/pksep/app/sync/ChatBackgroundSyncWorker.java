@@ -118,6 +118,7 @@ public class ChatBackgroundSyncWorker extends Worker {
                 messagesByTopic
             );
             dismissDeletedMessageNotifications(context, syncEvents.events);
+            ChatNotificationRecovery.reconcile(context, session, api, topics);
             ChatBackgroundSyncStore.setCompletedStatus(
                 context,
                 hints,

@@ -61,7 +61,11 @@ import {
   playNativeCallRingtone,
   stopNativeCallRingtone
 } from './useNotificationSoundPolicy';
-import { endAllCallKits, showIncomingCallKit } from './useCallKit';
+import {
+  dismissIncomingCallKit,
+  endAllCallKits,
+  showIncomingCallKit
+} from './useCallKit';
 import { getChatSDK } from './useChat';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
 import { TopicType } from './useChatSDK/types';
@@ -2517,7 +2521,7 @@ const resetTimer = () => {
 
 const playRingtone = () => {
   if (Capacitor.isNativePlatform()) {
-    void playNativeCallRingtone();
+    void playNativeCallRingtone(roomId.value);
     return;
   }
 
@@ -6261,7 +6265,7 @@ export const dismissIncomingCallState = (
   }
 
   if (Capacitor.isNativePlatform()) {
-    void endAllCallKits();
+    void dismissIncomingCallKit(targetRoomId);
   }
 };
 

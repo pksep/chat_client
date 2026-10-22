@@ -1238,12 +1238,11 @@ const setupChatListeners = (): void => {
 
   chatSDK.subscribeToEvent(WebSocketEventType.CALL_ANSWERED, ({ payload }) => {
     void (async () => {
-      const { dismissIncomingCall, handleCallAnswered } = await loadCallsApi();
-
       if (Capacitor.isNativePlatform()) {
-        const { endAllCallKits } = await loadCallKitApi();
-        await endAllCallKits();
+        const { dismissIncomingCallKit } = await loadCallKitApi();
+        await dismissIncomingCallKit(payload.roomId);
       }
+      const { dismissIncomingCall, handleCallAnswered } = await loadCallsApi();
       dismissIncomingCall(payload.roomId, payload.topicId);
       handleCallAnswered(
         payload.userId,
@@ -1259,12 +1258,11 @@ const setupChatListeners = (): void => {
     WebSocketEventType.DISMISS_INCOMING_CALL,
     ({ payload }) => {
       void (async () => {
-        const { dismissIncomingCall } = await loadCallsApi();
-
         if (Capacitor.isNativePlatform()) {
-          const { endAllCallKits } = await loadCallKitApi();
-          await endAllCallKits();
+          const { dismissIncomingCallKit } = await loadCallKitApi();
+          await dismissIncomingCallKit(payload.roomId);
         }
+        const { dismissIncomingCall } = await loadCallsApi();
         dismissIncomingCall(payload.roomId, payload.topicId);
       })();
     }

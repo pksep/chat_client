@@ -13,13 +13,11 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import sep.pksep.app.IncomingCallRingtonePlayer;
 
 @CapacitorPlugin(name = "NotificationAudio")
 public class NotificationAudioPlugin extends Plugin {
     private static final String NEW_MESSAGE_SOUND_ASSET = "public/audio/new-message.mp3";
-    private static final String CALL_RINGTONE_ASSET = "public/audio/ringtone.mp3";
-
-    private MediaPlayer callRingtonePlayer;
     private MediaPlayer notificationPlayer;
 
     @PluginMethod
@@ -115,22 +113,7 @@ public class NotificationAudioPlugin extends Plugin {
                 return;
             }
 
-            stopCallRingtonePlayer();
-
-            callRingtonePlayer = buildAssetPlayer(CALL_RINGTONE_ASSET, true);
-            if (callRingtonePlayer == null) {
-                call.reject("Call ringtone unavailable");
-                return;
-            }
-
-            callRingtonePlayer.setOnErrorListener((failedPlayer, what, extra) -> {
-                failedPlayer.release();
-                if (callRingtonePlayer == failedPlayer) {
-                    callRingtonePlayer = null;
-                }
-                return true;
-            });
-            callRingtonePlayer.start();
+            IncomingCallRingtonePlayer.startAsset(getContext(), call.getString("roomId"));
             call.resolve();
         } catch (Exception error) {
             call.reject("Failed to play call ringtone", error);
@@ -161,13 +144,7 @@ public class NotificationAudioPlugin extends Plugin {
     }
 
     private void stopCallRingtonePlayer() {
-        if (callRingtonePlayer != null) {
-            if (callRingtonePlayer.isPlaying()) {
-                callRingtonePlayer.stop();
-            }
-            callRingtonePlayer.release();
-            callRingtonePlayer = null;
-        }
+        IncomingCallRingtonePlayer.stopAsset();
     }
 
     private boolean canPlayCallRingtone() {

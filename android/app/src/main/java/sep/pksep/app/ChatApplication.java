@@ -18,6 +18,11 @@ public class ChatApplication extends Application implements HasTracerConfigurati
     private static final String PREF_NOTIFICATION_TOPIC_ID =
         "notification_topic_id";
 
+    @Override public void onCreate() {
+        super.onCreate();
+        sep.pksep.app.sync.ChatNotificationRecoveryScheduler.start(this);
+    }
+
     @Override
     public List<TracerConfiguration> getTracerConfiguration() {
         return Arrays.asList(

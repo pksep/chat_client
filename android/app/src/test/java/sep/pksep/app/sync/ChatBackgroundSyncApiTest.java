@@ -19,6 +19,16 @@ import org.json.JSONArray;
 
 public class ChatBackgroundSyncApiTest {
     @Test
+    public void notificationRecoveryRequestsOnlyUnreadMessagesWithoutMarkingThemRead() throws Exception {
+        try (TopicServer server = new TopicServer("[]", "[]")) {
+            assertEquals(0, server.api().fetchUnreadNotificationMessages("topic").length());
+            assertEquals(0, server.api().fetchUnreadNotificationMessages("muted-topic", true).length());
+            server.completed.get(5, TimeUnit.SECONDS);
+            assertTrue(server.requests.get(0).startsWith("GET /messages/topic/topic?limit=25&newMessages=true&unreadOnly=true "));
+            assertTrue(server.requests.get(1).startsWith("GET /messages/topic/muted-topic?limit=25&newMessages=true&unreadOnly=true&taggedOnly=true "));
+        }
+    }
+    @Test
     public void loadsBackgroundPagesAndDeduplicatesTopics() throws Exception {
         try (TopicServer server = new TopicServer(
             "{\"data\":[{\"id\":\"a\"},{\"id\":\"b\"}],\"meta\":{\"totalPages\":2}}",

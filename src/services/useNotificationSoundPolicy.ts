@@ -10,7 +10,7 @@ interface NotificationAudioPolicy {
 
 interface NotificationAudioPlugin {
   getNotificationSoundPolicy(): Promise<NotificationAudioPolicy>;
-  playCallRingtone(): Promise<void>;
+  playCallRingtone(options?: { roomId?: string }): Promise<void>;
   playNotificationSound(): Promise<void>;
   stopCallRingtone(): Promise<void>;
 }
@@ -69,13 +69,15 @@ export const playNativeNotificationSound = async (): Promise<boolean> => {
   }
 };
 
-export const playNativeCallRingtone = async (): Promise<boolean> => {
+export const playNativeCallRingtone = async (
+  roomId?: string | null
+): Promise<boolean> => {
   if (!isAndroidNativePlatform()) {
     return false;
   }
 
   try {
-    await NotificationAudio.playCallRingtone();
+    await NotificationAudio.playCallRingtone({ roomId: roomId || undefined });
     return true;
   } catch (error) {
     console.warn('Failed to play native call ringtone:', error);

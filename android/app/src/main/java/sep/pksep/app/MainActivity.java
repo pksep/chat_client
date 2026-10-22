@@ -221,6 +221,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onStop() {
         super.onStop();
+        sep.pksep.app.sync.ChatNotificationRecoveryScheduler.request(this);
         LaunchAppearance.finishLauncherIconUpdate(this);
     }
 
@@ -231,7 +232,7 @@ public class MainActivity extends BridgeActivity {
         super.onDestroy();
     }
 
-    static boolean isAppInForeground() {
+    public static boolean isAppInForeground() {
         return appInForeground;
     }
 

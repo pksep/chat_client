@@ -11,6 +11,10 @@ import sep.pksep.app.sync.ChatBackgroundSyncScheduler;
 import sep.pksep.app.sync.ChatBackgroundSyncStore;
 
 public class ChatFirebaseMessagingService extends FirebaseMessagingService {
+    @Override public void onDeletedMessages() {
+        super.onDeletedMessages();
+        sep.pksep.app.sync.ChatNotificationRecoveryScheduler.request(this);
+    }
     @Override
     public void onNewToken(String token) {
         super.onNewToken(token);
@@ -106,16 +110,8 @@ public class ChatFirebaseMessagingService extends FirebaseMessagingService {
         }
 
         RemoteMessage.Notification notification = remoteMessage.getNotification();
-        String topicId = ChatNotificationHelper.resolveNotificationTag(data);
         if (
-            notification == null &&
-            !MainActivity.isAppInForeground() &&
-            ChatNotificationDismissalHelper.shouldShowMessageNotification(
-                this,
-                topicId,
-                data.get("stateAt"),
-                data.get("sentAt")
-            )
+            notification == null && !MainActivity.isAppInForeground()
         ) {
             ChatNotificationHelper.showChatMessage(
                 this,
