@@ -17,6 +17,7 @@
     :selected-organization="selectedOrganization"
     :is-adding-new-organization="isAddingNewOrganization"
     :is-credentials-step="isCredentialsStep"
+    :auth-with-login="authWithLogin"
     @select-organization="selectOrganization"
     @add-organization="startAddOrganization"
     @remove-organization="removeOrganization"
@@ -122,6 +123,9 @@ if (shouldSkipStartupShell) {
 }
 
 const config = ref<IChatContainerConfig | null>(null);
+const authWithLogin = computed(
+  () => config.value?.CHAT_AUTH_WITH_LOGIN !== 'false'
+);
 const errorMessage = ref('');
 const isLoading = ref(false);
 const isBootstrapping = ref(!shouldSkipStartupShell);
@@ -304,6 +308,7 @@ const parseRuntimeConfig = (
     }, {});
 
   return {
+    CHAT_AUTH_WITH_LOGIN: envMap.VITE_AUTH_WITH_LOGIN,
     CHAT_MASTRA_URL: envMap.VITE_MASTRA_URL,
     CHAT_API_DOMAIN: envMap.VITE_CHAT_API_DOMAIN,
     CHAT_WS_DOMAIN: envMap.VITE_CHAT_WS_DOMAIN,
@@ -353,6 +358,7 @@ const applyConfig = (resolvedConfig: IChatContainerConfig) => {
 };
 
 const preloadAuthUsers = async () => {
+  if (!authWithLogin.value) return;
   try {
     await fetchUsersForAuth();
   } catch (error) {
@@ -479,8 +485,6 @@ const selectOrganization = (url: string) => {
     return;
   }
 
-  applyConfig(organization.config);
-  openCredentialsStepIfNeeded();
   void loadRemoteConfig({
     url: normalizedUrl,
     fallbackConfig: organization.config
@@ -636,16 +640,20 @@ const submitCredentialsLogin = async () => {
 
   try {
     const identifier = identifierValue.value.trim();
-    const users = getUsersList().filter(user => !isBotUser(user));
-    const matchingUsers = users.filter(
-      user => user.initials?.trim() === identifier
-    );
-    // В списке показаны инициалы, но авторизация принимает табельный номер.
-    const tabel =
-      users.some(user => user.nickname === identifier) ||
-      matchingUsers.length !== 1
-        ? identifier
-        : matchingUsers[0].nickname;
+    let tabel = identifier;
+    if (authWithLogin.value) {
+      const users = getUsersList().filter(user => !isBotUser(user));
+      const matchingUsers = users.filter(
+        user => user.initials?.trim() === identifier
+      );
+      // В списке показаны инициалы, но авторизация принимает табельный номер.
+      if (
+        !users.some(user => user.nickname === identifier) &&
+        matchingUsers.length === 1
+      ) {
+        tabel = matchingUsers[0].nickname;
+      }
+    }
 
     const authData = await loginWithCredentials({
       identifier: tabel,
@@ -721,9 +729,7 @@ onMounted(async () => {
           return;
         }
 
-        applyConfig(storedOrganization.config);
-        openCredentialsStepIfNeeded();
-        void loadRemoteConfig({
+        await loadRemoteConfig({
           url: urlOrganization,
           fallbackConfig: storedOrganization.config
         });
@@ -768,9 +774,7 @@ onMounted(async () => {
         return;
       }
 
-      applyConfig(lastOrganization.config);
-      openCredentialsStepIfNeeded();
-      void loadRemoteConfig({
+      await loadRemoteConfig({
         url: normalizedLastOrganization,
         fallbackConfig: lastOrganization.config
       });
