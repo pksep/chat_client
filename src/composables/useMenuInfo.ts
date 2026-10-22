@@ -39,6 +39,7 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
     openAddUser: false,
     information: null
   });
+  let informationRequest = 0;
 
   const computedFilteredMembers = computed(() => {
     const allUsers = getUsersList();
@@ -53,6 +54,12 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
   };
 
   const handleUpdateInformation = async (value: IMenuInfoInformation) => {
+    if (!value?.groupId && !value?.topicId) {
+      showErrorNotification(
+        'Не удалось определить чат. Откройте информацию о группе заново.'
+      );
+      return;
+    }
     if (value?.groupId) {
       const { setGroupInfo } = useGroup();
       try {
@@ -90,19 +97,54 @@ export function useMenuInfo<Props extends IMenuInfoProps>() {
   ) => {
     if (!props.isEnabled) return;
 
+    const request = ++informationRequest;
+    state.information = null;
     const sdk = getChatSDK();
-    const findTopic = (await sdk.getTopicById(props.topic.id)) as ITopic;
+    const { getSelectedTopic } = useTopics();
+    let findTopic =
+      getSelectedTopic(props.topic.id) ||
+      (currentGroup.value?.id === props.topic.id
+        ? currentGroup.value
+        : undefined);
+    if (!findTopic) {
+      try {
+        findTopic = (await sdk.getTopicById(props.topic.id)) as ITopic;
+      } catch (error) {
+        if (request === informationRequest) showErrorNotification(error);
+        return;
+      }
+    }
+    if (request !== informationRequest) return;
 
-    if (findTopic?.type === TopicType.Group) {
-      const { group } = await sdk.getGroup(findTopic.group.id);
-
+    if (findTopic?.type === TopicType.Group && findTopic.group?.id) {
+      const topicGroup = findTopic.group;
+      // Идентификатор группы уже есть в списке: сбой дополнительного чтения
+      // не должен превращать сохранение названия или фото в локальное изменение.
       state.information = {
-        name: group?.title,
-        avatarUrl: group?.avatarUrl,
-        groupId: group?.id,
+        name: topicGroup.title || findTopic.name,
+        avatarUrl: topicGroup.avatarUrl || findTopic.avatarUrl,
+        groupId: topicGroup.id,
         topicId: findTopic.id,
-        date: group?.createdAt ? new Date(group.createdAt) : undefined
+        date: topicGroup.createdAt ? new Date(topicGroup.createdAt) : undefined
       };
+      const initialInformation = state.information;
+      try {
+        const { group } = await sdk.getGroup(topicGroup.id);
+        if (
+          request !== informationRequest ||
+          state.information !== initialInformation ||
+          group?.id !== topicGroup.id
+        )
+          return;
+        state.information = {
+          ...state.information,
+          name: group.title,
+          avatarUrl: group.avatarUrl,
+          date: group.createdAt ? new Date(group.createdAt) : undefined
+        };
+      } catch (error) {
+        if (request === informationRequest) showErrorNotification(error);
+      }
     } else if (findTopic?.type === TopicType.DM) {
       state.information = {
         name:

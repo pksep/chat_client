@@ -89,7 +89,7 @@ public final class IncomingCallNotificationHelper {
         return isIncomingCallFresh(sentAtValue, expiresAtValue, dismissedAt, now);
     }
 
-    public static void showIncomingCall(
+    public static synchronized void showIncomingCall(
         Context context,
         String callerId,
         String callerName,
@@ -98,6 +98,12 @@ public final class IncomingCallNotificationHelper {
         String topicType
     ) {
         if (!ChatBackgroundSyncStore.getSession(context).isValid()) {
+            return;
+        }
+        // Не даём запоздавшему WebSocket/Push снова включить уже принятый звонок.
+        if (roomId == null || roomId.trim().isEmpty() || !shouldShowIncomingCall(
+            context, roomId, null, null, System.currentTimeMillis()
+        )) {
             return;
         }
         createChannel(context);
@@ -179,14 +185,14 @@ public final class IncomingCallNotificationHelper {
             NotificationBrandIconHelper.build(context, builder)
         );
         rememberActiveCall(context, roomId);
-        IncomingCallRingtonePlayer.start(context);
+        IncomingCallRingtonePlayer.start(context, roomId);
     }
 
-    public static void dismissIncomingCall(Context context, String roomId) {
+    public static synchronized void dismissIncomingCall(Context context, String roomId) {
         dismissIncomingCall(context, roomId, System.currentTimeMillis());
     }
 
-    public static void dismissIncomingCall(
+    public static synchronized void dismissIncomingCall(
         Context context,
         String roomId,
         long dismissedAt
@@ -195,12 +201,11 @@ public final class IncomingCallNotificationHelper {
         IncomingCallActivity.dismissIfMatches(roomId);
         forgetActiveCall(context, roomId);
         rememberDismissedCall(context, roomId, dismissedAt);
-        if (getActiveCallRoomIds(context).isEmpty()) {
-            IncomingCallRingtonePlayer.stop();
-        }
+        // Сохранённые ID старых вызовов не должны мешать остановке текущей мелодии.
+        IncomingCallRingtonePlayer.stop(roomId);
     }
 
-    public static void dismissAllIncomingCalls(Context context) {
+    public static synchronized void dismissAllIncomingCalls(Context context) {
         NotificationManagerCompat manager = NotificationManagerCompat.from(context);
         long dismissedAt = System.currentTimeMillis();
 

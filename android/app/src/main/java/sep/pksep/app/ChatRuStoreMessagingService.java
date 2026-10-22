@@ -118,14 +118,7 @@ public class ChatRuStoreMessagingService extends RuStoreMessagingService {
             return;
         }
 
-        String topicId = ChatNotificationHelper.resolveNotificationTag(data);
         if (
-            ChatNotificationDismissalHelper.shouldShowMessageNotification(
-                this,
-                topicId,
-                data.get("stateAt"),
-                data.get("sentAt")
-            ) &&
             !MainActivity.isAppInForeground()
         ) {
             ChatNotificationHelper.showChatMessage(this, data, title, body);
@@ -135,6 +128,7 @@ public class ChatRuStoreMessagingService extends RuStoreMessagingService {
     @Override
     public void onDeletedMessages() {
         RuStorePushPlugin.dispatchPushDeleted();
+        sep.pksep.app.sync.ChatNotificationRecoveryScheduler.request(this);
     }
 
     @Override

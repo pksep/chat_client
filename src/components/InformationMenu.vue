@@ -1,6 +1,8 @@
 <template>
   <button
     class="menu-info__avatar-button"
+    :disabled="!props.isAdmin || state.isSavingAvatar"
+    :aria-busy="state.isSavingAvatar"
     :data-testid="`${dataTestid}-InformationMenu-AvatarButton`"
     @click="openEditProfileIcon"
   >

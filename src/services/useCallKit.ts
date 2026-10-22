@@ -227,12 +227,14 @@ export const showIncomingCallKit = async (
   }
 };
 
-export const endAllCallKits = async () => {
+export const dismissIncomingCallKit = async (roomId?: string | null) => {
   if (!Capacitor.isNativePlatform()) return;
 
   try {
-    await CallScreen.dismissIncomingCall({});
+    await CallScreen.dismissIncomingCall(roomId ? { roomId } : {});
   } catch (error) {
     console.warn('[CallKit] Failed to dismiss incoming call:', error);
   }
 };
+
+export const endAllCallKits = () => dismissIncomingCallKit();

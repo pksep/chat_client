@@ -116,6 +116,14 @@ public final class ChatBackgroundSyncStore {
             && current.erpUrl.equals(next.erpUrl);
     }
 
+    public static void runForSession(Context context, Session expected, Runnable action) {
+        synchronized (SESSION_LOCK) {
+            Session current = getSession(context);
+            if (current.isValid() && current.userId.equals(expected.userId) &&
+                current.apiUrl.equals(expected.apiUrl)) action.run();
+        }
+    }
+
     static Session saveRefreshedSession(Context context, Session expected, String token) {
         synchronized (SESSION_LOCK) {
             Session current = getSession(context);

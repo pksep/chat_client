@@ -3,6 +3,7 @@ package sep.pksep.app;
 import android.Manifest;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.Notification;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -12,7 +13,13 @@ import android.os.Build;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.app.RemoteInput;
+import androidx.core.app.Person;
 import androidx.core.content.ContextCompat;
+import androidx.core.text.HtmlCompat;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.time.Instant;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -40,9 +47,19 @@ public final class ChatNotificationHelper {
         String title,
         String body
     ) {
+        showChatMessage(context, data, title, body, null);
+    }
+
+    public static synchronized void showChatMessage(
+        Context context,
+        Map<String, String> data,
+        String title,
+        String body,
+        JSONArray recoveredMessages
+    ) {
         if (
             context == null || data == null || data.isEmpty() ||
-            !ChatBackgroundSyncStore.getSession(context).isValid()
+            !ChatBackgroundSyncStore.getSession(context).isValid() || MainActivity.isAppInForeground()
         ) {
             return;
         }
@@ -60,6 +77,26 @@ public final class ChatNotificationHelper {
         NotificationChannelHelper.ensureDefaultChannel(context);
 
         String topicId = resolveNotificationTag(data);
+        NotificationManager notificationManager =
+            (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (notificationManager == null || !notificationManager.areNotificationsEnabled()) return;
+        Notification existing = findActiveNotification(notificationManager, topicId);
+        boolean newMessage = ChatNotificationDismissalHelper.shouldShowMessageNotification(
+            context, topicId, data.get("stateAt"), data.get("sentAt")
+        );
+        // Обновляем историю уже показанного уведомления без повторного сигнала.
+        // Смахнутое пользователем уведомление заново не создаём.
+        if (!newMessage && (recoveredMessages == null || existing == null ||
+            !ChatNotificationDismissalHelper.canRefreshDisplayed(context, topicId, data.get("stateAt")))) return;
+        StringBuilder historyKey = new StringBuilder(data.getOrDefault("unreadCount", ""));
+        if (recoveredMessages != null) {
+            for (int i = 0; i < recoveredMessages.length(); i++) {
+                JSONObject message = recoveredMessages.optJSONObject(i);
+                if (message != null) historyKey.append(':').append(message.optString("id"));
+            }
+            if (!newMessage && existing.extras != null &&
+                historyKey.toString().equals(existing.extras.getString("chatRecoveredHistory"))) return;
+        }
         ChatApplication.rememberNotificationTopic(context, topicId);
         ChatStartupHistory.refreshCache(context, topicId);
         int requestCode = REQUEST_CODE_PROVIDER.incrementAndGet();
@@ -115,19 +152,50 @@ public final class ChatNotificationHelper {
             NotificationChannelHelper.DEFAULT_CHANNEL_ID
         )
             .setSmallIcon(R.drawable.notification_statusbar_chat_bubbles_2026)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setLocalOnly(false)
+            .setOnlyAlertOnce(!newMessage)
+            .extend(new NotificationCompat.WearableExtender().setDismissalId(topicId))
             .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
             .setAutoCancel(true)
             .setContentIntent(contentIntent);
 
-        if (!isBlank(title)) {
-            builder.setContentTitle(title);
-        }
+        // Приложения часов могут читать только обычные поля, без MessagingStyle.
+        builder.setContentTitle(firstNonEmpty(title, data.get("conversationTitle"), data.get("senderName"), "Чат"));
+        builder.setContentText(plainMessageText(body));
 
-        if (!isBlank(body)) {
-            builder
-                .setContentText(body)
-                .setStyle(new NotificationCompat.BigTextStyle().bigText(body));
+        NotificationCompat.MessagingStyle style = new NotificationCompat.MessagingStyle(
+            new Person.Builder().setName("Вы").build()
+        ).setGroupConversation("GROUP".equalsIgnoreCase(data.get("topicType")));
+        if ("GROUP".equalsIgnoreCase(data.get("topicType")))
+            style.setConversationTitle(firstNonEmpty(data.get("conversationTitle"), title, "Чат"));
+        if (recoveredMessages != null) {
+            for (int i = 0; i < recoveredMessages.length(); i++) {
+                JSONObject message = recoveredMessages.optJSONObject(i);
+                if (message == null) continue;
+                JSONObject sender = message.optJSONObject("senderUser");
+                addStyleMessage(style, message.optString("id"),
+                    sender != null ? sender.optString("initials", title) : title,
+                    message.optString("senderUserId"), message.optString("text"),
+                    parseMessageTimestamp(message.optString("createdAt")));
+            }
+        } else {
+            NotificationCompat.MessagingStyle previous = existing != null
+                ? NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(existing) : null;
+            if (previous != null)
+                for (NotificationCompat.MessagingStyle.Message message : previous.getMessages())
+                    style.addMessage(message);
+            addStyleMessage(style, messageId, firstNonEmpty(data.get("senderName"), title),
+                data.get("senderUserId"), body,
+                IncomingCallNotificationHelper.parseTimestamp(data.get("stateAt"), System.currentTimeMillis()));
         }
+        builder.setStyle(style);
+        if (recoveredMessages != null) builder.getExtras().putString("chatRecoveredHistory", historyKey.toString());
+        builder.setWhen(IncomingCallNotificationHelper.parseTimestamp(data.get("stateAt"), System.currentTimeMillis()));
+        try { builder.setNumber(Integer.parseInt(data.get("unreadCount"))); }
+        catch (RuntimeException ignored) { }
 
         if (isUuid(topicId)) {
             builder.addAction(createReplyAction(context, topicId, messageId));
@@ -148,6 +216,43 @@ public final class ChatNotificationHelper {
             CHAT_NOTIFICATION_ID,
             NotificationBrandIconHelper.build(context, builder)
         );
+        ChatNotificationDismissalHelper.recordDisplayed(context, topicId, data.get("stateAt"), data.get("sentAt"));
+    }
+
+    public static synchronized void showRecoveredChatMessage(
+        Context context, ChatBackgroundSyncStore.Session session, Map<String, String> data,
+        String title, String body, JSONArray messages
+    ) {
+        ChatBackgroundSyncStore.runForSession(context, session,
+            () -> showChatMessage(context, data, title, body, messages));
+    }
+
+    private static Notification findActiveNotification(NotificationManager manager, String topicId) {
+        for (android.service.notification.StatusBarNotification notification : manager.getActiveNotifications())
+            if (notification.getId() == CHAT_NOTIFICATION_ID && topicId.equals(notification.getTag()))
+                return notification.getNotification();
+        return null;
+    }
+
+    private static void addStyleMessage(NotificationCompat.MessagingStyle style, String id,
+                                        String name, String senderId, String text, long at) {
+        Person sender = new Person.Builder().setName(firstNonEmpty(name, "Собеседник"))
+            .setKey(firstNonEmpty(senderId, name)).build();
+        NotificationCompat.MessagingStyle.Message message =
+            new NotificationCompat.MessagingStyle.Message(plainMessageText(text), at, sender);
+        message.getExtras().putString("chatMessageId", id);
+        style.addMessage(message);
+    }
+
+    private static String plainMessageText(String text) {
+        String content = isBlank(text) ? "" :
+            HtmlCompat.fromHtml(text, HtmlCompat.FROM_HTML_MODE_LEGACY).toString().trim();
+        return content.isEmpty() ? "Вложение" : content;
+    }
+
+    private static long parseMessageTimestamp(String value) {
+        try { return Instant.parse(value).toEpochMilli(); }
+        catch (RuntimeException ignored) { return 0L; }
     }
 
     private static NotificationCompat.Action createReplyAction(

@@ -119,6 +119,15 @@ final class ChatBackgroundSyncApi {
         return requireRows(payload);
     }
 
+    JSONArray fetchUnreadNotificationMessages(String topicId) throws IOException, JSONException {
+        return fetchUnreadNotificationMessages(topicId, false);
+    }
+
+    JSONArray fetchUnreadNotificationMessages(String topicId, boolean taggedOnly) throws IOException, JSONException {
+        return requireRows(getJson("/messages/topic/" + encodePathSegment(topicId)
+            + "?limit=25&newMessages=true&unreadOnly=true" + (taggedOnly ? "&taggedOnly=true" : "")));
+    }
+
     static JSONArray requireRows(Object payload) throws IOException {
         if (payload instanceof JSONArray) return (JSONArray) payload;
         if (payload instanceof JSONObject) {

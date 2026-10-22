@@ -20,7 +20,12 @@ import {
   isTauriRuntime
 } from './useTauriNotifications';
 import { getTelemetryErrorPayload, recordTelemetryEvent } from './useTelemetry';
-import { getTelemetryInstallationId } from './useTelemetryDevice';
+import {
+  addNativeNetworkStatusListener,
+  getTelemetryInstallationId
+} from './useTelemetryDevice';
+import { subscribeToAppVisibilityChanges } from './useAppVisibility';
+import { createNativePushRegistrationRetry } from './native-push-registration-retry';
 import { RuStorePush, type NativePushNotificationPayload } from './nativePush';
 import { getChatAuthSession } from '../utils/stored-chat-session';
 import { getAuthToken } from '../composables/useLogin';
@@ -75,8 +80,14 @@ let ruStorePushListenersBound = false;
 let firebasePushListenersBound = false;
 let pushNotificationsEnabled = false;
 let pushSessionRevision = 0;
-const nativePushRegistrationsInFlight = new Set<string>();
-const syncedNativePushRegistrations = new Set<string>();
+let removePushRecoveryListeners: (() => void) | null = null;
+const nativePushRegistrationRetry = createNativePushRegistrationRetry({
+  enabled: () =>
+    pushNotificationsEnabled &&
+    !isChatSessionEnding() &&
+    Boolean(getChatAuthSession()?.token),
+  register: (provider, token) => registerNativePushToken(token, provider)
+});
 let lastHandledNotificationKey = '';
 let lastHandledNotificationAt = 0;
 const NOTIFICATION_INTERACTION_DEDUPE_MS = 30_000;
@@ -540,32 +551,32 @@ const bindWebServiceWorkerMessageListener = () => {
   isWebServiceWorkerMessageListenerBound = true;
 };
 
-const syncNativePushToken = async (
+const registerNativePushToken = async (
   token: string,
   provider: 'firebase' | 'rustore'
-): Promise<void> => {
+): Promise<boolean> => {
   const userId = getChatAuthSession()?.user?.id || getCurrentUserId();
-  if (isChatSessionEnding() || !pushNotificationsEnabled || !userId) return;
+  if (isChatSessionEnding() || !pushNotificationsEnabled || !userId)
+    return false;
   const revision = pushSessionRevision;
-  const registrationKey = `${userId}:${provider}:${token}`;
-  if (
-    nativePushRegistrationsInFlight.has(registrationKey) ||
-    syncedNativePushRegistrations.has(registrationKey)
-  ) {
-    return;
-  }
-
-  nativePushRegistrationsInFlight.add(registrationKey);
   storeNativePushToken(token, provider);
 
   try {
-    await useChatApi().post('/notifications/device', {
-      token,
-      platform: provider === 'firebase' ? 'android' : 'rustore',
-      installationId: getTelemetryInstallationId()
-    });
-    if (!pushNotificationsEnabled || revision !== pushSessionRevision) return;
-    syncedNativePushRegistrations.add(registrationKey);
+    await withNetworkTimeout(
+      signal =>
+        useChatApi().post(
+          '/notifications/device',
+          {
+            token,
+            platform: provider === 'firebase' ? 'android' : 'rustore',
+            installationId: getTelemetryInstallationId()
+          },
+          { requset: { signal } }
+        ),
+      10_000
+    );
+    if (!pushNotificationsEnabled || revision !== pushSessionRevision)
+      return false;
     recordTelemetryEvent({
       category: 'notification',
       name: 'notification.native.registration.success',
@@ -576,6 +587,7 @@ const syncNativePushToken = async (
         tokenLength: token.length
       }
     });
+    return true;
   } catch (error) {
     recordTelemetryEvent({
       category: 'notification',
@@ -589,9 +601,43 @@ const syncNativePushToken = async (
       }
     });
     console.error(`${provider} push registration sync failed:`, error);
-  } finally {
-    nativePushRegistrationsInFlight.delete(registrationKey);
+    return false;
   }
+};
+
+const syncNativePushToken = (token: string, provider: 'firebase' | 'rustore') =>
+  nativePushRegistrationRetry.register(provider, token);
+
+const bindNativePushRecovery = () => {
+  if (removePushRecoveryListeners) return;
+  const retry = () => {
+    void nativePushRegistrationRetry.retryNow();
+  };
+  const onVisibility = () => {
+    if (document.visibilityState === 'visible') retry();
+  };
+  window.addEventListener('online', retry);
+  document.addEventListener('visibilitychange', onVisibility);
+  const unsubscribe = subscribeToAppVisibilityChanges(onVisibility);
+  let networkListener: PluginListenerHandle | null = null;
+  let removed = false;
+  void addNativeNetworkStatusListener(status => {
+    if (status.networkConnected && status.networkValidated !== false) retry();
+  })
+    .then(handle => {
+      if (removed) void handle?.remove();
+      else networkListener = handle;
+    })
+    .catch(() => {});
+  removePushRecoveryListeners = () => {
+    removed = true;
+    window.removeEventListener('online', retry);
+    document.removeEventListener('visibilitychange', onVisibility);
+    unsubscribe();
+    void networkListener?.remove();
+    nativePushRegistrationRetry.clear();
+    removePushRecoveryListeners = null;
+  };
 };
 
 const handleNativePushReceived = (
@@ -734,6 +780,16 @@ export const initPushNotifications = async () => {
     });
     if (permStatus.receive !== 'granted')
       return console.error('Permission denied');
+
+    bindNativePushRecovery();
+    // Сохранённые токены доступны и при недоступном SDK провайдера.
+    for (const [provider, key] of [
+      ['firebase', FIREBASE_PUSH_TOKEN_STORAGE_KEY],
+      ['rustore', RUSTORE_PUSH_TOKEN_STORAGE_KEY]
+    ] as const) {
+      const token = localStorage.getItem(key);
+      if (token) void syncNativePushToken(token, provider);
+    }
 
     if (!nativeNotificationTapListener) {
       await bindNativeNotificationTapListener();
@@ -982,6 +1038,7 @@ const handleCallPush = (notification?: { data?: NativeNotificationData }) => {
 };
 
 export const removePushListeners = async () => {
+  removePushRecoveryListeners?.();
   if (!Capacitor.isNativePlatform()) {
     return;
   }
@@ -1039,6 +1096,8 @@ const clearAllWebNotifications = async (): Promise<void> => {
 export const cleanupPushNotificationsOnLogout = async (): Promise<void> => {
   pushNotificationsEnabled = false;
   pushSessionRevision++;
+  removePushRecoveryListeners?.();
+  nativePushRegistrationRetry.clear();
   const accessToken = getAuthToken() || getChatAuthSession()?.token;
   const apiUrl = getConfig().CHAT_API_DOMAIN.replace(/\/+$/, '');
   // При истёкшей сессии очистка не должна запускать refresh и повторный выход.
@@ -1120,8 +1179,7 @@ export const cleanupPushNotificationsOnLogout = async (): Promise<void> => {
       }
 
       clearStoredPushRegistration();
-      nativePushRegistrationsInFlight.clear();
-      syncedNativePushRegistrations.clear();
+      nativePushRegistrationRetry.clear();
       recordTelemetryEvent({
         category: 'notification',
         name: 'notification.cleanup.success',
