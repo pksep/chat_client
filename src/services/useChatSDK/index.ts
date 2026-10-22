@@ -2180,10 +2180,26 @@ export class ChatSDK {
     return getConfig();
   }
 
-  async getLiveKitToken(roomId: string): Promise<string | null> {
+  async getLiveKitToken(
+    roomId: string,
+    diagnostics?: {
+      traceId: string;
+      callSessionId: string;
+      connectionAttemptId: number;
+    }
+  ): Promise<string | null> {
     try {
+      const query = new URLSearchParams({ roomId });
+      if (diagnostics) {
+        query.set('traceId', diagnostics.traceId);
+        query.set('callSessionId', diagnostics.callSessionId);
+        query.set(
+          'connectionAttemptId',
+          String(diagnostics.connectionAttemptId)
+        );
+      }
       const response = (await this.reqi.get<{ token: string }>(
-        `/calls/livekit-token?roomId=${encodeURIComponent(roomId)}`,
+        `/calls/livekit-token?${query.toString()}`,
         { parsed: false }
       )) as any;
 
@@ -2310,11 +2326,25 @@ export class ChatSDK {
 
   async getInviteLiveKitToken(
     roomId: string,
-    inviteToken: string
+    inviteToken: string,
+    diagnostics?: {
+      traceId: string;
+      callSessionId: string;
+      connectionAttemptId: number;
+    }
   ): Promise<string | null> {
     try {
+      const query = new URLSearchParams({ roomId, invite: inviteToken });
+      if (diagnostics) {
+        query.set('traceId', diagnostics.traceId);
+        query.set('callSessionId', diagnostics.callSessionId);
+        query.set(
+          'connectionAttemptId',
+          String(diagnostics.connectionAttemptId)
+        );
+      }
       const response = (await this.reqi.get<{ token: string }>(
-        `/calls/invite-livekit-token?roomId=${encodeURIComponent(roomId)}&invite=${encodeURIComponent(inviteToken)}`,
+        `/calls/invite-livekit-token?${query.toString()}`,
         { parsed: false }
       )) as any;
       const data = await response.json();
