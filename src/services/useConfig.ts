@@ -3,6 +3,7 @@ import { ref } from 'vue';
 
 const configStore = ref<IChatContainerConfig>({});
 const CONFIG_KEYS: Array<keyof IChatContainerConfig> = [
+  'CHAT_AUTH_WITH_LOGIN',
   'CHAT_MASTRA_URL',
   'CHAT_API_DOMAIN',
   'CHAT_WS_DOMAIN',
