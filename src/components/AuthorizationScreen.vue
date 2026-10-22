@@ -256,6 +256,7 @@ interface IAuthorizationScreenProps {
   selectedOrganization?: string;
   isAddingNewOrganization?: boolean;
   isCredentialsStep?: boolean;
+  authWithLogin?: boolean;
   errorMessage?: string;
   isLoading?: boolean;
 }
@@ -335,12 +336,13 @@ const handleQrAuth = async () => {
 const getUserLoginValue = (user: any): string =>
   user?.initials || user?.nickname || '';
 
-const userOptions = computed(() =>
-  getUsersList()
+const userOptions = computed(() => {
+  if (props.authWithLogin === false) return [];
+  return getUsersList()
     .filter(user => !isBotUser(user))
     .map(user => getUserLoginValue(user))
-    .filter((value, index, list) => !!value && list.indexOf(value) === index)
-);
+    .filter((value, index, list) => !!value && list.indexOf(value) === index);
+});
 
 watch(
   () => props.errorMessage,

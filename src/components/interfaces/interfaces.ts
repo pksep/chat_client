@@ -148,6 +148,7 @@ export enum MessageStatusEnum {
 }
 
 export interface IChatContainerConfig {
+  CHAT_AUTH_WITH_LOGIN?: string;
   CHAT_MASTRA_URL?: string;
   CHAT_API_DOMAIN?: string;
   CHAT_WS_DOMAIN?: string;
