@@ -57,6 +57,7 @@ import { copyTextToClipboard } from '../utils/copyTextToClipboard';
 import { parseGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
 import { mergeRemoteParticipantsDuringReconnect } from './call-reconnect-participants';
 import { createCallConnectionDiagnostics } from './call-connection-diagnostics';
+import { createCallWebRtcDiagnostics } from './call-webrtc-diagnostics';
 import {
   playNativeCallRingtone,
   stopNativeCallRingtone
@@ -887,11 +888,14 @@ const recordCallTelemetryEvent = (
       entityType: 'call',
       entityId: connection?.roomId || roomId.value || topicId.value,
       payload: buildCallTelemetryPayload({
+        userId: getAuthUser()?.id ?? null,
         ...payload,
         ...(connection
           ? {
               roomId: connection.roomId,
               topicId: connection.topicId,
+              callSessionId: connection.instanceId,
+              connectionAttemptId: connection.attemptId,
               callConnection: connection
             }
           : {})
@@ -901,6 +905,11 @@ const recordCallTelemetryEvent = (
     // Диагностика не должна прерывать подключение или восстановление звонка.
   }
 };
+
+const callWebRtcDiagnostics = createCallWebRtcDiagnostics(
+  (activeRoom, name, payload, level) =>
+    recordCallTelemetryEvent(name, payload, level, activeRoom)
+);
 
 const recordCallDisconnectRequested = (activeRoom: Room, reason: string) => {
   callConnectionDiagnostics.markDisconnectRequested(activeRoom, reason);
@@ -4028,6 +4037,11 @@ const setupRoomListeners = (activeRoom: Room) => {
       previousConnectionState = connectionState;
     })
     .on(RoomEvent.SignalReconnecting, () => {
+      void callWebRtcDiagnostics.capture(
+        activeRoom,
+        'before-signal-reconnect',
+        'warn'
+      );
       recordRoomTelemetryEvent(
         'call.livekit.signal_reconnecting',
         buildCallHealthTelemetryPayload(activeRoom),
@@ -4309,6 +4323,12 @@ const setupRoomListeners = (activeRoom: Room) => {
         return;
       }
 
+      void callWebRtcDiagnostics.capture(
+        activeRoom,
+        'before-reconnect',
+        'warn'
+      );
+
       isRoomReconnectInProgress = true;
       preserveRemoteParticipantsForReconnect();
       markCallIssueSignal('call.livekit.reconnecting', 'soft');
@@ -4331,6 +4351,7 @@ const setupRoomListeners = (activeRoom: Room) => {
       scheduleCallAudioRecovery(activeRoom);
     })
     .on(RoomEvent.Reconnected, () => {
+      void callWebRtcDiagnostics.capture(activeRoom, 'reconnected', 'info');
       isRoomReconnectInProgress = false;
       if (callStatusNoticeKind.value === 'reconnecting') {
         clearCallStatusNotice();
@@ -4354,6 +4375,9 @@ const setupRoomListeners = (activeRoom: Room) => {
       clearCallIssueSignal('soft');
     })
     .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
+      void callWebRtcDiagnostics
+        .capture(activeRoom, 'before-disconnect', 'warn')
+        .finally(() => callWebRtcDiagnostics.stop(activeRoom));
       const expectedDisconnect =
         ignoredDisconnectedRoom === activeRoom ||
         isExplicitHangupInProgress ||
@@ -4453,16 +4477,28 @@ const setupRoomListeners = (activeRoom: Room) => {
     });
 };
 
-const getToken = async (activeRoomId: string, inviteToken?: string) => {
+const getToken = async (
+  activeRoomId: string,
+  diagnostics: {
+    traceId: string;
+    callSessionId: string;
+    connectionAttemptId: number;
+  },
+  inviteToken?: string
+) => {
   const sdk = getChatSDK();
   if (!sdk) return null;
 
   const resolvedInviteToken = inviteToken ?? getCallInviteToken(activeRoomId);
   if (resolvedInviteToken) {
-    return sdk.getInviteLiveKitToken(activeRoomId, resolvedInviteToken);
+    return sdk.getInviteLiveKitToken(
+      activeRoomId,
+      resolvedInviteToken,
+      diagnostics
+    );
   }
 
-  return sdk.getLiveKitToken(activeRoomId);
+  return sdk.getLiveKitToken(activeRoomId, diagnostics);
 };
 
 const getConnectErrorMessage = (error: unknown) => {
@@ -4522,6 +4558,11 @@ const connectToRoom = async (options: {
     const activeRoomId = roomId.value;
     const activeTopicId = topicId.value;
     const config = sdk?.getConfig();
+    const connectionDiagnostics = {
+      traceId: ensureCallTelemetryTraceId(),
+      callSessionId: createTelemetryTraceId('livekit-room'),
+      connectionAttemptId: currentAttemptId
+    };
 
     if (!sdk || !me || !activeRoomId || !config?.CHAT_LIVEKIT_URL) {
       recordCallTelemetryEvent(
@@ -4546,7 +4587,11 @@ const connectToRoom = async (options: {
       topicId: activeTopicId
     });
 
-    const token = await getToken(activeRoomId, options.inviteToken);
+    const token = await getToken(
+      activeRoomId,
+      connectionDiagnostics,
+      options.inviteToken
+    );
     if (!token) {
       const callStatus = await sdk.getLiveKitCallStatus(activeRoomId, {
         inviteToken: options.inviteToken
@@ -4627,11 +4672,12 @@ const connectToRoom = async (options: {
     });
     room = nextRoom;
     callConnectionDiagnostics.register(nextRoom, {
+      instanceId: connectionDiagnostics.callSessionId,
       attemptId: currentAttemptId,
       connectReason: options.reason,
       roomId: activeRoomId,
       topicId: activeTopicId,
-      traceId: ensureCallTelemetryTraceId()
+      traceId: connectionDiagnostics.traceId
     });
 
     setupRoomListeners(nextRoom);
@@ -4653,6 +4699,7 @@ const connectToRoom = async (options: {
         peerConnectionTimeout: 20_000,
         websocketTimeout: 20_000
       });
+      callWebRtcDiagnostics.start(nextRoom);
       recordCallTelemetryEvent(
         'call.livekit.connect.success',
         {
@@ -4663,6 +4710,7 @@ const connectToRoom = async (options: {
         nextRoom
       );
     } catch (error) {
+      callWebRtcDiagnostics.stop(nextRoom);
       const abortContext = {
         attemptSuperseded: currentAttemptId !== connectAttemptId,
         roomReplaced: room !== nextRoom
@@ -4725,6 +4773,9 @@ const connectToRoom = async (options: {
     }
 
     if (currentAttemptId !== connectAttemptId || room !== nextRoom) {
+      void callWebRtcDiagnostics
+        .capture(nextRoom, 'before-stale-disconnect', 'warn')
+        .finally(() => callWebRtcDiagnostics.stop(nextRoom));
       recordCallDisconnectRequested(nextRoom, 'stale-connect-attempt');
       nextRoom.disconnect();
       return;
@@ -7157,6 +7208,9 @@ export const leaveCall = () => {
   releaseNativeCallAudio();
 
   if (activeRoom) {
+    void callWebRtcDiagnostics
+      .capture(activeRoom, 'before-user-leave', 'info')
+      .finally(() => callWebRtcDiagnostics.stop(activeRoom));
     recordCallDisconnectRequested(activeRoom, 'user-leave');
     activeRoom.disconnect();
   }
@@ -7204,8 +7258,13 @@ export const cleanup = (disconnectRoom = true) => {
   releaseNativeCallAudio();
 
   if (disconnectRoom && activeRoom) {
+    void callWebRtcDiagnostics
+      .capture(activeRoom, 'before-cleanup-disconnect', 'info')
+      .finally(() => callWebRtcDiagnostics.stop(activeRoom));
     recordCallDisconnectRequested(activeRoom, 'cleanup');
     activeRoom.disconnect();
+  } else if (activeRoom) {
+    callWebRtcDiagnostics.stop(activeRoom);
   }
 
   room = null;

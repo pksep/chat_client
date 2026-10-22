@@ -28,11 +28,11 @@ export const createCallConnectionDiagnostics = (
       context: Pick<
         ConnectionContext,
         'attemptId' | 'connectReason' | 'roomId' | 'topicId' | 'traceId'
-      >
+      > & { instanceId?: string }
     ) {
       connections.set(room, {
         ...context,
-        instanceId: createId(),
+        instanceId: context.instanceId || createId(),
         createdAt: now(),
         participantSid: null,
         disconnectRequestedBy: null
