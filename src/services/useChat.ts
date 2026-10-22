@@ -523,7 +523,9 @@ const setupChatListeners = (): void => {
       suspendIncomingMergeByTopic.value[message.topicId] === true;
 
     if (!shouldSuspendMerge) {
-      addMessageToLocal(message.topicId, message);
+      addMessageToLocal(message.topicId, message, {
+        animate: !opts?.silent
+      });
     } else if (!isDuplicateMessage) {
       const existingBuffered =
         bufferedIncomingMessagesByTopic.value[message.topicId] || [];

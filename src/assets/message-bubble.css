@@ -15,6 +15,10 @@
   }
 }
 
+.message__other {
+  --message-selection-offset: 30px;
+}
+
 .message__other .message-selection-toggle {
   margin-left: 0;
   order: -1;
@@ -25,19 +29,23 @@
 }
 
 .message-selection-toggle {
-  width: 30px !important;
+  position: relative;
+  width: 0 !important;
+  height: 20px;
   flex-shrink: 0;
   margin-left: auto;
   order: 99;
   align-self: center;
   opacity: 1;
-  overflow: hidden;
-  transition:
-    width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.2s ease;
+  overflow: visible;
+  transition: opacity 0.2s ease;
 }
 
 .message-selection-toggle>* {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 30px;
   opacity: 1;
   transform: translateX(0) scale(1);
   transform-origin: center;
@@ -48,8 +56,8 @@
 }
 
 .message-selection-toggle__hide {
-  width: 0 !important;
   opacity: 0;
+  pointer-events: none;
 }
 
 .message-selection-toggle__hide>* {
@@ -167,13 +175,76 @@
 }
 
 :is([data-theme='light'], .theme-light) .message.highlighted {
-  --message-highlight-background: var(--surface-authorization);
+  --message-highlight-background: var(--surface-brand);
+}
+
+:is([data-theme='light'], .theme-light) .message.highlighted::before {
+  opacity: 0.6;
 }
 
 .message-quote-highlight {
+  --message-quote-highlight-background: color-mix(in srgb, var(--text-link) 24%, transparent);
   display: inline;
-  background-color: var(--action-primary-bg);
+  position: relative;
+  z-index: 0;
+  background-color: transparent;
   color: inherit;
+}
+
+.message-deletion-layer {
+  position: fixed;
+  z-index: 10;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+
+.message-deletion-ghost {
+  position: absolute;
+  margin: 0;
+  pointer-events: none;
+  transform-origin: center;
+}
+
+.message-quote-highlight__background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.message-quote-highlight__rect {
+  position: absolute;
+  border-radius: 2px;
+  background-color: var(--message-quote-highlight-background);
+  transform-origin: center;
+  animation: message-quote-emphasis 3400ms ease-in-out both;
+}
+
+@keyframes message-quote-emphasis {
+  0% {
+    transform: scale(2.6, 1.8);
+    opacity: 0;
+  }
+  8%, 76% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-quote-highlight__rect {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
 }
 
 .message__author-meta {
@@ -1725,6 +1796,11 @@ div.message-content__file {
 @media screen and (width <=768px) {
   .message {
     gap: 8px;
+    --message-selection-offset: 30px;
+  }
+
+  .message__other {
+    --message-selection-offset: 0px;
   }
 
   .message__article__text,
@@ -1740,6 +1816,11 @@ div.message-content__file {
     align-self: start;
     margin-top: 10px;
     order: -2 !important;
+  }
+
+  .message-selection-toggle>* {
+    left: 0;
+    right: auto;
   }
 
   .message__other .message-selection-toggle {

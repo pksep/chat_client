@@ -82,6 +82,10 @@
             @send="handleSendSharedFiles"
           />
 
+          <IosPushNotificationPrompt
+            v-if="isIosWeb() && !isShareSelectionActive && !isCollapse"
+          />
+
           <TopicList
             paginated
             class="menu__contact-list"
@@ -229,6 +233,8 @@ import { useChatFolders } from '../composables/useChatFolders';
 import ChatFolderRail from './Menu/ChatFolderRail.vue';
 import { useChatAccess } from '../composables/useChatAccess';
 import ChatFoldersPanel from './Menu/ChatFoldersPanel.vue';
+import { isIosWeb } from '../utils/ios-pwa-viewport';
+import IosPushNotificationPrompt from './Menu/IosPushNotificationPrompt.vue';
 
 const CallsPage = defineAsyncComponent(() => import('./Calls/CallsPage.vue'));
 const AIMenuPanel = defineAsyncComponent(() => import('./AI/AIMenuPanel.vue'));

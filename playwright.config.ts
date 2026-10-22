@@ -44,12 +44,18 @@ export default defineConfig({
       name: 'webkit-iphone-pwa',
       testMatch: [
         'ios-pwa.spec.ts',
+        'ios-requests.spec.ts',
+        'ios-web-push.spec.ts',
         'group-editing.spec.ts',
         'content-editor-mentions.spec.ts',
+        'mention-delivery.spec.ts',
+        'mention-sound.spec.ts',
         'incoming-call-dismissal.spec.ts',
         'menu-update.spec.ts',
         'pts-snapshot-recovery.spec.ts',
         'unread-and-pinned-history.spec.ts',
+        'message-deletion-animation.spec.ts',
+        'message-arrival-animation.spec.ts',
         'external-avatar.spec.ts'
       ],
       use: { ...devices['iPhone 13'] }

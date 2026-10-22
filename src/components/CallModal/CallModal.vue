@@ -1508,7 +1508,7 @@ const syncMediaElementStream = (
     element.srcObject = stream;
   }
 
-  if (!stream) return;
+  if (!stream || !element.paused) return;
 
   void element.play().catch(error => {
     if (error instanceof DOMException && error.name === 'NotAllowedError') {
@@ -1520,6 +1520,7 @@ const syncMediaElementStream = (
 };
 
 const resumeRemoteAudioPlayback = () => {
+  if (document.hidden) return;
   Object.values(remoteAudioRefs.value).forEach(audio => {
     if (!audio?.srcObject || !audio.paused) {
       return;
@@ -2572,6 +2573,8 @@ watch(
 onMounted(() => {
   window.addEventListener('pointerdown', resumeRemoteAudioPlayback, true);
   window.addEventListener('keydown', resumeRemoteAudioPlayback, true);
+  document.addEventListener('visibilitychange', resumeRemoteAudioPlayback);
+  window.addEventListener('pageshow', resumeRemoteAudioPlayback);
   window.addEventListener('keydown', handleCallModalKeydown, true);
 
   if (typeof ResizeObserver !== 'undefined') {
@@ -2600,6 +2603,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('pointerdown', resumeRemoteAudioPlayback, true);
   window.removeEventListener('keydown', resumeRemoteAudioPlayback, true);
+  document.removeEventListener('visibilitychange', resumeRemoteAudioPlayback);
+  window.removeEventListener('pageshow', resumeRemoteAudioPlayback);
   window.removeEventListener('keydown', handleCallModalKeydown, true);
   clearCallBackdropTopicHover();
   remoteVideoResizeObserver?.disconnect();

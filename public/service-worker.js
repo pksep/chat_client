@@ -19,8 +19,35 @@ self.addEventListener('activate', event => {
   event.waitUntil(self.clients.claim());
 });
 
-let appFocused = false;
-let activeTopicId = null;
+const appContexts = new Map();
+const pushUserAgent = self.navigator?.userAgent || '';
+// Apple требует showNotification для каждого push, даже в открытой PWA,
+// иначе подписка может быть отозвана как за скрытую фоновую работу.
+const requiresVisiblePush =
+  /iPhone|iPad|iPod/.test(pushUserAgent) ||
+  (/Safari/.test(pushUserAgent) &&
+    !/Chrome|Chromium|Edg\/|OPR\//.test(pushUserAgent));
+
+const isTopicVisibleInClient = async topicId => {
+  if (!topicId) return false;
+  const windows = await self.clients.matchAll({
+    type: 'window',
+    includeUncontrolled: true
+  });
+  const liveIds = new Set(windows.map(client => client.id));
+  for (const id of appContexts.keys()) {
+    if (!liveIds.has(id)) appContexts.delete(id);
+  }
+  return windows.some(client => {
+    const context = appContexts.get(client.id);
+    return (
+      client.visibilityState === 'visible' &&
+      client.focused &&
+      context?.focused &&
+      context.topicId === topicId
+    );
+  });
+};
 
 const CHAT_ROUTE_TYPES = new Set(['dialogs', 'group']);
 
@@ -396,8 +423,12 @@ const runChatBackgroundSyncFromPayload = async (payload, source) => {
 
 self.addEventListener('message', event => {
   if (event.data?.type === 'APP_CONTEXT') {
-    appFocused = Boolean(event.data.focused);
-    activeTopicId = event.data.topicId || null;
+    if (event.source?.id) {
+      appContexts.set(event.source.id, {
+        focused: Boolean(event.data.focused),
+        topicId: event.data.topicId || null
+      });
+    }
   }
 
   if (event.data?.type === 'CLEAR_TOPIC_NOTIFICATIONS') {
@@ -460,7 +491,15 @@ self.addEventListener('push', event => {
       }
 
       if (payload.action === 'CHAT_SYNC') {
-        await runChatBackgroundSyncFromPayload(payload, 'push');
+        // Уведомление не должно ждать сети и полной синхронизации истории.
+        event.waitUntil(
+          runChatBackgroundSyncFromPayload(payload, 'push').catch(error => {
+            console.warn(
+              '[ChatBackgroundSyncSW] Ошибка синхронизации push',
+              error
+            );
+          })
+        );
 
         if (
           !payload.title &&
@@ -471,7 +510,7 @@ self.addEventListener('push', event => {
         }
       }
 
-      if (appFocused && topicId && activeTopicId === topicId) {
+      if (!requiresVisiblePush && (await isTopicVisibleInClient(topicId))) {
         const stateAt = Date.now();
         await markTopicNotificationsCleared(topicId, stateAt);
         await closeNotificationsForTopic(topicId, stateAt);

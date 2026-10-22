@@ -1473,6 +1473,7 @@ const createTopicsApi = () => {
       }
 
       if (
+        message.isReadByMe !== true &&
         shadowReadStateExists &&
         (!hasShadowReadBoundary ||
           getMessageTimestamp(message) > shadowLastReadTimestamp)
@@ -1481,10 +1482,17 @@ const createTopicsApi = () => {
         computedUnreadHasTaggedMessage ||= isTagged;
       }
     }
+    const hasReadThroughLatestMessage =
+      hasShadowReadBoundary &&
+      latestKnownMessageTimestamp > 0 &&
+      shadowLastReadTimestamp >= latestKnownMessageTimestamp;
+    const hasAllUnreadMessagesInCache =
+      unreadMessageCount >= effectiveServerUnreadCount;
     const shouldUseComputedUnread =
       shadowReadStateExists &&
-      (effectiveServerUnreadCount === 0 ||
-        (hasLatestRangeCoverage && hasLatestMessageInLocalCache));
+      hasLatestRangeCoverage &&
+      hasLatestMessageInLocalCache &&
+      (hasAllUnreadMessagesInCache || hasReadThroughLatestMessage);
     const shouldSuppressUnreadForNonTrackableLatestMessage =
       !!latestKnownMessage &&
       isUnreadIgnoredMessageForUser(latestKnownMessage, currentUserId) &&
@@ -1496,11 +1504,16 @@ const createTopicsApi = () => {
       : shouldUseComputedUnread
         ? Math.min(effectiveServerUnreadCount, computedUnreadMessageCount)
         : effectiveServerUnreadCount;
+    const knownUnreadHasTaggedMessage = shouldUseComputedUnread
+      ? computedUnreadHasTaggedMessage
+      : unreadHasTaggedMessage;
+    // Отсутствие упоминания в части истории не отменяет серверный значок @.
     const nextTaggedMe =
       nextUnreadCount > 0 &&
-      (shouldUseComputedUnread
-        ? computedUnreadHasTaggedMessage
-        : unreadHasTaggedMessage);
+      (knownUnreadHasTaggedMessage ||
+        (Boolean(topic.taggedMe) &&
+          !hasAllUnreadMessagesInCache &&
+          !hasReadThroughLatestMessage));
 
     if (
       baseUnreadCount !== nextUnreadCount ||

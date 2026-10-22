@@ -74,6 +74,10 @@
               </template>
             </ChatsToolbar>
 
+            <IosPushNotificationPrompt
+              v-if="isIosWeb() && !isShareSelectionActive"
+            />
+
             <div class="chat-list">
               <TopicList
                 paginated
@@ -251,6 +255,8 @@ import {
 import { useChatFolders } from '../../composables/useChatFolders';
 import ChatFoldersPanel from '../Menu/ChatFoldersPanel.vue';
 import ChatFolderRail from '../Menu/ChatFolderRail.vue';
+import { isIosWeb } from '../../utils/ios-pwa-viewport';
+import IosPushNotificationPrompt from '../Menu/IosPushNotificationPrompt.vue';
 
 const { access: chatAccess } = useChatAccess();
 

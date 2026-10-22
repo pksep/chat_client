@@ -237,5 +237,15 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
     { flush: 'post' }
   );
   onBeforeUnmount(() => observer?.disconnect());
-  return { handlePointerDown, handleClick };
+  const focusEditor = (): boolean => {
+    if (!isMobile() && !isIosWeb()) return false;
+    mode = 'editor';
+    picker()?.closest<HTMLButtonElement>('.smile-button')?.click();
+    sync();
+    // Нативный focus должен остаться в пользовательском жесте: iOS не
+    // открывает клавиатуру из отложенного TipTap commands.focus().
+    editor?.focus({ preventScroll: true });
+    return !!editor;
+  };
+  return { handlePointerDown, handleClick, focusEditor };
 }

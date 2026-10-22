@@ -54,6 +54,7 @@
           :alt="getMediaLabel(item.media)"
           loading="lazy"
           decoding="async"
+          @error="handleMediaPreviewError(item.media)"
         />
         <span
           v-if="item.media.type === MediaType.Video"
@@ -1353,7 +1354,24 @@ const openSlider = async (
   isSliderOpen.value = true;
 };
 
+const failedMediaPreviews = reactive(new Map<string, number>());
+const getPreviewKey = (media: IMedia): string =>
+  `${media.id || ''}:${media.path || ''}:${media.thumbnailPath || ''}`;
+
+const handleMediaPreviewError = (media: IMedia): void => {
+  const key = getPreviewKey(media);
+  const attempt = failedMediaPreviews.get(key) || 0;
+  if (attempt < 2) failedMediaPreviews.set(key, attempt + 1);
+};
+
 const getMediaPreviewPath = (media: IMedia): string => {
+  const attempt = failedMediaPreviews.get(getPreviewKey(media)) || 0;
+  if (attempt === 1) return getSliderMediaPath(media);
+  if (attempt === 2) {
+    return media.type === MediaType.Video
+      ? VIDEO_FALLBACK_THUMBNAIL
+      : getSliderMediaPath({ ...media, localPath: undefined });
+  }
   if (media.type === MediaType.Video && !media.thumbnailPath) {
     return media.localThumbnailPath || VIDEO_FALLBACK_THUMBNAIL;
   }

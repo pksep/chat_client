@@ -1,4 +1,5 @@
 import { refreshChatAccess } from '../../composables/useChatAccess';
+import { watchIosUpload } from '../../utils/ios-upload-watchdog';
 import { bindIncomingChatEvents } from './incoming-events';
 import { createSocketReconnectScheduler } from '../socket-reconnect';
 import {
@@ -335,6 +336,7 @@ export class ChatSDK {
         reject(new Error('Failed to upload media to storage: upload aborted'));
       };
 
+      watchIosUpload(xhr);
       xhr.send(file);
     });
   }
@@ -393,6 +395,7 @@ export class ChatSDK {
       uploadPart: async (session, partNumber, part, onPartProgress, signal) => {
         await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
+          let stalled = false;
           const baseUrl = this.apiUrl.replace(/\/+$/, '');
           xhr.open(
             'PUT',
@@ -443,10 +446,23 @@ export class ChatSDK {
           };
           xhr.onabort = () => {
             signal?.removeEventListener('abort', abort);
-            const error = new Error('Multipart upload aborted');
-            error.name = 'AbortError';
+            const timedOut = stalled && !signal?.aborted;
+            const error = Object.assign(
+              new Error(
+                timedOut
+                  ? 'Multipart upload stalled'
+                  : 'Multipart upload aborted'
+              ),
+              {
+                name: timedOut ? 'TimeoutError' : 'AbortError',
+                status: timedOut ? 408 : undefined
+              }
+            );
             reject(error);
           };
+          watchIosUpload(xhr, () => {
+            stalled = true;
+          });
           xhr.send(part);
         });
       },
@@ -2135,7 +2151,8 @@ export class ChatSDK {
     for (;;) {
       try {
         return (await this.reqi.post<Media>('/media/upload', payload, {
-          parsed: false
+          parsed: false,
+          requset: { signal }
         })) as any;
       } catch (error) {
         if (!this.isTransientUploadError(error)) {

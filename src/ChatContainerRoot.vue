@@ -94,6 +94,7 @@ import {
 import { useShareSelection } from './composables/useShareSelection';
 import { isGroupCallInviteUrl } from './utils/groupCallInviteUrl';
 import { installNotoEmojiFontFaces } from './composables/useEmojiStyle';
+import { isIosWeb } from './utils/ios-pwa-viewport';
 import {
   importAnyChatBackgroundSnapshot,
   loadNativeNotificationPreview
@@ -725,8 +726,13 @@ const runAppInitialization = async () => {
     // Навигация из push уже подключена в main.ts. Регистрация токена и
     // запрос разрешения не должны занимать мост перед свежей историей.
     void waitForStartupPaint()
-      .then(initTelemetryLocation)
-      .then(initPushNotifications)
+      .then(async () => {
+        const locationReady = initTelemetryLocation().catch(error => {
+          console.warn('Не удалось инициализировать геолокацию:', error);
+        });
+        if (!isIosWeb()) await locationReady;
+        return initPushNotifications();
+      })
       .catch(error => {
         console.warn('Не удалось инициализировать push-уведомления:', error);
       });

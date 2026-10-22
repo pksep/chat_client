@@ -747,6 +747,9 @@ const handleTauriFilesDropped = (files: File[]): void => {
 defineExpose({
   openStickerPack: (pack: string) => stickerPickerRef.value?.openPack(pack),
   focus: () => contentEditorRef.value?.focus(),
+  focusForReply: () => {
+    if (!composerKeyboard.focusEditor()) contentEditorRef.value?.focus();
+  },
   pasteCopiedContent: () =>
     chatClipboard?.pasteFromClipboard() ?? Promise.resolve(false),
   insertText: (text: string) =>

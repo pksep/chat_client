@@ -174,6 +174,8 @@ import {
 } from '../../composables/useManagerInquiries';
 import { visibleInquiryMessages } from '../../utils/inquiry-message-visibility';
 import { channelLabel } from '../../composables/useManagerRoutes';
+import { useMessageDeletionAnimation } from './composables/useMessageDeletionAnimation';
+import { useMessageArrivalAnimation } from './composables/useMessageArrivalAnimation';
 
 interface Props {
   dataTestid: string;
@@ -224,6 +226,16 @@ const quotedOverflowMessageIds = ref<Set<string>>(new Set());
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 const { byTopic: managerInquiriesByTopic } = useManagerInquiries();
 const listRootRef = ref<HTMLElement | null>(null);
+useMessageDeletionAnimation(
+  listRootRef,
+  () => props.messages,
+  () => route.value.id
+);
+useMessageArrivalAnimation(
+  listRootRef,
+  () => props.messages,
+  () => route.value.id
+);
 const messageElementsById = new Map<string, HTMLElement>();
 let indexedMessageElements: IndexedMessageElement[] = [];
 let messageElementsSyncRafId = 0;

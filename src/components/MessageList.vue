@@ -589,6 +589,7 @@ const PINNED_VIEWPORT_SNAPSHOT_INTERVAL_MS = 80;
 const unreadMarkerMessageIdsByTopic = reactive<Record<string, string | null>>(
   {}
 );
+const dismissedUnreadMarkerTopics = new Set<string>();
 let messageNavigationRevision = 0;
 const { pendingForwardMessages, pendingForwardTopicId } =
   usePendingForwardMessages();
@@ -2436,7 +2437,9 @@ const refreshUnreadMarkerState = (force = false) => {
   // Граница относится к текущему открытию чата и не сдвигается от read-receipt.
   // Контекст закрепа/поиска не устанавливает новую границу непрочитанных.
   const canDiscoverUnread =
-    topicUnreadCount.value > 0 && scrollAnchor.viewportMode.value !== 'jump';
+    !dismissedUnreadMarkerTopics.has(route.value.id) &&
+    topicUnreadCount.value > 0 &&
+    scrollAnchor.viewportMode.value !== 'jump';
   const firstUnreadMessageId =
     unreadMarkerMessageIdsByTopic[route.value.id] ||
     (canDiscoverUnread ? getFirstUnreadMessageId() : null);
@@ -2450,6 +2453,16 @@ const applyUnreadMarkerStateForTopic = (topicId: string) => {
 
   state.unreadMarkerMessageId = markerMessageId;
   state.hideUnreadMarker = !markerMessageId;
+};
+
+const dismissUnreadMarkerForTopic = (topicId: string) => {
+  // Своя отправка завершает границу непрочитанных до следующего открытия чата.
+  dismissedUnreadMarkerTopics.add(topicId);
+  unreadMarkerMessageIdsByTopic[topicId] = null;
+  if (route.value.id === topicId) {
+    state.unreadMarkerMessageId = null;
+    state.hideUnreadMarker = true;
+  }
 };
 
 const handleWindowFocusRefresh = () => {
@@ -2551,13 +2564,29 @@ const getScrollTargetBehavior = (
 const quoteHighlightClassName = 'message-quote-highlight';
 const messageHighlightDurationMs = 3400;
 let messageHighlightTimeoutId: number | null = null;
+let quoteHighlightTimeoutId: number | null = null;
+let quoteHighlightResizeObserver: ResizeObserver | null = null;
+let activeQuoteHighlight: {
+  messageId: string;
+  quoteText: string;
+  occurrenceIndex?: number;
+  startedAt: number;
+} | null = null;
 
 const cleanupQuoteHighlights = (): void => {
+  activeQuoteHighlight = null;
+  quoteHighlightResizeObserver?.disconnect();
+  quoteHighlightResizeObserver = null;
+  if (quoteHighlightTimeoutId !== null) {
+    window.clearTimeout(quoteHighlightTimeoutId);
+    quoteHighlightTimeoutId = null;
+  }
   const marks = chatWrapperRef.value?.querySelectorAll(
     `mark.${quoteHighlightClassName}`
   );
 
   marks?.forEach(mark => {
+    mark.querySelector('.message-quote-highlight__background')?.remove();
     const parent = mark.parentNode;
 
     while (mark.firstChild) {
@@ -2687,11 +2716,9 @@ const highlightMessageQuote = (
   messageId: string,
   quoteText: string,
   occurrenceIndex?: number
-): boolean => {
-  cleanupQuoteHighlights();
-
+): HTMLElement | null => {
   if (!quoteText || !chatWrapperRef.value) {
-    return false;
+    return null;
   }
 
   const messageElement = chatWrapperRef.value.querySelector<HTMLElement>(
@@ -2699,7 +2726,7 @@ const highlightMessageQuote = (
   );
 
   if (!messageElement) {
-    return false;
+    return null;
   }
 
   const contentElement =
@@ -2707,7 +2734,7 @@ const highlightMessageQuote = (
     messageElement.querySelector<HTMLElement>('.message-call__title');
 
   if (!contentElement) {
-    return false;
+    return null;
   }
 
   const textNodes = getTextNodes(contentElement);
@@ -2722,7 +2749,7 @@ const highlightMessageQuote = (
   );
 
   if (normalizedStartIndex < 0) {
-    return false;
+    return null;
   }
 
   const normalizedEndIndex =
@@ -2733,7 +2760,7 @@ const highlightMessageQuote = (
   const endBoundary = getRangeBoundary(textNodes, rawEnd);
 
   if (!startBoundary || !endBoundary) {
-    return false;
+    return null;
   }
 
   const range = document.createRange();
@@ -2745,38 +2772,56 @@ const highlightMessageQuote = (
 
   highlightMark.append(range.extractContents());
   range.insertNode(highlightMark);
-  const container = chatWrapperRef.value;
-  const containerRect = container.getBoundingClientRect();
-  const highlightRect = highlightMark.getBoundingClientRect();
-  const maxScroll = Math.max(
-    0,
-    container.scrollHeight - container.clientHeight
-  );
-  const targetScrollTop = Math.min(
-    maxScroll,
-    Math.max(
-      0,
-      container.scrollTop +
-        highlightRect.top +
-        highlightRect.height / 2 -
-        (containerRect.top + containerRect.height / 2)
-    )
-  );
 
-  container.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+  return highlightMark;
+};
 
-  window.setTimeout(() => {
-    const parent = highlightMark.parentNode;
+const animateQuoteHighlight = (mark: HTMLElement): void => {
+  quoteHighlightResizeObserver?.disconnect();
+  const bubble =
+    mark.closest<HTMLElement>('.message__article') || mark.parentElement;
+  if (!bubble) return;
 
-    while (highlightMark.firstChild) {
-      parent?.insertBefore(highlightMark.firstChild, highlightMark);
+  const background = document.createElement('span');
+  background.className = 'message-quote-highlight__background';
+  background.setAttribute('aria-hidden', 'true');
+  mark.append(background);
+  mark.classList.add('message-quote-highlight--active');
+
+  const updateBackground = (): void => {
+    if (!mark.isConnected || !activeQuoteHighlight) return;
+    const elapsed = performance.now() - activeQuoteHighlight.startedAt;
+    const lines = Array.from(mark.getClientRects()).filter(
+      rect => rect.width > 0 && rect.height > 0
+    );
+    const origin = background.getBoundingClientRect();
+    const bounds = bubble.getBoundingClientRect();
+
+    // Масштабируется только фон каждой строки, сам текст остаётся неподвижным.
+    background.style.clipPath = `inset(${bounds.top - origin.top}px ${origin.left - bounds.right}px ${origin.top - bounds.bottom}px ${bounds.left - origin.left}px)`;
+    lines.forEach((rect, index) => {
+      let line = background.children[index] as HTMLElement | undefined;
+      if (!line) {
+        line = document.createElement('span');
+        line.className = 'message-quote-highlight__rect';
+        line.style.animationDelay = `-${elapsed}ms`;
+        background.append(line);
+      }
+      Object.assign(line.style, {
+        left: `${rect.left - origin.left}px`,
+        top: `${rect.top - origin.top}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`
+      });
+    });
+    while (background.childElementCount > lines.length) {
+      background.lastElementChild?.remove();
     }
+  };
 
-    highlightMark.remove();
-    parent?.normalize();
-  }, messageHighlightDurationMs);
-
-  return true;
+  updateBackground();
+  quoteHighlightResizeObserver = new ResizeObserver(updateBackground);
+  quoteHighlightResizeObserver.observe(bubble);
 };
 
 const highlightWholeMessage = (messageId: string): void => {
@@ -2803,7 +2848,11 @@ const highlightWholeMessage = (messageId: string): void => {
   messageElement.classList.add('highlighted');
 
   messageHighlightTimeoutId = window.setTimeout(() => {
-    messageElement.classList.remove('highlighted');
+    wrapperElement
+      .querySelector<HTMLElement>(
+        `.message[data-message-id="${escapeCssValue(messageId)}"]`
+      )
+      ?.classList.remove('highlighted');
     messageHighlightTimeoutId = null;
   }, messageHighlightDurationMs);
 };
@@ -2818,9 +2867,16 @@ const jumpToMessageWithHighlight = async (
   await messageListUserItemsRef.value?.ensureMessageRendered?.(messageId);
 
   if (!isCurrent()) return false;
+  cleanupQuoteHighlights();
+  const quoteHighlight = highlightMessageQuote(
+    messageId,
+    quoteText,
+    quoteOccurrenceIndex
+  );
   const didJump = await scrollAnchor.jumpToMessage(messageId, {
     block: 'center',
     behavior,
+    targetElement: quoteHighlight,
     isCurrent
   });
 
@@ -2829,21 +2885,50 @@ const jumpToMessageWithHighlight = async (
   }
 
   highlightWholeMessage(messageId);
-  highlightMessageQuote(messageId, quoteText, quoteOccurrenceIndex);
+  if (quoteHighlight?.isConnected) {
+    activeQuoteHighlight = {
+      messageId,
+      quoteText,
+      occurrenceIndex: quoteOccurrenceIndex,
+      startedAt: performance.now()
+    };
+    animateQuoteHighlight(quoteHighlight);
+    quoteHighlightTimeoutId = window.setTimeout(
+      cleanupQuoteHighlights,
+      messageHighlightDurationMs
+    );
+  }
 
   return true;
+};
+
+const restoreActiveQuoteHighlight = (): void => {
+  const active = activeQuoteHighlight;
+  if (!active || !chatWrapperRef.value) return;
+  const elapsed = performance.now() - active.startedAt;
+  if (elapsed >= messageHighlightDurationMs) return;
+  if (chatWrapperRef.value.querySelector(`mark.${quoteHighlightClassName}`)) {
+    return;
+  }
+
+  const mark = highlightMessageQuote(
+    active.messageId,
+    active.quoteText,
+    active.occurrenceIndex
+  );
+  if (mark) {
+    // После пересоздания пузыря продолжаем прежний эффект, не запускаем заново.
+    animateQuoteHighlight(mark);
+    mark.closest('.message')?.classList.add('highlighted');
+  }
 };
 
 const refreshAroundMessageAfterOptimisticJump = async (
   topicId: string,
   messageId: string,
-  isCurrent: () => boolean
+  isCurrent: () => boolean,
+  preserveVisibleWindow = false
 ): Promise<void> => {
-  const anchor = scrollAnchor.captureViewportAnchor(messageId);
-  const mutation = scrollAnchor.beginViewportMutation('replace', {
-    forcePreserve: true,
-    preferredMessageId: messageId
-  });
   const messages = await fetchAroundMessage(messageId, topicId, {
     updateVisible: false,
     forceNetwork: getHasBrowserNetwork()
@@ -2851,38 +2936,29 @@ const refreshAroundMessageAfterOptimisticJump = async (
 
   if (!isCurrent()) return;
 
-  if (route.value.id !== topicId) {
-    scrollAnchor.commitViewportMutation(mutation.revision, {
-      forceAnchor: anchor
-    });
-    return;
-  }
-
   if (!messages?.some(message => message.id === messageId)) {
-    scrollAnchor.commitViewportMutation(mutation.revision, {
-      forceAnchor: anchor
-    });
     return;
   }
 
+  // Снимок нужен перед изменением списка: за время HTTP пользователь мог прокрутить чат.
+  const anchor = scrollAnchor.captureViewportAnchor(messageId);
+  const mutation = scrollAnchor.beginViewportMutation('replace', {
+    forcePreserve: true,
+    preferredMessageId: messageId
+  });
   mergeMessagesForTopic(topicId, messages, 'replace', {
     syncLastMessage: false,
     windowMode: 'around-anchor',
     anchorMessageId: messageId,
-    visibleMessages: messages
+    // Контекст уже показанной цитаты может не включать конец открытого чата.
+    visibleMessages: preserveVisibleWindow ? undefined : messages
   });
   await nextTick();
   if (!isCurrent()) return;
+  restoreActiveQuoteHighlight();
   scrollAnchor.commitViewportMutation(mutation.revision, {
     forceAnchor: anchor
   });
-  await messageListUserItemsRef.value?.ensureMessageRendered?.(messageId);
-  await scrollAnchor.jumpToMessage(messageId, {
-    block: 'center',
-    behavior: 'auto',
-    isCurrent
-  });
-  if (isCurrent()) highlightWholeMessage(messageId);
 };
 
 const jumpToOptimisticTarget = async (
@@ -2951,7 +3027,12 @@ const navigateToMessageId = async (
 
   if (!isCurrent()) return false;
   if (didJump) {
-    void refreshAroundMessageAfterOptimisticJump(topicId, messageId, isCurrent);
+    void refreshAroundMessageAfterOptimisticJump(
+      topicId,
+      messageId,
+      isCurrent,
+      true
+    );
     return true;
   }
 
@@ -3365,7 +3446,8 @@ const {
   authUser,
   mastraResult,
   scrollToBottom,
-  clearSellectedMessage
+  clearSellectedMessage,
+  dismissUnreadMarkerForTopic
 );
 
 const handleSend: typeof handleMessageSend = (...args) => {
@@ -3633,6 +3715,7 @@ watch(
     state.errorMessage = '';
     messageNavigationRevision += 1;
     const initialNavigationRevision = messageNavigationRevision;
+    dismissedUnreadMarkerTopics.delete(topicId);
     unreadMarkerMessageIdsByTopic[topicId] = null;
     state.hideUnreadMarker = true;
     state.unreadMarkerMessageId = null;
@@ -4354,6 +4437,8 @@ onUnmounted(() => {
     messageHighlightTimeoutId = null;
   }
 
+  cleanupQuoteHighlights();
+
   pendingNotificationTopicShellId = '';
   if (notificationTopicShellReadyFrameId) {
     window.cancelAnimationFrame(notificationTopicShellReadyFrameId);
@@ -4428,6 +4513,7 @@ watch(
       return;
     }
 
+    const pinRequestedAt = performance.now();
     nextTick(() => {
       requestAnimationFrame(() => {
         if (
@@ -4435,14 +4521,16 @@ watch(
           renderedTopicId.value !== topicMessagesId ||
           !isUserMessagesRoute.value ||
           shouldRenderUserMessageSkeleton.value ||
-          !(isReactionLayoutChange
-            ? scrollAnchor.viewportMode.value === 'live'
-            : shouldKeepCurrentTopicBottomPosition()) ||
+          scrollAnchor.viewportMode.value === 'jump' ||
+          (state.unreadMarkerMessageId &&
+            scrollAnchor.viewportMode.value !== 'live') ||
+          scrollAnchor.hasUserScrollIntentAfter(pinRequestedAt) ||
           !chatWrapperRef.value
         ) {
           return;
         }
 
+        // Рост ленты уже изменил расстояние до низа; учитываем намерение до обновления DOM.
         scrollToBottom({
           preferUnreadMarker: false,
           smooth: false

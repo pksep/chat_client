@@ -1,4 +1,4 @@
-import { shallowReactive } from 'vue';
+import { shallowReactive, shallowRef } from 'vue';
 import {
   deleteMessageChat,
   getChatSDK,
@@ -117,6 +117,7 @@ const applyKnownReadReceipts = (
 const fullMessagesStore = shallowReactive<Record<string, IMessage[]>>({});
 const messagesStore = shallowReactive<Record<string, IMessage[]>>({});
 const pinnedMessagesStore = shallowReactive<Record<string, IMessage[]>>({});
+export const latestMessageArrival = shallowRef<IMessage | null>(null);
 const MAX_ACTIVE_TOPIC_MESSAGES = 250;
 const INITIAL_TOPIC_WINDOW_MESSAGES = 100;
 const ACTIVE_MOBILE_APPEND_PERSIST_DELAY_MS = 1000;
@@ -701,7 +702,7 @@ const filterDeletedMessagesForTopic = (
   return messages.filter(message => !reconcileDeletedMessage(topicId, message));
 };
 
-const isDeletedMessageForTopic = (
+export const isDeletedMessageForTopic = (
   topicId: string,
   message: IMessage
 ): boolean => {
@@ -1991,7 +1992,8 @@ export const prefetchAroundMessageContext = (
 
 export const addMessageToLocal = (
   topicId: string,
-  incomingMessage: IMessage
+  incomingMessage: IMessage,
+  options?: { animate?: boolean }
 ): void => {
   const message = applyKnownReadReceipts(topicId, incomingMessage);
   if (reconcileDeletedMessage(topicId, message)) {
@@ -2005,6 +2007,13 @@ export const addMessageToLocal = (
   const parsedEx = parseMessageEx(message.ex);
   const clientId =
     typeof parsedEx?.clientId === 'string' ? parsedEx.clientId : null;
+  if (
+    options?.animate !== false &&
+    !alreadyExists &&
+    !(clientId && existingMessages.some(item => item.id === clientId))
+  ) {
+    latestMessageArrival.value = message;
+  }
   const pendingOutgoingForwardBatchMeta =
     message.senderUserId === authedUser.value?.id &&
     !parsedEx?.forwardBatchId &&
@@ -3376,20 +3385,6 @@ const applyLocalReadStatus = (
   if (!didSyncUnreadFromPreview) {
     syncTopicUnreadState(topicId);
   }
-
-  if (userId === authedUser.value.id && getSelectedTopic(topicId)?.taggedMe) {
-    // Re-evaluate taggedMe status for the topic
-    const hasUnreadMentions = updatedMessages.some(
-      m =>
-        m.taggedUserIds?.includes(authedUser.value?.id) &&
-        m.senderUserId !== authedUser.value?.id &&
-        !m.isReadByMe &&
-        !readMessageIds.has(m.id)
-    );
-    if (!hasUnreadMentions) {
-      setTopicTaggedMe(topicId, false);
-    }
-  }
 };
 
 export const flushDeferredLocalOwnReadStatus = (topicId: string): void => {
@@ -3668,7 +3663,10 @@ export const setUploadedFileData = (
             Boolean(payload.thumbnailPath) &&
             media.localThumbnailPath === VIDEO_FALLBACK_THUMBNAIL;
           const shouldClearLocalVideoPath =
-            payload.type === MediaType.Video && Boolean(payload.path);
+            Boolean(payload.path) &&
+            (payload.type === MediaType.Video ||
+              (payload.type === MediaType.Image &&
+                media.localPath?.startsWith('blob:')));
           const mergedEx =
             payload.ex || media.ex
               ? {

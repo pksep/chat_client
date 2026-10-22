@@ -25,14 +25,18 @@
         'message-selection-toggle__hide': !props.isSelectionMode
       }"
     >
-      <Checkbox
+      <div
         v-if="props.isSelectionMode"
-        :data-testid="props.selectionTestId"
-        :model-value="!!props.isSelected"
-        :circular="CheckboxCircularEnum.circled"
-        @update:model-value="handleToggleSelection"
-        @click.stop
-      />
+        class="message-selection-toggle__control"
+      >
+        <Checkbox
+          :data-testid="props.selectionTestId"
+          :model-value="!!props.isSelected"
+          :circular="CheckboxCircularEnum.circled"
+          @update:model-value="handleToggleSelection"
+          @click.stop
+        />
+      </div>
     </div>
     <div :class="messageArticlesStyles">
       <MessageQuickReply

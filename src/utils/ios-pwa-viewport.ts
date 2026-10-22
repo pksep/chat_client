@@ -39,6 +39,20 @@ export function initIosPwaViewport(): () => void {
       `${keyboardOpen ? window.scrollY + Math.max(0, viewport?.offsetTop || 0) : 0}px`
     );
     root.classList.toggle('chat-ios-keyboard-open', keyboardOpen);
+    const active = document.activeElement;
+    if (keyboardOpen && active instanceof HTMLElement) {
+      const form = active.closest<HTMLElement>('.authorization-screen');
+      if (form) {
+        const fieldRect = active.getBoundingClientRect();
+        const formRect = form.getBoundingClientRect();
+        const top = Math.max(formRect.top, viewport?.offsetTop || 0) + 20;
+        const bottom =
+          Math.min(formRect.bottom, (viewport?.offsetTop || 0) + height) - 20;
+        if (fieldRect.bottom > bottom)
+          form.scrollTop += fieldRect.bottom - bottom;
+        else if (fieldRect.top < top) form.scrollTop -= top - fieldRect.top;
+      }
+    }
   };
   const schedule = () => {
     if (!frame) frame = requestAnimationFrame(update);
@@ -52,6 +66,7 @@ export function initIosPwaViewport(): () => void {
   window.addEventListener('pageshow', schedule);
   document.addEventListener('visibilitychange', schedule);
   document.addEventListener('focusout', schedule);
+  document.addEventListener('focusin', schedule);
   return () => {
     cancelAnimationFrame(frame);
     viewport?.removeEventListener('resize', schedule);
@@ -61,6 +76,7 @@ export function initIosPwaViewport(): () => void {
     window.removeEventListener('pageshow', schedule);
     document.removeEventListener('visibilitychange', schedule);
     document.removeEventListener('focusout', schedule);
+    document.removeEventListener('focusin', schedule);
     root.classList.remove(
       'chat-ios-web',
       'chat-ios-pwa',
