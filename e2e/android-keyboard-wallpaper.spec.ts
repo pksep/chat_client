@@ -73,6 +73,80 @@ async function setAndroidKeyboard(page: Page, bottom: number) {
   }, bottom);
 }
 
+async function mockNativeKeyboard(page: Page) {
+  await page.addInitScript(() => {
+    const calls: string[] = [];
+    (window as any).nativeKeyboardCalls = calls;
+    (window as any).Capacitor = {
+      PluginHeaders: [
+        {
+          name: 'KeyboardViewport',
+          methods: ['start', 'stop', 'setOverlayOpen'].map(name => ({
+            name,
+            rtype: 'promise'
+          }))
+        }
+      ],
+      nativePromise: (plugin: string, method: string) => {
+        if (plugin === 'KeyboardViewport') {
+          calls.push(method);
+          if (method === 'stop') window.__sepAndroidKeyboard?.(0, 'end');
+        }
+        return Promise.resolve();
+      }
+    };
+  });
+}
+
+test('Android IME: меню и поиск реакций сохраняют фокус и обработку клавиатуры', async ({
+  page
+}) => {
+  await mockNativeKeyboard(page);
+  await openChat(page);
+  const input = page.locator('.chat__input .ProseMirror');
+  await input.focus();
+  await setAndroidKeyboard(page, 326);
+  await page
+    .locator('.message[data-message-id="message-39"]')
+    .dispatchEvent('contextmenu', { clientX: 240, clientY: 410 });
+  const menu = page.locator('.message-context-menu');
+  await expect(menu).toBeVisible();
+  await menu.locator('.select-reactions-list-button').tap();
+  await expect(
+    menu.locator('.message-context-menu__emoji-picker--ready')
+  ).toBeVisible();
+  await expect(input).toBeFocused();
+  await menu.locator('.v3-search input').tap();
+  await expect(menu.locator('.v3-search input')).toBeFocused();
+  expect(
+    await page.evaluate(() => (window as any).nativeKeyboardCalls)
+  ).toEqual(['start']);
+  expect(
+    await page
+      .locator('.chat__input')
+      .evaluate(el => el.getBoundingClientRect().bottom)
+  ).toBe(506);
+});
+
+test('Android IME: касание сообщения после закрытия клавиатуры не удерживает фокус ввода', async ({
+  page
+}) => {
+  await mockNativeKeyboard(page);
+  await openChat(page);
+  const input = page.locator('.chat__input .ProseMirror');
+  await input.focus();
+  await setAndroidKeyboard(page, 0);
+  await page
+    .locator(
+      '.message[data-message-id="message-39"] .message__content__articles'
+    )
+    .tap();
+  await expect(input).not.toBeFocused();
+  expect(
+    await page.evaluate(() => (window as any).nativeKeyboardCalls)
+  ).toEqual(['start']);
+});
+
 test('Android: меню сообщения и реакции помещаются над открытой клавиатурой', async ({
   page
 }, testInfo) => {

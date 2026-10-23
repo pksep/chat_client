@@ -6,6 +6,7 @@ import android.app.Activity;
 import android.app.Application;
 import android.os.Build;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.animation.AccelerateInterpolator;
 import android.widget.FrameLayout;
@@ -24,13 +25,13 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(sdk = {30, 35}, manifest = Config.NONE, application = Application.class)
+@Config(sdk = {30, 34, 35}, manifest = Config.NONE, application = Application.class)
 public class ChatKeyboardViewportTest {
     private Activity activity;
     private FrameLayout parent;
     private View webView;
     private ChatKeyboardViewport viewport;
-    private WindowInsetsCompat childInsets;
+    private WindowInsetsCompat forwardedInsets;
     private final List<String> frames = new ArrayList<>();
     private int dismissedOverlays;
     private int animationStarts;
@@ -45,13 +46,12 @@ public class ChatKeyboardViewportTest {
         params.topMargin = 20;
         params.bottomMargin = 40;
         parent.addView(webView, params);
-        parent.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+        ViewGroup decor = (ViewGroup) activity.getWindow().getDecorView();
+        decor.removeAllViews();
+        decor.addView(parent, new ViewGroup.LayoutParams(-1, -1));
+        decor.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(2400, View.MeasureSpec.EXACTLY));
-        parent.layout(0, 0, 1080, 2400);
-        ViewCompat.setOnApplyWindowInsetsListener(webView, (view, insets) -> {
-            childInsets = insets;
-            return WindowInsetsCompat.CONSUMED;
-        });
+        decor.layout(0, 0, 1080, 2400);
         if (Build.VERSION.SDK_INT >= 30) {
             viewport = new ChatKeyboardViewport(activity.getWindow(), webView,
                 new ChatKeyboardViewport.FrameListener() {
@@ -66,7 +66,7 @@ public class ChatKeyboardViewportTest {
                     }
 
                 });
-            ViewCompat.dispatchApplyWindowInsets(parent, insets(0));
+            applyInsets(0);
         }
     }
 
@@ -78,6 +78,11 @@ public class ChatKeyboardViewportTest {
             .build();
     }
 
+    private void applyInsets(int keyboard) {
+        forwardedInsets = ViewCompat.dispatchApplyWindowInsets(
+            activity.getWindow().getDecorView(), insets(keyboard));
+    }
+
     private WindowInsetsAnimationCompat animation() {
         return new WindowInsetsAnimationCompat(WindowInsetsCompat.Type.ime(), null, 250L);
     }
@@ -85,12 +90,14 @@ public class ChatKeyboardViewportTest {
     @Test public void openingAndClosingPublishActualFramesWithoutResizingChromium() {
         WindowInsetsAnimationCompat opening = animation();
         viewport.animationCallback.onPrepare(opening);
-        ViewCompat.dispatchApplyWindowInsets(parent, insets(900));
+        applyInsets(900);
         assertEquals("prepare:0", frames.get(frames.size() - 1));
-        assertEquals(0, childInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom);
-        assertEquals(40, childInsets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom);
+        assertEquals(0, forwardedInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom);
         for (int keyboard : new int[] {100, 250, 500, 700, 900}) {
-            viewport.animationCallback.onProgress(insets(keyboard), Collections.singletonList(opening));
+            WindowInsetsCompat forwarded = viewport.animationCallback.onProgress(
+                insets(keyboard), Collections.singletonList(opening));
+            assertEquals(0, forwarded.getInsets(WindowInsetsCompat.Type.ime()).bottom);
+            assertEquals(40, forwarded.getInsets(WindowInsetsCompat.Type.systemBars()).bottom);
             assertEquals("progress:" + (keyboard - 40), frames.get(frames.size() - 1));
             assertEquals(2340, webView.getHeight());
             assertEquals(-1, webView.getLayoutParams().height);
@@ -99,7 +106,7 @@ public class ChatKeyboardViewportTest {
         assertEquals("end:860", frames.get(frames.size() - 1));
         WindowInsetsAnimationCompat closing = animation();
         viewport.animationCallback.onPrepare(closing);
-        ViewCompat.dispatchApplyWindowInsets(parent, insets(0));
+        applyInsets(0);
         assertEquals("prepare:860", frames.get(frames.size() - 1));
         for (int keyboard : new int[] {800, 650, 400, 200, 0}) {
             viewport.animationCallback.onProgress(insets(keyboard), Collections.singletonList(closing));
@@ -114,10 +121,10 @@ public class ChatKeyboardViewportTest {
         WindowInsetsAnimationCompat opening = animation();
         WindowInsetsAnimationCompat closing = animation();
         viewport.animationCallback.onPrepare(opening);
-        ViewCompat.dispatchApplyWindowInsets(parent, insets(900));
+        applyInsets(900);
         viewport.animationCallback.onProgress(insets(400), Collections.singletonList(opening));
         viewport.animationCallback.onPrepare(closing);
-        ViewCompat.dispatchApplyWindowInsets(parent, insets(0));
+        applyInsets(0);
         viewport.animationCallback.onEnd(opening);
         assertEquals("progress:360", frames.get(frames.size() - 1));
         viewport.animationCallback.onProgress(insets(0), Collections.singletonList(closing));
@@ -129,7 +136,7 @@ public class ChatKeyboardViewportTest {
         WindowInsetsAnimationCompat opening = new WindowInsetsAnimationCompat(
             WindowInsetsCompat.Type.ime(), new AccelerateInterpolator(), 250L);
         viewport.animationCallback.onPrepare(opening);
-        ViewCompat.dispatchApplyWindowInsets(parent, insets(900));
+        applyInsets(900);
         WindowInsetsAnimationCompat.BoundsCompat bounds = new WindowInsetsAnimationCompat.BoundsCompat(
             Insets.NONE, Insets.of(0, 0, 0, 900));
         viewport.animationCallback.onStart(opening, bounds);
@@ -146,15 +153,23 @@ public class ChatKeyboardViewportTest {
     }
 
     @Test public void closeRestoresSystemModeAndResetsChat() {
-        ViewCompat.dispatchApplyWindowInsets(parent, insets(900));
+        applyInsets(900);
         viewport.close();
         assertEquals("end:0", frames.get(frames.size() - 1));
         assertEquals(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE,
             activity.getWindow().getAttributes().softInputMode);
     }
 
+    @Test public void keyboardOverlapExcludesSystemPanelOutsideWebView() {
+        activity.getWindow().getDecorView().layout(0, 0, 1080, 2400);
+        parent.layout(0, 20, 1080, 2336);
+        webView.layout(0, 0, 1080, 2276);
+        applyInsets(900);
+        assertEquals("end:796", frames.get(frames.size() - 1));
+    }
+
     @Test public void backDismissesOnlyAttachmentWithoutChangingKeyboardPosition() {
-        ViewCompat.dispatchApplyWindowInsets(parent, insets(900));
+        applyInsets(900);
         viewport.setOverlayOpen(true);
         int count = frames.size();
         viewport.dismissOverlay();

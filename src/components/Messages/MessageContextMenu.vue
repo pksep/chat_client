@@ -5,6 +5,8 @@
       { 'message-context-menu--emoji-picker': showEmojies }
     ]"
     :visible="!!props.isOpen[props.messageId]"
+    @pointerdown.capture="preserveComposerFocus"
+    @mousedown.capture="preserveComposerFocus"
     :position="contextMenuPosition"
     :fixed-position="showEmojies"
     :top-overflow="
@@ -440,6 +442,7 @@ import {
 
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import { getVisibleViewport } from '../../utils/visible-viewport';
+import { getAndroidKeyboardInset } from '../../utils/android-keyboard-viewport';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import PinConfirmModal from '../UI/PinConfirmModal.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
@@ -878,6 +881,24 @@ const contextMenuPosition = computed(() =>
     ? emojiPickerPosition.value
     : props.position
 );
+
+const preserveComposerFocus = (event: Event) => {
+  if (
+    !event.cancelable ||
+    !document.documentElement.classList.contains('chat-android-ime') ||
+    getAndroidKeyboardInset() <= 100 ||
+    (event.target instanceof Element &&
+      event.target.closest('input, textarea, select, [contenteditable="true"]'))
+  )
+    return;
+  const active = document.activeElement;
+  if (
+    active instanceof HTMLElement &&
+    active.isContentEditable &&
+    active.closest('.chat__input')
+  )
+    event.preventDefault();
+};
 
 const setEmojiPickerPosition = (trigger: HTMLElement): void => {
   const triggerRect = trigger.getBoundingClientRect();

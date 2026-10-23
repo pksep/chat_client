@@ -29,7 +29,7 @@ public final class ChatKeyboardViewport implements AutoCloseable {
 
     private final Window window;
     private final View webView;
-    private final ViewGroup parent;
+    private final View insetsView;
     private final FrameListener listener;
     private final int originalSoftInputMode;
     private final Set<WindowInsetsAnimationCompat> animations = new HashSet<>();
@@ -111,27 +111,29 @@ public final class ChatKeyboardViewport implements AutoCloseable {
         this.window = window;
         this.webView = webView;
         this.listener = listener;
-        parent = (ViewGroup) webView.getParent();
+        // До Android 15 DecorView может поглотить IME до родителя WebView.
+        insetsView = window.getDecorView();
         originalSoftInputMode = window.getAttributes().softInputMode;
         window.setSoftInputMode(
             (originalSoftInputMode & ~WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST) |
             WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
         );
-        ViewCompat.setWindowInsetsAnimationCallback(parent, animationCallback);
-        ViewCompat.setOnApplyWindowInsetsListener(parent, (view, insets) -> {
+        ViewCompat.setWindowInsetsAnimationCallback(insetsView, animationCallback);
+        ViewCompat.setOnApplyWindowInsetsListener(insetsView, (view, insets) -> {
             targetInsets = insets;
             if (animations.isEmpty()) publish(insets, "end");
             // EdgeToEdge продолжает учитывать системные панели, но IME уже обрабатывает чат.
-            return withoutIme(insets);
+            return ViewCompat.onApplyWindowInsets(view, withoutIme(insets));
         });
         sync();
-        ViewCompat.requestApplyInsets(parent);
+        ViewCompat.requestApplyInsets(insetsView);
     }
 
     public void sync() {
         if (!animations.isEmpty()) return;
-        WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(parent);
-        publish(insets != null ? insets : targetInsets, "end");
+        WindowInsetsCompat insets = targetInsets != null
+            ? targetInsets : ViewCompat.getRootWindowInsets(insetsView);
+        publish(insets, "end");
     }
 
     private int bottomMargin() {
@@ -170,7 +172,19 @@ public final class ChatKeyboardViewport implements AutoCloseable {
     }
 
     private int keyboardBottom(WindowInsetsCompat insets) {
-        return Math.max(0, insets.getInsets(WindowInsetsCompat.Type.ime()).bottom - bottomMargin());
+        int ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+        if (ime == 0) return 0;
+        int gap = bottomMargin();
+        if (insetsView.getHeight() > 0 && webView.getHeight() > 0) {
+            int[] rootPosition = new int[2];
+            int[] webPosition = new int[2];
+            insetsView.getLocationInWindow(rootPosition);
+            webView.getLocationInWindow(webPosition);
+            // При decorFitsSystemWindows системная панель находится ещё и снаружи WebView.
+            gap = Math.max(0, rootPosition[1] + insetsView.getHeight()
+                - webPosition[1] - webView.getHeight());
+        }
+        return Math.max(0, ime - gap);
     }
 
     private void publish(WindowInsetsCompat insets, String phase) {
@@ -192,10 +206,10 @@ public final class ChatKeyboardViewport implements AutoCloseable {
         setOverlayOpen(false);
         compositorAnimation = null;
         animations.clear();
-        ViewCompat.setWindowInsetsAnimationCallback(parent, null);
-        ViewCompat.setOnApplyWindowInsetsListener(parent, null);
+        ViewCompat.setWindowInsetsAnimationCallback(insetsView, null);
+        ViewCompat.setOnApplyWindowInsetsListener(insetsView, null);
         listener.onFrame(0, "end");
         window.setSoftInputMode(originalSoftInputMode);
-        ViewCompat.requestApplyInsets(parent);
+        ViewCompat.requestApplyInsets(insetsView);
     }
 }

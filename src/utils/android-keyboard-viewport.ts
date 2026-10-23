@@ -238,7 +238,11 @@ export function initAndroidKeyboardViewport(): () => void {
   let enabled = true;
   const focusChanged = (event: FocusEvent) => {
     if (!(event.target instanceof Element)) return;
-    const next = !!event.target.closest('.chat__input');
+    if (
+      !event.target.matches('input, textarea, select, [contenteditable="true"]')
+    )
+      return;
+    const next = !!event.target.closest('.chat__input, .message-context-menu');
     if (next === enabled) return;
     enabled = next;
     // Формы настроек и поиск сохраняют обычную системную обработку клавиатуры.

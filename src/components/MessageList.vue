@@ -403,7 +403,10 @@ import {
   computed
 } from 'vue';
 import MessageListAIItems from './Messages/MessageListAIItems.vue';
-import { initAndroidKeyboardViewport } from '../utils/android-keyboard-viewport';
+import {
+  getAndroidKeyboardInset,
+  initAndroidKeyboardViewport
+} from '../utils/android-keyboard-viewport';
 import MessageListUserItems from './Messages/MessageListUserItems.vue';
 import MessageListInput from './Messages/MessageListInput.vue';
 import ReactionHeartIcon from './UI/ReactionHeartIcon.vue';
@@ -4287,6 +4290,11 @@ const isEditableEventTarget = (e: Event) => {
 };
 
 const preserveMobileMessageInputFocus = (event: Event): void => {
+  if (
+    document.documentElement.classList.contains('chat-android-ime') &&
+    getAndroidKeyboardInset() <= 100
+  )
+    return;
   // Отмена touch pointerdown в WebKit может поглотить клик по скрепке и меню.
   if (
     isIosWeb() &&
