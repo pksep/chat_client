@@ -59,6 +59,11 @@ import { mergeRemoteParticipantsDuringReconnect } from './call-reconnect-partici
 import { createCallConnectionDiagnostics } from './call-connection-diagnostics';
 import { createCallWebRtcDiagnostics } from './call-webrtc-diagnostics';
 import {
+  createCallRelayRecoveryPolicy,
+  extractRelayRecoverySamples,
+  type RelayRecoveryDecision
+} from './call-relay-recovery';
+import {
   playNativeCallRingtone,
   stopNativeCallRingtone
 } from './useNotificationSoundPolicy';
@@ -259,6 +264,10 @@ let activeCallNetworkRecoveryPromise: Promise<boolean> | null = null;
 let localVideoQualityRecoveryTimeout: ReturnType<typeof setTimeout> | null =
   null;
 let localVideoPublishingQuality = VideoQuality.HIGH;
+const callRelayRecoveryPolicy = createCallRelayRecoveryPolicy();
+let preferredCallIceTransportPolicy: RTCIceTransportPolicy | null = null;
+let pendingCallRelayRecovery: RelayRecoveryDecision | null = null;
+let callRelayRecoveryPromise: Promise<void> | null = null;
 const participantReactionTimeouts = new Map<
   string,
   ReturnType<typeof setTimeout>
@@ -544,9 +553,13 @@ const SCREEN_SHARE_CAPTURE_DEFAULTS = {
   systemAudio: 'exclude' as const
 };
 const SCREEN_SHARE_PUBLISH_DEFAULTS = {
-  degradationPreference: 'maintain-resolution' as RTCDegradationPreference,
-  simulcast: false,
-  screenShareEncoding: ScreenSharePresets.original.encoding
+  degradationPreference: 'balanced' as RTCDegradationPreference,
+  simulcast: true,
+  screenShareEncoding: ScreenSharePresets.original.encoding,
+  screenShareSimulcastLayers: [
+    ScreenSharePresets.h360fps3,
+    ScreenSharePresets.h720fps5
+  ]
 };
 const LIVEKIT_RECONNECT_POLICY: ReconnectPolicy = {
   nextRetryDelayInMs(context: ReconnectContext): number {
@@ -910,9 +923,56 @@ const recordCallTelemetryEvent = (
   }
 };
 
+function queueCallRelayRecovery(
+  activeRoom: Room,
+  decision: RelayRecoveryDecision
+): void {
+  if (
+    room !== activeRoom ||
+    isExplicitHangupInProgress ||
+    callRelayRecoveryPromise ||
+    preferredCallIceTransportPolicy === 'relay'
+  ) {
+    return;
+  }
+
+  preferredCallIceTransportPolicy = 'relay';
+  pendingCallRelayRecovery = decision;
+  recordCallTelemetryEvent(
+    'call.turn_relay_recovery.requested',
+    {
+      ...decision,
+      policy: callRelayRecoveryPolicy.snapshot(),
+      previousIceTransportPolicy: 'all',
+      nextIceTransportPolicy: 'relay'
+    },
+    'warn',
+    activeRoom
+  );
+
+  if (
+    decision.reason === 'sustained-high-rtt' &&
+    activeRoom.state === ConnectionState.Connected
+  ) {
+    void performCallRelayRecovery(activeRoom, decision);
+  }
+}
+
 const callWebRtcDiagnostics = createCallWebRtcDiagnostics(
-  (activeRoom, name, payload, level) =>
-    recordCallTelemetryEvent(name, payload, level, activeRoom)
+  (activeRoom, name, payload, level) => {
+    recordCallTelemetryEvent(name, payload, level, activeRoom);
+
+    if (name !== 'call.webrtc.stats' || payload.trigger !== 'periodic') {
+      return;
+    }
+
+    const decision = callRelayRecoveryPolicy.recordStats(
+      extractRelayRecoverySamples(payload)
+    );
+    if (decision) {
+      queueCallRelayRecovery(activeRoom, decision);
+    }
+  }
 );
 
 type CallDisconnectSource =
@@ -3122,7 +3182,10 @@ const setLocalVideoPublishingQuality = (
   localVideoPublishingQuality = maxQuality;
 
   activeRoom.localParticipant.videoTrackPublications.forEach(publication => {
-    if (publication.source === Track.Source.Camera) {
+    if (
+      publication.source === Track.Source.Camera ||
+      publication.source === Track.Source.ScreenShare
+    ) {
       publication.videoTrack?.setPublishingQuality(maxQuality);
     }
   });
@@ -3133,6 +3196,7 @@ const setLocalVideoPublishingQuality = (
     recordCallTelemetryEvent('call.media_quality.changed', {
       reason,
       maxVideoQuality: maxQuality,
+      maxScreenShareQuality: maxQuality,
       connectionQuality: state.connectionQuality
     });
   }
@@ -4089,6 +4153,11 @@ const setupRoomListeners = (activeRoom: Room) => {
         buildCallHealthTelemetryPayload(activeRoom),
         'warn'
       );
+      const relayRecoveryDecision =
+        callRelayRecoveryPolicy.recordSignalReconnect();
+      if (relayRecoveryDecision) {
+        queueCallRelayRecovery(activeRoom, relayRecoveryDecision);
+      }
     })
     .on(RoomEvent.AudioPlaybackStatusChanged, () => {
       recordRoomTelemetryEvent('call.livekit.audio_playback_changed', {
@@ -4257,7 +4326,10 @@ const setupRoomListeners = (activeRoom: Room) => {
           recoveryAttemptCount: screenShareRecoveryAttemptCount
         });
       }
-      if (publication.source === Track.Source.Camera) {
+      if (
+        publication.source === Track.Source.Camera ||
+        publication.source === Track.Source.ScreenShare
+      ) {
         setLocalVideoPublishingQuality(
           activeRoom,
           localVideoPublishingQuality,
@@ -4415,6 +4487,10 @@ const setupRoomListeners = (activeRoom: Room) => {
         buildCallHealthTelemetryPayload(activeRoom)
       );
       clearCallIssueSignal('soft');
+
+      if (pendingCallRelayRecovery) {
+        void performCallRelayRecovery(activeRoom, pendingCallRelayRecovery);
+      }
     })
     .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
       void callWebRtcDiagnostics
@@ -4605,6 +4681,7 @@ const isExpectedConnectAbort = (
 const connectToRoom = async (options: {
   inviteToken?: string;
   reason: string;
+  iceTransportPolicy?: RTCIceTransportPolicy;
 }) => {
   if (connectPromise) {
     recordCallTelemetryEvent('call.livekit.connect.reused', {
@@ -4622,6 +4699,8 @@ const connectToRoom = async (options: {
     const activeRoomId = roomId.value;
     const activeTopicId = topicId.value;
     const config = sdk?.getConfig();
+    const iceTransportPolicy =
+      options.iceTransportPolicy || preferredCallIceTransportPolicy || 'all';
     const connectionDiagnostics = {
       traceId: ensureCallTelemetryTraceId(),
       callSessionId: createTelemetryTraceId('livekit-room'),
@@ -4647,6 +4726,7 @@ const connectToRoom = async (options: {
     recordCallTelemetryEvent('call.token.start', {
       attemptId: currentAttemptId,
       connectReason: options.reason,
+      iceTransportPolicy,
       roomId: activeRoomId,
       topicId: activeTopicId
     });
@@ -4751,7 +4831,8 @@ const connectToRoom = async (options: {
         'call.livekit.connect.start',
         {
           attemptId: currentAttemptId,
-          liveKitUrl: config.CHAT_LIVEKIT_URL
+          liveKitUrl: config.CHAT_LIVEKIT_URL,
+          iceTransportPolicy
         },
         'info',
         nextRoom
@@ -4760,18 +4841,36 @@ const connectToRoom = async (options: {
       await nextRoom.connect(config.CHAT_LIVEKIT_URL, token, {
         maxRetries: 3,
         peerConnectionTimeout: 20_000,
-        websocketTimeout: 20_000
+        websocketTimeout: 20_000,
+        rtcConfig:
+          iceTransportPolicy === 'relay'
+            ? { iceTransportPolicy: 'relay' }
+            : undefined
       });
       callWebRtcDiagnostics.start(nextRoom);
       recordCallTelemetryEvent(
         'call.livekit.connect.success',
         {
           attemptId: currentAttemptId,
-          elapsedMs: Date.now() - connectStartedAt
+          elapsedMs: Date.now() - connectStartedAt,
+          iceTransportPolicy
         },
         'info',
         nextRoom
       );
+      if (iceTransportPolicy === 'relay') {
+        pendingCallRelayRecovery = null;
+        recordCallTelemetryEvent(
+          'call.turn_relay_recovery.connected',
+          {
+            attemptId: currentAttemptId,
+            iceTransportPolicy,
+            policy: callRelayRecoveryPolicy.snapshot()
+          },
+          'info',
+          nextRoom
+        );
+      }
     } catch (error) {
       callWebRtcDiagnostics.stop(nextRoom);
       const abortContext = {
@@ -4805,6 +4904,23 @@ const connectToRoom = async (options: {
         return;
       }
 
+      if (iceTransportPolicy === 'relay') {
+        preferredCallIceTransportPolicy = null;
+        pendingCallRelayRecovery = null;
+        callRelayRecoveryPolicy.markRelayFailed();
+        recordCallTelemetryEvent(
+          'call.turn_relay_recovery.connect_failed',
+          {
+            attemptId: currentAttemptId,
+            iceTransportPolicy,
+            policy: callRelayRecoveryPolicy.snapshot(),
+            ...getTelemetryErrorPayload(error)
+          },
+          'warn',
+          nextRoom
+        );
+      }
+
       const isCallRecovery =
         directCallRecoveryRoomId === activeRoomId &&
         (!activeTopicId || directCallRecoveryTopicId === activeTopicId);
@@ -4826,6 +4942,7 @@ const connectToRoom = async (options: {
           : 'call.livekit.connect.preserved_failed',
         {
           attemptId: currentAttemptId,
+          iceTransportPolicy,
           ...buildCallHealthTelemetryPayload(nextRoom),
           ...getTelemetryErrorPayload(error)
         },
@@ -4903,6 +5020,133 @@ const connectToRoom = async (options: {
 
   return connectPromise;
 };
+
+async function performCallRelayRecovery(
+  sourceRoom: Room,
+  decision: RelayRecoveryDecision
+): Promise<void> {
+  if (callRelayRecoveryPromise) {
+    return callRelayRecoveryPromise;
+  }
+
+  if (
+    room !== sourceRoom ||
+    isExplicitHangupInProgress ||
+    matchesPendingEndCall(roomId.value, topicId.value)
+  ) {
+    pendingCallRelayRecovery = null;
+    return;
+  }
+
+  const expectedRoomId = roomId.value;
+  const expectedTopicId = topicId.value;
+  const inviteToken = getCallInviteToken(expectedRoomId);
+  pendingCallRelayRecovery = null;
+
+  const recoveryTask = (async () => {
+    showReconnectCallStatusNotice();
+    recordCallTelemetryEvent(
+      'call.turn_relay_recovery.started',
+      {
+        ...decision,
+        previousIceTransportPolicy: 'all',
+        nextIceTransportPolicy: 'relay'
+      },
+      'warn',
+      sourceRoom
+    );
+
+    try {
+      await connectToRoom({
+        inviteToken,
+        reason: `turn-relay-recovery:${decision.reason}`,
+        iceTransportPolicy: 'relay'
+      });
+
+      if (
+        room?.state !== ConnectionState.Connected ||
+        roomId.value !== expectedRoomId ||
+        topicId.value !== expectedTopicId
+      ) {
+        throw new Error('TURN relay recovery did not establish the call');
+      }
+
+      preferredCallIceTransportPolicy = 'relay';
+      recordCallTelemetryEvent(
+        'call.turn_relay_recovery.completed',
+        {
+          ...decision,
+          iceTransportPolicy: 'relay',
+          ...buildCallHealthTelemetryPayload(room)
+        },
+        'info',
+        room
+      );
+      if (callStatusNoticeKind.value === 'reconnecting') {
+        clearCallStatusNotice();
+      }
+    } catch (error) {
+      preferredCallIceTransportPolicy = null;
+      pendingCallRelayRecovery = null;
+      callRelayRecoveryPolicy.markRelayFailed();
+      recordCallTelemetryEvent(
+        'call.turn_relay_recovery.failed',
+        {
+          ...decision,
+          fallbackIceTransportPolicy: 'all',
+          policy: callRelayRecoveryPolicy.snapshot(),
+          ...getTelemetryErrorPayload(error)
+        },
+        'warn',
+        room
+      );
+
+      if (
+        room ||
+        isExplicitHangupInProgress ||
+        roomId.value !== expectedRoomId ||
+        topicId.value !== expectedTopicId ||
+        matchesPendingEndCall(expectedRoomId, expectedTopicId)
+      ) {
+        return;
+      }
+
+      try {
+        await connectToRoom({
+          inviteToken,
+          reason: 'turn-relay-recovery:fallback-all',
+          iceTransportPolicy: 'all'
+        });
+        recordCallTelemetryEvent(
+          'call.turn_relay_recovery.fallback_connected',
+          {
+            iceTransportPolicy: 'all',
+            ...buildCallHealthTelemetryPayload(room)
+          },
+          'info',
+          room
+        );
+      } catch (fallbackError) {
+        recordCallTelemetryEvent(
+          'call.turn_relay_recovery.fallback_failed',
+          {
+            iceTransportPolicy: 'all',
+            ...getTelemetryErrorPayload(fallbackError)
+          },
+          'error',
+          room
+        );
+      }
+    }
+  })();
+
+  callRelayRecoveryPromise = recoveryTask;
+  await recoveryTask.finally(() => {
+    if (callRelayRecoveryPromise === recoveryTask) {
+      callRelayRecoveryPromise = null;
+    }
+  });
+}
 
 const connectInvitedGroupCallWithRetry = async (
   invite: InvitedGroupCallEntry,
@@ -5233,9 +5477,16 @@ export const recoverActiveCallAfterNetworkChange = async (
   return activeCallNetworkRecoveryPromise;
 };
 
+const resetCallRelayRecoveryState = () => {
+  preferredCallIceTransportPolicy = null;
+  pendingCallRelayRecovery = null;
+  callRelayRecoveryPolicy.reset();
+};
+
 const resetMediaState = () => {
   isRoomReconnectInProgress = false;
   suppressParticipantPresenceNotifications = true;
+  resetCallRelayRecoveryState();
   clearLocalVideoQualityRecovery();
   localVideoPublishingQuality = VideoQuality.HIGH;
   clearTrackStreamCaches();
