@@ -12,6 +12,21 @@ const getLayoutKey = (element: HTMLElement): string =>
   element.dataset.messageId
     ? `message:${element.dataset.messageId}`
     : `date:${element.querySelector<HTMLElement>('[data-date-divider-label]')?.dataset.dateDividerLabel}`;
+const getClip = (container: HTMLElement) => {
+  const bounds = container.getBoundingClientRect();
+  const viewport = container
+    .closest('.chat__message-viewport')
+    ?.getBoundingClientRect();
+  if (!viewport?.height) return bounds;
+  const left = Math.max(bounds.left, viewport.left);
+  const top = Math.max(bounds.top, viewport.top);
+  return new DOMRect(
+    left,
+    top,
+    Math.max(0, Math.min(bounds.right, viewport.right) - left),
+    Math.max(0, Math.min(bounds.bottom, viewport.bottom) - top)
+  );
+};
 
 const freezeSnapshotMedia = (
   content: HTMLElement,
@@ -87,6 +102,7 @@ export function useMessageDeletionAnimation(
     movements.forEach(animation => animation.cancel());
     movements.clear();
     ghosts.length = 0;
+    if (root.value) delete root.value.dataset.messageDeletionActive;
     layer?.remove();
     layer = null;
     viewport?.removeEventListener('wheel', cleanup);
@@ -133,7 +149,7 @@ export function useMessageDeletionAnimation(
   const ensureLayer = (container: HTMLElement): HTMLElement => {
     if (layer) return layer;
     viewport = container;
-    const bounds = container.getBoundingClientRect();
+    const bounds = getClip(container);
     layer = document.createElement('div');
     layer.className = 'message-deletion-layer';
     layer.setAttribute('aria-hidden', 'true');
@@ -145,7 +161,10 @@ export function useMessageDeletionAnimation(
       height: `${bounds.height}px`,
       borderRadius: getComputedStyle(container).borderRadius
     });
-    root.value!.append(layer);
+    // Слой ленты Android имеет will-change: translate. Вложенный fixed-слой
+    // получает его координаты и обрезается скроллером вместо области экрана.
+    (container.closest('.chat-container') || document.body).append(layer);
+    root.value!.dataset.messageDeletionActive = 'true';
     container.addEventListener('wheel', cleanup, { passive: true });
     container.addEventListener('touchstart', cleanup, { passive: true });
     container.addEventListener('pointerdown', cleanup, { passive: true });
@@ -165,7 +184,7 @@ export function useMessageDeletionAnimation(
     );
     if (!content) return false;
     const bounds = content.getBoundingClientRect();
-    const clip = container.getBoundingClientRect();
+    const clip = getClip(container);
     if (
       !bounds.width ||
       !bounds.height ||

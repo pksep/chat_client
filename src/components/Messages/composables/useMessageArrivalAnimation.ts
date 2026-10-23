@@ -70,7 +70,7 @@ export function useMessageArrivalAnimation(
     const layouts = [
       ...root.value.querySelectorAll<HTMLElement>(layoutSelector)
     ].map(element => ({ element, bounds: element.getBoundingClientRect() }));
-    const deleting = !!root.value.querySelector('.message-deletion-layer');
+    const deleting = root.value.dataset.messageDeletionActive === 'true';
     // Сначала читаем геометрию, затем запускаем анимации без изменения высоты ленты.
     for (const { element, bounds: current } of layouts) {
       if (current.bottom <= bounds.top || current.top >= bounds.bottom)

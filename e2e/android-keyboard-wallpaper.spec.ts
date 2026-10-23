@@ -49,14 +49,121 @@ async function openChat(page: Page, platform = 'android', count = 40) {
   return errors;
 }
 
-const backgroundStrip = (page: Page, y = 200, x = 1) =>
-  page.screenshot({ clip: { x, y, width: 2, height: 80 } });
+const backgroundStrip = (page: Page, y = 200, x = 1, height = 80) =>
+  page.screenshot({ clip: { x, y, width: 2, height } });
 
 const lastMessageBottom = (page: Page, count = 40) =>
   page
     .locator(`[data-message-id="message-${count - 1}"]`)
     .first()
     .evaluate(element => element.getBoundingClientRect().bottom);
+
+async function setAndroidKeyboard(page: Page, bottom: number) {
+  await page.evaluate(async bottom => {
+    const path = performance
+      .getEntriesByType('resource')
+      .find(entry =>
+        entry.name.includes('/src/utils/android-keyboard-viewport.ts')
+      )!.name;
+    const { createAndroidKeyboardViewport } = await import(
+      /* @vite-ignore */ path
+    );
+    window.__sepAndroidKeyboard ||= createAndroidKeyboardViewport();
+    window.__sepAndroidKeyboard(bottom * devicePixelRatio, 'end');
+  }, bottom);
+}
+
+test('Android: меню сообщения и реакции помещаются над открытой клавиатурой', async ({
+  page
+}, testInfo) => {
+  await openChat(page);
+  await setAndroidKeyboard(page, 326);
+  await page.evaluate(() => {
+    document
+      .querySelector('.message[data-message-id="message-39"]')!
+      .dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 240,
+          clientY: 410
+        })
+      );
+  });
+  const menu = page.locator('.message-context-menu');
+  await expect(menu).toBeVisible();
+  await expect
+    .poll(() => menu.evaluate(el => el.getBoundingClientRect().bottom))
+    .toBeLessThanOrEqual(498);
+  await expect(page.locator('.select-reactions--ready')).toBeVisible();
+  expect(
+    await page
+      .locator('.select-reactions')
+      .evaluate(el => el.getBoundingClientRect().top)
+  ).toBeGreaterThanOrEqual(8);
+  await expect(
+    menu.getByRole('button', { name: 'Удалить', exact: true })
+  ).toBeInViewport();
+  await setAndroidKeyboard(page, 400);
+  await expect
+    .poll(() => menu.evaluate(el => el.getBoundingClientRect().bottom))
+    .toBeLessThanOrEqual(424);
+  await page.screenshot({
+    path: testInfo.outputPath('message-menu-above-keyboard.png')
+  });
+  await menu.locator('.select-reactions-list-button').click();
+  const picker = menu.locator('.message-context-menu__emoji-picker--ready');
+  await expect(picker).toBeVisible();
+  await expect
+    .poll(() => picker.evaluate(el => el.getBoundingClientRect().bottom))
+    .toBeLessThanOrEqual(424);
+});
+
+for (const bottom of [0, 326]) {
+  test(`Android: эффект удаления остаётся на месте сообщения при клавиатуре ${bottom}`, async ({
+    page
+  }) => {
+    await openChat(page);
+    await setAndroidKeyboard(page, bottom);
+    const geometry = await page.evaluate(async () => {
+      const element = document.querySelector<HTMLElement>(
+        '.message[data-message-id="message-39"] .message__content__articles'
+      )!;
+      const before = element.getBoundingClientRect();
+      const path = performance
+        .getEntriesByType('resource')
+        .find(entry =>
+          entry.name.includes('/src/services/useMessages.ts')
+        )!.name;
+      const messages = await import(/* @vite-ignore */ path);
+      void messages.deleteMessageFromLocal(
+        'mobile-search-fixture',
+        'message-39'
+      );
+      const vuePath = performance
+        .getEntriesByType('resource')
+        .find(entry => /\/vue\.js\?/.test(entry.name))!.name;
+      const { nextTick } = await import(/* @vite-ignore */ vuePath);
+      await nextTick();
+      const ghost = document.querySelector<HTMLElement>(
+        '.message-deletion-ghost'
+      )!;
+      const after = ghost?.getBoundingClientRect();
+      return {
+        before: { top: before.top, left: before.left },
+        after: after && { top: after.top, left: after.left }
+      };
+    });
+    expect(geometry.after).toBeDefined();
+    expect(Math.abs(geometry.after!.top - geometry.before.top)).toBeLessThan(
+      24
+    );
+    expect(Math.abs(geometry.after!.left - geometry.before.left)).toBeLessThan(
+      24
+    );
+    await expect(page.locator('.message-deletion-layer')).toHaveCount(0);
+  });
+}
 
 for (const [count, wallpaper] of [
   [40, 'none'],
@@ -143,6 +250,11 @@ for (const platform of ['web', 'ios']) {
 
 test('Android: поворот экрана обновляет размер фона', async ({ page }) => {
   const errors = await openChat(page);
+  // Сообщения при изменении высоты двигаются поверх проверяемого фона.
+  await page.addStyleTag({
+    content:
+      '.chat-container > :not(.chat-container__wallpaper) { visibility: hidden !important; }'
+  });
   await page.setViewportSize({ width: 832, height: 392 });
   await expect
     .poll(() =>
@@ -151,10 +263,21 @@ test('Android: поворот экрана обновляет размер фо�
         .evaluate(el => el.clientHeight)
     )
     .toBe(392);
-  const background = await backgroundStrip(page, 90, 440);
-  expect(background.equals(await backgroundStrip(page, 180, 440))).toBe(false);
+  const background = await backgroundStrip(page, 80, 440, 40);
+  expect(background.equals(await backgroundStrip(page, 180, 440, 40))).toBe(
+    false
+  );
   await page.setViewportSize({ width: 832, height: 260 });
-  expect((await backgroundStrip(page, 90, 440)).equals(background)).toBe(true);
+  await expect
+    .poll(() =>
+      page
+        .locator('.chat-container__wallpaper-image')
+        .evaluate(el => el.clientHeight)
+    )
+    .toBe(392);
+  expect((await backgroundStrip(page, 80, 440, 40)).equals(background)).toBe(
+    true
+  );
   await page.setViewportSize({ width: 392, height: 832 });
   await expect
     .poll(() =>

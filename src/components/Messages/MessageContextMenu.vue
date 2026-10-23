@@ -7,6 +7,14 @@
     :visible="!!props.isOpen[props.messageId]"
     :position="contextMenuPosition"
     :fixed-position="showEmojies"
+    :top-overflow="
+      !showEmojies &&
+      !isSelectionContextMenu &&
+      !showReadDetails &&
+      !canRetryMessage
+        ? 47
+        : 0
+    "
     @unmount-close="handleClosePopover"
     :data-testid="`${props.dataTestid}-MessageBubble-ContextMenu`"
   >
@@ -431,6 +439,7 @@ import {
 } from '@pksep/yui';
 
 import ContextMenu from '../ContactList/ContextMenu.vue';
+import { getVisibleViewport } from '../../utils/visible-viewport';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import PinConfirmModal from '../UI/PinConfirmModal.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
@@ -872,27 +881,28 @@ const contextMenuPosition = computed(() =>
 
 const setEmojiPickerPosition = (trigger: HTMLElement): void => {
   const triggerRect = trigger.getBoundingClientRect();
+  const viewport = getVisibleViewport();
   const pickerWidth = Math.min(
     EMOJI_PICKER_WIDTH,
-    window.innerWidth - EMOJI_PICKER_VIEWPORT_GAP * 2
+    viewport.width - EMOJI_PICKER_VIEWPORT_GAP * 2
   );
   const pickerHeight = Math.min(
     EMOJI_PICKER_HEIGHT,
-    window.innerHeight - EMOJI_PICKER_VIEWPORT_GAP * 2
+    viewport.height - EMOJI_PICKER_VIEWPORT_GAP * 2
   );
   const canOpenLeft =
-    triggerRect.right - pickerWidth >= EMOJI_PICKER_VIEWPORT_GAP;
+    triggerRect.right - pickerWidth >=
+    viewport.left + EMOJI_PICKER_VIEWPORT_GAP;
   const canOpenAbove =
     triggerRect.top - EMOJI_PICKER_TRIGGER_GAP - pickerHeight >=
-    EMOJI_PICKER_VIEWPORT_GAP;
+    viewport.top + EMOJI_PICKER_VIEWPORT_GAP;
   const opensLeft =
     canOpenLeft ||
-    triggerRect.left + pickerWidth >
-      window.innerWidth - EMOJI_PICKER_VIEWPORT_GAP;
+    triggerRect.left + pickerWidth > viewport.right - EMOJI_PICKER_VIEWPORT_GAP;
   const opensAbove =
     canOpenAbove ||
     triggerRect.bottom + EMOJI_PICKER_TRIGGER_GAP + pickerHeight >
-      window.innerHeight - EMOJI_PICKER_VIEWPORT_GAP;
+      viewport.bottom - EMOJI_PICKER_VIEWPORT_GAP;
   const preferredX = opensLeft
     ? triggerRect.right - pickerWidth
     : triggerRect.left;
@@ -902,12 +912,12 @@ const setEmojiPickerPosition = (trigger: HTMLElement): void => {
 
   emojiPickerPosition.value = {
     x: Math.min(
-      Math.max(EMOJI_PICKER_VIEWPORT_GAP, preferredX),
-      window.innerWidth - EMOJI_PICKER_VIEWPORT_GAP - pickerWidth
+      Math.max(viewport.left + EMOJI_PICKER_VIEWPORT_GAP, preferredX),
+      viewport.right - EMOJI_PICKER_VIEWPORT_GAP - pickerWidth
     ),
     y: Math.min(
-      Math.max(EMOJI_PICKER_VIEWPORT_GAP, preferredY),
-      window.innerHeight - EMOJI_PICKER_VIEWPORT_GAP - pickerHeight
+      Math.max(viewport.top + EMOJI_PICKER_VIEWPORT_GAP, preferredY),
+      viewport.bottom - EMOJI_PICKER_VIEWPORT_GAP - pickerHeight
     )
   };
   emojiPickerOrigin.value = opensAbove
@@ -993,7 +1003,6 @@ const ensureReactionLayoutObserver = () => {
 };
 
 const checkFlip = async () => {
-  const windowWidth = window.innerWidth;
   reactionsPositionReady.value = false;
   await waitForPaint();
 
@@ -1009,8 +1018,9 @@ const checkFlip = async () => {
   const defaultRight = menuRect.left + rowWidth;
   const defaultTop = menuRect.top - rowHeight - 5;
 
-  flipReactions.value = defaultRight > windowWidth - 8;
-  flipReactionsY.value = defaultTop < 8;
+  const viewport = getVisibleViewport();
+  flipReactions.value = defaultRight > viewport.right - 8;
+  flipReactionsY.value = defaultTop < viewport.top + 8;
   reactionsPositionReady.value = true;
 };
 
@@ -1047,8 +1057,10 @@ const syncReadDetailsPosition = async () => {
   }
 
   const panelRect = panel.getBoundingClientRect();
-  const maxTop = Math.max(8, window.innerHeight - panelRect.height - 8);
-  const clampedTop = Math.max(8, Math.min(triggerRect.top, maxTop));
+  const viewport = getVisibleViewport();
+  const minTop = viewport.top + 8;
+  const maxTop = Math.max(minTop, viewport.bottom - panelRect.height - 8);
+  const clampedTop = Math.max(minTop, Math.min(triggerRect.top, maxTop));
 
   readDetailsOffsetTop.value = clampedTop - menuRect.top;
   flipReadDetails.value =
