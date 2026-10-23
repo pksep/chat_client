@@ -1,26 +1,34 @@
 <template>
-  <section
-    v-if="isIos && !dismissed && status !== 'idle' && status !== 'subscribed'"
-    class="ios-push-prompt"
-    aria-label="Уведомления на iPhone"
-    data-testid="IosPushNotificationPrompt"
+  <MobileModal
+    v-if="isPromptOpen"
+    :open="isPromptOpen && !installOpen"
+    class="mobile-modal ios-push-modal"
+    header-class="hidden"
+    :show-divider="false"
+    @unmount-close="dismissed = true"
   >
-    <strong>Уведомления о сообщениях</strong>
-    <p aria-live="polite">{{ description }}</p>
-    <div class="ios-push-prompt__actions">
-      <Button
-        v-if="canEnable || status === 'install'"
-        :type="ButtonTypeEnum.primary"
-        :size="SizesEnum.small"
-        @click="handleAction"
-      >
-        {{ status === 'install' ? 'Как установить' : 'Включить' }}
-      </Button>
-      <button class="ios-push-prompt__later" @click="dismissed = true">
-        Позже
-      </button>
-    </div>
-  </section>
+    <section
+      class="ios-push-prompt"
+      data-testid="IosPushNotificationPrompt"
+      aria-label="Уведомления на iPhone"
+    >
+      <strong>Уведомления о сообщениях</strong>
+      <p aria-live="polite">{{ description }}</p>
+      <div class="ios-push-prompt__actions">
+        <Button
+          v-if="canEnable || status === 'install'"
+          :type="ButtonTypeEnum.primary"
+          :size="SizesEnum.small"
+          @click="handleAction"
+        >
+          {{ status === 'install' ? 'Как установить' : 'Включить' }}
+        </Button>
+        <Button :type="ButtonTypeEnum.secondary" @click="dismissed = true">
+          Позже
+        </Button>
+      </div>
+    </section>
+  </MobileModal>
   <IosInstallPromptModal :open="installOpen" @close="installOpen = false" />
 </template>
 
@@ -34,10 +42,21 @@ import {
 } from '../../services/web-push-status';
 import { requestWebPushNotifications } from '../../services/usePushNotifications';
 import IosInstallPromptModal from './IosInstallPromptModal.vue';
+import MobileModal from '../UI/MobileModal.vue';
 
 const isIos = isIosWeb();
+const props = withDefaults(defineProps<{ active?: boolean }>(), {
+  active: true
+});
 const dismissed = ref(false);
 const installOpen = ref(false);
+const isPromptOpen = computed(
+  () =>
+    isIos &&
+    props.active &&
+    !dismissed.value &&
+    !['idle', 'subscribed'].includes(status.value)
+);
 const canEnable = computed(() => ['prompt', 'error'].includes(status.value));
 const description = computed(() => {
   switch (status.value) {
@@ -75,13 +94,9 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .ios-push-prompt {
-  flex-shrink: 0;
   display: grid;
-  gap: 8px;
-  margin: 8px 12px;
-  padding: 12px;
-  border-radius: 12px;
-  background: var(--surface-input-secondary);
+  gap: 12px;
+  padding: 10px;
   color: var(--text-primary);
   font-size: 14px;
   line-height: 1.4;
@@ -91,15 +106,19 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
 }
 .ios-push-prompt__actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  display: grid;
+  gap: 10px;
 }
-.ios-push-prompt__later {
-  border: 0;
-  background: transparent;
-  padding: 8px;
-  color: var(--text-secondary);
-  cursor: pointer;
+</style>
+
+<style>
+dialog.mobile-modal.ios-push-modal {
+  height: auto !important;
+}
+.ios-push-modal .modal-yui-kit__modal-content {
+  padding: 10px;
+}
+.ios-push-modal button.button-yui-kit {
+  margin-top: 0;
 }
 </style>

@@ -147,10 +147,15 @@ test('iPhone запрашивает разрешение только по кн�
   const fixture = await prepare(page);
   const prompt = page.getByTestId('IosPushNotificationPrompt');
   await expect(prompt).toBeVisible();
+  const modal = page.locator('dialog.ios-push-modal');
+  await expect(modal).toBeVisible();
+  expect(
+    await prompt.evaluate(el => !!el.closest('dialog.mobile__modal'))
+  ).toBe(true);
   expect(
     await page.evaluate(() => (window as any).webPushFixture.requests)
   ).toBe(0);
-  await page.locator('.mobile-list-container').screenshot({
+  await page.screenshot({
     path: testInfo.outputPath('ios-notifications.png')
   });
   await prompt.getByRole('button', { name: 'Включить', exact: true }).click();

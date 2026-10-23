@@ -1,6 +1,152 @@
 import { expect, test } from '@playwright/test';
 import { openFixture, openTopic } from './fixtures/topic-performance-page';
 
+test('iPhone PWA: папки сохраняют панель навигации, модалки занимают экран и учитывают safe area', async ({
+  page
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'webkit-iphone-pwa');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.addLocatorHandler(
+    page.locator('dialog.ios-push-modal[open]'),
+    async dialog => {
+      await dialog.getByRole('button', { name: 'Позже', exact: true }).click();
+    }
+  );
+  await page.goto('/e2e/fixtures/ios-pwa.html?kind=menu');
+  await expect(page.locator('.menu-bottom-nav')).toBeVisible();
+  await page.evaluate(async () => {
+    document.documentElement.style.setProperty('--ios-safe-top', '59px');
+    document.documentElement.style.setProperty('--ios-safe-bottom', '34px');
+    (window as any).setIosViewport(844);
+    const sdkPath = '/src/services/useChatSDK/index.ts';
+    const { ChatSDK } = await import(/* @vite-ignore */ sdkPath);
+    ChatSDK.prototype.connect = () => new Promise(() => {});
+    const chatPath = '/src/services/useChat.ts';
+    const { initializeChat, getChatSDK } = await import(
+      /* @vite-ignore */ chatPath
+    );
+    await initializeChat({
+      userId: 'ios-pwa-test-user',
+      token: 'ios-folder-test',
+      apiUrl: '/e2e/ios-api',
+      wsUrl: 'ws://127.0.0.1:65530'
+    });
+    getChatSDK().getChatFolders = async () => [
+      {
+        id: 'iphone-folder',
+        name: 'Работа',
+        icon: 'paw',
+        scope: 'chats',
+        topicIds: ['iphone-chat-0'],
+        position: 0,
+        createdAt: '2026-10-23T00:00:00Z',
+        updatedAt: '2026-10-23T00:00:00Z'
+      }
+    ];
+    const path = '/src/composables/useChatFolders.ts';
+    await (await import(/* @vite-ignore */ path))
+      .useChatFolders()
+      .loadFolders(true);
+  });
+  await expect(
+    page.getByTestId('ChatFolders-Rail-Folder-iphone-folder')
+  ).toBeVisible();
+  await page.getByTestId('ChatFolders-Rail-Manage').click();
+  const panel = page.getByTestId('ChatFolders-Panel');
+  await expect(panel.getByTestId('ChatFolders-Rail-Manage')).toBeVisible();
+  await expect(panel.getByTestId('ChatFolders-Rail-All')).toBeVisible();
+  await panel.getByTestId('ChatFolders-CreateButton').click();
+  const editor = page.locator('dialog.chat-folder-editor-mobile');
+  await expect(editor).toBeVisible();
+  const assertScreen = async (dialog: ReturnType<typeof page.locator>) => {
+    await expect
+      .poll(() =>
+        dialog.evaluate(el =>
+          el
+            .getAnimations({ subtree: true })
+            .some(animation => animation.playState === 'running')
+        )
+      )
+      .toBe(false);
+    await expect
+      .poll(async () => {
+        const box = (await dialog.boundingBox())!;
+        return [Math.round(box.y), Math.round(box.height)];
+      })
+      .toEqual([0, 844]);
+    const header = dialog
+      .locator('.mobile__modal-header, .chat-folder-details__header')
+      .first();
+    expect((await header.boundingBox())!.y).toBeGreaterThanOrEqual(59);
+    expect((await header.boundingBox())!.y).toBeLessThanOrEqual(109);
+  };
+  await assertScreen(editor);
+  await page
+    .getByTestId('ChatFolders-NameInput')
+    .locator('input')
+    .fill('Новая');
+  const row = editor.locator('[data-topic-id="iphone-chat-0"]');
+  await row.click();
+  await expect(row).toHaveClass(/menu-list-row--active/);
+  const rowBox = (await row.boundingBox())!;
+  expect(rowBox.x).toBe(0);
+  expect(rowBox.width).toBe(390);
+  const search = editor.getByTestId('ChatFolders-TopicSearch').locator('input');
+  await editor.getByTestId('ChatFolders-NameInput').locator('input').blur();
+  await expect(search).toHaveCSS(
+    'background-color',
+    await editor
+      .getByTestId('ChatFolders-NameInput')
+      .evaluate(el => getComputedStyle(el).backgroundColor)
+  );
+  const saveBox = (await editor
+    .getByTestId('ChatFolders-SaveButton')
+    .boundingBox())!;
+  expect(saveBox.y + saveBox.height).toBeLessThanOrEqual(810);
+  await page.screenshot({
+    path: testInfo.outputPath('iphone-folder-editor.png'),
+    animations: 'disabled'
+  });
+  await editor.getByRole('button', { name: 'Назад', exact: true }).click();
+  await page.getByTestId('ChatFolders-Folder-iphone-folder').click();
+  const details = page.locator('dialog.chat-folder-details-modal');
+  await assertScreen(details);
+  await page.getByTestId('ChatFolders-IconButton').click();
+  await expect(page.getByTestId('ChatFolders-Icon-paw')).toBeVisible();
+  await assertScreen(details);
+  await page.screenshot({
+    path: testInfo.outputPath('iphone-folder-details.png'),
+    animations: 'disabled'
+  });
+  await assertScreen(details);
+  await details.getByRole('button', { name: 'Назад', exact: true }).click();
+  await panel.getByTestId('ChatFolders-Rail-All').click();
+  await page.locator('.chats-toolbar__create-button').click();
+  await page.getByRole('button', { name: 'Создать бота', exact: true }).click();
+  const bot = page.locator('dialog.new-bot-mobile');
+  await assertScreen(bot);
+  const botHeader = (await bot.locator('.mobile__modal-header').boundingBox())!;
+  const botAvatar = (await bot
+    .locator('.bot-editor__avatar-button')
+    .boundingBox())!;
+  expect(botAvatar.y - botHeader.y - botHeader.height).toBeGreaterThanOrEqual(
+    10
+  );
+  expect(botAvatar.y - botHeader.y - botHeader.height).toBeLessThanOrEqual(35);
+  await page.screenshot({
+    path: testInfo.outputPath('iphone-bot-modal.png'),
+    animations: 'disabled'
+  });
+  await assertScreen(bot);
+  const submitBox = (await bot
+    .getByRole('button', { name: 'Создать', exact: true })
+    .boundingBox())!;
+  expect(submitBox.y + submitBox.height).toBeLessThanOrEqual(810);
+  expect(errors).toEqual([]);
+});
+
 test.beforeEach(async ({ page }, testInfo) => {
   await page.route('**/*', route => {
     const hostname = new URL(route.request().url()).hostname;

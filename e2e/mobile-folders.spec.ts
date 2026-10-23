@@ -131,7 +131,15 @@ for (const clients of [false, true]) {
           (await buttons.allTextContents())
             .map(text => text.trim())
             .slice(2 + names.length)
-        ).toEqual(['Сайт', 'Авито', 'ВК', 'Новые заявки', 'Поддержка']);
+        ).toEqual([
+          'Сайт',
+          'Авито',
+          'ВК',
+          'Telegram',
+          'MAX',
+          'Новые заявки',
+          'Поддержка'
+        ]);
       for (const width of [320, 360, 393, 412, 768]) {
         await page.setViewportSize({ width, height: 851 });
         const search = (await page.locator('.search-yui-kit').boundingBox())!;
@@ -400,7 +408,7 @@ test('Настройки и системные папки доступны бе�
     page.locator('.chat-folder-rail__items [data-folder-id]')
   ).toHaveCount(0);
   await expect(page.locator('.chat-folder-rail__items > button')).toHaveCount(
-    7
+    9
   );
   await page.getByTestId('Clients-SystemFolder-site').tap();
   await expect(page.locator('.contact-list__li')).toHaveCount(1);

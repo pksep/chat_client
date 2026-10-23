@@ -57,6 +57,7 @@ final class ChatNotificationRecoveryPlan {
         data.put("messageId", latest.optString("id"));
         data.put("senderUserId", latest.optString("senderUserId"));
         data.put("senderName", senderName);
+        data.put("senderAvatarUrl", sender != null ? sender.optString("avatarUrl", "") : "");
         data.put("conversationTitle", title);
         data.put("stateAt", String.valueOf(timestamp(latest)));
         data.put("unreadCount", String.valueOf(muted ? messages.size() : topic.optInt("unreadMessageCount")));

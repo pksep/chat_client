@@ -410,6 +410,7 @@ import {
 import MessageListUserItems from './Messages/MessageListUserItems.vue';
 import MessageListInput from './Messages/MessageListInput.vue';
 import ReactionHeartIcon from './UI/ReactionHeartIcon.vue';
+import { subscribeToOwnReactions } from '../services/useChat';
 import {
   MessageTypeEnum,
   PushNotification,
@@ -2478,7 +2479,7 @@ const applyUnreadMarkerStateForTopic = (topicId: string) => {
 };
 
 const dismissUnreadMarkerForTopic = (topicId: string) => {
-  // Своя отправка завершает границу непрочитанных до следующего открытия чата.
+  // Своя отправка или реакция завершает границу до следующего открытия чата.
   dismissedUnreadMarkerTopics.add(topicId);
   unreadMarkerMessageIdsByTopic[topicId] = null;
   if (route.value.id === topicId) {
@@ -2486,6 +2487,11 @@ const dismissUnreadMarkerForTopic = (topicId: string) => {
     state.hideUnreadMarker = true;
   }
 };
+
+const unsubscribeOwnReactions = subscribeToOwnReactions(topicId => {
+  if (route.value.id === topicId) dismissUnreadMarkerForTopic(topicId);
+});
+onBeforeUnmount(unsubscribeOwnReactions);
 
 const handleWindowFocusRefresh = () => {
   refreshUnreadMarkerState();
@@ -4053,10 +4059,20 @@ watch(
         message.senderUserId !== authUser.value?.id &&
         message.isReadByMe !== true
     );
-    const shouldPositionToUnread =
+    const canSetInitialUnreadMarker =
       topicUnreadCount > 0 &&
       !shouldScrollToBottomForNotification &&
       !shouldBootstrapAroundMessage &&
+      initialNavigationRevision === messageNavigationRevision &&
+      !dismissedUnreadMarkerTopics.has(topicId) &&
+      !!initialUnreadMessage;
+    if (canSetInitialUnreadMarker) {
+      // Граница фиксируется до read-receipt и восстановления позиции. Намерение
+      // пользователя прокрутить историю отменяет автоскролл, но не саму плашку.
+      unreadMarkerMessageIdsByTopic[topicId] = initialUnreadMessage.id;
+    }
+    const shouldPositionToUnread =
+      canSetInitialUnreadMarker &&
       !hasTopicSwitchUserScrollIntent(topicSwitchToken) &&
       scrollAnchor.viewportMode.value !== 'jump' &&
       !!initialUnreadMessage;
@@ -4068,7 +4084,6 @@ watch(
         visibleMessages: initialMessages,
         visibleLimit: Math.max(fastInitialMessagesLimit, 48)
       });
-      unreadMarkerMessageIdsByTopic[topicId] = initialUnreadMessage.id;
     }
 
     // Если сообщение удалено или сеть недоступна, оставляем доступную историю.

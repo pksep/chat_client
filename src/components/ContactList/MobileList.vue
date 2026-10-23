@@ -43,7 +43,22 @@
             @close="closeFolderManager"
             @select-folder="handleSelectFolder"
             @select-topic="handleTopicSelect"
-          />
+          >
+            <template #folders>
+              <ChatFolderRail
+                mobile
+                :loading="isChatFoldersLoading"
+                :folders="chatFolders"
+                :topics="chatBadgeTopics"
+                :selected-folder-id="activeFolderId"
+                is-managing
+                is-active
+                :auth-user-id="authUserId"
+                @select="handleSelectFolder"
+                @manage="closeFolderManager"
+              />
+            </template>
+          </ChatFoldersPanel>
 
           <template v-else>
             <ChatsToolbar
@@ -73,10 +88,6 @@
                 />
               </template>
             </ChatsToolbar>
-
-            <IosPushNotificationPrompt
-              v-if="isIosWeb() && !isShareSelectionActive"
-            />
 
             <div class="chat-list">
               <TopicList
@@ -172,6 +183,13 @@
       :data-testid="`${props.dataTestid}-MobileList-BottomNav`"
     />
   </div>
+
+  <IosPushNotificationPrompt
+    v-if="isIosWeb() && !isShareSelectionActive"
+    :active="
+      activeSection === 'chats' && !selectedTopicId && !isManagingFolders
+    "
+  />
 
   <template v-if="!isAssistantRoute">
     <NewChatMobileModal

@@ -1290,8 +1290,10 @@
   transition: background-color 0.2s ease;
 }
 
-.ai-activity-panel__item:hover {
-  background: var(--action-secondary-hover-bg, #f4f7fd);
+@media (hover: hover) and (pointer: fine) {
+  .ai-activity-panel__item:hover {
+    background: var(--action-secondary-pressed-bg);
+  }
 }
 
 .ai-activity-panel__item:active {

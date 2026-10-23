@@ -6,6 +6,15 @@ import {
   openTopic
 } from './fixtures/topic-performance-page';
 
+test.beforeEach(async ({ page }) => {
+  await page.addLocatorHandler(
+    page.locator('dialog.ios-push-modal[open]'),
+    async dialog => {
+      await dialog.getByRole('button', { name: 'Позже', exact: true }).click();
+    }
+  );
+});
+
 test('фон цитаты сжимается вокруг текста и повторяется без сдвига строк', async ({
   page
 }, testInfo) => {
@@ -468,16 +477,86 @@ test('своя отправка скрывает плашку непрочита
   expect(state.errors).toEqual([]);
 });
 
-for (const unreadCount of [3, 180]) {
+test('своя реакция скрывает плашку только в текущем чате и она не возвращается от read-receipt', async ({
+  page
+}) => {
+  const state = await openFixture(page, { count: 40, unreadCount: 3 });
+  const rows = makeMessages('performance-0', 40).map((row, index) => ({
+    ...row,
+    isReadByMe: index < 37,
+    reactions:
+      index === 37
+        ? [
+            {
+              id: 'reaction',
+              messageId: row.id,
+              senderUserId: 'peer',
+              text: '❤️'
+            }
+          ]
+        : []
+  }));
+  await page.route('**/messages/topic/performance-0?*', route =>
+    route.fulfill({ json: rows })
+  );
+  await openTopic(page, 0);
+  const divider = page.locator('.chat__message-unread_messages_start');
+  await expect(divider).toBeInViewport();
+  await page.evaluate(async () => {
+    (window as any).topicPerformance.sdk.sendWebSocketEvent = () => true;
+    const path = '/src/services/useChat.ts';
+    await (
+      await import(/* @vite-ignore */ path)
+    ).setReactionMessage({
+      messageId: 'another-message',
+      topicId: 'performance-1',
+      emoji: '❤️'
+    });
+  });
+  await expect(divider).toBeInViewport();
+  await message(page, 0, 37).locator('.reaction').first().click();
+  await expect(divider).toHaveCount(0);
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(divider).toHaveCount(0);
+  expect(state.errors).toEqual([]);
+});
+
+test('прочитанный чат без устаревших read-флагов не получает плашку непрочитанных', async ({
+  page
+}) => {
+  const state = await openFixture(page, { count: 40, unreadCount: 0 });
+  const rows = makeMessages('performance-0', 40).map(row => ({
+    ...row,
+    isReadByMe: undefined
+  }));
+  await page.route('**/messages/topic/performance-0?*', route =>
+    route.fulfill({ json: rows })
+  );
+  await openTopic(page, 0);
+  await expect(page.locator('.chat__input--booting')).toHaveCount(0);
+  await expect(message(page, 0, 39)).toBeInViewport();
+  await expect(
+    page.locator('.chat__message-unread_messages_start')
+  ).toHaveCount(0);
+  expect(state.errors).toEqual([]);
+});
+
+for (const unreadCount of [3, 180, 900]) {
   test(`плашка непрочитанных видна при открытии и сохраняется после чтения: ${unreadCount}`, async ({
     page
   }) => {
-    const state = await openFixture(page, { count: 240, unreadCount });
-    const firstUnreadIndex = 240 - unreadCount;
-    const rows = makeMessages('performance-0', 240).map((row, index) => ({
-      ...row,
-      isReadByMe: index < firstUnreadIndex
-    }));
+    const messageCount = Math.max(240, unreadCount + 60);
+    const state = await openFixture(page, { count: messageCount, unreadCount });
+    const firstUnreadIndex = messageCount - unreadCount;
+    const rows = makeMessages('performance-0', messageCount).map(
+      (row, index) => ({
+        ...row,
+        isReadByMe: index < firstUnreadIndex
+      })
+    );
     await page.route('**/messages/topic/performance-0?*', async route => {
       const params = new URL(route.request().url()).searchParams;
       const limit = Number(params.get('limit') || 48);

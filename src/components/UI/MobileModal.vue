@@ -3,7 +3,14 @@
     v-if="hasOpened"
     :open="isModalOpen"
     position="bottom"
-    :class="['mobile__modal', props.class]"
+    :class="[
+      'mobile__modal',
+      props.class,
+      {
+        'mobile__modal--divider': props.showDivider,
+        'mobile__modal--footer': !!$slots.footer
+      }
+    ]"
     @close="handleCloseModal"
     :data-testid="`${dataTestid}-MobileModal-Container`"
   >

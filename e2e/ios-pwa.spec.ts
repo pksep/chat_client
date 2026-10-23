@@ -15,6 +15,12 @@ test.beforeEach(async ({ page }, testInfo) => {
   const errors: string[] = [];
   pageErrors.set(page, errors);
   page.on('pageerror', error => errors.push(error.message));
+  await page.addLocatorHandler(
+    page.locator('dialog.ios-push-modal[open]'),
+    async dialog => {
+      await dialog.getByRole('button', { name: 'Позже', exact: true }).click();
+    }
+  );
   await page.route('**/e2e/ios-api/**', route => {
     const path = new URL(route.request().url()).pathname;
     if (/\/messages\/topic\/[^/]+(?:\/pinned)?$/.test(path))
@@ -123,7 +129,7 @@ test('PWA: информация группы и кнопка назад оста
         const box = (await dialog.boundingBox())!;
         return Math.round(box.y + box.height);
       })
-      .toBeLessThanOrEqual(top + height - 34);
+      .toBe(top + height);
   }
   await page.screenshot({
     path: testInfo.outputPath('group-info-safe-area.png')
@@ -635,10 +641,7 @@ for (const standalone of [true, false]) {
         document.documentElement.style.setProperty('--ios-safe-bottom', '34px');
       });
     const navBox = (await nav.boundingBox())!;
-    expect(navBox.y + navBox.height).toBeCloseTo(
-      844 - (standalone ? 34 : 8),
-      0
-    );
+    expect(navBox.y + navBox.height).toBeCloseTo(844 - 20, 0);
     const avatar = nav.locator('.cached-avatar');
     await expect(avatar).toHaveClass(/cached-avatar--image-ready/);
     expect(

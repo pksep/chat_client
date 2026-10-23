@@ -85,7 +85,12 @@ html.chat-ios-keyboard-open {
   :is(.chat__input, .chat__header-mobile-search-controls, .selected-messages) {
   position: relative;
   bottom: auto;
-  padding-bottom: calc(10px + var(--ios-safe-bottom));
+  padding-bottom: 20px;
+}
+
+.chat-ios-keyboard-open
+  :is(.chat__input, .chat__header-mobile-search-controls, .selected-messages) {
+  padding-bottom: 10px;
 }
 
 .chat-ios-pwa .chat__header-mobile-search-controls {
@@ -105,26 +110,90 @@ html.chat-ios-keyboard-open {
 }
 
 /* Native dialog и fixed-окна находятся вне области раскладки #app. */
-.chat-ios-pwa dialog.mobile__modal.modal-yui-kit {
+.chat-ios-pwa
+  dialog.modal-yui-kit:is(
+    .mobile__modal:not(.mobile-modal),
+    .chat-folder-details-modal
+  ) {
+  --menu-section-safe-top: 10px;
   box-sizing: border-box;
-  top: calc(var(--ios-viewport-top, 0px) + var(--ios-safe-top));
-  bottom: calc(
-    max(
-        0px,
-        calc(
-          100% - var(--ios-viewport-top, 0px) -
-            var(--ios-viewport-height, 100dvh)
-        )
-      ) + var(--ios-safe-bottom)
+  top: var(--ios-viewport-top, 0px);
+  bottom: auto;
+  margin: 0;
+  height: var(--ios-viewport-height, 100dvh) !important;
+  max-height: var(--ios-viewport-height, 100dvh);
+  padding: var(--ios-safe-top) 0 var(--ios-safe-bottom) !important;
+  border: 0;
+  border-radius: 0 !important;
+}
+
+.chat-ios-pwa dialog.mobile__modal:not(.mobile-modal) {
+  --mobile-modal-rows: max-content minmax(0, 1fr);
+}
+
+.chat-ios-pwa dialog.mobile__modal:not(.mobile-modal).mobile__modal--divider {
+  --mobile-modal-rows: max-content max-content minmax(0, 1fr);
+}
+
+.chat-ios-pwa dialog.mobile__modal:not(.mobile-modal).mobile__modal--footer {
+  --mobile-modal-rows: max-content minmax(0, 1fr) max-content;
+}
+
+.chat-ios-pwa
+  dialog.mobile__modal:not(
+    .mobile-modal
+  ).mobile__modal--divider.mobile__modal--footer {
+  --mobile-modal-rows: max-content max-content minmax(0, 1fr) max-content;
+}
+
+.chat-ios-pwa
+  dialog.mobile__modal:not(.mobile-modal)
+  > .modal-yui-kit__modal-content {
+  grid-template-rows: var(--mobile-modal-rows);
+}
+
+.chat-ios-pwa dialog.mobile__modal:not(.mobile-modal) .mobile__modal-content {
+  min-height: 0;
+  overflow: auto;
+}
+
+.chat-ios-pwa dialog.new-bot-mobile .mobile__modal-content {
+  height: auto;
+}
+
+.chat-ios-pwa .new-bot-mobile .new-bot-mobile__body {
+  height: 100%;
+  min-height: 0;
+}
+
+.chat-ios-pwa .new-bot-mobile .bot-editor--mobile {
+  min-height: 0;
+  overflow: auto;
+}
+
+.chat-ios-pwa
+  dialog.modal-yui-kit:is(
+    .mobile__modal:not(.mobile-modal),
+    .chat-folder-details-modal
+  )
+  > .modal-yui-kit__modal-content {
+  box-sizing: border-box;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  border-radius: 0 !important;
+}
+
+.chat-ios-pwa dialog.mobile-modal.modal-yui-kit {
+  top: auto;
+  bottom: max(
+    0px,
+    calc(
+      100% - var(--ios-viewport-top, 0px) - var(--ios-viewport-height, 100dvh)
+    )
   );
-  height: calc(
-    var(--ios-viewport-height, 100dvh) - var(--ios-safe-top) -
-      var(--ios-safe-bottom)
-  );
-  max-height: calc(
-    var(--ios-viewport-height, 100dvh) - var(--ios-safe-top) -
-      var(--ios-safe-bottom)
-  );
+  max-height: calc(var(--ios-viewport-height, 100dvh) - var(--ios-safe-top));
+  padding-bottom: var(--ios-safe-bottom);
 }
 
 .chat-ios-pwa .call-modal {
@@ -135,7 +204,7 @@ html.chat-ios-keyboard-open {
 }
 
 .chat-ios-pwa .call-modal__container {
-  padding-top: calc(15px + var(--ios-safe-top));
+  padding-top: calc(20px + var(--ios-safe-top));
   padding-bottom: calc(10px + var(--ios-safe-bottom));
   transition: none;
 }
@@ -234,7 +303,7 @@ html.chat-ios-keyboard-open {
 
 .chat-ios-web .mobile-list-container > .menu-bottom-nav {
   position: absolute;
-  bottom: max(8px, var(--ios-safe-bottom, env(safe-area-inset-bottom, 0px)));
+  bottom: 20px;
 }
 
 /* Форма должна прокручиваться внутри visualViewport, а не двигать корень PWA. */
