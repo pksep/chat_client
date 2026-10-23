@@ -78,6 +78,7 @@ import type { PaginatedResponse } from '../services/useChatSDK/types';
 import { isTopicSyncState, type TopicSyncState } from '../utils/topic-sync';
 import { isPtsReplayStale } from '../utils/pts-replay';
 import { rememberNativeTopicSync } from '../services/native-startup-reads';
+import { afterStartupPaint } from '../utils/after-startup-paint';
 
 const topics = ref<ITopic[]>([]);
 const topicsById = computed(
@@ -469,10 +470,20 @@ const createTopicsApi = () => {
       clearTimeout(persistTopicsTimeout);
     }
 
-    persistTopicsTimeout = setTimeout(() => {
+    const timeout = setTimeout(async () => {
+      // Сериализация списка и IndexedDB не должны задерживать первый свежий кадр.
+      await afterStartupPaint();
+      if (persistTopicsTimeout !== timeout) return;
       persistTopicsTimeout = null;
-      void saveCachedTopics(stripEphemeralTopicState(topics.value || []));
+      const userId = authedUser.value?.id;
+      const confirmedAt = lastNetworkTopicsAppliedAt;
+      void saveCachedTopics(
+        stripEphemeralTopicState(topics.value || []),
+        userId,
+        confirmedAt
+      );
     }, 150);
+    persistTopicsTimeout = timeout;
   };
 
   const setTopics = (newTopics: ITopic[]) => {
@@ -839,7 +850,7 @@ const createTopicsApi = () => {
     const retained = topics.value.filter(
       topic =>
         (!isCallTopic(topic) || topic.id === route.value.id) &&
-        (hasMoreTopics.value ||
+        ((hasMoreTopics.value && !pruneMissing) ||
           !isMainListTopic(topic) ||
           session.ids.has(topic.id) ||
           (!pruneMissing && topic.id === route.value.id))
@@ -908,6 +919,7 @@ const createTopicsApi = () => {
     forceFull?: boolean;
     deferMaintenanceUntil?: Promise<void>;
     cacheReady?: Promise<void>;
+    discardCachedTopics?: boolean;
     onNetworkApplied?: (sync?: TopicSyncState) => void;
   }): Promise<ITopic[]> => {
     if (
@@ -1000,7 +1012,7 @@ const createTopicsApi = () => {
         includeSync: true
       });
       if (!isCurrent()) return topics.value;
-      applyTopicPage(response, session, 1, isDelta);
+      const pages = [{ response, page: 1 }];
       // Старый сервер игнорирует scope: первые страницы могут состоять только
       // из служебных звонков. Доходим до обычных чатов без пустого первого экрана.
       if (
@@ -1009,12 +1021,18 @@ const createTopicsApi = () => {
         response.data.some(topic => !isMainListTopic(topic))
       ) {
         let visibleCount = response.data.filter(isMainListTopic).length;
-        while (hasMoreTopics.value && visibleCount < TOPICS_PAGE_SIZE) {
-          const totalPages = response.meta?.totalPages ?? response.totalPages;
+        let currentPage = 1;
+        let lastPage = response;
+        const receivedIds = new Set(response.data.map(topic => topic.id));
+        while (
+          hasNextTopicPage(lastPage, currentPage, TOPICS_PAGE_SIZE) &&
+          visibleCount < TOPICS_PAGE_SIZE
+        ) {
+          const totalPages = lastPage.meta?.totalPages ?? lastPage.totalPages;
           const batchSize = Number.isInteger(totalPages)
-            ? Math.max(1, Math.min(3, totalPages! - session.page))
+            ? Math.max(1, Math.min(3, totalPages! - currentPage))
             : 1;
-          const firstPage = session.page + 1;
+          const firstPage = currentPage + 1;
           const batch = await Promise.allSettled(
             Array.from({ length: batchSize }, (_, index) =>
               sdk.getTopics({ page: firstPage + index, scope: 'chats' })
@@ -1027,16 +1045,27 @@ const createTopicsApi = () => {
             const page = firstPage + index;
             if (
               hasNextTopicPage(next, page, TOPICS_PAGE_SIZE) &&
-              next.data.every(topic => session.ids.has(topic.id))
+              next.data.every(topic => receivedIds.has(topic.id))
             )
               throw new Error(
                 'Сервер вернул повторную или пустую страницу чатов'
               );
             visibleCount += next.data.filter(isMainListTopic).length;
-            applyTopicPage(next, session, page);
+            next.data.forEach(topic => receivedIds.add(topic.id));
+            pages.push({ response: next, page });
+            currentPage = page;
+            lastPage = next;
           }
         }
       }
+      // Все страницы первого экрана применяются в одном цикле Vue.
+      for (const entry of pages)
+        applyTopicPage(
+          entry.response,
+          session,
+          entry.page,
+          isDelta || (entry.page === 1 && options?.discardCachedTopics === true)
+        );
       // Старый API без курсора и без прежнего снимка нечего подтверждать
       // или сбрасывать. Запись пустого снимка задерживала первый экран.
       if (session.sync || confirmed) await persistTopicSyncSession(session);

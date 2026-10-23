@@ -4,6 +4,11 @@ import { toRaw } from 'vue';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
 import { isTopicSyncState, type TopicSyncState } from '../utils/topic-sync';
+import { getConfig } from './useConfig';
+import {
+  clearTopicPreviewFreshness,
+  saveTopicPreviewFreshness
+} from '../utils/startup-topic-freshness';
 
 const DB_NAME = 'chat-offline-state-db';
 const STORE_NAME = 'entities';
@@ -116,17 +121,22 @@ export const loadFastCachedTopics = <T = ITopic>(
 
 const saveFastCachedTopics = <T>(
   topics: T[],
-  userId = getResolvedUserId()
+  userId = getResolvedUserId(),
+  confirmedAt = 0
 ): void => {
   if (typeof window === 'undefined' || !userId) {
     return;
   }
 
+  const apiUrl = getConfig().CHAT_API_DOMAIN || '';
+  // Другая вкладка или фоновый снимок не подтверждают свежесть своего кеша.
+  clearTopicPreviewFreshness(userId);
   try {
     window.localStorage.setItem(
       getFastTopicsCacheKey(userId),
       JSON.stringify(serializeValue(topics))
     );
+    saveTopicPreviewFreshness(apiUrl, userId, confirmedAt);
   } catch (error) {
     console.warn('Failed to save fast cached topics:', error);
   }
@@ -221,14 +231,15 @@ const saveCachedEntity = async <T>(
   type: CacheEntityType,
   items: T[],
   userId = getResolvedUserId(),
-  topicSync?: TopicSyncState | null
+  topicSync?: TopicSyncState | null,
+  confirmedAt = 0
 ): Promise<void> => {
   if (!userId) {
     return;
   }
 
   if (type === 'topics') {
-    saveFastCachedTopics(items, userId);
+    saveFastCachedTopics(items, userId, confirmedAt);
   }
 
   try {
@@ -267,8 +278,10 @@ export const loadCachedTopics = async (userId?: string): Promise<ITopic[]> =>
 
 export const saveCachedTopics = async (
   topics: ITopic[],
-  userId?: string
-): Promise<void> => saveCachedEntity<ITopic>('topics', topics, userId);
+  userId?: string,
+  confirmedAt?: number
+): Promise<void> =>
+  saveCachedEntity<ITopic>('topics', topics, userId, undefined, confirmedAt);
 
 export const saveCachedTopicSyncSnapshot = (
   topics: ITopic[],

@@ -1450,6 +1450,18 @@ export const prefetchNotificationHistory = (
   };
 };
 
+const initialHistoryReads = new Set<{
+  topicId: string;
+  changes: Map<string, IMessage>;
+}>();
+const recordInitialHistoryChange = (
+  topicId: string,
+  message: IMessage
+): void => {
+  for (const read of initialHistoryReads)
+    if (read.topicId === topicId) read.changes.set(message.id, message);
+};
+
 export const fetchMessagesForTopic = async (
   topicId: string = route.value.id,
   opts?: {
@@ -1465,6 +1477,7 @@ export const fetchMessagesForTopic = async (
     visibleLimit?: number;
     updateVisible?: boolean;
     revealIfEmpty?: boolean;
+    replaceInitialWindow?: boolean;
     allowVisibleShrink?: boolean;
     skipShadowSnapshot?: boolean;
     allowStaleFallback?: boolean;
@@ -1472,6 +1485,10 @@ export const fetchMessagesForTopic = async (
     maxAgeMs?: number;
   }
 ): Promise<IMessage[]> => {
+  const initialRead = opts?.replaceInitialWindow
+    ? { topicId, changes: new Map<string, IMessage>() }
+    : undefined;
+  if (initialRead) initialHistoryReads.add(initialRead);
   try {
     if (!topicId) return [];
 
@@ -1723,7 +1740,7 @@ export const fetchMessagesForTopic = async (
     const earlyResult = await earlyRequest;
     if (earlyRequest && requestSdk !== getChatSDK()) return [];
     if (earlyResult?.ok === false) throw earlyResult.error;
-    const messages = normalizePaginationResult(
+    const networkMessages = normalizePaginationResult(
       earlyResult?.ok === true && earlyResult.messages
         ? earlyResult.messages
         : await sdk.getMessages(topicId, {
@@ -1735,6 +1752,13 @@ export const fetchMessagesForTopic = async (
           }),
       opts
     );
+    // Пока HTTP выполнялся, WS мог принести отправку или правку сообщения.
+    const messages = initialRead
+      ? dedupeMessagesForTopic([
+          ...networkMessages,
+          ...initialRead.changes.values()
+        ])
+      : networkMessages;
     cleanupFavoriteTopicSystemMessages(getSelectedTopic(topicId), messages);
 
     void recordShadowChatEvent({
@@ -1761,9 +1785,10 @@ export const fetchMessagesForTopic = async (
     if (!opts?.skipSave) {
       const existing = getFullMessagesByTopicId(topicId) || [];
 
-      let combined = isPaginationRequest
-        ? mergeWithPendingOutgoingMessages(messages, existing)
-        : [...existing, ...messages];
+      let combined =
+        isPaginationRequest || opts?.replaceInitialWindow
+          ? mergeWithPendingOutgoingMessages(messages, existing)
+          : [...existing, ...messages];
 
       if (opts?.lastMessageId) {
         combined = [...messages, ...existing];
@@ -1772,14 +1797,16 @@ export const fetchMessagesForTopic = async (
       }
       const unique = dedupeMessagesForTopic(combined);
       const existingVisible = getMessagesByTopicId(topicId);
-      const visibleMessages = opts?.lastMessageId
-        ? dedupeMessagesForTopic([...messages, ...existingVisible])
-        : opts?.afterMessageId
-          ? dedupeMessagesForTopic([...existingVisible, ...messages])
-          : dedupeMessagesForTopic([
-              ...existingVisible,
-              ...mergeWithPendingOutgoingMessages(messages, existingVisible)
-            ]);
+      const visibleMessages = opts?.replaceInitialWindow
+        ? mergeWithPendingOutgoingMessages(messages, existing)
+        : opts?.lastMessageId
+          ? dedupeMessagesForTopic([...messages, ...existingVisible])
+          : opts?.afterMessageId
+            ? dedupeMessagesForTopic([...existingVisible, ...messages])
+            : dedupeMessagesForTopic([
+                ...existingVisible,
+                ...mergeWithPendingOutgoingMessages(messages, existingVisible)
+              ]);
 
       saveMessagesToLocal(topicId, unique, {
         syncLastMessage: opts?.syncLastMessage ?? false,
@@ -1832,6 +1859,8 @@ export const fetchMessagesForTopic = async (
     }
 
     return hydrateMessagesFromCache(topicId);
+  } finally {
+    if (initialRead) initialHistoryReads.delete(initialRead);
   }
 };
 
@@ -1999,6 +2028,7 @@ export const addMessageToLocal = (
   if (reconcileDeletedMessage(topicId, message)) {
     return;
   }
+  recordInitialHistoryChange(topicId, message);
 
   const existingMessages = getFullMessagesByTopicId(topicId);
   const alreadyExists = existingMessages.some(item => item.id === message.id);
@@ -2277,6 +2307,7 @@ export const editMessageFromLocal = (
   topicId: string,
   message: IMessage
 ): void => {
+  recordInitialHistoryChange(topicId, message);
   const existingMessages = getFullMessagesByTopicId(topicId);
 
   const updateMessage = (msg: IMessage): IMessage => {

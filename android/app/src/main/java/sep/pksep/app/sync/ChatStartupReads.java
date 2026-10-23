@@ -1,6 +1,7 @@
 package sep.pksep.app.sync;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.LinkedHashMap;
@@ -14,7 +15,10 @@ import sep.pksep.app.BuildConfig;
 public final class ChatStartupReads {
     private static final String PREFS = "chat_startup_reads";
     private static final int MAX_READS = 5;
+    private static final String FULL_TOPICS_ENDPOINT =
+        "/topics?page=1&limit=50&scope=chats&includeUnread=true&includeSync=true";
     private static final long MAX_AGE_MS = 10_000L;
+    private static final long SYNC_RETRY_DELAY_MS = 5 * 60_000L;
     private static final ExecutorService IO = Executors.newFixedThreadPool(MAX_READS);
     private static final Map<String, CompletableFuture<JSONObject>> pending = new LinkedHashMap<>();
     private static ChatBackgroundSyncStore.Session session;
@@ -38,14 +42,18 @@ public final class ChatStartupReads {
             try {
                 ChatBackgroundSyncStore.Session saved = ChatBackgroundSyncStore.getSession(app);
                 if (!saved.isValid() || saved.userId.isEmpty()) return;
-                JSONObject plan = new JSONObject(app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                    .getString("plan", "{}"));
+                SharedPreferences preferences = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                JSONObject plan = new JSONObject(preferences.getString("plan", "{}"));
                 boolean sameAccount = saved.userId.equals(plan.optString("userId")) &&
                     saved.apiUrl.equals(plan.optString("apiUrl"));
                 JSONArray endpoints = sameAccount ? plan.optJSONArray("endpoints") : null;
+                boolean useFullTopics = sameAccount && useFullTopicsUntilRetry(
+                    saved.apiUrl, preferences.getString("syncFallbackApi", ""),
+                    preferences.getLong("syncRetryAt", 0L), System.currentTimeMillis()
+                );
                 if (endpoints == null) endpoints = new JSONArray()
                     .put("/users?page=1&limit=200")
-                    .put("/topics?page=1&limit=50&scope=chats&includeUnread=true&includeSync=true");
+                    .put(FULL_TOPICS_ENDPOINT);
                 synchronized (ChatStartupReads.class) {
                     pending.clear();
                     session = saved;
@@ -53,7 +61,12 @@ public final class ChatStartupReads {
                     for (int i = 0; i < endpoints.length() && pending.size() < MAX_READS; i++) {
                         String endpoint = endpoints.optString(i);
                         if (!isAllowed(endpoint) || pending.containsKey(endpoint)) continue;
-                        schedule(saved, endpoint);
+                        if (useFullTopics && endpoint.startsWith("/topics/sync?")) {
+                            pending.put(endpoint, CompletableFuture.completedFuture(
+                                new JSONObject().put("reset", true)
+                            ));
+                            scheduleFullTopics(app, saved);
+                        } else schedule(app, saved, endpoint);
                     }
                 }
             } catch (Exception invalidPlan) {
@@ -62,27 +75,65 @@ public final class ChatStartupReads {
         });
     }
 
-    private static void schedule(ChatBackgroundSyncStore.Session saved, String endpoint) {
+    private static void schedule(Context app, ChatBackgroundSyncStore.Session saved, String endpoint) {
         pending.put(endpoint, CompletableFuture.supplyAsync(() -> {
             try {
                 mark("startup-read-requested");
                 JSONObject result = new ChatBackgroundSyncApi(saved, 1200, 3000).fetchStartupRead(endpoint);
                 mark("startup-read-received");
+                if (endpoint.startsWith("/topics/sync?") && result.optBoolean("reset", false)) {
+                    synchronized (ChatStartupReads.class) {
+                        if (session == saved) scheduleFullTopics(app, saved);
+                    }
+                }
                 if (endpoint.startsWith("/topics?page=1&") && !result.has("sync") && hasServiceTopics(result)) {
                     JSONObject meta = result.optJSONObject("meta");
                     int pages = meta == null ? 1 : meta.optInt("totalPages", 1);
                     synchronized (ChatStartupReads.class) {
                         if (session == saved) for (int page = 2; page <= Math.min(pages, 4); page++) {
                             String next = "/topics?page=" + page + "&limit=50&scope=chats";
-                            if (!pending.containsKey(next)) schedule(saved, next);
+                            if (!pending.containsKey(next)) schedule(app, saved, next);
                         }
                     }
                 }
                 return result;
+            } catch (ChatBackgroundSyncApi.ApiException rejected) {
+                if (shouldResetSync(endpoint, rejected.statusCode)) {
+                    synchronized (ChatStartupReads.class) {
+                        if (session != saved) return null;
+                        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                            .putString("syncFallbackApi", saved.apiUrl)
+                            .putLong("syncRetryAt", System.currentTimeMillis() + SYNC_RETRY_DELAY_MS)
+                            .apply();
+                        scheduleFullTopics(app, saved);
+                    }
+                    // Не повторяем в WebView уже отклонённую сервером дельту.
+                    // Клиент заберёт свежий полный ответ через обычный fallback.
+                    try {
+                        return new JSONObject().put("reset", true);
+                    } catch (Exception invalidResponse) {
+                        return null;
+                    }
+                }
+                return null;
             } catch (Exception unavailable) {
                 return null;
             }
         }, IO));
+    }
+
+    private static void scheduleFullTopics(Context app, ChatBackgroundSyncStore.Session saved) {
+        if (!pending.containsKey(FULL_TOPICS_ENDPOINT)) schedule(app, saved, FULL_TOPICS_ENDPOINT);
+    }
+
+    static boolean useFullTopicsUntilRetry(String apiUrl, String fallbackApi, long retryAt, long now) {
+        return apiUrl != null && !apiUrl.isEmpty() && apiUrl.equals(fallbackApi) &&
+            retryAt > now && retryAt - now <= SYNC_RETRY_DELAY_MS;
+    }
+
+    static boolean shouldResetSync(String endpoint, int statusCode) {
+        return endpoint != null && endpoint.startsWith("/topics/sync?") &&
+            (statusCode == 400 || statusCode == 404 || statusCode == 405 || statusCode == 501);
     }
 
     static boolean hasServiceTopics(JSONObject response) {

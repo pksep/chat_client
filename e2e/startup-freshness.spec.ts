@@ -158,10 +158,34 @@ test('прямой вход показывает сохранённое врем
   }
 });
 
-test('обычный запуск ждёт свежий список и показывает новое сообщение в первом кадре', async ({
-  page
+test('недавний кеш виден до сети, затем список обновляется без повторного запуска', async ({
+  page,
+  isMobile
 }) => {
+  test.skip(!isMobile, 'Быстрый показ кеша при мобильном запуске');
   await prepare(page);
+  await page.addInitScript(
+    ({ origin, userId }) => {
+      localStorage.setItem(
+        `chat-topic-preview-v1:${origin}/api:${userId}`,
+        String(Date.now())
+      );
+    },
+    { origin: fixture.origin, userId: fixture.user.id }
+  );
+  await page.addInitScript(() => {
+    const writes: Array<{ at: number; shellVisible: boolean }> = [];
+    (window as any).__topicCacheWrites = writes;
+    const put = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (...args) {
+      if (args[0]?.type === 'topics')
+        writes.push({
+          at: performance.now(),
+          shellVisible: !!document.getElementById('startup-shell')
+        });
+      return put.apply(this, args);
+    };
+  });
   let release!: () => void;
   const gate = new Promise<void>(resolve => {
     release = resolve;
@@ -187,10 +211,16 @@ test('обычный запуск ждёт свежий список и пока
   try {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect.poll(() => requested, { timeout: 30_000 }).toBe(true);
-    await expect(page.locator('#startup-shell')).toHaveCount(1);
+    await expect(page.locator('#startup-shell')).toHaveCount(0);
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__firstTopicFrame))
+      .toContain('Сохранённое сообщение');
     expect(
-      await page.evaluate(() => (window as any).__firstTopicFrame)
-    ).toBeNull();
+      await page.evaluate(
+        () =>
+          performance.getEntriesByName('chat-startup:topics-resolved').length
+      )
+    ).toBe(0);
   } finally {
     release();
   }
@@ -199,7 +229,10 @@ test('обычный запуск ждёт свежий список и пока
   });
   await expect
     .poll(() => page.evaluate(() => (window as any).__firstTopicFrame))
-    .toContain('Новое сообщение после закрытия');
+    .toContain('Сохранённое сообщение');
+  await expect(
+    page.locator(`[data-topic-id="${fixture.topics[1].id}"]`)
+  ).toContainText('Новое сообщение после закрытия');
   expect(
     await page.evaluate(
       () =>
@@ -210,6 +243,118 @@ test('обычный запуск ждёт свежий список и пока
         )?.detail?.isFresh
     )
   ).toBe(true);
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__topicCacheWrites.length))
+    .toBeGreaterThan(0);
+  expect(
+    await page.evaluate(() => {
+      const painted = performance.getEntriesByName(
+        'chat-startup:content-painted'
+      )[0];
+      return (window as any).__topicCacheWrites.every(
+        (write: { at: number; shellVisible: boolean }) =>
+          !write.shellVisible && write.at > painted.startTime
+      );
+    })
+  ).toBe(true);
+});
+
+for (const scenario of [
+  'month-old',
+  'missing',
+  'other-server',
+  'other-user',
+  'future',
+  'no-cache'
+]) {
+  test(`первый список ждёт свежий снимок: ${scenario}`, async ({ page }) => {
+    await prepare(page);
+    await page.addInitScript(
+      ({ origin, userId, scenario }) => {
+        const server =
+          scenario === 'other-server'
+            ? 'https://other.test/api'
+            : `${origin}/api`;
+        const user = scenario === 'other-user' ? 'other-user' : userId;
+        if (scenario !== 'missing')
+          localStorage.setItem(
+            `chat-topic-preview-v1:${server}:${user}`,
+            String(
+              Date.now() +
+                (scenario === 'month-old'
+                  ? -31 * 86400_000
+                  : scenario === 'future'
+                    ? 60_000
+                    : 0)
+            )
+          );
+        if (scenario === 'no-cache')
+          localStorage.removeItem(`chat-offline-fast-topics-v1:${userId}`);
+      },
+      { origin: fixture.origin, userId: fixture.user.id, scenario }
+    );
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    let requests = 0;
+    await page.route('**/api/topics?*', async route => {
+      requests++;
+      await gate;
+      await route.fulfill({
+        json: { data: fixture.topics, total: fixture.topics.length }
+      });
+    });
+    try {
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
+      await expect.poll(() => requests, { timeout: 30_000 }).toBeGreaterThan(0);
+      await expect(page.locator('#startup-shell')).toHaveCount(1);
+      expect(
+        await page.evaluate(() => (window as any).__firstTopicFrame)
+      ).toBeNull();
+      release();
+      await expect(page.locator('#startup-shell')).toHaveCount(0);
+      await expect
+        .poll(() => page.evaluate(() => (window as any).__firstTopicFrame))
+        .toContain(fixture.topics[1].lastMessage.text);
+    } finally {
+      release();
+    }
+  });
+}
+
+test('запись кеша другого сервера отменяет прежнюю отметку свежести', async ({
+  page
+}) => {
+  await page.route('**/cache-scope', route =>
+    route.fulfill({ contentType: 'text/html', body: '<!doctype html>' })
+  );
+  await page.goto('/cache-scope');
+  const result = await page.evaluate(async () => {
+    const { setConfig } = await import('/src/services/useConfig.ts');
+    const { saveCachedTopics } = await import(
+      '/src/services/useChatStateCache.ts'
+    );
+    const { hasRecentTopicPreview } = await import(
+      '/src/utils/startup-topic-freshness.ts'
+    );
+    const userId = 'same-user';
+    setConfig({ CHAT_API_DOMAIN: 'https://first.test/api' });
+    await saveCachedTopics([], userId, Date.now());
+    const firstBefore = hasRecentTopicPreview('https://first.test/api', userId);
+    setConfig({ CHAT_API_DOMAIN: 'https://second.test/api' });
+    await saveCachedTopics([], userId, Date.now());
+    return {
+      firstBefore,
+      firstAfter: hasRecentTopicPreview('https://first.test/api', userId),
+      second: hasRecentTopicPreview('https://second.test/api', userId)
+    };
+  });
+  expect(result).toEqual({
+    firstBefore: true,
+    firstAfter: false,
+    second: true
+  });
 });
 
 test('нет сети: обычный запуск показывает кеш со статусом в заголовке', async ({
@@ -361,31 +506,48 @@ for (const scenario of [
   'failed',
   'stalled',
   'stalled-in-list',
+  'fresh-in-list',
   'offline',
   'pending-text-without-snapshot'
 ]) {
   const failNetwork = scenario === 'failed';
-  const openFromList = scenario === 'stalled-in-list';
-  const stallNetwork = scenario === 'stalled' || openFromList;
+  const openFromList =
+    scenario === 'stalled-in-list' || scenario === 'fresh-in-list';
+  const freshFromList = scenario === 'fresh-in-list';
+  const stallNetwork = scenario === 'stalled' || scenario === 'stalled-in-list';
   const offline = scenario === 'offline';
   const missingPendingSnapshot = scenario === 'pending-text-without-snapshot';
-  const description = openFromList
-    ? 'сохранённый чат открывается из списка при зависшем HTTP'
-    : stallNetwork
-      ? 'зависший HTTP не блокирует сохранённую историю'
-      : offline
-        ? 'без сети доступна сохранённая история'
-        : failNetwork
-          ? 'ошибка HTTP возвращает сохранённую историю'
-          : missingPendingSnapshot
-            ? 'неотправленный текст без отдельного снимка сохраняется'
-            : 'свежий ответ сохраняет неотправленное сообщение';
+  const description = freshFromList
+    ? 'много новых сообщений: из списка сразу показывается актуальное окно'
+    : openFromList
+      ? 'сохранённый чат открывается из списка при зависшем HTTP'
+      : stallNetwork
+        ? 'зависший HTTP не блокирует сохранённую историю'
+        : offline
+          ? 'без сети доступна сохранённая история'
+          : failNetwork
+            ? 'ошибка HTTP возвращает сохранённую историю'
+            : missingPendingSnapshot
+              ? 'неотправленный текст без отдельного снимка сохраняется'
+              : 'свежий ответ сохраняет неотправленное сообщение';
   test(`первый экран чата: ${description}`, async ({
     page,
     isMobile
   }, testInfo) => {
     test.skip(!isMobile, 'Оптимизация мобильного холодного запуска');
     await prepare(page);
+    if (freshFromList)
+      await page.route('**/api/topics?*', route =>
+        route.fulfill({
+          json: {
+            data: fixture.topics.map(topic => ({
+              ...topic,
+              unreadMessageCount: 50000
+            })),
+            total: fixture.topics.length
+          }
+        })
+      );
     await page.goto('/');
     await expect(page.locator('#startup-shell')).toHaveCount(0, {
       timeout: 30_000
@@ -454,6 +616,34 @@ for (const scenario of [
     const gate = new Promise<void>(resolve => {
       release = resolve;
     });
+    const historyLimits: number[] = [];
+    if (freshFromList) {
+      await page.evaluate(async topicId => {
+        const { hydrateMessagesFromCache } = await import(
+          '/src/services/useMessages.ts'
+        );
+        await hydrateMessagesFromCache(topicId);
+      }, topic.id);
+      await page.evaluate(cachedId => {
+        (window as any).__sawStaleHistory = false;
+        const frame = () => {
+          const node = document.querySelector<HTMLElement>(
+            `[data-message-id="${cachedId}"]`
+          );
+          if (node && node.getBoundingClientRect().height > 0)
+            (window as any).__sawStaleHistory = true;
+          requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+      }, cached.id);
+      await page.route('**/api/messages/topic/*?*', async route => {
+        historyLimits.push(
+          Number(new URL(route.request().url()).searchParams.get('limit'))
+        );
+        await gate;
+        await route.continue();
+      });
+    }
     if (stallNetwork) {
       await page.route('**/api/messages/topic/*?*', async route => {
         await gate;
@@ -469,6 +659,34 @@ for (const scenario of [
         await page.locator(`[data-topic-id="${topic.id}"]:visible`).click();
       } else {
         await page.goto(`/dialogs/${topic.id}`);
+      }
+      if (freshFromList) {
+        await expect.poll(() => historyLimits.length).toBeGreaterThan(0);
+        await expect(
+          page.locator(`[data-message-id="${cached.id}"]`)
+        ).not.toBeVisible();
+        await page.evaluate(
+          async ({ topic, user }) => {
+            const { addMessageToLocal, editMessageFromLocal } = await import(
+              '/src/services/useMessages.ts'
+            );
+            addMessageToLocal(topic.id, {
+              ...topic.lastMessage,
+              id: '29410000-0000-4000-8000-999999999992',
+              text: 'Пришло во время запроса',
+              senderUserId: user.id,
+              senderUser: user,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            } as any);
+            editMessageFromLocal(topic.id, {
+              ...topic.lastMessage,
+              text: 'Правка во время запроса'
+            } as any);
+          },
+          { topic, user: fixture.users[2] }
+        );
+        release();
       }
       await expect(page.locator('#startup-shell')).toHaveCount(0, {
         timeout: 30_000
@@ -499,6 +717,22 @@ for (const scenario of [
         await expect(
           page.locator(`[data-message-id="${cached.id}"]`)
         ).toHaveCount(0);
+        if (freshFromList) {
+          expect(
+            await page.evaluate(() => (window as any).__sawStaleHistory)
+          ).toBe(false);
+          expect(historyLimits.every(limit => limit > 0 && limit <= 250)).toBe(
+            true
+          );
+          await expect(
+            page.locator(
+              '[data-message-id="29410000-0000-4000-8000-999999999992"]'
+            )
+          ).toContainText('Пришло во время запроса');
+          await expect(
+            page.locator(`[data-message-id="${topic.lastMessage.id}"]`)
+          ).toContainText('Правка во время запроса');
+        }
       }
       if (stallNetwork) {
         const browserButton = page.getByRole('button', {

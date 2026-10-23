@@ -111,11 +111,25 @@ async function bootstrap(page: Page) {
   await expect
     .poll(async () => (await readSnapshot(page))?.topicSync?.pts)
     .toBe('10');
+  await expect
+    .poll(() =>
+      page.evaluate(
+        ({ origin, userId }) =>
+          Number(
+            localStorage.getItem(
+              `chat-topic-preview-v1:${origin}/api:${userId}`
+            )
+          ),
+        { origin: fixture.origin, userId: fixture.user.id }
+      )
+    )
+    .toBeGreaterThan(0);
   return () => fullRequests;
 }
 
 test('повторный запуск применяет дельту из IndexedDB, добавления и удаления без полного GET', async ({
-  page
+  page,
+  isMobile
 }) => {
   const errors = await prepare(page);
   const fullRequests = await bootstrap(page);
@@ -158,10 +172,17 @@ test('повторный запуск применяет дельту из Index
   try {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect.poll(() => cursors.length, { timeout: 15000 }).toBe(1);
-    await expect(page.locator('#startup-shell')).toHaveCount(1);
-    expect(
-      await page.evaluate(() => (window as any).__firstSyncedFrame)
-    ).toBeNull();
+    if (isMobile) {
+      await expect(page.locator('#startup-shell')).toHaveCount(0);
+      await expect
+        .poll(() => page.evaluate(() => (window as any).__firstSyncedFrame))
+        .toContain(fixture.topics[1].lastMessage.text);
+    } else {
+      await expect(page.locator('#startup-shell')).toHaveCount(1);
+      expect(
+        await page.evaluate(() => (window as any).__firstSyncedFrame)
+      ).toBeNull();
+    }
   } finally {
     release();
   }
@@ -170,7 +191,12 @@ test('повторный запуск применяет дельту из Index
   });
   await expect
     .poll(() => page.evaluate(() => (window as any).__firstSyncedFrame))
-    .toContain('Актуально после PTS');
+    .toContain(
+      isMobile ? fixture.topics[1].lastMessage.text : 'Актуально после PTS'
+    );
+  await expect(page.locator(`[data-topic-id="${updated.id}"]`)).toContainText(
+    'Актуально после PTS'
+  );
   await expect(
     page.locator(`[data-topic-id="${fixture.topics.at(-1)!.id}"]`)
   ).toHaveCount(0);
@@ -235,6 +261,14 @@ test('месячный снимок сразу обновляется через
   const errors = await prepare(page);
   const fullRequests = await bootstrap(page);
   await page.evaluate(
+    ({ origin, userId }) =>
+      localStorage.setItem(
+        `chat-topic-preview-v1:${origin}/api:${userId}`,
+        String(Date.now() - 31 * 86400_000)
+      ),
+    { origin: fixture.origin, userId: fixture.user.id }
+  );
+  await page.evaluate(
     userId =>
       new Promise<void>((resolve, reject) => {
         const open = indexedDB.open('chat-offline-state-db');
@@ -265,11 +299,59 @@ test('месячный снимок сразу обновляется через
     deltas++;
     return route.fulfill({ json: { reset: true } });
   });
-  await page.reload();
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  let full = 0;
+  let histories = 0;
+  page.on('request', request => {
+    if (new URL(request.url()).pathname.startsWith('/api/messages/topic/'))
+      histories++;
+  });
+  const current = Array.from({ length: 50 }, (_, i) => ({
+    ...fixture.topics[1],
+    id: i ? `month-new-${i}` : fixture.topics[1].id,
+    unreadMessageCount: 50000,
+    lastMessage: {
+      ...fixture.topics[1].lastMessage,
+      text: 'Актуально после месяца',
+      updatedAt: new Date().toISOString()
+    }
+  }));
+  await page.route('**/api/topics?*', async route => {
+    full++;
+    await gate;
+    await route.fulfill({
+      json: {
+        data: current,
+        unreadTopics: [],
+        sync: syncState('90000'),
+        meta: { totalItems: 120, totalPages: 3, currentPage: 1 }
+      }
+    });
+  });
+  try {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect.poll(() => full).toBe(1);
+    await expect(page.locator('#startup-shell')).toHaveCount(1);
+    expect(
+      await page.evaluate(() => (window as any).__firstSyncedFrame)
+    ).toBeNull();
+  } finally {
+    release();
+  }
   await expect(page.locator('#startup-shell')).toHaveCount(0, {
     timeout: 20_000
   });
-  await expect.poll(fullRequests).toBe(2);
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__firstSyncedFrame))
+    .toContain('Актуально после месяца');
+  await expect(
+    page.locator(`[data-topic-id="${fixture.topics.at(-1)!.id}"]`)
+  ).toHaveCount(0);
+  expect(fullRequests()).toBe(1);
+  expect(histories).toBe(0);
   expect(deltas).toBe(0);
   expect(errors).toEqual([]);
 });

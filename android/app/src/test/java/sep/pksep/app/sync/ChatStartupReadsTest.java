@@ -7,6 +7,26 @@ import org.json.JSONObject;
 
 public class ChatStartupReadsTest {
     @Test
+    public void rejectedDeltaUsesFreshFullReadsOnlyUntilTheSameServerCanBeRetried() {
+        assertTrue(ChatStartupReads.useFullTopicsUntilRetry("https://api.test", "https://api.test", 301000, 1000));
+        assertFalse(ChatStartupReads.useFullTopicsUntilRetry("https://api.test", "https://other.test", 301000, 1000));
+        assertFalse(ChatStartupReads.useFullTopicsUntilRetry("https://api.test", "https://api.test", 1000, 1000));
+        assertFalse(ChatStartupReads.useFullTopicsUntilRetry("https://api.test", "https://api.test", 301001, 1000));
+        assertFalse(ChatStartupReads.useFullTopicsUntilRetry("", "", 301000, 1000));
+    }
+
+    @Test
+    public void rejectedDeltaFallsBackWithoutRepeatingAuthenticationOrTransientFailures() {
+        for (int status : new int[] {400, 404, 405, 501}) {
+            assertTrue(ChatStartupReads.shouldResetSync("/topics/sync?version=1", status));
+            assertFalse(ChatStartupReads.shouldResetSync("/topics?page=1", status));
+        }
+        for (int status : new int[] {200, 401, 403, 408, 429, 500, 503}) {
+            assertFalse(ChatStartupReads.shouldResetSync("/topics/sync?version=1", status));
+        }
+    }
+
+    @Test
     public void onlyPrefetchesLegacyPagesWhenServicesAreMixedIntoMainList() throws Exception {
         assertFalse(ChatStartupReads.hasServiceTopics(new JSONObject("{\"data\":[{\"id\":\"dm\"}]}")));
         assertTrue(ChatStartupReads.hasServiceTopics(new JSONObject("{\"data\":[{\"group\":{\"description\":\"sep-chat:external-inquiry:v1\"}}]}")));

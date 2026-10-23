@@ -200,6 +200,15 @@ try {
               )[0];
               return mark ? performance.timeOrigin + mark.startTime : null;
             })(),
+            usedRecentCache:
+              performance.getEntriesByName('chat-startup:cached-list-ready')
+                .length > 0,
+            freshContentPaintedEpochMs: (() => {
+              const mark = performance.getEntriesByName(
+                'chat-startup:fresh-content-painted'
+              )[0];
+              return mark ? performance.timeOrigin + mark.startTime : null;
+            })(),
             freshTopicsEpochMs: (() => {
               const mark = performance.getEntriesByName(
                 'chat-startup:topics-resolved'
@@ -290,6 +299,14 @@ try {
           ? null
           : Math.max(contentEpoch, nativeContentEpoch) - deviceLaunchStartedAt;
       const deviceLaunchToContentMs = finalWebViewContentMs;
+      const deviceLaunchToFreshContentMs =
+        sample.freshContentPaintedEpochMs === null ||
+        deviceLaunchToContentMs === null
+          ? null
+          : Math.max(
+              sample.freshContentPaintedEpochMs - deviceLaunchStartedAt,
+              deviceLaunchToContentMs
+            );
       Object.assign(sample, {
         nativeMarks: nativeMarks.map(mark => ({
           stage: mark.stage,
@@ -303,27 +320,24 @@ try {
           : null,
         deviceLaunchToContentMs,
         finalWebViewContentMs,
+        deviceLaunchToFreshContentMs,
+        meetsTwoSecondVisibleListTarget:
+          deviceLaunchToContentMs !== null && deviceLaunchToContentMs <= 2000,
         readinessMetric:
           sample.contentPaintedEpochMs === null
             ? 'shell-removed'
             : 'content-painted',
         meetsTwoSecondFreshContentTarget:
-          deviceLaunchToContentMs !== null &&
-          deviceLaunchToContentMs <= 2000 &&
+          deviceLaunchToFreshContentMs !== null &&
+          deviceLaunchToFreshContentMs <= 2000 &&
           sample.freshTopicsEpochMs !== null &&
           sample.freshUsersEpochMs !== null &&
-          contentEpoch !== null &&
-          sample.freshTopicsEpochMs <= contentEpoch &&
-          sample.freshUsersEpochMs <= contentEpoch &&
           sample.expectedTopicVisible,
         meetsOneSecondTarget:
-          deviceLaunchToContentMs !== null &&
-          deviceLaunchToContentMs <= 1000 &&
+          deviceLaunchToFreshContentMs !== null &&
+          deviceLaunchToFreshContentMs <= 1000 &&
           sample.freshTopicsEpochMs !== null &&
           sample.freshUsersEpochMs !== null &&
-          contentEpoch !== null &&
-          sample.freshTopicsEpochMs <= contentEpoch &&
-          sample.freshUsersEpochMs <= contentEpoch &&
           sample.expectedTopicVisible
       });
       samples.push(sample);

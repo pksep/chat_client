@@ -58,6 +58,7 @@ import {
 } from './composables/useUsers';
 import { getConfig } from './services/useConfig';
 import { finishNativeStartupReads } from './services/native-startup-reads';
+import { hasRecentTopicPreview } from './utils/startup-topic-freshness';
 import {
   getSelectedTopic,
   getTopicList,
@@ -340,7 +341,8 @@ interface FreshChatContentState {
 
 const hydrateFreshChatContent = async (
   userId?: string,
-  cacheReady?: Promise<void>
+  cacheReady?: Promise<void>,
+  discardCachedTopics = false
 ): Promise<FreshChatContentState> => {
   if (!hasStartupNetwork()) {
     return {
@@ -398,6 +400,7 @@ const hydrateFreshChatContent = async (
   if (!shouldDeferTopicsRefresh) {
     await fetchAllTopics({
       cacheReady,
+      discardCachedTopics,
       deferMaintenanceUntil: waitForStartupPaint(),
       onNetworkApplied: () => {
         topicsRefreshed = true;
@@ -409,6 +412,15 @@ const hydrateFreshChatContent = async (
   }
 
   await usersRefresh;
+  if (topicsRefreshed) {
+    void nextTick(() => {
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          performance.mark('chat-startup:fresh-content-painted');
+        })
+      );
+    });
+  }
 
   hydratedCacheUserId = userId;
   return {
@@ -441,12 +453,13 @@ const hasPriorityMessageTopicRoute = (): boolean =>
   );
 
 const isInitialDataResolved = ref(false);
-// На главной не строим скрытый список сначала с пустыми, затем со старыми
-// и свежими данными: это занимало главный поток перед получением ответов.
+const isCachedListReady = ref(false);
+// Недавний кеш показываем сразу; после долгого перерыва ждём свежий список.
 const shouldMountChat = computed(
   () =>
     !isMobile.value ||
     hasPriorityMessageTopicRoute() ||
+    isCachedListReady.value ||
     isInitialDataResolved.value
 );
 
@@ -480,6 +493,7 @@ const scheduleStartupReady = (): void => {
   if (
     isStartupReadyScheduled ||
     (!isAppInitializationComplete &&
+      !(isCachedListReady.value && !activeTopicId) &&
       !(!isMobile.value && activeTopicId && isActiveTopicRenderReady)) ||
     (activeTopicId && !isActiveTopicRenderReady && !allowPendingStartupTopic)
   ) {
@@ -487,7 +501,6 @@ const scheduleStartupReady = (): void => {
   }
 
   isStartupReadyScheduled = true;
-  finishNativeStartupReads();
   clearTimeout(startupTopicReadyTimeout);
   performance.mark('chat-startup:content-ready');
   void nextTick(() => {
@@ -638,8 +651,9 @@ const runAppInitialization = async () => {
   const hasStoredChatSession = !!(directAuthSession?.token || storedChatToken);
   const shouldUseBootstrapToken =
     !!bootstrapErpToken && (hasStartupNetwork() || !hasStoredChatSession);
-  const initialUserId =
-    directAuthSession?.user?.id || getStoredSessionUserId() || '';
+  const initialUserId = tokenUrl
+    ? ''
+    : directAuthSession?.user?.id || getStoredSessionUserId() || '';
   let deferredStartupBackgroundSnapshotUserId: string | undefined;
   const prepareStartupBackgroundSnapshot = async (
     userId: string | undefined,
@@ -761,6 +775,11 @@ const runAppInitialization = async () => {
     setCurrentUserId(authUserId || undefined);
     if (authData.user) setAuthUser(authData.user);
 
+    const canPreviewCachedList =
+      !tokenUrl &&
+      !!authUserId &&
+      initialUserId === authUserId &&
+      hasRecentTopicPreview(config.CHAT_API_DOMAIN, authUserId);
     const cacheReady = (async () => {
       await initialCacheHydration;
       if (authUserId !== hydratedCacheUserId) {
@@ -770,6 +789,18 @@ const runAppInitialization = async () => {
         authUserId || undefined,
         'post-auth-after-cache-hydration'
       );
+      if (
+        isMobile.value &&
+        !getActiveChatTopicId() &&
+        canPreviewCachedList &&
+        getAuthUser()?.id === authUserId &&
+        !isChatSessionEnding() &&
+        getTopicList().length > 0
+      ) {
+        isCachedListReady.value = true;
+        performance.mark('chat-startup:cached-list-ready');
+        scheduleStartupReady();
+      }
     })();
 
     const chatInitialization = initializeChat({
@@ -785,7 +816,8 @@ const runAppInitialization = async () => {
     }
     const freshContent = hydrateFreshChatContent(
       authUserId || undefined,
-      cacheReady
+      cacheReady,
+      !canPreviewCachedList
     );
     await chatInitialization;
     const freshContentState = await freshContent;
@@ -808,6 +840,8 @@ const runAppInitialization = async () => {
       return;
     }
   } finally {
+    // Ранний показ кеша не отменяет ещё выполняющиеся нативные запросы.
+    finishNativeStartupReads();
     if (tokenUrl) {
       url.searchParams.delete('token');
       url.searchParams.delete('organization');

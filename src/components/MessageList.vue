@@ -693,6 +693,7 @@ const getRenderedTopicMessages = (
 };
 const pendingInitialNotificationMessageId = ref('');
 const isAwaitingNotificationHistory = ref(false);
+const isAwaitingInitialHistory = ref(false);
 const initialNotificationPositionReady = ref(true);
 let initialNotificationPositionMessageId = '';
 const renderedUserMessages = computed(() => {
@@ -701,7 +702,8 @@ const renderedUserMessages = computed(() => {
   if (
     !topicId ||
     renderedTopicId.value !== topicId ||
-    isAwaitingNotificationHistory.value
+    isAwaitingNotificationHistory.value ||
+    isAwaitingInitialHistory.value
   ) {
     return [];
   }
@@ -3700,6 +3702,7 @@ watch(
     isForcedNotificationRefreshPending = false;
     hideFloatingDateDivider();
     if (!topicId) {
+      isAwaitingInitialHistory.value = false;
       renderedTopicId.value = '';
       paintedUserMessageTopicId.value = '';
       isAwaitingUserMessagesPaint.value = false;
@@ -3710,6 +3713,9 @@ watch(
       return;
     }
     const topicSwitchToken = ++activeTopicSwitchToken;
+    // На мобильном не показываем старую историю перед актуальным окном.
+    isAwaitingInitialHistory.value =
+      isMobile.value && routeType !== RouteTypes.AI && getHasBrowserNetwork();
     paintedUserMessageTopicId.value = '';
     lastFloatingDateDividerScrollTop = null;
     topicSwitchStartedAtMs = performance.now();
@@ -3747,7 +3753,11 @@ watch(
     }
     isLoadingInitialMessages.value = true;
     resetInitialMessagesSkeleton();
-    if (routeType === RouteTypes.AI || isAwaitingUserMessagesPaint.value)
+    if (
+      routeType === RouteTypes.AI ||
+      isAwaitingUserMessagesPaint.value ||
+      isAwaitingInitialHistory.value
+    )
       scheduleInitialMessagesSkeleton(topicId, topicSwitchToken);
     if (shouldScrollToBottomForNotification)
       scheduleNotificationTopicShellReady(topicId);
@@ -3780,6 +3790,7 @@ watch(
         : initialMessagesLimit;
     let notificationVisibleMessagesLimit = expandedLimit;
     let notificationHistoryIsFresh = false;
+    let initialHistoryIsFresh = false;
     const pendingSearchNavigationForTopic =
       routeType !== RouteTypes.AI &&
       getPendingSearchNavigation()?.topicId === topicId
@@ -3823,18 +3834,15 @@ watch(
     }
 
     const shouldHydrateBeforeInitialPaint = routeType !== RouteTypes.AI;
-    const isFreshMobileStartup =
-      isMobile.value &&
-      shouldScrollToBottomForNotification &&
-      !!document.getElementById('startup-shell') &&
-      getHasBrowserNetwork();
+    const shouldRefreshMobileHistoryBeforePaint =
+      isMobile.value && !shouldBootstrapAroundMessage && getHasBrowserNetwork();
     const hydrateInitialMessages = async (): Promise<IMessage[]> => {
       const hydrateFullHistory = () =>
         hydrateMessagesFromCache(topicId, undefined, {
           visibleLimit: fastInitialMessagesLimit,
           allowVisibleShrink: true
         });
-      if (isFreshMobileStartup) {
+      if (shouldRefreshMobileHistoryBeforePaint) {
         return hydratePendingMessagesFromCache(
           topicId,
           undefined,
@@ -3894,7 +3902,11 @@ watch(
             allowStaleFallback: !getHasBrowserNetwork(),
             visibleLimit: fastInitialMessagesLimit,
             updateVisible: false,
-            revealIfEmpty: true
+            revealIfEmpty: true,
+            replaceInitialWindow: shouldRefreshMobileHistoryBeforePaint,
+            onNetworkApplied: () => {
+              initialHistoryIsFresh = true;
+            }
           });
     }
 
@@ -3981,8 +3993,10 @@ watch(
     const initialMessages = (await initialMessagesFetch) || [];
 
     if (
-      isFreshMobileStartup &&
-      !notificationHistoryIsFresh &&
+      shouldRefreshMobileHistoryBeforePaint &&
+      !(shouldScrollToBottomForNotification
+        ? notificationHistoryIsFresh
+        : initialHistoryIsFresh || initialMessages.length > 0) &&
       !isStaleTopicSwitch()
     ) {
       await hydrateMessagesFromCache(topicId, undefined, {
@@ -3994,6 +4008,7 @@ watch(
     if (isStaleTopicSwitch()) {
       return;
     }
+    isAwaitingInitialHistory.value = false;
 
     if (shouldScrollToBottomForNotification) {
       void fetchPinnedMessagesForTopic(topicId, {
@@ -4004,7 +4019,8 @@ watch(
     cancelInitialMessagesSkeletonDelay();
     const shouldApplyInitialNetworkWindow =
       !shouldBootstrapAroundMessage &&
-      (shouldScrollToBottomForNotification ||
+      (shouldRefreshMobileHistoryBeforePaint ||
+        shouldScrollToBottomForNotification ||
         getMessagesByTopicId(topicId).length === 0 ||
         shouldKeepTopicSwitchBottomPosition(topicSwitchToken));
 
@@ -4023,7 +4039,11 @@ watch(
               )
             : notificationVisibleMessagesLimit
           : fastInitialMessagesLimit,
-        { allowShrink: !!shouldScrollToBottomForNotification }
+        {
+          allowShrink:
+            shouldRefreshMobileHistoryBeforePaint ||
+            !!shouldScrollToBottomForNotification
+        }
       );
     }
 

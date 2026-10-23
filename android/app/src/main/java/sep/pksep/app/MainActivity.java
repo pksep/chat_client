@@ -149,7 +149,7 @@ public class MainActivity extends BridgeActivity {
         } else if (isDarkLaunchTheme()) {
             setTheme(R.style.AppTheme_NoActionBarLaunchDark);
         }
-        SplashScreen launchSplash = preparedNativeLaunch
+        SplashScreen launchSplash = preparedNativeLaunch && launchedFromChatNotification
             ? null
             : SplashScreen.installSplashScreen(this);
         configureLaunchSplash(launchSplash);
