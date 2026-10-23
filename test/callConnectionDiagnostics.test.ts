@@ -20,7 +20,11 @@ test('позднее отключение старого Room сохраняет
     traceId: 'trace-old'
   });
   diagnostics.snapshot(oldRoom, oldRoom);
-  diagnostics.markDisconnectRequested(oldRoom, 'replace-room');
+  diagnostics.markDisconnectRequested(
+    oldRoom,
+    'replace-room',
+    'disconnect-operation-1'
+  );
   diagnostics.register(newRoom, {
     attemptId: 2,
     connectReason: 'network-recovery:window-focus',
@@ -40,13 +44,17 @@ test('позднее отключение старого Room сохраняет
     isCurrentRoom: false,
     currentRoomInstanceId: 'instance-2',
     disconnectRequestedBy: 'replace-room',
+    disconnectOperationId: 'disconnect-operation-1',
+    disconnectRequestedAt: expect.any(Number),
     roomState: 'disconnected'
   });
   expect(diagnostics.snapshot(newRoom, newRoom)).toMatchObject({
     participantSid: 'PA_new',
     traceId: 'trace-new',
     isCurrentRoom: true,
-    disconnectRequestedBy: null
+    disconnectRequestedBy: null,
+    disconnectOperationId: null,
+    disconnectRequestedAt: null
   });
 });
 
@@ -81,4 +89,38 @@ test('переподключение SDK меняет SID внутри одно�
     isCurrentRoom: false
   });
   expect(beforeReconnect?.participantSid).toBe('PA_before');
+});
+
+test('сохраняет только последние события жизненного цикла Room', () => {
+  let now = 1_000;
+  const diagnostics = createCallConnectionDiagnostics(
+    () => 'instance',
+    () => now
+  );
+  const room = createRoom('PA_current');
+  diagnostics.register(room, {
+    attemptId: 1,
+    connectReason: 'answer-call',
+    roomId: room.name,
+    topicId: 'topic',
+    traceId: 'trace'
+  });
+
+  diagnostics.recordLifecycleEvent(room, 'call.livekit.signal_connected');
+  now = 20_000;
+  diagnostics.recordLifecycleEvent(
+    room,
+    'call.livekit.connection_state_changed',
+    { connectionState: 'disconnected' }
+  );
+  now = 21_000;
+
+  expect(diagnostics.recentLifecycleEvents(room)).toEqual([
+    {
+      name: 'call.livekit.connection_state_changed',
+      at: 20_000,
+      ageMs: 1_000,
+      details: { connectionState: 'disconnected' }
+    }
+  ]);
 });
