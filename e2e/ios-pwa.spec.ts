@@ -15,6 +15,12 @@ test.beforeEach(async ({ page }, testInfo) => {
   const errors: string[] = [];
   pageErrors.set(page, errors);
   page.on('pageerror', error => errors.push(error.message));
+  await page.addLocatorHandler(
+    page.locator('dialog.ios-push-modal[open]'),
+    async dialog => {
+      await dialog.getByRole('button', { name: 'Позже', exact: true }).click();
+    }
+  );
   await page.route('**/e2e/ios-api/**', route => {
     const path = new URL(route.request().url()).pathname;
     if (/\/messages\/topic\/[^/]+(?:\/pinned)?$/.test(path))
@@ -123,7 +129,7 @@ test('PWA: информация группы и кнопка назад оста
         const box = (await dialog.boundingBox())!;
         return Math.round(box.y + box.height);
       })
-      .toBeLessThanOrEqual(top + height - 34);
+      .toBe(top + height);
   }
   await page.screenshot({
     path: testInfo.outputPath('group-info-safe-area.png')
@@ -485,6 +491,8 @@ test('PWA: сдвиг документа с клавиатурой сохран�
 test('PWA: инпут, вложения, стикеры и хэдер работают после переходов и закрытия профиля', async ({
   page
 }) => {
+  // Два полных цикла touch-навигации в WebKit с трассировкой дольше 30 секунд.
+  test.setTimeout(90_000);
   await page.addInitScript(() => (window as any).setIosViewport(844, 100));
   await page.goto('/e2e/fixtures/ios-pwa.html?kind=group&no-pinned&shell&beta');
   const editor = page.locator('.chat__input .ProseMirror');
@@ -573,16 +581,19 @@ test('PWA: реакция из долгого нажатия дожидаетс�
       return true;
     };
   });
-  const message = page.locator('.message').last();
+  const message = page.locator('.message:visible').last();
   await message.scrollIntoViewIfNeeded();
-  const bounds = (await message.boundingBox())!;
-  const point = {
-    pointerId: 1,
-    pointerType: 'touch',
-    isPrimary: true,
-    clientX: bounds.x + 40,
-    clientY: bounds.y + 12
-  };
+  await expect(message).toBeInViewport();
+  const point = await message.evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    return {
+      pointerId: 1,
+      pointerType: 'touch',
+      isPrimary: true,
+      clientX: bounds.x + 40,
+      clientY: bounds.y + 12
+    };
+  });
   const text = message.locator('.message-content--text');
   await text.dispatchEvent('pointerdown', point);
   const menu = page.locator('.message-context-menu:visible');
@@ -630,10 +641,7 @@ for (const standalone of [true, false]) {
         document.documentElement.style.setProperty('--ios-safe-bottom', '34px');
       });
     const navBox = (await nav.boundingBox())!;
-    expect(navBox.y + navBox.height).toBeCloseTo(
-      844 - 16 - (standalone ? 34 : 0),
-      0
-    );
+    expect(navBox.y + navBox.height).toBeCloseTo(844 - 20, 0);
     const avatar = nav.locator('.cached-avatar');
     await expect(avatar).toHaveClass(/cached-avatar--image-ready/);
     expect(
@@ -760,6 +768,9 @@ for (const standalone of [true, false]) {
   test(`${mode}: скрепка и редактор работают после повторного открытия клавиатуры`, async ({
     page
   }) => {
+    await page.addInitScript(() =>
+      Object.defineProperty(navigator, 'platform', { value: 'iPhone' })
+    );
     await page.addInitScript(
       standalone =>
         Object.defineProperty(navigator, 'standalone', {
@@ -774,7 +785,17 @@ for (const standalone of [true, false]) {
     for (let attempt = 0; attempt < 3; attempt++) {
       await editor.tap();
       await expect(editor).not.toHaveAttribute('inputmode', 'none');
-      await editor.fill(`Черновик ${attempt}`);
+      await editor.evaluate(
+        () =>
+          new Promise<void>(resolve =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+          )
+      );
+      // iOS использует Meta+A; Control+A перемещает курсор в начало строки.
+      await editor.press('Meta+A');
+      await editor.press('Backspace');
+      await expect(editor).toHaveText('');
+      await editor.pressSequentially(`Черновик ${attempt}`);
       await page.evaluate(() => (window as any).setIosViewport(500, 180));
       await page.locator('.chat__input .attach-file-button:visible').tap();
       const option = page

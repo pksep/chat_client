@@ -141,18 +141,26 @@ export const getImageDimensions = (file: File): Promise<MediaDimensions> => {
   return new Promise(resolve => {
     const image = new Image();
     const objectUrl = URL.createObjectURL(file);
+    const finish = (dimensions: MediaDimensions) => {
+      clearTimeout(timeout);
+      image.onload = null;
+      image.onerror = null;
+      URL.revokeObjectURL(objectUrl);
+      resolve(dimensions);
+    };
+    // Камера iOS может не прислать load/error после возврата в PWA.
+    // Размер превью не должен блокировать загрузку самого файла.
+    const timeout = setTimeout(() => finish({}), 2500);
 
     image.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve({
+      finish({
         width: image.naturalWidth,
         height: image.naturalHeight
       });
     };
 
     image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve({});
+      finish({});
     };
 
     image.src = objectUrl;

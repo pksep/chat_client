@@ -56,11 +56,6 @@
   height: var(--default-height);
   background-color: var(--table-surface-search);
   background-image: none;
-  background-position:
-    center center,
-    var(--chat-wallpaper-position, center top);
-  background-repeat: no-repeat, var(--chat-wallpaper-repeat, repeat);
-  background-size: auto, var(--chat-wallpaper-size, cover);
   grid-template-areas:
     'menu header'
     'menu chat';
@@ -87,6 +82,15 @@
   }
 }
 
+.chat-container,
+.chat-container__wallpaper-image {
+  background-position:
+    center center,
+    var(--chat-wallpaper-position, center top);
+  background-repeat: no-repeat, var(--chat-wallpaper-repeat, repeat);
+  background-size: auto, var(--chat-wallpaper-size, cover);
+}
+
 .chat-container:has(:is(.chat__header-desktop-search-row, .chat__header-mobile-search-row)) {
   grid-template-rows: auto minmax(0, 1fr);
 }
@@ -99,11 +103,67 @@
   background-color: var(--surface-input-secondary);
 }
 
-.chat-container--wallpaper:has(.chat__message-wrapper) {
+.chat-container--wallpaper:has(.chat__message-wrapper),
+.chat-container--wallpaper:has(.chat__message-wrapper) .chat-container__wallpaper-image {
   background-color: var(--chat-wallpaper-background, var(--surface-main));
   background-image: linear-gradient(rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1))),
       rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1)))),
     var(--chat-wallpaper-image);
+}
+
+.chat-container:has(> .chat-container__wallpaper) {
+  isolation: isolate;
+  background-image: none;
+}
+
+.chat-container__wallpaper {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.chat-container__wallpaper-image {
+  height: 100%;
+}
+
+/* Во время IME меняются только слои сообщений и ввода; размер ленты — после анимации. */
+.chat__message-viewport {
+  display: contents;
+}
+
+.chat-android-ime .chat__message-viewport {
+  display: grid;
+  grid-area: 2 / 1;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  overflow: clip;
+}
+
+.chat-android-ime .chat__message-viewport > .chat__message-wrapper {
+  grid-row: 1;
+}
+
+.chat-android-ime .chat--mobile-route {
+  overflow: clip;
+}
+
+.chat-android-ime .chat__mobile-route-view--messages {
+  height: 100%;
+  align-self: start;
+  overflow: visible;
+}
+
+.chat-android-ime .chat__input .emoji-picker--open {
+  top: auto !important;
+  bottom: calc(var(--composer-height, 75px) + 5px);
+  transition: opacity 120ms ease-out;
+}
+
+.chat-android-ime .chat__input .v3-emoji-picker {
+  min-height: 0;
+  max-height: var(--android-emoji-picker-max-height, 490px) !important;
 }
 
 .chat-container:has(.menu.menu--collapse) {

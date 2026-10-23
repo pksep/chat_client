@@ -1,225 +1,234 @@
 <template>
-  <div
-    :class="[
-      'chat__message-wrapper',
-      'chat-scrollbar',
-      {
-        'chat__message-wrapper--content-deferred': shouldRenderAiMessageSkeleton
-      }
-    ]"
-    ref="chatWrapperRef"
-    v-if="isAiRoute"
-    :style="chatMessageWrapperStyle"
-    @pointerdown.capture="preserveMobileMessageInputFocus"
-    @mousedown.capture="preserveMobileMessageInputFocus"
-    @wheel.passive="handleFloatingDateDividerUserScroll"
-    @touchmove.passive="handleFloatingDateDividerUserScroll"
-    @touchstart="onTouchStart"
-    @touchend="onTouchEnd"
-    @scroll="handleAiScroll"
-    @vue:mounted="scrollAiToBottom"
-    :data-testid="`${props.dataTestid}-MessageList-AIMessagesWrapper`"
-  >
-    <MessageListAIItems
-      v-if="!shouldRenderAiMessageSkeleton"
-      :messages="state.aiMessages"
-      :data-testid="props.dataTestid"
-    />
+  <div class="chat__message-viewport">
     <div
-      v-else
       :class="[
-        'chat__message-skeleton',
-        { 'chat__message-skeleton--group': route.type === RouteTypes.GROUP }
+        'chat__message-wrapper',
+        'chat-scrollbar',
+        {
+          'chat__message-wrapper--content-deferred':
+            shouldRenderAiMessageSkeleton
+        }
       ]"
-      aria-hidden="true"
-      :data-testid="`${props.dataTestid}-MessageList-Skeleton`"
+      ref="chatWrapperRef"
+      v-if="isAiRoute"
+      :style="chatMessageWrapperStyle"
+      @pointerdown.capture="preserveMobileMessageInputFocus"
+      @mousedown.capture="preserveMobileMessageInputFocus"
+      @wheel.passive="handleFloatingDateDividerUserScroll"
+      @touchmove.passive="handleFloatingDateDividerUserScroll"
+      @touchstart="onTouchStart"
+      @touchend="onTouchEnd"
+      @scroll="handleAiScroll"
+      @vue:mounted="scrollAiToBottom"
+      :data-testid="`${props.dataTestid}-MessageList-AIMessagesWrapper`"
     >
-      <span
-        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-      >
-        <span class="chat__message-skeleton-avatar" />
-        <span
-          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--short"
-        />
-      </span>
-      <span
-        class="chat__message-skeleton-media chat__message-skeleton-media--outgoing"
-      >
-        <span class="chat__message-skeleton-media-icon" />
-      </span>
-      <span
-        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-      >
-        <span class="chat__message-skeleton-avatar" />
-        <span
-          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
-        />
-      </span>
-      <span
-        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing chat__message-skeleton-bubble--wide"
+      <MessageListAIItems
+        v-if="!shouldRenderAiMessageSkeleton"
+        :messages="state.aiMessages"
+        :data-testid="props.dataTestid"
       />
-      <span
-        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-      >
-        <span class="chat__message-skeleton-avatar" />
-        <span
-          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--tiny"
-        />
-      </span>
-      <span
-        class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing"
-      />
-      <span
-        class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
-      >
-        <span class="chat__message-skeleton-avatar" />
-        <span
-          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
-        />
-      </span>
-    </div>
-    <Transition name="chat-floating-date" mode="out-in">
       <div
-        v-if="!shouldRenderAiMessageSkeleton && shouldShowFloatingDateDivider"
-        :key="floatingDateDividerLabel"
+        v-else
         :class="[
-          'chat__floating-date-divider',
-          { 'chat__floating-date-divider--hidden': isFloatingDateDividerHidden }
+          'chat__message-skeleton',
+          { 'chat__message-skeleton--group': route.type === RouteTypes.GROUP }
         ]"
-        :data-testid="`${props.dataTestid}-MessageList-FloatingDateDivider`"
+        aria-hidden="true"
+        :data-testid="`${props.dataTestid}-MessageList-Skeleton`"
       >
-        <div class="date-divider">
-          <span>{{ floatingDateDividerLabel }}</span>
-        </div>
-      </div>
-    </Transition>
-  </div>
-
-  <div
-    :class="[
-      'chat__message-wrapper',
-      'chat-scrollbar',
-      {
-        'chat__message-wrapper--content-deferred':
-          shouldDeferUserMessageContentLayout,
-        'chat__message-wrapper--bootstrap-scroll-locked':
-          shouldLockUserMessageBootstrapScroll,
-        'chat__message-wrapper--search-positioning':
-          isSearchNavigationPositioning,
-        'chat__message-wrapper--favorite': isFavoriteMessageTopic,
-        'chat__message-wrapper--call-topic': isActiveCallTopic
-      }
-    ]"
-    v-if="!isAiRoute && !isDefaultRoute"
-    ref="chatWrapperRef"
-    :style="chatMessageWrapperStyle"
-    @vue:mounted="scrollToBottom"
-    @pointerdown.capture="preserveMobileMessageInputFocus"
-    @mousedown.capture="preserveMobileMessageInputFocus"
-    @scroll="handleScroll"
-    @wheel.passive="handleFloatingDateDividerUserScroll"
-    @touchmove.passive="handleUserMessageTouchMove"
-    @touchstart="handleUserMessageTouchStart"
-    @touchend="handleUserMessageTouchEnd"
-    @touchcancel="handleUserMessageTouchCancel"
-    @scrollend="handleMessageScrollEnd"
-    :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
-  >
-    <MessageListUserItems
-      v-if="shouldMountUserMessageItems"
-      :key="renderedTopicId"
-      ref="messageListUserItemsRef"
-      :class="{
-        'chat__message-bubble--warming': shouldCoverUserMessagesWithSkeleton
-      }"
-      :messages="renderedUserMessages"
-      :auth-user-id="authUserId"
-      :hide-unread-marker="state.hideUnreadMarker"
-      :unread-marker-message-id="state.unreadMarkerMessageId"
-      :data-testid="props.dataTestid"
-      @set-edit-message="handleSetEditMessage"
-      @set-reply-message="handleSetReplyMessage"
-      @set-forward-message="handleSetForwardMessage"
-      @retry-message="handleRetryMessage"
-      @scroll-to-message="handleScrollToMessage"
-      @open-sticker-pack="messageListInputRef?.openStickerPack?.($event)"
-      @content-ready="handleUserMessagesContentReady"
-    >
-      <template
-        v-if="activeTopic && isActiveCallTopic && !hasCallTopicDefaultMessage"
-        #before
-      >
-        <CallTopicDefaultMessage
-          :topic="activeTopic"
-          :data-testid="`${props.dataTestid}-CallTopicDefaultMessage`"
-        />
-      </template>
-      <template #after>
-        <CallTopicActions
-          v-if="activeTopic && shouldShowInlineCallTopicActions"
-          class="call-topic-actions--message-inline"
-          :topic="activeTopic"
-          :data-testid="`${props.dataTestid}-CallTopicActionsInline`"
-        />
-        <div
-          v-if="isDeletedAccountTopic"
-          class="top-element"
-          :data-testid="`${props.dataTestid}-MessageList-DeletedAccountMessage`"
+        <span
+          class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
         >
-          <div class="system-message chat__deleted-account-message">
-            <span class="system-message-text"
-              >Чат с этим пользователем недоступен</span
-            >
+          <span class="chat__message-skeleton-avatar" />
+          <span
+            class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--short"
+          />
+        </span>
+        <span
+          class="chat__message-skeleton-media chat__message-skeleton-media--outgoing"
+        >
+          <span class="chat__message-skeleton-media-icon" />
+        </span>
+        <span
+          class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+        >
+          <span class="chat__message-skeleton-avatar" />
+          <span
+            class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
+          />
+        </span>
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing chat__message-skeleton-bubble--wide"
+        />
+        <span
+          class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+        >
+          <span class="chat__message-skeleton-avatar" />
+          <span
+            class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming chat__message-skeleton-bubble--tiny"
+          />
+        </span>
+        <span
+          class="chat__message-skeleton-bubble chat__message-skeleton-bubble--outgoing"
+        />
+        <span
+          class="chat__message-skeleton-row chat__message-skeleton-row--incoming"
+        >
+          <span class="chat__message-skeleton-avatar" />
+          <span
+            class="chat__message-skeleton-bubble chat__message-skeleton-bubble--incoming"
+          />
+        </span>
+      </div>
+      <Transition name="chat-floating-date" mode="out-in">
+        <div
+          v-if="!shouldRenderAiMessageSkeleton && shouldShowFloatingDateDivider"
+          :key="floatingDateDividerLabel"
+          :class="[
+            'chat__floating-date-divider',
+            {
+              'chat__floating-date-divider--hidden': isFloatingDateDividerHidden
+            }
+          ]"
+          :data-testid="`${props.dataTestid}-MessageList-FloatingDateDivider`"
+        >
+          <div class="date-divider">
+            <span>{{ floatingDateDividerLabel }}</span>
           </div>
         </div>
-      </template>
-    </MessageListUserItems>
-    <div
-      v-if="shouldRenderEmptyUserMessageState"
-      class="chat__message-empty-state"
-      :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
-    >
-      <span>
-        {{
-          isFavoriteMessageTopic
-            ? 'Здесь пока ничего нет...'
-            : 'Сообщений пока нет'
-        }}
-      </span>
+      </Transition>
     </div>
-    <Transition name="chat-floating-date" mode="out-in">
-      <div
-        v-if="!shouldRenderUserMessageSkeleton && shouldShowFloatingDateDivider"
-        :key="floatingDateDividerLabel"
-        :class="[
-          'chat__floating-date-divider',
-          { 'chat__floating-date-divider--hidden': isFloatingDateDividerHidden }
-        ]"
-        :data-testid="`${props.dataTestid}-MessageList-FloatingDateDivider`"
+
+    <div
+      :class="[
+        'chat__message-wrapper',
+        'chat-scrollbar',
+        {
+          'chat__message-wrapper--content-deferred':
+            shouldDeferUserMessageContentLayout,
+          'chat__message-wrapper--bootstrap-scroll-locked':
+            shouldLockUserMessageBootstrapScroll,
+          'chat__message-wrapper--search-positioning':
+            isSearchNavigationPositioning,
+          'chat__message-wrapper--favorite': isFavoriteMessageTopic,
+          'chat__message-wrapper--call-topic': isActiveCallTopic
+        }
+      ]"
+      v-if="!isAiRoute && !isDefaultRoute"
+      ref="chatWrapperRef"
+      :style="chatMessageWrapperStyle"
+      @vue:mounted="scrollToBottom"
+      @pointerdown.capture="preserveMobileMessageInputFocus"
+      @mousedown.capture="preserveMobileMessageInputFocus"
+      @scroll="handleScroll"
+      @wheel.passive="handleFloatingDateDividerUserScroll"
+      @touchmove.passive="handleUserMessageTouchMove"
+      @touchstart="handleUserMessageTouchStart"
+      @touchend="handleUserMessageTouchEnd"
+      @touchcancel="handleUserMessageTouchCancel"
+      @scrollend="handleMessageScrollEnd"
+      :data-testid="`${props.dataTestid}-MessageList-UserMessagesWrapper`"
+    >
+      <MessageListUserItems
+        v-if="shouldMountUserMessageItems"
+        :key="renderedTopicId"
+        ref="messageListUserItemsRef"
+        :class="{
+          'chat__message-bubble--warming': shouldCoverUserMessagesWithSkeleton
+        }"
+        :messages="renderedUserMessages"
+        :auth-user-id="authUserId"
+        :hide-unread-marker="state.hideUnreadMarker"
+        :unread-marker-message-id="state.unreadMarkerMessageId"
+        :data-testid="props.dataTestid"
+        @set-edit-message="handleSetEditMessage"
+        @set-reply-message="handleSetReplyMessage"
+        @set-forward-message="handleSetForwardMessage"
+        @retry-message="handleRetryMessage"
+        @scroll-to-message="handleScrollToMessage"
+        @open-sticker-pack="messageListInputRef?.openStickerPack?.($event)"
+        @content-ready="handleUserMessagesContentReady"
       >
-        <div class="date-divider">
-          <span>{{ floatingDateDividerLabel }}</span>
+        <template
+          v-if="activeTopic && isActiveCallTopic && !hasCallTopicDefaultMessage"
+          #before
+        >
+          <CallTopicDefaultMessage
+            :topic="activeTopic"
+            :data-testid="`${props.dataTestid}-CallTopicDefaultMessage`"
+          />
+        </template>
+        <template #after>
+          <CallTopicActions
+            v-if="activeTopic && shouldShowInlineCallTopicActions"
+            class="call-topic-actions--message-inline"
+            :topic="activeTopic"
+            :data-testid="`${props.dataTestid}-CallTopicActionsInline`"
+          />
+          <div
+            v-if="isDeletedAccountTopic"
+            class="top-element"
+            :data-testid="`${props.dataTestid}-MessageList-DeletedAccountMessage`"
+          >
+            <div class="system-message chat__deleted-account-message">
+              <span class="system-message-text"
+                >Чат с этим пользователем недоступен</span
+              >
+            </div>
+          </div>
+        </template>
+      </MessageListUserItems>
+      <div
+        v-if="shouldRenderEmptyUserMessageState"
+        class="chat__message-empty-state"
+        :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
+      >
+        <span>
+          {{
+            isFavoriteMessageTopic
+              ? 'Здесь пока ничего нет...'
+              : 'Сообщений пока нет'
+          }}
+        </span>
+      </div>
+      <Transition name="chat-floating-date" mode="out-in">
+        <div
+          v-if="
+            !shouldRenderUserMessageSkeleton && shouldShowFloatingDateDivider
+          "
+          :key="floatingDateDividerLabel"
+          :class="[
+            'chat__floating-date-divider',
+            {
+              'chat__floating-date-divider--hidden': isFloatingDateDividerHidden
+            }
+          ]"
+          :data-testid="`${props.dataTestid}-MessageList-FloatingDateDivider`"
+        >
+          <div class="date-divider">
+            <span>{{ floatingDateDividerLabel }}</span>
+          </div>
         </div>
-      </div>
-    </Transition>
-    <Transition name="chat-pagination-loading">
-      <div
-        v-if="shouldShowOlderMessagesLoading"
-        class="chat__pagination-loading chat__pagination-loading--top"
-        :data-testid="`${props.dataTestid}-MessageList-OlderMessagesLoading`"
-      >
-        <span class="chat__pagination-loading-text">загрузка...</span>
-      </div>
-    </Transition>
-    <Transition name="chat-pagination-loading">
-      <div
-        v-if="shouldShowNewerMessagesLoading"
-        class="chat__pagination-loading chat__pagination-loading--bottom"
-        :data-testid="`${props.dataTestid}-MessageList-NewerMessagesLoading`"
-      >
-        <span class="chat__pagination-loading-text">загрузка...</span>
-      </div>
-    </Transition>
+      </Transition>
+      <Transition name="chat-pagination-loading">
+        <div
+          v-if="shouldShowOlderMessagesLoading"
+          class="chat__pagination-loading chat__pagination-loading--top"
+          :data-testid="`${props.dataTestid}-MessageList-OlderMessagesLoading`"
+        >
+          <span class="chat__pagination-loading-text">загрузка...</span>
+        </div>
+      </Transition>
+      <Transition name="chat-pagination-loading">
+        <div
+          v-if="shouldShowNewerMessagesLoading"
+          class="chat__pagination-loading chat__pagination-loading--bottom"
+          :data-testid="`${props.dataTestid}-MessageList-NewerMessagesLoading`"
+        >
+          <span class="chat__pagination-loading-text">загрузка...</span>
+        </div>
+      </Transition>
+    </div>
   </div>
 
   <div
@@ -390,12 +399,18 @@ import {
   nextTick,
   onUnmounted,
   onMounted,
+  onBeforeUnmount,
   computed
 } from 'vue';
 import MessageListAIItems from './Messages/MessageListAIItems.vue';
+import {
+  getAndroidKeyboardInset,
+  initAndroidKeyboardViewport
+} from '../utils/android-keyboard-viewport';
 import MessageListUserItems from './Messages/MessageListUserItems.vue';
 import MessageListInput from './Messages/MessageListInput.vue';
 import ReactionHeartIcon from './UI/ReactionHeartIcon.vue';
+import { subscribeToOwnReactions } from '../services/useChat';
 import {
   MessageTypeEnum,
   PushNotification,
@@ -518,6 +533,12 @@ export interface IMessageListExtendedProps extends IMessageListProps {
   suppressInitialSkeleton?: boolean;
 }
 
+let cleanupAndroidKeyboardViewport = () => {};
+onMounted(() => {
+  cleanupAndroidKeyboardViewport = initAndroidKeyboardViewport();
+});
+onBeforeUnmount(() => cleanupAndroidKeyboardViewport());
+
 const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
   dataTestid: 'MessageList',
   deferContentRender: false,
@@ -589,6 +610,7 @@ const PINNED_VIEWPORT_SNAPSHOT_INTERVAL_MS = 80;
 const unreadMarkerMessageIdsByTopic = reactive<Record<string, string | null>>(
   {}
 );
+const dismissedUnreadMarkerTopics = new Set<string>();
 let messageNavigationRevision = 0;
 const { pendingForwardMessages, pendingForwardTopicId } =
   usePendingForwardMessages();
@@ -672,6 +694,7 @@ const getRenderedTopicMessages = (
 };
 const pendingInitialNotificationMessageId = ref('');
 const isAwaitingNotificationHistory = ref(false);
+const isAwaitingInitialHistory = ref(false);
 const initialNotificationPositionReady = ref(true);
 let initialNotificationPositionMessageId = '';
 const renderedUserMessages = computed(() => {
@@ -680,7 +703,8 @@ const renderedUserMessages = computed(() => {
   if (
     !topicId ||
     renderedTopicId.value !== topicId ||
-    isAwaitingNotificationHistory.value
+    isAwaitingNotificationHistory.value ||
+    isAwaitingInitialHistory.value
   ) {
     return [];
   }
@@ -2436,7 +2460,9 @@ const refreshUnreadMarkerState = (force = false) => {
   // Граница относится к текущему открытию чата и не сдвигается от read-receipt.
   // Контекст закрепа/поиска не устанавливает новую границу непрочитанных.
   const canDiscoverUnread =
-    topicUnreadCount.value > 0 && scrollAnchor.viewportMode.value !== 'jump';
+    !dismissedUnreadMarkerTopics.has(route.value.id) &&
+    topicUnreadCount.value > 0 &&
+    scrollAnchor.viewportMode.value !== 'jump';
   const firstUnreadMessageId =
     unreadMarkerMessageIdsByTopic[route.value.id] ||
     (canDiscoverUnread ? getFirstUnreadMessageId() : null);
@@ -2451,6 +2477,21 @@ const applyUnreadMarkerStateForTopic = (topicId: string) => {
   state.unreadMarkerMessageId = markerMessageId;
   state.hideUnreadMarker = !markerMessageId;
 };
+
+const dismissUnreadMarkerForTopic = (topicId: string) => {
+  // Своя отправка или реакция завершает границу до следующего открытия чата.
+  dismissedUnreadMarkerTopics.add(topicId);
+  unreadMarkerMessageIdsByTopic[topicId] = null;
+  if (route.value.id === topicId) {
+    state.unreadMarkerMessageId = null;
+    state.hideUnreadMarker = true;
+  }
+};
+
+const unsubscribeOwnReactions = subscribeToOwnReactions(topicId => {
+  if (route.value.id === topicId) dismissUnreadMarkerForTopic(topicId);
+});
+onBeforeUnmount(unsubscribeOwnReactions);
 
 const handleWindowFocusRefresh = () => {
   refreshUnreadMarkerState();
@@ -2551,13 +2592,29 @@ const getScrollTargetBehavior = (
 const quoteHighlightClassName = 'message-quote-highlight';
 const messageHighlightDurationMs = 3400;
 let messageHighlightTimeoutId: number | null = null;
+let quoteHighlightTimeoutId: number | null = null;
+let quoteHighlightResizeObserver: ResizeObserver | null = null;
+let activeQuoteHighlight: {
+  messageId: string;
+  quoteText: string;
+  occurrenceIndex?: number;
+  startedAt: number;
+} | null = null;
 
 const cleanupQuoteHighlights = (): void => {
+  activeQuoteHighlight = null;
+  quoteHighlightResizeObserver?.disconnect();
+  quoteHighlightResizeObserver = null;
+  if (quoteHighlightTimeoutId !== null) {
+    window.clearTimeout(quoteHighlightTimeoutId);
+    quoteHighlightTimeoutId = null;
+  }
   const marks = chatWrapperRef.value?.querySelectorAll(
     `mark.${quoteHighlightClassName}`
   );
 
   marks?.forEach(mark => {
+    mark.querySelector('.message-quote-highlight__background')?.remove();
     const parent = mark.parentNode;
 
     while (mark.firstChild) {
@@ -2687,11 +2744,9 @@ const highlightMessageQuote = (
   messageId: string,
   quoteText: string,
   occurrenceIndex?: number
-): boolean => {
-  cleanupQuoteHighlights();
-
+): HTMLElement | null => {
   if (!quoteText || !chatWrapperRef.value) {
-    return false;
+    return null;
   }
 
   const messageElement = chatWrapperRef.value.querySelector<HTMLElement>(
@@ -2699,7 +2754,7 @@ const highlightMessageQuote = (
   );
 
   if (!messageElement) {
-    return false;
+    return null;
   }
 
   const contentElement =
@@ -2707,7 +2762,7 @@ const highlightMessageQuote = (
     messageElement.querySelector<HTMLElement>('.message-call__title');
 
   if (!contentElement) {
-    return false;
+    return null;
   }
 
   const textNodes = getTextNodes(contentElement);
@@ -2722,7 +2777,7 @@ const highlightMessageQuote = (
   );
 
   if (normalizedStartIndex < 0) {
-    return false;
+    return null;
   }
 
   const normalizedEndIndex =
@@ -2733,7 +2788,7 @@ const highlightMessageQuote = (
   const endBoundary = getRangeBoundary(textNodes, rawEnd);
 
   if (!startBoundary || !endBoundary) {
-    return false;
+    return null;
   }
 
   const range = document.createRange();
@@ -2745,38 +2800,56 @@ const highlightMessageQuote = (
 
   highlightMark.append(range.extractContents());
   range.insertNode(highlightMark);
-  const container = chatWrapperRef.value;
-  const containerRect = container.getBoundingClientRect();
-  const highlightRect = highlightMark.getBoundingClientRect();
-  const maxScroll = Math.max(
-    0,
-    container.scrollHeight - container.clientHeight
-  );
-  const targetScrollTop = Math.min(
-    maxScroll,
-    Math.max(
-      0,
-      container.scrollTop +
-        highlightRect.top +
-        highlightRect.height / 2 -
-        (containerRect.top + containerRect.height / 2)
-    )
-  );
 
-  container.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+  return highlightMark;
+};
 
-  window.setTimeout(() => {
-    const parent = highlightMark.parentNode;
+const animateQuoteHighlight = (mark: HTMLElement): void => {
+  quoteHighlightResizeObserver?.disconnect();
+  const bubble =
+    mark.closest<HTMLElement>('.message__article') || mark.parentElement;
+  if (!bubble) return;
 
-    while (highlightMark.firstChild) {
-      parent?.insertBefore(highlightMark.firstChild, highlightMark);
+  const background = document.createElement('span');
+  background.className = 'message-quote-highlight__background';
+  background.setAttribute('aria-hidden', 'true');
+  mark.append(background);
+  mark.classList.add('message-quote-highlight--active');
+
+  const updateBackground = (): void => {
+    if (!mark.isConnected || !activeQuoteHighlight) return;
+    const elapsed = performance.now() - activeQuoteHighlight.startedAt;
+    const lines = Array.from(mark.getClientRects()).filter(
+      rect => rect.width > 0 && rect.height > 0
+    );
+    const origin = background.getBoundingClientRect();
+    const bounds = bubble.getBoundingClientRect();
+
+    // Масштабируется только фон каждой строки, сам текст остаётся неподвижным.
+    background.style.clipPath = `inset(${bounds.top - origin.top}px ${origin.left - bounds.right}px ${origin.top - bounds.bottom}px ${bounds.left - origin.left}px)`;
+    lines.forEach((rect, index) => {
+      let line = background.children[index] as HTMLElement | undefined;
+      if (!line) {
+        line = document.createElement('span');
+        line.className = 'message-quote-highlight__rect';
+        line.style.animationDelay = `-${elapsed}ms`;
+        background.append(line);
+      }
+      Object.assign(line.style, {
+        left: `${rect.left - origin.left}px`,
+        top: `${rect.top - origin.top}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`
+      });
+    });
+    while (background.childElementCount > lines.length) {
+      background.lastElementChild?.remove();
     }
+  };
 
-    highlightMark.remove();
-    parent?.normalize();
-  }, messageHighlightDurationMs);
-
-  return true;
+  updateBackground();
+  quoteHighlightResizeObserver = new ResizeObserver(updateBackground);
+  quoteHighlightResizeObserver.observe(bubble);
 };
 
 const highlightWholeMessage = (messageId: string): void => {
@@ -2803,7 +2876,11 @@ const highlightWholeMessage = (messageId: string): void => {
   messageElement.classList.add('highlighted');
 
   messageHighlightTimeoutId = window.setTimeout(() => {
-    messageElement.classList.remove('highlighted');
+    wrapperElement
+      .querySelector<HTMLElement>(
+        `.message[data-message-id="${escapeCssValue(messageId)}"]`
+      )
+      ?.classList.remove('highlighted');
     messageHighlightTimeoutId = null;
   }, messageHighlightDurationMs);
 };
@@ -2818,9 +2895,16 @@ const jumpToMessageWithHighlight = async (
   await messageListUserItemsRef.value?.ensureMessageRendered?.(messageId);
 
   if (!isCurrent()) return false;
+  cleanupQuoteHighlights();
+  const quoteHighlight = highlightMessageQuote(
+    messageId,
+    quoteText,
+    quoteOccurrenceIndex
+  );
   const didJump = await scrollAnchor.jumpToMessage(messageId, {
     block: 'center',
     behavior,
+    targetElement: quoteHighlight,
     isCurrent
   });
 
@@ -2829,21 +2913,50 @@ const jumpToMessageWithHighlight = async (
   }
 
   highlightWholeMessage(messageId);
-  highlightMessageQuote(messageId, quoteText, quoteOccurrenceIndex);
+  if (quoteHighlight?.isConnected) {
+    activeQuoteHighlight = {
+      messageId,
+      quoteText,
+      occurrenceIndex: quoteOccurrenceIndex,
+      startedAt: performance.now()
+    };
+    animateQuoteHighlight(quoteHighlight);
+    quoteHighlightTimeoutId = window.setTimeout(
+      cleanupQuoteHighlights,
+      messageHighlightDurationMs
+    );
+  }
 
   return true;
+};
+
+const restoreActiveQuoteHighlight = (): void => {
+  const active = activeQuoteHighlight;
+  if (!active || !chatWrapperRef.value) return;
+  const elapsed = performance.now() - active.startedAt;
+  if (elapsed >= messageHighlightDurationMs) return;
+  if (chatWrapperRef.value.querySelector(`mark.${quoteHighlightClassName}`)) {
+    return;
+  }
+
+  const mark = highlightMessageQuote(
+    active.messageId,
+    active.quoteText,
+    active.occurrenceIndex
+  );
+  if (mark) {
+    // После пересоздания пузыря продолжаем прежний эффект, не запускаем заново.
+    animateQuoteHighlight(mark);
+    mark.closest('.message')?.classList.add('highlighted');
+  }
 };
 
 const refreshAroundMessageAfterOptimisticJump = async (
   topicId: string,
   messageId: string,
-  isCurrent: () => boolean
+  isCurrent: () => boolean,
+  preserveVisibleWindow = false
 ): Promise<void> => {
-  const anchor = scrollAnchor.captureViewportAnchor(messageId);
-  const mutation = scrollAnchor.beginViewportMutation('replace', {
-    forcePreserve: true,
-    preferredMessageId: messageId
-  });
   const messages = await fetchAroundMessage(messageId, topicId, {
     updateVisible: false,
     forceNetwork: getHasBrowserNetwork()
@@ -2851,38 +2964,29 @@ const refreshAroundMessageAfterOptimisticJump = async (
 
   if (!isCurrent()) return;
 
-  if (route.value.id !== topicId) {
-    scrollAnchor.commitViewportMutation(mutation.revision, {
-      forceAnchor: anchor
-    });
-    return;
-  }
-
   if (!messages?.some(message => message.id === messageId)) {
-    scrollAnchor.commitViewportMutation(mutation.revision, {
-      forceAnchor: anchor
-    });
     return;
   }
 
+  // Снимок нужен перед изменением списка: за время HTTP пользователь мог прокрутить чат.
+  const anchor = scrollAnchor.captureViewportAnchor(messageId);
+  const mutation = scrollAnchor.beginViewportMutation('replace', {
+    forcePreserve: true,
+    preferredMessageId: messageId
+  });
   mergeMessagesForTopic(topicId, messages, 'replace', {
     syncLastMessage: false,
     windowMode: 'around-anchor',
     anchorMessageId: messageId,
-    visibleMessages: messages
+    // Контекст уже показанной цитаты может не включать конец открытого чата.
+    visibleMessages: preserveVisibleWindow ? undefined : messages
   });
   await nextTick();
   if (!isCurrent()) return;
+  restoreActiveQuoteHighlight();
   scrollAnchor.commitViewportMutation(mutation.revision, {
     forceAnchor: anchor
   });
-  await messageListUserItemsRef.value?.ensureMessageRendered?.(messageId);
-  await scrollAnchor.jumpToMessage(messageId, {
-    block: 'center',
-    behavior: 'auto',
-    isCurrent
-  });
-  if (isCurrent()) highlightWholeMessage(messageId);
 };
 
 const jumpToOptimisticTarget = async (
@@ -2951,7 +3055,12 @@ const navigateToMessageId = async (
 
   if (!isCurrent()) return false;
   if (didJump) {
-    void refreshAroundMessageAfterOptimisticJump(topicId, messageId, isCurrent);
+    void refreshAroundMessageAfterOptimisticJump(
+      topicId,
+      messageId,
+      isCurrent,
+      true
+    );
     return true;
   }
 
@@ -3365,7 +3474,8 @@ const {
   authUser,
   mastraResult,
   scrollToBottom,
-  clearSellectedMessage
+  clearSellectedMessage,
+  dismissUnreadMarkerForTopic
 );
 
 const handleSend: typeof handleMessageSend = (...args) => {
@@ -3598,6 +3708,7 @@ watch(
     isForcedNotificationRefreshPending = false;
     hideFloatingDateDivider();
     if (!topicId) {
+      isAwaitingInitialHistory.value = false;
       renderedTopicId.value = '';
       paintedUserMessageTopicId.value = '';
       isAwaitingUserMessagesPaint.value = false;
@@ -3608,6 +3719,9 @@ watch(
       return;
     }
     const topicSwitchToken = ++activeTopicSwitchToken;
+    // На мобильном не показываем старую историю перед актуальным окном.
+    isAwaitingInitialHistory.value =
+      isMobile.value && routeType !== RouteTypes.AI && getHasBrowserNetwork();
     paintedUserMessageTopicId.value = '';
     lastFloatingDateDividerScrollTop = null;
     topicSwitchStartedAtMs = performance.now();
@@ -3633,6 +3747,7 @@ watch(
     state.errorMessage = '';
     messageNavigationRevision += 1;
     const initialNavigationRevision = messageNavigationRevision;
+    dismissedUnreadMarkerTopics.delete(topicId);
     unreadMarkerMessageIdsByTopic[topicId] = null;
     state.hideUnreadMarker = true;
     state.unreadMarkerMessageId = null;
@@ -3644,7 +3759,11 @@ watch(
     }
     isLoadingInitialMessages.value = true;
     resetInitialMessagesSkeleton();
-    if (routeType === RouteTypes.AI || isAwaitingUserMessagesPaint.value)
+    if (
+      routeType === RouteTypes.AI ||
+      isAwaitingUserMessagesPaint.value ||
+      isAwaitingInitialHistory.value
+    )
       scheduleInitialMessagesSkeleton(topicId, topicSwitchToken);
     if (shouldScrollToBottomForNotification)
       scheduleNotificationTopicShellReady(topicId);
@@ -3677,6 +3796,7 @@ watch(
         : initialMessagesLimit;
     let notificationVisibleMessagesLimit = expandedLimit;
     let notificationHistoryIsFresh = false;
+    let initialHistoryIsFresh = false;
     const pendingSearchNavigationForTopic =
       routeType !== RouteTypes.AI &&
       getPendingSearchNavigation()?.topicId === topicId
@@ -3720,18 +3840,15 @@ watch(
     }
 
     const shouldHydrateBeforeInitialPaint = routeType !== RouteTypes.AI;
-    const isFreshMobileStartup =
-      isMobile.value &&
-      shouldScrollToBottomForNotification &&
-      !!document.getElementById('startup-shell') &&
-      getHasBrowserNetwork();
+    const shouldRefreshMobileHistoryBeforePaint =
+      isMobile.value && !shouldBootstrapAroundMessage && getHasBrowserNetwork();
     const hydrateInitialMessages = async (): Promise<IMessage[]> => {
       const hydrateFullHistory = () =>
         hydrateMessagesFromCache(topicId, undefined, {
           visibleLimit: fastInitialMessagesLimit,
           allowVisibleShrink: true
         });
-      if (isFreshMobileStartup) {
+      if (shouldRefreshMobileHistoryBeforePaint) {
         return hydratePendingMessagesFromCache(
           topicId,
           undefined,
@@ -3791,7 +3908,11 @@ watch(
             allowStaleFallback: !getHasBrowserNetwork(),
             visibleLimit: fastInitialMessagesLimit,
             updateVisible: false,
-            revealIfEmpty: true
+            revealIfEmpty: true,
+            replaceInitialWindow: shouldRefreshMobileHistoryBeforePaint,
+            onNetworkApplied: () => {
+              initialHistoryIsFresh = true;
+            }
           });
     }
 
@@ -3878,8 +3999,10 @@ watch(
     const initialMessages = (await initialMessagesFetch) || [];
 
     if (
-      isFreshMobileStartup &&
-      !notificationHistoryIsFresh &&
+      shouldRefreshMobileHistoryBeforePaint &&
+      !(shouldScrollToBottomForNotification
+        ? notificationHistoryIsFresh
+        : initialHistoryIsFresh || initialMessages.length > 0) &&
       !isStaleTopicSwitch()
     ) {
       await hydrateMessagesFromCache(topicId, undefined, {
@@ -3891,6 +4014,7 @@ watch(
     if (isStaleTopicSwitch()) {
       return;
     }
+    isAwaitingInitialHistory.value = false;
 
     if (shouldScrollToBottomForNotification) {
       void fetchPinnedMessagesForTopic(topicId, {
@@ -3901,7 +4025,8 @@ watch(
     cancelInitialMessagesSkeletonDelay();
     const shouldApplyInitialNetworkWindow =
       !shouldBootstrapAroundMessage &&
-      (shouldScrollToBottomForNotification ||
+      (shouldRefreshMobileHistoryBeforePaint ||
+        shouldScrollToBottomForNotification ||
         getMessagesByTopicId(topicId).length === 0 ||
         shouldKeepTopicSwitchBottomPosition(topicSwitchToken));
 
@@ -3920,7 +4045,11 @@ watch(
               )
             : notificationVisibleMessagesLimit
           : fastInitialMessagesLimit,
-        { allowShrink: !!shouldScrollToBottomForNotification }
+        {
+          allowShrink:
+            shouldRefreshMobileHistoryBeforePaint ||
+            !!shouldScrollToBottomForNotification
+        }
       );
     }
 
@@ -3930,10 +4059,20 @@ watch(
         message.senderUserId !== authUser.value?.id &&
         message.isReadByMe !== true
     );
-    const shouldPositionToUnread =
+    const canSetInitialUnreadMarker =
       topicUnreadCount > 0 &&
       !shouldScrollToBottomForNotification &&
       !shouldBootstrapAroundMessage &&
+      initialNavigationRevision === messageNavigationRevision &&
+      !dismissedUnreadMarkerTopics.has(topicId) &&
+      !!initialUnreadMessage;
+    if (canSetInitialUnreadMarker) {
+      // Граница фиксируется до read-receipt и восстановления позиции. Намерение
+      // пользователя прокрутить историю отменяет автоскролл, но не саму плашку.
+      unreadMarkerMessageIdsByTopic[topicId] = initialUnreadMessage.id;
+    }
+    const shouldPositionToUnread =
+      canSetInitialUnreadMarker &&
       !hasTopicSwitchUserScrollIntent(topicSwitchToken) &&
       scrollAnchor.viewportMode.value !== 'jump' &&
       !!initialUnreadMessage;
@@ -3945,7 +4084,6 @@ watch(
         visibleMessages: initialMessages,
         visibleLimit: Math.max(fastInitialMessagesLimit, 48)
       });
-      unreadMarkerMessageIdsByTopic[topicId] = initialUnreadMessage.id;
     }
 
     // Если сообщение удалено или сеть недоступна, оставляем доступную историю.
@@ -4187,6 +4325,11 @@ const isEditableEventTarget = (e: Event) => {
 };
 
 const preserveMobileMessageInputFocus = (event: Event): void => {
+  if (
+    document.documentElement.classList.contains('chat-android-ime') &&
+    getAndroidKeyboardInset() <= 100
+  )
+    return;
   // Отмена touch pointerdown в WebKit может поглотить клик по скрепке и меню.
   if (
     isIosWeb() &&
@@ -4354,6 +4497,8 @@ onUnmounted(() => {
     messageHighlightTimeoutId = null;
   }
 
+  cleanupQuoteHighlights();
+
   pendingNotificationTopicShellId = '';
   if (notificationTopicShellReadyFrameId) {
     window.cancelAnimationFrame(notificationTopicShellReadyFrameId);
@@ -4428,6 +4573,7 @@ watch(
       return;
     }
 
+    const pinRequestedAt = performance.now();
     nextTick(() => {
       requestAnimationFrame(() => {
         if (
@@ -4435,14 +4581,16 @@ watch(
           renderedTopicId.value !== topicMessagesId ||
           !isUserMessagesRoute.value ||
           shouldRenderUserMessageSkeleton.value ||
-          !(isReactionLayoutChange
-            ? scrollAnchor.viewportMode.value === 'live'
-            : shouldKeepCurrentTopicBottomPosition()) ||
+          scrollAnchor.viewportMode.value === 'jump' ||
+          (state.unreadMarkerMessageId &&
+            scrollAnchor.viewportMode.value !== 'live') ||
+          scrollAnchor.hasUserScrollIntentAfter(pinRequestedAt) ||
           !chatWrapperRef.value
         ) {
           return;
         }
 
+        // Рост ленты уже изменил расстояние до низа; учитываем намерение до обновления DOM.
         scrollToBottom({
           preferUnreadMarker: false,
           smooth: false

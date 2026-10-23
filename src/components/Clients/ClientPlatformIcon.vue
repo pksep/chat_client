@@ -53,5 +53,6 @@ defineProps<{ platform: string }>();
   display: block;
   flex-shrink: 0;
   object-fit: contain;
+  max-width: 15px;
 }
 </style>

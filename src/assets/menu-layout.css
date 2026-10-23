@@ -117,6 +117,13 @@
     justify-content: space-between;
   }
 
+  .mobile-list-container .chats-toolbar__headline > .connection-status {
+    position: absolute;
+    left: 50%;
+    margin-left: 0;
+    transform: translateX(-50%);
+  }
+
   .mobile-list-container
     .menu-section-heading:not(.menu-section-heading--centered)
     > button {

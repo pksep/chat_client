@@ -115,80 +115,92 @@ describe('multipart browser upload', () => {
     expect(initCalled).toBe(false);
   });
 
-  test('slices parts sequentially and retries only the failed part', async () => {
-    const file = createFile();
-    const session = createSession();
-    const attempts = new Map<number, number>();
-    const uploadedSlices = new Map<number, number[]>();
-    const progress: number[] = [];
-    let active = 0;
-    let peakActive = 0;
-    let statusCalls = 0;
-    let completeCalls = 0;
-    const transport: MultipartUploadTransport = {
-      init: async () => session,
-      status: async () => {
-        statusCalls += 1;
-        return session;
-      },
-      uploadPart: async (_session, partNumber, part, onProgress) => {
-        const attempt = (attempts.get(partNumber) || 0) + 1;
-        attempts.set(partNumber, attempt);
-        active += 1;
-        peakActive = Math.max(peakActive, active);
-        await new Promise(resolve => setTimeout(resolve, 5));
-        active -= 1;
+  test.each(['network', 'timeout'])(
+    'slices parts sequentially and retries only the failed part (%s)',
+    async failure => {
+      const file = createFile();
+      const session = createSession();
+      const attempts = new Map<number, number>();
+      const uploadedSlices = new Map<number, number[]>();
+      const progress: number[] = [];
+      let active = 0;
+      let peakActive = 0;
+      let statusCalls = 0;
+      let completeCalls = 0;
+      let abortCalls = 0;
+      const transport: MultipartUploadTransport = {
+        init: async () => session,
+        status: async () => {
+          statusCalls += 1;
+          return session;
+        },
+        uploadPart: async (_session, partNumber, part, onProgress) => {
+          const attempt = (attempts.get(partNumber) || 0) + 1;
+          attempts.set(partNumber, attempt);
+          active += 1;
+          peakActive = Math.max(peakActive, active);
+          await new Promise(resolve => setTimeout(resolve, 5));
+          active -= 1;
 
-        if (partNumber === 2 && attempt === 1) {
-          throw new Error('temporary part failure');
+          if (partNumber === 2 && attempt === 1) {
+            throw failure === 'timeout'
+              ? Object.assign(new Error('Multipart upload stalled'), {
+                  name: 'TimeoutError',
+                  status: 408
+                })
+              : new Error('temporary part failure');
+          }
+
+          uploadedSlices.set(partNumber, [
+            ...new Uint8Array(await part.arrayBuffer())
+          ]);
+          onProgress(part.size);
+        },
+        complete: async () => {
+          completeCalls += 1;
+          return { objectName: session.objectName, hash: 'hash', etag: 'etag' };
+        },
+        abort: async () => {
+          abortCalls++;
         }
+      };
 
-        uploadedSlices.set(partNumber, [
-          ...new Uint8Array(await part.arrayBuffer())
-        ]);
-        onProgress(part.size);
-      },
-      complete: async () => {
-        completeCalls += 1;
-        return { objectName: session.objectName, hash: 'hash', etag: 'etag' };
-      },
-      abort: async () => undefined
-    };
+      await expect(
+        uploadMultipartFile(file, transport, {
+          // Callers cannot override the single writer required by MinIO.
+          concurrency: 2,
+          retryCount: 1,
+          onProgress: value => progress.push(value)
+        })
+      ).resolves.toMatchObject({ completed: { hash: 'hash' } });
 
-    await expect(
-      uploadMultipartFile(file, transport, {
-        // Callers cannot override the single writer required by MinIO.
-        concurrency: 2,
-        retryCount: 1,
-        onProgress: value => progress.push(value)
-      })
-    ).resolves.toMatchObject({ completed: { hash: 'hash' } });
-
-    expect(peakActive).toBe(1);
-    expect(attempts).toEqual(
-      new Map([
-        [1, 1],
-        [2, 2],
-        [3, 1]
-      ])
-    );
-    expect(statusCalls).toBe(1);
-    expect(completeCalls).toBe(1);
-    expect(uploadedSlices).toEqual(
-      new Map([
-        [1, [0, 1, 2, 3]],
-        [2, [4, 5, 6, 7]],
-        [3, [8, 9, 10, 11]]
-      ])
-    );
-    expect(progress.at(-1)).toBe(100);
-    expect(
-      progress.every(
-        (value, index) => index === 0 || value >= progress[index - 1]
-      )
-    ).toBe(true);
-    removePersistedMultipartUpload(file);
-  });
+      expect(peakActive).toBe(1);
+      expect(attempts).toEqual(
+        new Map([
+          [1, 1],
+          [2, 2],
+          [3, 1]
+        ])
+      );
+      expect(statusCalls).toBe(1);
+      expect(completeCalls).toBe(1);
+      expect(abortCalls).toBe(0);
+      expect(uploadedSlices).toEqual(
+        new Map([
+          [1, [0, 1, 2, 3]],
+          [2, [4, 5, 6, 7]],
+          [3, [8, 9, 10, 11]]
+        ])
+      );
+      expect(progress.at(-1)).toBe(100);
+      expect(
+        progress.every(
+          (value, index) => index === 0 || value >= progress[index - 1]
+        )
+      ).toBe(true);
+      removePersistedMultipartUpload(file);
+    }
+  );
 
   test('closes a storage-lock session and starts one fresh session once', async () => {
     const file = createFile('storage-lock.bin');

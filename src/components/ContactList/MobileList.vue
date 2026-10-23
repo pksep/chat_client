@@ -43,7 +43,22 @@
             @close="closeFolderManager"
             @select-folder="handleSelectFolder"
             @select-topic="handleTopicSelect"
-          />
+          >
+            <template #folders>
+              <ChatFolderRail
+                mobile
+                :loading="isChatFoldersLoading"
+                :folders="chatFolders"
+                :topics="chatBadgeTopics"
+                :selected-folder-id="activeFolderId"
+                is-managing
+                is-active
+                :auth-user-id="authUserId"
+                @select="handleSelectFolder"
+                @manage="closeFolderManager"
+              />
+            </template>
+          </ChatFoldersPanel>
 
           <template v-else>
             <ChatsToolbar
@@ -169,6 +184,13 @@
     />
   </div>
 
+  <IosPushNotificationPrompt
+    v-if="isIosWeb() && !isShareSelectionActive"
+    :active="
+      activeSection === 'chats' && !selectedTopicId && !isManagingFolders
+    "
+  />
+
   <template v-if="!isAssistantRoute">
     <NewChatMobileModal
       v-if="hasOpenedNewChat"
@@ -251,6 +273,8 @@ import {
 import { useChatFolders } from '../../composables/useChatFolders';
 import ChatFoldersPanel from '../Menu/ChatFoldersPanel.vue';
 import ChatFolderRail from '../Menu/ChatFolderRail.vue';
+import { isIosWeb } from '../../utils/ios-pwa-viewport';
+import IosPushNotificationPrompt from '../Menu/IosPushNotificationPrompt.vue';
 
 const { access: chatAccess } = useChatAccess();
 

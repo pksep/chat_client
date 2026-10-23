@@ -437,7 +437,11 @@ import MuteIcon from '../UI/MuteIcon.vue';
 import ReadIcon from '../UI/ReadIcon.vue';
 import { TopicType } from '../../services/useChatSDK/types';
 import { getUserLastOnline } from '../../composables/useUsers';
-import { getHasWebsocketConnection, markAsRead } from '../../services/useChat';
+import {
+  getHasBrowserNetwork,
+  getHasWebsocketConnection,
+  markAsRead
+} from '../../services/useChat';
 import {
   getTopicUnreadBadgeCount,
   hasTopicUnreadIndicator
@@ -808,6 +812,7 @@ const warmTopicMessagesFromCache = (
   prioritize = false
 ): void => {
   if (
+    (isMobile.value && getHasBrowserNetwork()) ||
     !topicId ||
     props.showCheckbox ||
     hasKnownTopicMessagesState(topicId) ||
@@ -835,6 +840,8 @@ const warmTopicMessagesFromCache = (
 
 const prepareTopicMessagesForOpen = async (topicId: string): Promise<void> => {
   if (!topicId) return;
+  // Онлайн сразу запрашиваем актуальное окно, не разбирая старую историю до клика.
+  if (isMobile.value && getHasBrowserNetwork()) return;
 
   if (!hasKnownTopicMessagesState(topicId)) {
     warmTopicMessagesFromCache(topicId, true);

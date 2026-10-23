@@ -42,6 +42,7 @@ public class NotificationLaunchActivity extends AppCompatActivity {
     private JSONArray preparedRows;
     private long preparedHistoryStartedAt;
     private boolean launcherLogoPresented;
+    private boolean routeLauncherOnly;
 
     private static void markStartupBenchmark(String stage) {
         if (BuildConfig.CHAT_STARTUP_BENCHMARK) {
@@ -58,11 +59,12 @@ public class NotificationLaunchActivity extends AppCompatActivity {
         if (LaunchAppearance.isDark(this)) {
             setTheme(R.style.AppTheme_StartupLaunchDark);
         }
-        SplashScreen launchSplash = SplashScreen.installSplashScreen(this);
-        launchSplash.setKeepOnScreenCondition(() -> !launcherLogoPresented);
-        launchSplash.setOnExitAnimationListener(provider -> provider.remove());
         Intent launchIntent = getIntent();
         String topicId = topicId(launchIntent);
+        routeLauncherOnly = topicId.isEmpty();
+        SplashScreen launchSplash = SplashScreen.installSplashScreen(this);
+        launchSplash.setKeepOnScreenCondition(() -> routeLauncherOnly || !launcherLogoPresented);
+        launchSplash.setOnExitAnimationListener(provider -> provider.remove());
         if (topicId.isEmpty() && !MainActivity.hasCreatedInstance()) ChatStartupReads.start(this);
         // Start TLS/DNS before inflating the launcher view. Rendering proceeds
         // in parallel and the first server page can arrive within the first
@@ -126,6 +128,7 @@ public class NotificationLaunchActivity extends AppCompatActivity {
         JSONArray recentRows
     ) {
         int generation = ++launchGeneration;
+        routeLauncherOnly = topicId.isEmpty();
         preparedRows = null;
         preparedHistoryStartedAt = historyStartedAt;
         launcherLogoPresented = false;
@@ -234,6 +237,12 @@ public class NotificationLaunchActivity extends AppCompatActivity {
 
         Intent mainIntent = new Intent(getIntent());
         mainIntent.setClass(this, MainActivity.class);
+        // Внутренний экран не должен повторять запуск с иконки рабочего стола.
+        mainIntent.setFlags(mainIntent.getFlags() & ~(
+            Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+        ));
+        mainIntent.setSourceBounds(null);
+        mainIntent.removeCategory(Intent.CATEGORY_LAUNCHER);
         mainIntent.putExtra(EXTRA_PREPARED_NOTIFICATION_LAUNCH, true);
         if (preparedRows != null) {
             String history = preparedRows.toString();
@@ -253,6 +262,8 @@ public class NotificationLaunchActivity extends AppCompatActivity {
         );
         startActivity(mainIntent);
         overridePendingTransition(0, 0);
+        // Передаём системную заставку следующей Activity без второго стартового кадра.
+        if (routeLauncherOnly) finish();
     }
 
     @Override

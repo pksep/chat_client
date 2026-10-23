@@ -33,6 +33,8 @@ import { getConfig } from './useConfig';
 import { clearAnyChatBackgroundSyncSession } from './useChatBackgroundSync';
 import { withNetworkTimeout } from '../utils/network-timeout';
 import { isChatSessionEnding } from '../composables/useAuth';
+import { isIosWeb } from '../utils/ios-pwa-viewport';
+import { refreshWebPushAvailability, webPushStatus } from './web-push-status';
 
 const FIREBASE_PUSH_TOKEN_STORAGE_KEY = 'chat_native_push_token';
 const RUSTORE_PUSH_TOKEN_STORAGE_KEY = 'chat_rustore_push_token';
@@ -41,7 +43,7 @@ const WEB_PUSH_SUBSCRIPTION_MIGRATION_STORAGE_KEY =
   'chat_web_push_subscription_migration';
 const WEB_PUSH_SUBSCRIPTION_MIGRATION_VERSION = 'v1';
 
-type WebPushBrowser = 'chrome' | 'mozilla' | 'yandex' | 'unknown';
+type WebPushBrowser = 'chrome' | 'mozilla' | 'yandex' | 'safari' | 'unknown';
 
 interface NotificationTapPlugin {
   addListener(
@@ -92,6 +94,9 @@ let lastHandledNotificationKey = '';
 let lastHandledNotificationAt = 0;
 const NOTIFICATION_INTERACTION_DEDUPE_MS = 30_000;
 let isWebServiceWorkerMessageListenerBound = false;
+let webPushRegistrationPromise: Promise<void> | null = null;
+let removeWebPushRecoveryListeners: (() => void) | null = null;
+let lastWebPushRegistrationAt = 0;
 type LiveKitModule = typeof import('./useLiveKit');
 
 const loadLiveKit = () => import('./useLiveKit');
@@ -158,6 +163,7 @@ const getWebPushBrowser = (): WebPushBrowser => {
   if (typeof navigator === 'undefined') {
     return 'unknown';
   }
+  if (isIosWeb()) return 'safari';
 
   const navigatorWithUserAgentData = navigator as Navigator & {
     userAgentData?: {
@@ -190,7 +196,7 @@ const getWebPushBrowser = (): WebPushBrowser => {
     return 'chrome';
   }
 
-  return 'unknown';
+  return userAgent.includes('safari') ? 'safari' : 'unknown';
 };
 
 const hasPayloadValues = (payload?: Record<string, string> | null) =>
@@ -488,6 +494,27 @@ const getOrRegisterWebServiceWorker =
       console.warn('Не удалось обновить service worker:', error);
     }
 
+    if (!registration.active) {
+      const worker = registration.installing || registration.waiting;
+      if (!worker) throw new Error('Service worker уведомлений не активирован');
+      await new Promise<void>((resolve, reject) => {
+        const finish = () => {
+          if (worker.state !== 'activated' && worker.state !== 'redundant')
+            return;
+          window.clearTimeout(timeout);
+          worker.removeEventListener('statechange', finish);
+          if (worker.state === 'activated') resolve();
+          else reject(new Error('Service worker уведомлений не активирован'));
+        };
+        const timeout = window.setTimeout(() => {
+          worker.removeEventListener('statechange', finish);
+          reject(new Error('Истекло время активации service worker'));
+        }, 10_000);
+        worker.addEventListener('statechange', finish);
+        finish();
+      });
+    }
+
     return registration;
   };
 
@@ -728,7 +755,7 @@ const recordNativePushError = (
   console.error(`${provider} push error:`, normalizedError);
 };
 
-export const initPushNotifications = async () => {
+const initializePushNotifications = async () => {
   if (isChatSessionEnding() || !getChatAuthSession()?.token) return;
   const revision = pushSessionRevision;
   pushNotificationsEnabled = true;
@@ -901,23 +928,35 @@ export const initPushNotifications = async () => {
   consumeWebNotificationNavigationFromUrl();
 
   // Web Push (Browser)
-  if (!('serviceWorker' in navigator)) return;
-
-  if (Notification.permission === 'default')
-    await Notification.requestPermission();
-  if (Notification.permission !== 'granted') return;
-
-  const registration = await getOrRegisterWebServiceWorker();
-  if (!isCurrentSession()) return;
+  if (!refreshWebPushAvailability()) return;
+  bindWebPushRecovery();
   bindWebServiceWorkerMessageListener();
   consumeWebCallActionFromUrl();
 
+  if (Notification.permission === 'default') {
+    // iOS разрешает запрос только непосредственно из нажатия пользователя.
+    if (isIosWeb()) return;
+    await Notification.requestPermission();
+  }
+  if (Notification.permission !== 'granted') {
+    refreshWebPushAvailability();
+    return;
+  }
+
+  webPushStatus.value = 'registering';
+  const registration = await getOrRegisterWebServiceWorker();
+  if (!isCurrentSession()) return;
+
   // Get public key from server
-  const resp = await api.get<{ publicKey: string }>('/push/public-key');
-  const data = await resp.json();
+  const data = await withNetworkTimeout(async signal => {
+    const response = await api.get<{ publicKey: string }>('/push/public-key', {
+      request: { signal }
+    });
+    return response.json();
+  }, 10_000);
   if (!isCurrentSession()) return;
   const publicKey = data?.publicKey;
-  if (!publicKey) return console.error('Missing VAPID key');
+  if (!publicKey) throw new Error('Сервер не вернул ключ Web Push');
 
   const applicationServerKey = urlBase64ToArrayBuffer(publicKey);
 
@@ -928,8 +967,9 @@ export const initPushNotifications = async () => {
   const needsSubscriptionMigration =
     Boolean(subscription) &&
     (subscriptionKeyMatches === false ||
-      localStorage.getItem(WEB_PUSH_SUBSCRIPTION_MIGRATION_STORAGE_KEY) !==
-        WEB_PUSH_SUBSCRIPTION_MIGRATION_VERSION);
+      (!isIosWeb() &&
+        localStorage.getItem(WEB_PUSH_SUBSCRIPTION_MIGRATION_STORAGE_KEY) !==
+          WEB_PUSH_SUBSCRIPTION_MIGRATION_VERSION));
 
   if (subscription && needsSubscriptionMigration) {
     const previousEndpoint = subscription.endpoint;
@@ -996,10 +1036,18 @@ export const initPushNotifications = async () => {
     browser
   };
 
-  await api.post('/push/subscribe', {
-    subscription: subscriptionPayload,
-    browser
-  });
+  await withNetworkTimeout(
+    signal =>
+      api.post(
+        '/push/subscribe',
+        { subscription: subscriptionPayload, browser },
+        { requset: { signal } }
+      ),
+    10_000
+  );
+  if (!isCurrentSession()) return;
+  webPushStatus.value = 'subscribed';
+  lastWebPushRegistrationAt = Date.now();
   localStorage.setItem(
     WEB_PUSH_SUBSCRIPTION_MIGRATION_STORAGE_KEY,
     WEB_PUSH_SUBSCRIPTION_MIGRATION_VERSION
@@ -1013,6 +1061,85 @@ export const initPushNotifications = async () => {
       endpointLength: subscription.endpoint.length
     }
   });
+};
+
+export const initPushNotifications = (): Promise<void> => {
+  if (Capacitor.isNativePlatform() || isTauriRuntime())
+    return initializePushNotifications();
+  if (webPushRegistrationPromise) return webPushRegistrationPromise;
+  const revision = pushSessionRevision;
+  const pending = initializePushNotifications()
+    .catch(error => {
+      if (revision === pushSessionRevision && pushNotificationsEnabled) {
+        webPushStatus.value = 'error';
+        recordTelemetryEvent({
+          category: 'notification',
+          name: 'notification.web.subscribe.failed',
+          level: 'error',
+          entityType: 'notification',
+          payload: getTelemetryErrorPayload(error)
+        });
+      }
+      throw error;
+    })
+    .finally(() => {
+      if (webPushRegistrationPromise === pending)
+        webPushRegistrationPromise = null;
+    });
+  webPushRegistrationPromise = pending;
+  return pending;
+};
+
+const bindWebPushRecovery = (): void => {
+  if (removeWebPushRecoveryListeners) return;
+  const retry = () => {
+    if (
+      !pushNotificationsEnabled ||
+      isChatSessionEnding() ||
+      document.visibilityState !== 'visible' ||
+      !refreshWebPushAvailability() ||
+      Notification.permission !== 'granted' ||
+      (webPushStatus.value === 'subscribed' &&
+        Date.now() - lastWebPushRegistrationAt < 5 * 60_000)
+    )
+      return;
+    void initPushNotifications().catch(error => {
+      console.warn('Не удалось восстановить Web Push:', error);
+    });
+  };
+  window.addEventListener('online', retry);
+  window.addEventListener('pageshow', retry);
+  window.addEventListener('focus', retry);
+  document.addEventListener('visibilitychange', retry);
+  removeWebPushRecoveryListeners = () => {
+    window.removeEventListener('online', retry);
+    window.removeEventListener('pageshow', retry);
+    window.removeEventListener('focus', retry);
+    document.removeEventListener('visibilitychange', retry);
+    removeWebPushRecoveryListeners = null;
+  };
+};
+
+export const requestWebPushNotifications = async (): Promise<void> => {
+  if (
+    Capacitor.isNativePlatform() ||
+    isChatSessionEnding() ||
+    !getChatAuthSession()?.token ||
+    !refreshWebPushAvailability()
+  )
+    return;
+  try {
+    // До requestPermission не должно быть await: иначе Safari теряет жест.
+    const permission =
+      Notification.permission === 'default'
+        ? await Notification.requestPermission()
+        : Notification.permission;
+    refreshWebPushAvailability();
+    if (permission === 'granted') await initPushNotifications();
+  } catch (error) {
+    webPushStatus.value = 'error';
+    console.warn('Не удалось включить уведомления:', error);
+  }
 };
 
 const handleCallPush = (notification?: { data?: NativeNotificationData }) => {
@@ -1097,6 +1224,10 @@ export const cleanupPushNotificationsOnLogout = async (): Promise<void> => {
   pushNotificationsEnabled = false;
   pushSessionRevision++;
   removePushRecoveryListeners?.();
+  removeWebPushRecoveryListeners?.();
+  webPushRegistrationPromise = null;
+  webPushStatus.value = 'idle';
+  lastWebPushRegistrationAt = 0;
   nativePushRegistrationRetry.clear();
   const accessToken = getAuthToken() || getChatAuthSession()?.token;
   const apiUrl = getConfig().CHAT_API_DOMAIN.replace(/\/+$/, '');

@@ -13,6 +13,7 @@ interface PendingUploadPayload {
   messageId: string;
   fileId: string;
   file?: File;
+  fileBytes?: ArrayBuffer;
   opfsFileName?: string;
   originName?: string;
   contentType?: string;
@@ -320,7 +321,7 @@ const loadPendingUpload = async (
     store.get(cacheKey)
   )) as PendingUploadPayload | undefined;
 
-  if (!metadata || metadata.file) {
+  if (!metadata || metadata.file || metadata.fileBytes) {
     return metadata;
   }
 

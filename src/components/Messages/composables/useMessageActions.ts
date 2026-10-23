@@ -63,6 +63,7 @@ export function useMessageActions(
             replyQuoteOccurrenceIndex: quoteOccurrenceIndex
           }
         : message;
+    if (message) messageListInputRef.value?.focusForReply?.();
   };
 
   const handleSetForwardMessage = (

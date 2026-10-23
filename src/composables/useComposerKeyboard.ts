@@ -2,11 +2,29 @@ import { Capacitor } from '@capacitor/core';
 import { onBeforeUnmount, ref, watch, type Ref } from 'vue';
 import { BackButtonPriority, useBackButtonHandler } from './useBackButton';
 import { isIosStandalonePwa, isIosWeb } from '../utils/ios-pwa-viewport';
+import {
+  androidKeyboardEvent,
+  getAndroidKeyboardInset,
+  setAndroidComposerOverlayOpen
+} from '../utils/android-keyboard-viewport';
 
 // Фокус, нужный редактору для вставки эмодзи, не должен открывать клавиатуру.
 export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
   const keyboardVisible = ref(false);
   const pickerOpen = ref(false);
+  const attachmentOpen = ref(false);
+  const closeAttachment = () =>
+    host.value
+      ?.querySelector<HTMLButtonElement>(
+        '.attach-file-popover .active-yui-kit .attach-file-button'
+      )
+      ?.click();
+  watch(attachmentOpen, setAndroidComposerOverlayOpen, { flush: 'sync' });
+  useBackButtonHandler(
+    attachmentOpen,
+    closeAttachment,
+    BackButtonPriority.composerPopover
+  );
   let mode: 'closed' | 'editor' | 'search' = 'closed';
   let editor: HTMLElement | null = null;
   let originalInputMode: string | null = null;
@@ -25,6 +43,21 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
     ].find(element => element.getClientRects().length > 0);
   const search = () =>
     picker()?.querySelector<HTMLInputElement>('.v3-search input');
+  const scheduleAndroidPickerLayout = () => {
+    if (Capacitor.getPlatform() !== 'android' || pickerLayoutFrame) return;
+    pickerLayoutFrame = requestAnimationFrame(() => {
+      pickerLayoutFrame = 0;
+      const element = host.value;
+      const panel = picker();
+      if (!element || !panel) return;
+      const input = element.getBoundingClientRect();
+      panel.style.bottom = `${getAndroidKeyboardInset() + input.height + 5}px`;
+      element.style.setProperty(
+        '--android-emoji-picker-max-height',
+        `${Math.max(0, input.top - (element.closest('.chat')?.getBoundingClientRect().top || 0) - 13)}px`
+      );
+    });
+  };
   const scheduleIosPickerLayout = () => {
     if (!isIosStandalonePwa() || pickerLayoutFrame) return;
     pickerLayoutFrame = requestAnimationFrame(() => {
@@ -66,7 +99,13 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
       editor?.setAttribute('inputmode', 'none');
     else restoreInputMode();
     pickerOpen.value = !!picker();
-    if (pickerOpen.value) scheduleIosPickerLayout();
+    attachmentOpen.value = !!host.value?.querySelector(
+      '.attach-file-popover .active-yui-kit'
+    );
+    if (pickerOpen.value) {
+      scheduleIosPickerLayout();
+      scheduleAndroidPickerLayout();
+    }
   };
   const closeKeyboard = () => {
     mode = 'closed';
@@ -75,6 +114,10 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
     if (focused instanceof HTMLElement && host.value?.contains(focused))
       focused.blur();
     keyboardVisible.value = false;
+  };
+  const preparePicker = () => {
+    // На Android панель открывается поверх чата, сохраняя уже открытую клавиатуру.
+    if (Capacitor.getPlatform() !== 'android') closeKeyboard();
   };
   const handlePointerDown = (event: PointerEvent): boolean => {
     if (!isMobile() || !(event.target instanceof Element)) return false;
@@ -89,7 +132,7 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
       return true;
     }
     if (target.closest('.smile-button') && !target.closest('.emoji-picker')) {
-      if (!picker()) closeKeyboard();
+      if (!picker()) preparePicker();
       // WebKit после preventDefault на touch pointerdown теряет клик по кнопке.
       if (!isIosWeb() || event.pointerType !== 'touch') event.preventDefault();
       event.stopPropagation();
@@ -118,8 +161,9 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
       event.target.closest('.smile-button') &&
       !event.target.closest('.emoji-picker') &&
       !picker()
-    )
-      closeKeyboard();
+    ) {
+      preparePicker();
+    }
   };
   const preserveFocus = (event: PointerEvent) => {
     if (isIosWeb() && event.pointerType === 'touch') return;
@@ -158,6 +202,7 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
   };
   const measureKeyboard = () => {
     scheduleIosPickerLayout();
+    scheduleAndroidPickerLayout();
     const viewport = window.visualViewport;
     if (!viewport || !isMobile()) return;
     if (viewportWidth !== viewport.width) {
@@ -165,7 +210,9 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
       viewportHeight = viewport.height;
     }
     viewportHeight = Math.max(viewportHeight, viewport.height);
-    const visible = viewportHeight - viewport.height > 100;
+    const visible =
+      Math.max(viewportHeight - viewport.height, getAndroidKeyboardInset()) >
+      100;
     if (keyboardVisible.value && !visible) {
       mode = 'closed';
       sync();
@@ -181,7 +228,7 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
     pickerOpen,
     () => {
       picker()?.closest<HTMLButtonElement>('.smile-button')?.click();
-      closeKeyboard();
+      if (Capacitor.getPlatform() !== 'android') closeKeyboard();
     },
     BackButtonPriority.overlay
   );
@@ -189,6 +236,8 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
     host,
     (element, _previous, onCleanup) => {
       if (!element) return;
+      if (Capacitor.getPlatform() === 'android')
+        window.__sepAndroidDismissComposerOverlay = closeAttachment;
       observer = new MutationObserver(sync);
       observer.observe(element, {
         childList: true,
@@ -200,6 +249,7 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
       document.addEventListener('pointerdown', preserveFocus, true);
       document.addEventListener('click', preserveSearchPicker);
       window.visualViewport?.addEventListener('resize', measureKeyboard);
+      window.addEventListener(androidKeyboardEvent, measureKeyboard);
       window.visualViewport?.addEventListener(
         'scroll',
         scheduleIosPickerLayout
@@ -218,6 +268,7 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
         document.removeEventListener('pointerdown', preserveFocus, true);
         document.removeEventListener('click', preserveSearchPicker);
         window.visualViewport?.removeEventListener('resize', measureKeyboard);
+        window.removeEventListener(androidKeyboardEvent, measureKeyboard);
         window.visualViewport?.removeEventListener(
           'scroll',
           scheduleIosPickerLayout
@@ -225,8 +276,12 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
         pickerResizeObserver?.disconnect();
         cancelAnimationFrame(pickerLayoutFrame);
         pickerLayoutFrame = 0;
+        element.style.removeProperty('--android-emoji-picker-max-height');
         element.style.removeProperty('--ios-emoji-picker-max-height');
         element.style.removeProperty('--ios-emoji-picker-top');
+        if (window.__sepAndroidDismissComposerOverlay === closeAttachment)
+          delete window.__sepAndroidDismissComposerOverlay;
+        attachmentOpen.value = false;
         restoreInputMode();
         editor = null;
         mode = 'closed';
@@ -237,5 +292,15 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
     { flush: 'post' }
   );
   onBeforeUnmount(() => observer?.disconnect());
-  return { handlePointerDown, handleClick };
+  const focusEditor = (): boolean => {
+    if (!isMobile() && !isIosWeb()) return false;
+    mode = 'editor';
+    picker()?.closest<HTMLButtonElement>('.smile-button')?.click();
+    sync();
+    // Нативный focus должен остаться в пользовательском жесте: iOS не
+    // открывает клавиатуру из отложенного TipTap commands.focus().
+    editor?.focus({ preventScroll: true });
+    return !!editor;
+  };
+  return { handlePointerDown, handleClick, focusEditor };
 }

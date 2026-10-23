@@ -19,7 +19,6 @@
 
     <style name="AppTheme.NoActionBarDark" parent="AppTheme.NoActionBar">
         <item name="android:windowBackground">@color/launch_background_dark</item>
-        <item name="android:background">@color/launch_background_dark</item>
         <item name="android:statusBarColor">@color/status_bar_surface_dark</item>
         <item name="android:navigationBarColor">@color/launch_background_dark</item>
         <item name="android:windowLightStatusBar">false</item>

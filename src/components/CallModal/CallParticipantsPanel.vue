@@ -10,6 +10,11 @@
     <div
       v-else
       class="call-modal__remote-grid"
+      @touchstart.passive="handleTouchStart"
+      @touchmove="handleTouchMove"
+      @touchend="handleTouchEnd"
+      @touchcancel="cancelSwipe"
+      @click.capture="suppressSwipeClick"
       :class="{
         'call-modal__remote-grid--single': currentPageParticipantCount === 1,
         'call-modal__remote-grid--duo': currentPageParticipantCount === 2,
@@ -129,7 +134,7 @@ const emit = defineEmits<{
   (event: 'select-participant', identity: string | null): void;
 }>();
 
-defineProps<{
+const props = defineProps<{
   participants: Array<{
     identity: string;
     tileId: string;
@@ -170,4 +175,68 @@ defineProps<{
   goToPage: (page: number) => void;
   setRemoteVideoRef: (identity: string, el: Element | null) => void;
 }>();
+
+let swipe: { id: number; x: number; y: number; horizontal: boolean } | null =
+  null;
+let suppressClickUntil = 0;
+
+const cancelSwipe = () => {
+  swipe = null;
+};
+
+const handleTouchStart = (event: TouchEvent) => {
+  cancelSwipe();
+  if (event.touches.length !== 1 || props.totalPages < 2) return;
+  const touch = event.touches[0];
+  swipe = {
+    id: touch.identifier,
+    x: touch.clientX,
+    y: touch.clientY,
+    horizontal: false
+  };
+};
+
+const handleTouchMove = (event: TouchEvent) => {
+  if (!swipe) return;
+  if (event.touches.length !== 1) return cancelSwipe();
+  const touch = event.touches[0];
+  const dx = Math.abs(touch.clientX - swipe.x);
+  const dy = Math.abs(touch.clientY - swipe.y);
+  if (!swipe.horizontal && dy > 12 && dy >= dx) return cancelSwipe();
+  if (dx > 12 && dx > dy * 1.4) swipe.horizontal = true;
+  if (swipe.horizontal && event.cancelable) event.preventDefault();
+};
+
+const handleTouchEnd = (event: TouchEvent) => {
+  const start = swipe;
+  cancelSwipe();
+  if (!start) return;
+  const touch = Array.from(event.changedTouches).find(
+    t => t.identifier === start.id
+  );
+  if (!touch) return;
+  const dx = touch.clientX - start.x;
+  const dy = touch.clientY - start.y;
+  if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+  // После свайпа WebKit может прислать click по плитке участника.
+  suppressClickUntil = Date.now() + 500;
+  props.goToPage(
+    Math.max(
+      0,
+      Math.min(props.totalPages - 1, props.currentPage + (dx < 0 ? 1 : -1))
+    )
+  );
+};
+
+const suppressSwipeClick = (event: MouseEvent) => {
+  if (Date.now() >= suppressClickUntil) return;
+  event.preventDefault();
+  event.stopPropagation();
+};
 </script>
+
+<style scoped>
+.call-modal__remote-grid {
+  touch-action: pan-y pinch-zoom;
+}
+</style>

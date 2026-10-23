@@ -18,7 +18,6 @@ import {
   managerUploadId
 } from '../../../composables/useManagerRoutes';
 import { generateUUID } from '../../../utils/generateUUID';
-import { fileToDataURL } from '../../../utils/fileToDataURL';
 import { stripHtml } from '../../../utils/stripHtml';
 import { showErrorNotification } from '../../../composables/useNotifications';
 import {
@@ -82,6 +81,7 @@ import { stageAiAttachments } from '../../../services/aiAttachments';
 import { buildForwardMessageSendPlan } from '../../../utils/forward-message-send-plan';
 import { getUploadFileSizeError } from '../../../services/useChatSDK/multipart-upload';
 import { createStickerMessage } from '../../../utils/stickers';
+import { isIosWeb } from '../../../utils/ios-pwa-viewport';
 import { prepareKeyboardSticker } from '../../../utils/sticker-animation';
 import {
   canUseNativeMessageUpload,
@@ -409,7 +409,8 @@ export function useMessageSender(
   authUser: Ref<any>,
   mastraResult: Ref<any>,
   scrollToBottom: () => void,
-  clearSellectedMessage: () => void
+  clearSellectedMessage: () => void,
+  onMessageSubmitted?: (topicId: string) => void
 ) {
   const sendCallTopicPromptResponse = async (
     topicId: string,
@@ -750,6 +751,7 @@ export function useMessageSender(
           topicId,
           text: message.text || '',
           medias,
+          taggedUserIds: message.taggedUserIds,
           ex: createMessageEx({ clientId: messageId }, message.ex),
           replyMessageId: messageMeta.replyMessageId,
           forwardMessageId
@@ -772,6 +774,7 @@ export function useMessageSender(
         topicId,
         text: message.text || '',
         medias,
+        taggedUserIds: message.taggedUserIds,
         ex: createMessageEx({ clientId: messageId }, message.ex),
         replyMessageId: messageMeta?.replyMessageId
       });
@@ -1110,6 +1113,9 @@ export function useMessageSender(
 
   if (!arePendingMessageRetryListenersBound && typeof window !== 'undefined') {
     const triggerRetry = () => {
+      if (isIosWeb() && !document.hidden) {
+        backgroundInterruptedUploadMessages.clear();
+      }
       scheduleAllPendingMessageAutoRetries({ immediate: true });
     };
 
@@ -1347,7 +1353,10 @@ export function useMessageSender(
 
         return true;
       } catch (error: any) {
-        if (payload.isMedia && wasDocumentRecentlyHidden()) {
+        if (
+          payload.isMedia &&
+          (isIosWeb() ? document.hidden : wasDocumentRecentlyHidden())
+        ) {
           markBackgroundInterruptedUpload(topicId, messageId);
         }
 
@@ -1547,6 +1556,7 @@ export function useMessageSender(
     });
     clearPendingMessageAutoRetry(topicId, clientId);
     if (state.replyMessage === replyMessage) state.replyMessage = null;
+    onMessageSubmitted?.(topicId);
     state.hideUnreadMarker = true;
     await nextTick();
     scrollToBottom();
@@ -1802,6 +1812,7 @@ export function useMessageSender(
         return;
       }
 
+      onMessageSubmitted?.(topicId);
       if (parts.length === 0 && hasForwardMessages) {
         for (const [index, forwardMessage] of forwardMessages.entries()) {
           const ex = createMessageEx(
@@ -2099,11 +2110,7 @@ export function useMessageSender(
       filePayloads.map(async ({ file, isMedia }, i) => {
         const type = getMediaType(file, isMedia);
         const localPath =
-          type === MediaType.Video
-            ? URL.createObjectURL(file)
-            : type === MediaType.File
-              ? ''
-              : await fileToDataURL(file);
+          type === MediaType.File ? '' : URL.createObjectURL(file);
         const baseMedia = {
           localPath,
           path: '',
@@ -2190,6 +2197,7 @@ export function useMessageSender(
 
     if (useNativeUpload) activeNativeUploadMessages.add(clientId);
     addMessageToLocal(newMessage.topicId, newMessage);
+    onMessageSubmitted?.(topicId);
     const pendingUploadMessagePersistence = registerPendingUploadMessage(
       newMessage.topicId,
       clientId,

@@ -176,10 +176,11 @@ public final class ChatNotificationHelper {
                 JSONObject message = recoveredMessages.optJSONObject(i);
                 if (message == null) continue;
                 JSONObject sender = message.optJSONObject("senderUser");
-                addStyleMessage(style, message.optString("id"),
+                addStyleMessage(context, style, message.optString("id"),
                     sender != null ? sender.optString("initials", title) : title,
                     message.optString("senderUserId"), message.optString("text"),
-                    parseMessageTimestamp(message.optString("createdAt")));
+                    parseMessageTimestamp(message.optString("createdAt")),
+                    sender != null ? sender.optString("avatarUrl", "") : "");
             }
         } else {
             NotificationCompat.MessagingStyle previous = existing != null
@@ -187,9 +188,10 @@ public final class ChatNotificationHelper {
             if (previous != null)
                 for (NotificationCompat.MessagingStyle.Message message : previous.getMessages())
                     style.addMessage(message);
-            addStyleMessage(style, messageId, firstNonEmpty(data.get("senderName"), title),
+            addStyleMessage(context, style, messageId, firstNonEmpty(data.get("senderName"), title),
                 data.get("senderUserId"), body,
-                IncomingCallNotificationHelper.parseTimestamp(data.get("stateAt"), System.currentTimeMillis()));
+                IncomingCallNotificationHelper.parseTimestamp(data.get("stateAt"), System.currentTimeMillis()),
+                data.get("senderAvatarUrl"));
         }
         builder.setStyle(style);
         if (recoveredMessages != null) builder.getExtras().putString("chatRecoveredHistory", historyKey.toString());
@@ -211,12 +213,15 @@ public final class ChatNotificationHelper {
             topicId,
             messageId
         );
+        builder.getExtras().putInt(NotificationAvatarHelper.REQUEST, requestCode);
+        Notification notification = NotificationBrandIconHelper.build(context, builder);
         NotificationManagerCompat.from(context).notify(
             topicId,
             CHAT_NOTIFICATION_ID,
-            NotificationBrandIconHelper.build(context, builder)
+            notification
         );
         ChatNotificationDismissalHelper.recordDisplayed(context, topicId, data.get("stateAt"), data.get("sentAt"));
+        NotificationAvatarHelper.update(context, topicId, CHAT_NOTIFICATION_ID, requestCode, notification);
     }
 
     public static synchronized void showRecoveredChatMessage(
@@ -234,13 +239,14 @@ public final class ChatNotificationHelper {
         return null;
     }
 
-    private static void addStyleMessage(NotificationCompat.MessagingStyle style, String id,
-                                        String name, String senderId, String text, long at) {
+    private static void addStyleMessage(Context context, NotificationCompat.MessagingStyle style, String id,
+                                        String name, String senderId, String text, long at, String avatarUrl) {
         Person sender = new Person.Builder().setName(firstNonEmpty(name, "Собеседник"))
-            .setKey(firstNonEmpty(senderId, name)).build();
+            .setKey(firstNonEmpty(senderId, name)).setIcon(NotificationAvatarHelper.cached(context, avatarUrl)).build();
         NotificationCompat.MessagingStyle.Message message =
             new NotificationCompat.MessagingStyle.Message(plainMessageText(text), at, sender);
         message.getExtras().putString("chatMessageId", id);
+        message.getExtras().putString(NotificationAvatarHelper.AVATAR, avatarUrl);
         style.addMessage(message);
     }
 

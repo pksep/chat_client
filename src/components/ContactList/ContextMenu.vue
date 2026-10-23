@@ -11,7 +11,7 @@
     }"
     :data-testid="`${props.dataTestid}-ContextMenu-Container`"
   >
-    <div class="template">
+    <div class="template" :style="contentStyle">
       <slot />
     </div>
     <p class="tip">
@@ -23,6 +23,8 @@
 <script setup lang="ts">
 import { vOnClickOutside } from '@vueuse/components';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { getVisibleViewport } from '../../utils/visible-viewport';
+import { androidKeyboardEvent } from '../../utils/android-keyboard-viewport';
 import {
   BackButtonPriority,
   useBackButtonHandler
@@ -35,11 +37,13 @@ const props = withDefaults(
     dataTestid?: string;
     fixedPosition?: boolean;
     forceFlipY?: boolean;
+    topOverflow?: number;
   }>(),
   {
     dataTestid: () => 'ContextMenu',
     fixedPosition: false,
-    forceFlipY: false
+    forceFlipY: false,
+    topOverflow: 0
   }
 );
 
@@ -53,6 +57,18 @@ const flip = ref(false);
 const flipY = ref(false);
 const menuLayoutVersion = ref(0);
 let menuResizeObserver: ResizeObserver | null = null;
+const viewport = computed(() => {
+  void menuLayoutVersion.value;
+  return getVisibleViewport();
+});
+const contentStyle = computed(() => ({
+  maxHeight: `${Math.max(0, viewport.value.height - props.topOverflow - 36)}px`,
+  overflowY:
+    (menuRef.value?.scrollHeight || 0) >
+    viewport.value.height - props.topOverflow - 16
+      ? ('auto' as const)
+      : undefined
+}));
 
 const isOutsideEvent = (event: Event) => {
   const menu = menuRef.value;
@@ -84,18 +100,21 @@ const position = computed(() => {
   }
 
   if (menuWidth) {
-    const maxX = Math.max(8, window.innerWidth - menuWidth - 8);
-    x = Math.min(Math.max(8, x), maxX);
+    const minX = viewport.value.left + 8;
+    const maxX = Math.max(minX, viewport.value.right - menuWidth - 8);
+    x = Math.min(Math.max(minX, x), maxX);
   }
 
   if (menuHeight) {
-    const maxY = Math.max(8, window.innerHeight - menuHeight - 8);
-    y = Math.min(Math.max(8, y), maxY);
+    const minY = viewport.value.top + props.topOverflow + 8;
+    const maxY = Math.max(minY, viewport.value.bottom - menuHeight - 8);
+    y = Math.min(Math.max(minY, y), maxY);
   }
 
   return {
     left: `${x}px`,
-    top: `${y}px`
+    top: `${y}px`,
+    maxHeight: `${Math.max(0, viewport.value.height - props.topOverflow - 16)}px`
   };
 });
 
@@ -114,17 +133,15 @@ const recomputeFlip = async () => {
     return;
   }
 
-  const windowWidth = window.innerWidth;
-  const windowHeight = window.innerHeight;
-
   await nextTick();
 
   const rect = menuRef.value?.getBoundingClientRect();
   if (!rect) return;
 
-  flip.value = props.position.x + rect.width > windowWidth;
+  const bounds = getVisibleViewport();
+  flip.value = props.position.x + rect.width > bounds.right;
   flipY.value =
-    props.forceFlipY || props.position.y + rect.height > windowHeight;
+    props.forceFlipY || props.position.y + rect.height > bounds.bottom;
   menuLayoutVersion.value += 1;
 };
 
@@ -210,6 +227,9 @@ watch(
 
     if (visible) {
       window.addEventListener('resize', handleWindowResize);
+      window.addEventListener(androidKeyboardEvent, handleWindowResize);
+      window.visualViewport?.addEventListener('resize', handleWindowResize);
+      window.visualViewport?.addEventListener('scroll', handleWindowResize);
       document.addEventListener('mousedown', closePopoverOnPointerStart);
       document.addEventListener('touchstart', closePopoverOnPointerStart, {
         passive: true
@@ -218,6 +238,9 @@ watch(
     }
 
     window.removeEventListener('resize', handleWindowResize);
+    window.removeEventListener(androidKeyboardEvent, handleWindowResize);
+    window.visualViewport?.removeEventListener('resize', handleWindowResize);
+    window.visualViewport?.removeEventListener('scroll', handleWindowResize);
     document.removeEventListener('mousedown', closePopoverOnPointerStart);
     document.removeEventListener('touchstart', closePopoverOnPointerStart);
   },
@@ -232,6 +255,9 @@ onBeforeUnmount(() => {
   }
 
   window.removeEventListener('resize', handleWindowResize);
+  window.removeEventListener(androidKeyboardEvent, handleWindowResize);
+  window.visualViewport?.removeEventListener('resize', handleWindowResize);
+  window.visualViewport?.removeEventListener('scroll', handleWindowResize);
   document.removeEventListener('mousedown', closePopoverOnPointerStart);
   document.removeEventListener('touchstart', closePopoverOnPointerStart);
 });

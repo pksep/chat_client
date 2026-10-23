@@ -523,7 +523,9 @@ const setupChatListeners = (): void => {
       suspendIncomingMergeByTopic.value[message.topicId] === true;
 
     if (!shouldSuspendMerge) {
-      addMessageToLocal(message.topicId, message);
+      addMessageToLocal(message.topicId, message, {
+        animate: !opts?.silent
+      });
     } else if (!isDuplicateMessage) {
       const existingBuffered =
         bufferedIncomingMessagesByTopic.value[message.topicId] || [];
@@ -2971,11 +2973,22 @@ export const deleteMessageChat = async (params: {
   }
 };
 
+const ownReactionListeners = new Set<(topicId: string) => void>();
+export const subscribeToOwnReactions = (
+  listener: (topicId: string) => void
+): (() => void) => {
+  ownReactionListeners.add(listener);
+  return () => {
+    ownReactionListeners.delete(listener);
+  };
+};
+
 export const setReactionMessage = async (params: {
   messageId: string;
   emoji: string;
   topicId: string;
 }): Promise<void> => {
+  ownReactionListeners.forEach(listener => listener(params.topicId));
   const sdk = getChatSDK();
   const sendReactionOverSocket = (): boolean => {
     try {

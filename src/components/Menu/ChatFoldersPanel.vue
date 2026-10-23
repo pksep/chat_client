@@ -2,7 +2,10 @@
   <section
     :class="[
       'chat-folders-panel',
-      { 'chat-folders-panel--mobile': props.mobile }
+      {
+        'chat-folders-panel--mobile': props.mobile,
+        'chat-folders-panel--with-rail': props.mobile && !!$slots.folders
+      }
     ]"
     data-testid="ChatFolders-Panel"
     @click="closeFolderMenu"
@@ -27,6 +30,10 @@
       placeholder="Поиск"
       data-testid="ChatFolders-Search"
     />
+
+    <div v-if="props.mobile && $slots.folders" class="chat-folders-panel__rail">
+      <slot name="folders" />
+    </div>
 
     <ul
       v-if="props.loading && !props.folders.length"

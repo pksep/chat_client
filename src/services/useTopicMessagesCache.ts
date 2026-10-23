@@ -7,6 +7,7 @@ import { reviveCachedDates as deserializeValue } from '../utils/revive-cached-da
 import type { IMessage } from '../components/interfaces/interfaces';
 import { mergeMessageSnapshots } from '../utils/merge-message-snapshots';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
+import { isIosWeb } from '../utils/ios-pwa-viewport';
 
 const DB_NAME = 'chat-topic-messages-db';
 const STORE_NAME = 'topicMessages';
@@ -43,6 +44,7 @@ interface CachedPendingUpload {
   messageId: string;
   fileId: string;
   file?: File;
+  fileBytes?: ArrayBuffer;
   opfsFileName?: string;
   originName?: string;
   contentType?: string;
@@ -510,9 +512,15 @@ const getPendingUploadsOpfsDirectory = async (
   }
 };
 
-const loadPendingUploadFileFromOpfs = async (
+const loadDurablePendingUploadFile = async (
   cached: CachedPendingUpload
 ): Promise<File | null> => {
+  if (cached.fileBytes) {
+    return new File([cached.fileBytes], cached.originName || 'attachment', {
+      type: cached.contentType || '',
+      lastModified: cached.lastModified
+    });
+  }
   if (!cached.opfsFileName) {
     return null;
   }
@@ -837,6 +845,16 @@ export const savePendingUploadFile = async (params: {
       return;
     }
 
+    if (isIosWeb()) {
+      // WebKit может отклонить File при записи в IndexedDB, в том числе фото
+      // камеры. Байты сохраняются надёжно и восстанавливаются после перезапуска.
+      payload.fileBytes = await params.file.arrayBuffer();
+      payload.originName = params.file.name;
+      payload.contentType = params.file.type;
+      payload.lastModified = params.file.lastModified;
+      delete payload.file;
+    }
+
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(PENDING_UPLOADS_STORE_NAME, 'readwrite');
       const store = tx.objectStore(PENDING_UPLOADS_STORE_NAME);
@@ -899,7 +917,7 @@ export const loadPendingUploadFile = async (
 
       if (completedResult) {
         const file =
-          (await loadPendingUploadFileFromOpfs(completedResult)) ||
+          (await loadDurablePendingUploadFile(completedResult)) ||
           completedResult.file;
 
         if (!file) {
@@ -944,7 +962,7 @@ export const loadPendingUploadFile = async (
         }
 
         const file =
-          (await loadPendingUploadFileFromOpfs(result)) || result.file;
+          (await loadDurablePendingUploadFile(result)) || result.file;
 
         if (!file) {
           resolve(null);

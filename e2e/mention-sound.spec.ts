@@ -45,7 +45,9 @@ test('звук упоминания обходит mute, обычное сооб
         );
         (window as any).__messageSounds = 0;
         (window as any).Audio = class extends EventTarget {
-          src = '';
+          constructor(public src = '') {
+            super();
+          }
           preload = '';
           load() {
             this.dispatchEvent(new Event('canplaythrough'));

@@ -713,6 +713,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       behavior?: ScrollBehavior;
       highlightClassName?: string;
       highlightDurationMs?: number;
+      targetElement?: HTMLElement | null;
       isCurrent?: () => boolean;
     }
   ): Promise<boolean> => {
@@ -728,18 +729,50 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     cancelScheduledAnchorRestore();
     viewportMode.value = 'jump';
     const targetTop = getMessageTargetTop(
-      messageElement,
+      jumpOptions?.targetElement || messageElement,
       jumpOptions?.block || 'center'
     );
     if (targetTop === null) {
       return false;
     }
 
-    await scrollWithSmoothTail(
-      targetTop,
-      jumpOptions?.behavior || 'auto',
-      jumpOptions?.isCurrent
+    const container = containerRef.value;
+    const finalTop = Math.min(
+      Math.max(0, container.scrollHeight - container.clientHeight),
+      Math.max(0, targetTop)
     );
+    const behavior = window.matchMedia('(prefers-reduced-motion: reduce)')
+      .matches
+      ? 'instant'
+      : jumpOptions?.behavior || 'auto';
+    const startedAt = performance.now();
+    setInternalScrollLock();
+    // Один плавный переход сразу к фрагменту, без мгновенного переноса и доводки.
+    container.scrollTo({ top: finalTop, behavior });
+    if (behavior === 'smooth') {
+      await new Promise<void>(resolve => {
+        let previousTop = container.scrollTop;
+        let stableFrames = 0;
+        const waitForScroll = (): void => {
+          const currentTop = container.scrollTop;
+          stableFrames =
+            Math.abs(currentTop - previousTop) < 0.5 ? stableFrames + 1 : 0;
+          previousTop = currentTop;
+          const elapsed = performance.now() - startedAt;
+          if (
+            jumpOptions?.isCurrent?.() === false ||
+            hasUserScrollIntentAfter(startedAt) ||
+            (elapsed > 100 && stableFrames >= 3) ||
+            elapsed >= 1500
+          ) {
+            resolve();
+            return;
+          }
+          requestAnimationFrame(waitForScroll);
+        };
+        requestAnimationFrame(waitForScroll);
+      });
+    }
     if (jumpOptions?.isCurrent?.() === false) return false;
 
     if (jumpOptions?.highlightClassName) {
@@ -780,6 +813,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     viewportMode,
     isNearBottom,
     isAtBottom: updateBottomState,
+    hasUserScrollIntentAfter,
     scrollToBottomSmooth,
     scrollToBottomInstant,
     initialize,
