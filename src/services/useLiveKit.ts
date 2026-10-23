@@ -915,14 +915,36 @@ const callWebRtcDiagnostics = createCallWebRtcDiagnostics(
     recordCallTelemetryEvent(name, payload, level, activeRoom)
 );
 
-const recordCallDisconnectRequested = (activeRoom: Room, reason: string) => {
-  callConnectionDiagnostics.markDisconnectRequested(activeRoom, reason);
+type CallDisconnectSource =
+  | 'replace-room'
+  | 'stale-connect-attempt'
+  | 'ended-notice'
+  | 'user-leave'
+  | 'cleanup';
+
+const disconnectCallRoom = (
+  activeRoom: Room,
+  source: CallDisconnectSource
+): Promise<void> => {
+  const operationId = createTelemetryTraceId('disconnect');
+  callConnectionDiagnostics.markDisconnectRequested(
+    activeRoom,
+    source,
+    operationId
+  );
   recordCallTelemetryEvent(
     'call.livekit.disconnect.requested',
-    { reason, ...buildCallHealthTelemetryPayload(activeRoom) },
+    {
+      reason: source,
+      disconnectSource: source,
+      disconnectOperationId: operationId,
+      ...buildCallHealthTelemetryPayload(activeRoom)
+    },
     'info',
     activeRoom
   );
+
+  return activeRoom.disconnect();
 };
 
 const buildAudioOutputDiagnosticsPayload = (
@@ -4026,7 +4048,23 @@ const setupRoomListeners = (activeRoom: Room) => {
     name: string,
     payload?: Record<string, unknown>,
     level: 'debug' | 'info' | 'warn' | 'error' = 'info'
-  ) => recordCallTelemetryEvent(name, payload, level, activeRoom);
+  ) => {
+    const lifecycleDetails = Object.fromEntries(
+      ['previousConnectionState', 'connectionState', 'reason', 'reasonName']
+        .map(key => [key, payload?.[key]])
+        .filter(
+          (entry): entry is [string, string | number | boolean | null] =>
+            entry[1] === null ||
+            ['string', 'number', 'boolean'].includes(typeof entry[1])
+        )
+    );
+    callConnectionDiagnostics.recordLifecycleEvent(
+      activeRoom,
+      name,
+      lifecycleDetails
+    );
+    recordCallTelemetryEvent(name, payload, level, activeRoom);
+  };
   let previousConnectionState = activeRoom.state;
   activeRoom
     .on(RoomEvent.SignalConnected, () => {
@@ -4382,23 +4420,45 @@ const setupRoomListeners = (activeRoom: Room) => {
       void callWebRtcDiagnostics
         .capture(activeRoom, 'before-disconnect', 'warn')
         .finally(() => callWebRtcDiagnostics.stop(activeRoom));
+      const connectionSnapshot = callConnectionDiagnostics.snapshot(
+        activeRoom,
+        room
+      );
       const expectedDisconnect =
         ignoredDisconnectedRoom === activeRoom ||
         isExplicitHangupInProgress ||
-        Boolean(
-          callConnectionDiagnostics.snapshot(activeRoom, room)
-            ?.disconnectRequestedBy
-        );
+        Boolean(connectionSnapshot?.disconnectRequestedBy);
+      const recentLiveKitEvents =
+        callConnectionDiagnostics.recentLifecycleEvents(activeRoom);
+      const unattributedClientDisconnect =
+        reason === DisconnectReason.CLIENT_INITIATED && !expectedDisconnect;
       recordRoomTelemetryEvent(
         'call.livekit.disconnected.observed',
         {
           reason,
           reasonName: reason === undefined ? null : DisconnectReason[reason],
           ignoredForRoom: ignoredDisconnectedRoom === activeRoom,
+          disconnectInitiator: expectedDisconnect
+            ? 'application'
+            : 'sdk-or-unattributed',
+          recentLiveKitEvents,
           ...buildCallHealthTelemetryPayload(activeRoom)
         },
         expectedDisconnect ? 'info' : 'warn'
       );
+      if (unattributedClientDisconnect) {
+        recordRoomTelemetryEvent(
+          'call.livekit.disconnect.unattributed',
+          {
+            reason,
+            reasonName: DisconnectReason[reason],
+            disconnectInitiator: 'sdk-or-unattributed',
+            recentLiveKitEvents,
+            ...buildCallHealthTelemetryPayload(activeRoom)
+          },
+          'error'
+        );
+      }
       isRoomReconnectInProgress = false;
       if (ignoredDisconnectedRoom === activeRoom) {
         if (room === activeRoom) {
@@ -4629,8 +4689,7 @@ const connectToRoom = async (options: {
     if (previousRoom) {
       isRoomReconnectInProgress = false;
       ignoredDisconnectedRoom = previousRoom;
-      recordCallDisconnectRequested(previousRoom, 'replace-room');
-      await previousRoom.disconnect();
+      await disconnectCallRoom(previousRoom, 'replace-room');
 
       if (ignoredDisconnectedRoom === previousRoom) {
         ignoredDisconnectedRoom = null;
@@ -4780,8 +4839,7 @@ const connectToRoom = async (options: {
       void callWebRtcDiagnostics
         .capture(nextRoom, 'before-stale-disconnect', 'warn')
         .finally(() => callWebRtcDiagnostics.stop(nextRoom));
-      recordCallDisconnectRequested(nextRoom, 'stale-connect-attempt');
-      nextRoom.disconnect();
+      void disconnectCallRoom(nextRoom, 'stale-connect-attempt');
       return;
     }
 
@@ -6133,8 +6191,7 @@ const showEndedCallNoticeAndReleaseMedia = (
 
   if (activeRoom) {
     ignoredDisconnectedRoom = activeRoom;
-    recordCallDisconnectRequested(activeRoom, 'ended-notice');
-    activeRoom.disconnect();
+    void disconnectCallRoom(activeRoom, 'ended-notice');
   }
 
   room = null;
@@ -7215,8 +7272,7 @@ export const leaveCall = () => {
     void callWebRtcDiagnostics
       .capture(activeRoom, 'before-user-leave', 'info')
       .finally(() => callWebRtcDiagnostics.stop(activeRoom));
-    recordCallDisconnectRequested(activeRoom, 'user-leave');
-    activeRoom.disconnect();
+    void disconnectCallRoom(activeRoom, 'user-leave');
   }
 
   room = null;
@@ -7265,8 +7321,7 @@ export const cleanup = (disconnectRoom = true) => {
     void callWebRtcDiagnostics
       .capture(activeRoom, 'before-cleanup-disconnect', 'info')
       .finally(() => callWebRtcDiagnostics.stop(activeRoom));
-    recordCallDisconnectRequested(activeRoom, 'cleanup');
-    activeRoom.disconnect();
+    void disconnectCallRoom(activeRoom, 'cleanup');
   } else if (activeRoom) {
     callWebRtcDiagnostics.stop(activeRoom);
   }
