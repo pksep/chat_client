@@ -6,7 +6,12 @@
     ]"
     :data-testid="`${props.dataTestid}-ChatsToolbar`"
   >
-    <MenuSectionHeading as="div" class="chats-toolbar__headline">
+    <MenuSectionHeading
+      as="div"
+      class="chats-toolbar__headline"
+      network-status
+      :refresh-failed="getTopicsRefreshFailed()"
+    >
       <h4
         v-if="!props.isCollapse"
         class="chats-toolbar__title"
@@ -32,6 +37,7 @@
 
       <ConnectionStatus
         v-if="!props.isCollapse && !!isWaitingConnection"
+        class="chats-toolbar__desktop-network"
         :refresh-failed="getTopicsRefreshFailed()"
       />
 

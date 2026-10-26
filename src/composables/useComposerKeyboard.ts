@@ -203,16 +203,25 @@ export function useComposerKeyboard(host: Ref<HTMLElement | null>) {
   const measureKeyboard = () => {
     scheduleIosPickerLayout();
     scheduleAndroidPickerLayout();
-    const viewport = window.visualViewport;
-    if (!viewport || !isMobile()) return;
-    if (viewportWidth !== viewport.width) {
-      viewportWidth = viewport.width;
-      viewportHeight = viewport.height;
+    let visible: boolean;
+    if (
+      Capacitor.getPlatform() === 'android' &&
+      Capacitor.isPluginAvailable('KeyboardViewport')
+    ) {
+      // Native IME уже сообщает высоту: чтение viewport вынуждает лишний layout.
+      visible = getAndroidKeyboardInset() > 100;
+    } else {
+      const viewport = window.visualViewport;
+      if (!viewport || !isMobile()) return;
+      if (viewportWidth !== viewport.width) {
+        viewportWidth = viewport.width;
+        viewportHeight = viewport.height;
+      }
+      viewportHeight = Math.max(viewportHeight, viewport.height);
+      visible =
+        Math.max(viewportHeight - viewport.height, getAndroidKeyboardInset()) >
+        100;
     }
-    viewportHeight = Math.max(viewportHeight, viewport.height);
-    const visible =
-      Math.max(viewportHeight - viewport.height, getAndroidKeyboardInset()) >
-      100;
     if (keyboardVisible.value && !visible) {
       mode = 'closed';
       sync();

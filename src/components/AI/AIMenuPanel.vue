@@ -10,6 +10,7 @@
     data-testid="AI-MenuPanel"
   >
     <MenuSectionHeading
+      network-status
       :class="[
         'ai-menu-panel__header',
         {

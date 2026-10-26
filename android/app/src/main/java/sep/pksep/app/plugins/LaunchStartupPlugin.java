@@ -11,11 +11,8 @@ import sep.pksep.app.MainActivity;
 public class LaunchStartupPlugin extends Plugin {
     @PluginMethod
     public void waitForPermissions(PluginCall call) {
-        if (getActivity() instanceof MainActivity) {
-            ((MainActivity) getActivity()).whenStartupRuntimePermissionsReady(call::resolve);
-        } else {
-            call.resolve();
-        }
+        // Совместимость с кешированным WebView: общего запроса при старте больше нет.
+        call.resolve();
     }
 
     @PluginMethod

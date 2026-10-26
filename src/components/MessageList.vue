@@ -179,6 +179,16 @@
         </template>
       </MessageListUserItems>
       <div
+        v-if="isAwaitingInitialHistory && initialHistoryRefreshFailed"
+        class="chat__message-empty-state chat__history-refresh-error"
+        role="status"
+      >
+        <span>Не удалось обновить сообщения</span>
+        <button type="button" @click="initialHistoryRefreshRevision++">
+          Повторить
+        </button>
+      </div>
+      <div
         v-if="shouldRenderEmptyUserMessageState"
         class="chat__message-empty-state"
         :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
@@ -580,6 +590,8 @@ const { state: isCompactMessageInput } = useResizeState(481, {
 });
 const isNativeAndroid =
   Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+const getHasHistoryNetwork = (): boolean =>
+  getHasBrowserNetwork() && (Capacitor.isNativePlatform() || navigator.onLine);
 
 const { onTouchStart, onTouchEnd } = useMessageSwipe(route);
 
@@ -626,6 +638,7 @@ const chatMessageWrapperStyle = computed(() => ({
     : {})
 }));
 
+let messageInlineEndInsetRafId = 0;
 const syncMessageInlineEndInset = (): void => {
   const wrapper = chatWrapperRef.value;
   if (!wrapper) {
@@ -646,6 +659,14 @@ const syncMessageInlineEndInset = (): void => {
   if (messageInlineEndInset.value !== nextInset) {
     messageInlineEndInset.value = nextInset;
   }
+};
+const scheduleMessageInlineEndInsetSync = (): void => {
+  if (messageInlineEndInsetRafId) return;
+  // Монтаж и ResizeObserver запрашивают один замер после обновления DOM.
+  messageInlineEndInsetRafId = window.requestAnimationFrame(() => {
+    messageInlineEndInsetRafId = 0;
+    syncMessageInlineEndInset();
+  });
 };
 const authUser = computed(() => getAuthUser());
 const authUserId = computed(() =>
@@ -695,6 +716,9 @@ const getRenderedTopicMessages = (
 const pendingInitialNotificationMessageId = ref('');
 const isAwaitingNotificationHistory = ref(false);
 const isAwaitingInitialHistory = ref(false);
+const isInitialHistoryPositioning = ref(false);
+const initialHistoryRefreshFailed = ref(false);
+const initialHistoryRefreshRevision = ref(0);
 const initialNotificationPositionReady = ref(true);
 let initialNotificationPositionMessageId = '';
 const renderedUserMessages = computed(() => {
@@ -2041,7 +2065,9 @@ const shouldRenderUserMessageSkeleton = computed(
   () =>
     props.deferContentRender ||
     (!isActiveCallTopic.value &&
-      (shouldShowSearchNavigationSkeleton.value ||
+      ((isAwaitingInitialHistory.value && !initialHistoryRefreshFailed.value) ||
+        isInitialHistoryPositioning.value ||
+        shouldShowSearchNavigationSkeleton.value ||
         shouldProtectEmptyUserMessagesWithSkeleton.value ||
         (isUserMessagesRoute.value && shouldShowDelayedInitialSkeleton.value)))
 );
@@ -3295,6 +3321,7 @@ const bootstrapPendingSearchNavigation = async (): Promise<void> => {
 
 const handleArrowDownClick = async (): Promise<void> => {
   const revision = ++messageNavigationRevision;
+  if (route.value.id) dismissUnreadMarkerForTopic(route.value.id);
   await handleScrollToButton(() => revision === messageNavigationRevision);
 };
 
@@ -3377,7 +3404,13 @@ const getFirstUnreadMessageId = (): string | null => {
 };
 
 const resetUnreadIfViewingBottom = (): void => {
-  if (!route.value?.id || !chatWrapperRef.value) {
+  if (
+    !route.value?.id ||
+    !chatWrapperRef.value ||
+    isLoadingInitialMessages.value ||
+    isAwaitingInitialHistory.value ||
+    isInitialHistoryPositioning.value
+  ) {
     return;
   }
 
@@ -3392,6 +3425,10 @@ const resetUnreadIfViewingBottom = (): void => {
 
   if (!isViewingBottom.value) {
     return;
+  }
+
+  if (scrollAnchor.hasUserScrollIntentAfter(topicSwitchStartedAtMs)) {
+    dismissUnreadMarkerForTopic(route.value.id);
   }
 
   if (topicUnreadCount.value > 0) {
@@ -3504,7 +3541,7 @@ onMounted(async () => {
 
   if ('ResizeObserver' in window) {
     chatVisibilityObserver = new ResizeObserver(() => {
-      syncMessageInlineEndInset();
+      scheduleMessageInlineEndInsetSync();
       syncVisibleUnreadAfterAutoScroll();
       schedulePinnedViewportSnapshotSync();
     });
@@ -3512,13 +3549,14 @@ onMounted(async () => {
     nextTick(() => {
       if (chatWrapperRef.value) {
         chatVisibilityObserver?.observe(chatWrapperRef.value);
-        syncMessageInlineEndInset();
+        scheduleMessageInlineEndInsetSync();
       }
     });
   }
 });
 
 onUnmounted(() => {
+  window.cancelAnimationFrame(messageInlineEndInsetRafId);
   window.removeEventListener('resize', scheduleFloatingDateDividerSync);
   releaseBootstrapScrollLock();
   releaseSearchNavigationPositioning();
@@ -3582,7 +3620,7 @@ watch(
 
     chatVisibilityObserver.disconnect();
     chatVisibilityObserver.observe(wrapper);
-    syncMessageInlineEndInset();
+    scheduleMessageInlineEndInsetSync();
     syncVisibleUnreadAfterAutoScroll();
     scheduleFloatingDateDividerSync();
   }
@@ -3640,10 +3678,18 @@ watch(
 );
 
 watch(
+  () => getHasHistoryNetwork(),
+  () => {
+    if (isAwaitingInitialHistory.value) initialHistoryRefreshRevision.value++;
+  }
+);
+
+watch(
   [
     () => route.value?.id,
     () => route.value?.type,
-    () => notificationTopicRefreshRequest.value?.id || 0
+    () => notificationTopicRefreshRequest.value?.id || 0,
+    () => initialHistoryRefreshRevision.value
   ],
   async (
     [topicId, routeType, notificationRefreshRequestId],
@@ -3709,6 +3755,8 @@ watch(
     hideFloatingDateDivider();
     if (!topicId) {
       isAwaitingInitialHistory.value = false;
+      isInitialHistoryPositioning.value = false;
+      initialHistoryRefreshFailed.value = false;
       renderedTopicId.value = '';
       paintedUserMessageTopicId.value = '';
       isAwaitingUserMessagesPaint.value = false;
@@ -3719,9 +3767,11 @@ watch(
       return;
     }
     const topicSwitchToken = ++activeTopicSwitchToken;
-    // На мобильном не показываем старую историю перед актуальным окном.
+    // При наличии сети переписка открывается только после свежего ответа.
     isAwaitingInitialHistory.value =
-      isMobile.value && routeType !== RouteTypes.AI && getHasBrowserNetwork();
+      routeType !== RouteTypes.AI && getHasHistoryNetwork();
+    isInitialHistoryPositioning.value = routeType !== RouteTypes.AI;
+    initialHistoryRefreshFailed.value = false;
     paintedUserMessageTopicId.value = '';
     lastFloatingDateDividerScrollTop = null;
     topicSwitchStartedAtMs = performance.now();
@@ -3840,15 +3890,18 @@ watch(
     }
 
     const shouldHydrateBeforeInitialPaint = routeType !== RouteTypes.AI;
-    const shouldRefreshMobileHistoryBeforePaint =
-      isMobile.value && !shouldBootstrapAroundMessage && getHasBrowserNetwork();
+    const shouldRefreshHistoryBeforePaint =
+      routeType !== RouteTypes.AI &&
+      !shouldBootstrapAroundMessage &&
+      getHasHistoryNetwork();
+    if (shouldBootstrapAroundMessage) isAwaitingInitialHistory.value = false;
     const hydrateInitialMessages = async (): Promise<IMessage[]> => {
       const hydrateFullHistory = () =>
         hydrateMessagesFromCache(topicId, undefined, {
           visibleLimit: fastInitialMessagesLimit,
           allowVisibleShrink: true
         });
-      if (shouldRefreshMobileHistoryBeforePaint) {
+      if (shouldRefreshHistoryBeforePaint) {
         return hydratePendingMessagesFromCache(
           topicId,
           undefined,
@@ -3900,23 +3953,31 @@ watch(
             notificationHistoryIsFresh = result.isFresh;
             return result.messages;
           })
-        : fetchMessagesForTopic(topicId, {
-            limit: initialNetworkMessagesLimit,
-            maxAgeMs: TOPIC_SWITCH_CACHE_MAX_AGE_MS,
-            forceRefresh: true,
-            forceNetwork: getHasBrowserNetwork(),
-            allowStaleFallback: !getHasBrowserNetwork(),
-            visibleLimit: fastInitialMessagesLimit,
-            updateVisible: false,
-            revealIfEmpty: true,
-            replaceInitialWindow: shouldRefreshMobileHistoryBeforePaint,
-            onNetworkApplied: () => {
-              initialHistoryIsFresh = true;
-            }
-          });
+        : !getHasHistoryNetwork()
+          ? hydrationPromise
+          : fetchMessagesForTopic(topicId, {
+              limit: initialNetworkMessagesLimit,
+              maxAgeMs: getHasBrowserNetwork()
+                ? undefined
+                : TOPIC_SWITCH_CACHE_MAX_AGE_MS,
+              forceRefresh: true,
+              forceNetwork: getHasBrowserNetwork(),
+              allowStaleFallback: !getHasBrowserNetwork(),
+              visibleLimit: fastInitialMessagesLimit,
+              updateVisible: false,
+              revealIfEmpty: true,
+              replaceInitialWindow: shouldRefreshHistoryBeforePaint,
+              onNetworkApplied: () => {
+                initialHistoryIsFresh = true;
+              }
+            });
     }
 
-    const hydratedMessages = await hydrationPromise;
+    // Готовый HTTP, в том числе для уведомления, не ждёт локальных вложений.
+    const hydratedMessages = await (shouldRefreshHistoryBeforePaint &&
+    initialMessagesFetch
+      ? Promise.race([hydrationPromise, initialMessagesFetch])
+      : hydrationPromise);
 
     if (isStaleTopicSwitch()) {
       return;
@@ -3940,9 +4001,10 @@ watch(
     }
 
     if (
-      getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
-      getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId)).length >
-        0
+      !isAwaitingInitialHistory.value &&
+      (getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
+        getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId))
+          .length > 0)
     ) {
       setTopicMessagesKnownEmpty(topicId, false);
       resetInitialMessagesSkeleton();
@@ -3998,8 +4060,23 @@ watch(
 
     const initialMessages = (await initialMessagesFetch) || [];
 
+    if (isStaleTopicSwitch()) return;
     if (
-      shouldRefreshMobileHistoryBeforePaint &&
+      isAwaitingInitialHistory.value &&
+      !(shouldScrollToBottomForNotification
+        ? notificationHistoryIsFresh
+        : initialHistoryIsFresh) &&
+      getHasHistoryNetwork()
+    ) {
+      initialHistoryRefreshFailed.value = true;
+      isInitialHistoryPositioning.value = false;
+      isLoadingInitialMessages.value = false;
+      resetInitialMessagesSkeleton();
+      return;
+    }
+
+    if (
+      shouldRefreshHistoryBeforePaint &&
       !(shouldScrollToBottomForNotification
         ? notificationHistoryIsFresh
         : initialHistoryIsFresh || initialMessages.length > 0) &&
@@ -4025,7 +4102,7 @@ watch(
     cancelInitialMessagesSkeletonDelay();
     const shouldApplyInitialNetworkWindow =
       !shouldBootstrapAroundMessage &&
-      (shouldRefreshMobileHistoryBeforePaint ||
+      (shouldRefreshHistoryBeforePaint ||
         shouldScrollToBottomForNotification ||
         getMessagesByTopicId(topicId).length === 0 ||
         shouldKeepTopicSwitchBottomPosition(topicSwitchToken));
@@ -4047,7 +4124,7 @@ watch(
           : fastInitialMessagesLimit,
         {
           allowShrink:
-            shouldRefreshMobileHistoryBeforePaint ||
+            shouldRefreshHistoryBeforePaint ||
             !!shouldScrollToBottomForNotification
         }
       );
@@ -4114,7 +4191,9 @@ watch(
       setTopicMessagesKnownEmpty(
         topicId,
         getRenderedTopicMessages(topicId, initialMessages).length === 0 &&
-          !topicHasKnownLastMessage
+          (initialHistoryIsFresh ||
+            notificationHistoryIsFresh ||
+            !topicHasKnownLastMessage)
       );
       isAwaitingUserMessagesPaint.value = false;
       resetInitialMessagesSkeleton();
@@ -4212,6 +4291,7 @@ watch(
     }
 
     scrollAnchor.initialize();
+    isInitialHistoryPositioning.value = false;
     isLoadingInitialMessages.value = false;
     resetInitialMessagesSkeleton();
     completedTopicSwitchToken = topicSwitchToken;

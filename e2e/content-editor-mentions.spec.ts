@@ -10,6 +10,11 @@ const label = '@Фамилия И. О. ';
 const mention = `<span class="link" data-user-id="${userId}" data-span="">${label}</span>`;
 const editor = (page: Page) =>
   page.locator('.chat__input .ProseMirror[contenteditable="true"]');
+const clearEditor = async (page: Page) => {
+  await editor(page).press('ControlOrMeta+a');
+  await editor(page).press('Backspace');
+  await expect(editor(page)).toHaveText('');
+};
 
 const paste = async (page: Page, html: string, text = '') => {
   await editor(page).focus();
@@ -117,7 +122,7 @@ test('повторная вставка HTML редактора и открыт�
   await paste(page, `<p>${mention}<br><strong>test</strong></p>`);
   const html = await editor(page).innerHTML();
   expect(html).toContain(label);
-  await editor(page).fill('');
+  await clearEditor(page);
   await paste(page, html);
   await expect(editor(page).locator('[data-span]')).toHaveText(label.trim());
   await expect(editor(page).locator('strong')).toHaveText('test');
@@ -146,7 +151,8 @@ test('имя берётся из видимого текста, а обычны�
     'href',
     'https://example.com'
   );
-  await editor(page).fill('');
+  await clearEditor(page);
+  await expect(editor(page).locator('[data-span]')).toHaveCount(0);
   await paste(page, '', '@Фамилия И. О.\ntest');
   await expect(editor(page)).toContainText('@Фамилия И. О.');
   await expect(editor(page)).toContainText('test');

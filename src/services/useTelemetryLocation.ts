@@ -3,7 +3,6 @@ import {
   Geolocation,
   type PermissionStatus as NativePermissionStatus
 } from '@capacitor/geolocation';
-import { LaunchStartup } from './launchStartup';
 
 const MAX_AGE_MS = 60_000;
 let deviceLocation: Record<string, unknown> | null = null;
@@ -74,14 +73,8 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
     try {
       let permission: Partial<NativePermissionStatus>;
       if (Capacitor.isNativePlatform()) {
-        const isAndroid = Capacitor.getPlatform() === 'android';
-        if (isAndroid && requestPermission) {
-          // Android запрашивает доступ вместе с остальными разрешениями Activity.
-          await LaunchStartup.waitForPermissions();
-        }
         permission = await Geolocation.checkPermissions();
         if (
-          !isAndroid &&
           !isGranted(permission) &&
           permission.location !== 'denied' &&
           requestPermission &&

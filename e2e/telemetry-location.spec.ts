@@ -221,11 +221,7 @@ test('Android использует приблизительное разреше
     await geo.initTelemetryLocation();
     return { calls, highAccuracy, context: geo.getTelemetryLocationContext() };
   });
-  expect(result.calls).toEqual([
-    'waitForPermissions',
-    'checkPermissions',
-    'getCurrentPosition'
-  ]);
+  expect(result.calls).toEqual(['checkPermissions', 'getCurrentPosition']);
   expect(result.highAccuracy).toBe(false);
   expect(result.context.device).toMatchObject({
     latitude: 40,
@@ -235,7 +231,7 @@ test('Android использует приблизительное разреше
 });
 
 for (const permission of ['granted', 'denied'] as const) {
-  test(`Android ждёт завершения нативного запроса: ${permission}`, async ({
+  test(`Android запрашивает геолокацию через плагин один раз: ${permission}`, async ({
     page
   }) => {
     const result = await page.evaluate(async permission => {
@@ -263,20 +259,21 @@ for (const permission of ['granted', 'denied'] as const) {
         ],
         async nativePromise(_: string, method: string) {
           calls.push(method);
-          if (method === 'waitForPermissions') {
+          if (method === 'requestPermissions') {
             started();
-            return new Promise<void>(resolve => {
+            await new Promise<void>(resolve => {
               finishPermissions = resolve;
             });
+            return { location: permission, coarseLocation: permission };
           }
           if (method === 'checkPermissions')
-            return { location: permission, coarseLocation: permission };
+            return { location: 'prompt', coarseLocation: 'prompt' };
           if (method === 'getCurrentPosition')
             return {
               timestamp: Date.now(),
               coords: { latitude: 40, longitude: 44, accuracy: 20 }
             };
-          throw new Error('Повторный системный запрос через плагин');
+          throw new Error('Неожиданный запрос разрешений');
         }
       };
       const geo = await import('/src/services/useTelemetryLocation.ts');
@@ -292,10 +289,13 @@ for (const permission of ['granted', 'denied'] as const) {
         context: geo.getTelemetryLocationContext()
       };
     }, permission);
-    expect(result.beforePermission).toEqual(['waitForPermissions']);
-    expect(result.calls).toEqual([
-      'waitForPermissions',
+    expect(result.beforePermission).toEqual([
       'checkPermissions',
+      'requestPermissions'
+    ]);
+    expect(result.calls).toEqual([
+      'checkPermissions',
+      'requestPermissions',
       ...(permission === 'granted' ? ['getCurrentPosition'] : [])
     ]);
     expect(result.context.device.status).toBe(

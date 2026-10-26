@@ -7,5 +7,10 @@ allprojects {
             resValue 'string', 'app_name', 'CHAT-294 Test'
             resValue 'string', 'title_activity_main', 'CHAT-294 Test'
         }
+        afterEvaluate {
+            tasks.named('processDebugGoogleServices').configure {
+                googleServicesJsonFiles.set([rootProject.file('../e2e/fixtures/android-performance-google-services.json')])
+            }
+        }
     }
 }

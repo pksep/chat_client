@@ -4,6 +4,7 @@ import { useMessageSender } from '../../src/components/Messages/composables/useM
 
 export const mountMessageSender = (topicId: string) => {
   const scope = effectScope();
+  const senderUser = ref(authedUser.value);
   const sender = scope.run(() =>
     useMessageSender(
       ref({ id: topicId, type: 'dialogs' }),
@@ -15,11 +16,17 @@ export const mountMessageSender = (topicId: string) => {
         forwardMessages: [],
         hideUnreadMarker: false
       },
-      authedUser,
+      senderUser,
       ref(null),
       () => {},
       () => {}
     )
   )!;
-  return { ...sender, stop: () => scope.stop() };
+  return {
+    ...sender,
+    setAuthUser: (user: typeof authedUser.value) => {
+      senderUser.value = user;
+    },
+    stop: () => scope.stop()
+  };
 };

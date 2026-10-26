@@ -38,7 +38,6 @@ button.calls-bot__back {
   cursor: pointer;
 
   & button.button-yui-kit.ghost-yui-kit {
-
     gap: 5px !important;
   }
 
@@ -103,7 +102,7 @@ button.calls-bot__back {
   opacity: 1;
 }
 
-.chat__header-summary-button>svg {
+.chat__header-summary-button > svg {
   flex-shrink: 0;
   width: 22px !important;
   height: 22px !important;
@@ -211,7 +210,7 @@ button.button-yui-kit {
   color: var(--text-link) !important;
 }
 
-.chat__header-search-nav.button-yui-kit>svg {
+.chat__header-search-nav.button-yui-kit > svg {
   width: 24px !important;
   height: 24px !important;
 }
@@ -310,7 +309,8 @@ button.button-yui-kit {
     border-bottom: 0;
   }
 
-  .chat__header-wrapper:not(:has(.chat__header-main)) .chat__header-active-call {
+  .chat__header-wrapper:not(:has(.chat__header-main))
+    .chat__header-active-call {
     flex-basis: var(--mobile-active-call-height);
     height: var(--mobile-active-call-height);
     padding-block: 10px;
@@ -333,6 +333,28 @@ button.button-yui-kit {
   .chat__header-main {
     justify-content: start;
     gap: 10px;
+  }
+
+  .connection-status.chat__header-network {
+    justify-content: center;
+    min-height: 24px;
+    margin: 0 0 4px;
+    gap: 0;
+  }
+
+  .connection-status.chat__header-network > span {
+    margin-left: 0;
+  }
+
+  .connection-status.chat__header-network > svg {
+    position: static;
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+  }
+
+  .chat__header-profile > .connection-status {
+    display: none;
   }
 
   .chat__header-buttons {
@@ -419,26 +441,31 @@ button.button-yui-kit {
     border: none !important;
   }
 
-  .chat__header-mobile-search-controls .chat__header-search-nav.button-yui-kit>svg {
+  .chat__header-mobile-search-controls
+    .chat__header-search-nav.button-yui-kit
+    > svg {
     width: 30px !important;
     height: 30px !important;
   }
 
-  .chat__header-mobile-search-controls-content>.chat__header-search-nav.button-yui-kit {
+  .chat__header-mobile-search-controls-content
+    > .chat__header-search-nav.button-yui-kit {
     justify-self: end;
     color: var(--text-secondary) !important;
   }
 
-  .chat__header-mobile-search-controls .chat__header-search-nav.button-yui-kit:disabled {
+  .chat__header-mobile-search-controls
+    .chat__header-search-nav.button-yui-kit:disabled {
     color: var(--text-disabled) !important;
     background-color: transparent !important;
   }
 
-  .chat__header-mobile-search-controls .chat__header-search-nav.button-yui-kit:disabled:active {
+  .chat__header-mobile-search-controls
+    .chat__header-search-nav.button-yui-kit:disabled:active {
     background-color: transparent !important;
   }
 
-  .chat__header-ai-assistant>.menu__user-assistant-icon>svg.ai-icon {
+  .chat__header-ai-assistant > .menu__user-assistant-icon > svg.ai-icon {
     font-size: 20px;
   }
 }

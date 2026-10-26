@@ -339,7 +339,9 @@ export function useManagerInquiries() {
   return {
     inquiries,
     managers,
-    allowed: computed(() => allowed.value && chatAccess.value.client),
+    allowed: computed(
+      () => chatAccess.value.client && (!resolved.value || allowed.value)
+    ),
     resolved,
     loading,
     byTopic: computed(

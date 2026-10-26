@@ -1702,6 +1702,8 @@ const syncCurrentUserFromFreshUsers = (): void => {
 const refreshTopicMessagesAfterReconnect = async (
   topicId: string
 ): Promise<void> => {
+  const sdk = chatSDK;
+  const userId = currentUserId.value;
   const latestMessages = await fetchMessagesForTopic(topicId, {
     limit: 100,
     newMessages: true,
@@ -1710,6 +1712,8 @@ const refreshTopicMessagesAfterReconnect = async (
     allowStaleFallback: false,
     skipSave: true
   });
+
+  if (chatSDK !== sdk || currentUserId.value !== userId) return;
 
   if (
     latestMessages.length > 0 ||
@@ -1824,6 +1828,8 @@ const waitForChatHttpHealth = async (
 };
 
 const runActiveTopicRefreshAfterReconnect = async (): Promise<void> => {
+  const sdk = chatSDK;
+  const userId = currentUserId.value;
   const activeTopicId = route.value.id;
 
   if (!activeTopicId) {
@@ -1836,6 +1842,8 @@ const runActiveTopicRefreshAfterReconnect = async (): Promise<void> => {
   ]);
 
   if (
+    chatSDK === sdk &&
+    currentUserId.value === userId &&
     route.value.id === activeTopicId &&
     route.value.type === RouteTypes.GROUP
   ) {
@@ -1861,6 +1869,12 @@ const waitForNextReconnectRefreshStage = async (): Promise<void> => {
 const runStagedReconnectRefresh = async (
   reason: ReconnectRefreshReason
 ): Promise<void> => {
+  const sdk = chatSDK;
+  const userId = currentUserId.value;
+  const isCurrent = () =>
+    chatSDK === sdk &&
+    currentUserId.value === userId &&
+    shouldContinueReconnectRefresh();
   console.info('Chat fresh sync started after reconnect/resume', { reason });
   void saveShadowSyncMeta('fresh_sync:last_started', {
     reason,
@@ -1868,33 +1882,34 @@ const runStagedReconnectRefresh = async (
   });
   resetNetworkRuntimeStateForFreshSync();
   await syncPtsStateToServer();
+  if (!isCurrent()) return;
 
   const hasHttpConnection = await waitForChatHttpHealth(reason);
+  if (chatSDK !== sdk || currentUserId.value !== userId) return;
 
   if (!hasHttpConnection) {
     throw new Error('Chat HTTP health check failed');
   }
+  if (!isCurrent()) return;
 
-  await Promise.allSettled([fetchAllUsers()]);
-  syncCurrentUserFromFreshUsers();
-  await waitForNextReconnectRefreshStage();
-
-  if (!shouldContinueReconnectRefresh()) {
-    return;
+  // Открытый чат и звонок не ждут справочник; все задачи остаются в одном цикле.
+  const activeRefresh = Promise.allSettled([
+    runActiveTopicRefreshAfterReconnect(),
+    recoverActiveCallAfterReconnect(reason)
+  ]);
+  try {
+    await Promise.allSettled([fetchAllUsers()]);
+    if (!isCurrent()) return;
+    syncCurrentUserFromFreshUsers();
+    await waitForNextReconnectRefreshStage();
+    if (!isCurrent()) return;
+    await fetchAllTopics();
+  } finally {
+    await activeRefresh;
   }
-
-  await fetchAllTopics();
-  await Promise.allSettled([recoverActiveCallAfterReconnect(reason)]);
   await waitForNextReconnectRefreshStage();
 
-  if (!shouldContinueReconnectRefresh()) {
-    return;
-  }
-
-  await runActiveTopicRefreshAfterReconnect();
-  await waitForNextReconnectRefreshStage();
-
-  if (!shouldContinueReconnectRefresh()) {
+  if (!isCurrent()) {
     return;
   }
 

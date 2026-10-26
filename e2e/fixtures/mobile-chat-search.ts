@@ -108,23 +108,24 @@ setTopics([
     info: { unreadCount: 0 }
   } as ITopic
 ]);
-saveMessagesToLocal(
-  topicId,
-  Array.from(
-    { length: Number(params.get('message-count') || 40) },
-    (_, index) => ({
-      id: `message-${index}`,
-      topicId,
-      senderUserId: 'mobile-search-user',
-      senderUser: { id: 'mobile-search-user', initials: 'Тест' },
-      text: `Сообщение ${index + 1}: проверка поиска и сохранения прокрутки`,
-      createdAt: new Date(2026, 9, 5, 10, index).toISOString(),
-      media: [],
-      isReadByMe: true
-    })
-  ) as IMessage[],
-  { skipPersist: true, syncLastMessage: false }
-);
+const historyMessages = Array.from(
+  { length: Number(params.get('message-count') || 40) },
+  (_, index) => ({
+    id: `message-${index}`,
+    topicId,
+    senderUserId: 'mobile-search-user',
+    senderUser: { id: 'mobile-search-user', initials: 'Тест' },
+    text: `Сообщение ${index + 1}: проверка поиска и сохранения прокрутки`,
+    createdAt: new Date(2026, 9, 5, 10, index).toISOString(),
+    media: [],
+    isReadByMe: true
+  })
+) as IMessage[];
+if (fullShell) (window as any).iosPwaFixture.historyMessages = historyMessages;
+saveMessagesToLocal(topicId, historyMessages, {
+  skipPersist: true,
+  syncLastMessage: false
+});
 history.replaceState({}, '', `/${isAi ? 'ai' : 'group'}/${topicId}`);
 initRoute();
 if (params.has('call')) {

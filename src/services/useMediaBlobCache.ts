@@ -131,7 +131,8 @@ interface CachedMediaBlobRecord {
   accessedAt: string;
 }
 
-const objectUrlCache = new Map<string, string>();
+// Вложения истории не имеют глубоких proxy: готовый Blob обновляет src по ключу.
+const objectUrlCache = shallowReactive(new Map<string, string>());
 const pendingMediaRequests = new Map<string, Promise<string | null>>();
 const pendingCachedMediaReads = new Map<string, Promise<string | null>>();
 let dbPromise: Promise<IDBDatabase | null> | null = null;

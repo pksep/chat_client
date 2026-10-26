@@ -117,11 +117,35 @@
     justify-content: space-between;
   }
 
-  .mobile-list-container .chats-toolbar__headline > .connection-status {
+  .menu-section-heading > .menu-section-heading__network {
     position: absolute;
     left: 50%;
     margin-left: 0;
+    margin-top: 0;
     transform: translateX(-50%);
+    width: max-content;
+    white-space: nowrap;
+    gap: 0;
+  }
+
+  .menu-section-heading__network > span {
+    margin-left: 0;
+  }
+
+  .menu-section-heading__network > svg {
+    position: static;
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+  }
+
+  .chats-toolbar__desktop-network {
+    display: none;
+  }
+
+  .menu-section-heading--waiting
+    > :is(h2, h3, h4, .calls-page__header-copy, .menu-section-heading__label) {
+    visibility: hidden;
   }
 
   .mobile-list-container

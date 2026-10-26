@@ -465,6 +465,7 @@ import {
 import { isFavoriteTopic } from '../../utils/favorite-topic';
 import {
   getFullMessagesByTopicId,
+  isDeletedMessageForTopic,
   hasKnownTopicMessagesState,
   hydrateMessagePreviewFromCache,
   hydrateMessagesFromCache
@@ -544,8 +545,13 @@ watch(
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 
-const { isOpen, position, openActivePopover, closeActivePopover } =
-  useContextMenu();
+const {
+  isOpen,
+  position,
+  openActivePopover,
+  closeActivePopover,
+  startTouchLongPress
+} = useContextMenu();
 
 const hasOpenTopicContextMenu = computed(() =>
   Object.values(isOpen.value).some(Boolean)
@@ -571,7 +577,9 @@ const displayTopics = computed(() =>
     : props.topics
   ).map(topic => {
     const lastMessage = resolveTopicLastMessage(
-      topic.lastMessage,
+      topic.lastMessage && isDeletedMessageForTopic(topic.id, topic.lastMessage)
+        ? undefined
+        : topic.lastMessage,
       getClientLastMessage(topic)
     );
 
@@ -679,6 +687,7 @@ let activeTopicCacheWarmCount = 0;
 const queuedTopicCacheWarmIds: string[] = [];
 const queuedTopicCacheWarmSet = new Set<string>();
 const activeTopicCacheWarmIds = new Set<string>();
+const pendingTopicCacheWarms = new Map<string, Promise<IMessage[]>>();
 const TOPIC_PRESS_SCROLL_CANCEL_PX = 8;
 const TOPIC_POINTER_CLICK_MAX_DELAY_MS = 2000;
 const TOPIC_CACHE_PREVIEW_LIMIT = 48;
@@ -757,6 +766,22 @@ const preloadTopicMessageAvatars = async (
   );
 };
 
+const hydrateTopicPreviewForOpen = (topicId: string): Promise<IMessage[]> => {
+  const existing = pendingTopicCacheWarms.get(topicId);
+  if (existing) return existing;
+  const hydration = hydrateMessagePreviewFromCache(
+    topicId,
+    undefined,
+    TOPIC_CACHE_PREVIEW_LIMIT,
+    { fallbackToSnapshot: true }
+  ).finally(() => {
+    if (pendingTopicCacheWarms.get(topicId) === hydration)
+      pendingTopicCacheWarms.delete(topicId);
+  });
+  pendingTopicCacheWarms.set(topicId, hydration);
+  return hydration;
+};
+
 const runQueuedTopicCacheWarms = (): void => {
   // IntersectionObserver видит строки и под стартовым экраном. Чтение историй
   // и декодирование аватаров этих чатов должны начинаться после готового списка.
@@ -789,16 +814,13 @@ const runQueuedTopicCacheWarms = (): void => {
 
     activeTopicCacheWarmCount += 1;
     activeTopicCacheWarmIds.add(topicId);
-    void hydrateMessagePreviewFromCache(
-      topicId,
-      undefined,
-      TOPIC_CACHE_PREVIEW_LIMIT
-    )
+    void hydrateTopicPreviewForOpen(topicId)
       .then(messages => {
         // Фоновый прогрев декодирует только локальные изображения и не
         // обращается к CDN для топика, который пользователь ещё не открыл.
         void preloadTopicMessageAvatars(messages, false);
       })
+      .catch(() => undefined)
       .finally(() => {
         activeTopicCacheWarmCount -= 1;
         activeTopicCacheWarmIds.delete(topicId);
@@ -812,7 +834,7 @@ const warmTopicMessagesFromCache = (
   prioritize = false
 ): void => {
   if (
-    (isMobile.value && getHasBrowserNetwork()) ||
+    (isMobile.value && getHasBrowserNetwork() && !prioritize) ||
     !topicId ||
     props.showCheckbox ||
     hasKnownTopicMessagesState(topicId) ||
@@ -840,8 +862,17 @@ const warmTopicMessagesFromCache = (
 
 const prepareTopicMessagesForOpen = async (topicId: string): Promise<void> => {
   if (!topicId) return;
-  // Онлайн сразу запрашиваем актуальное окно, не разбирая старую историю до клика.
-  if (isMobile.value && getHasBrowserNetwork()) return;
+  if (isMobile.value && getHasBrowserNetwork()) {
+    if (hasKnownTopicMessagesState(topicId)) return;
+    // Список остаётся видимым, пока короткий кеш готовится к первому кадру.
+    await Promise.race([
+      hydrateTopicPreviewForOpen(topicId).catch(() => undefined),
+      new Promise<void>(resolve =>
+        window.setTimeout(resolve, TOPIC_OPEN_CACHE_WAIT_MS)
+      )
+    ]);
+    return;
+  }
 
   if (!hasKnownTopicMessagesState(topicId)) {
     warmTopicMessagesFromCache(topicId, true);
@@ -1410,6 +1441,17 @@ const handleTopicPress = (topic: ITopic, event: PointerEvent): void => {
   };
 
   warmTopicMessagesFromCache(topic.id, true);
+
+  if (event.pointerType === 'touch' && event.isPrimary) {
+    startTouchLongPress(topic.id, event, {
+      cancelOnScroll: true,
+      isTargetPresent: () =>
+        !props.showCheckbox &&
+        !!listRootRef.value?.querySelector(
+          `[data-topic-id="${CSS.escape(topic.id)}"]`
+        )
+    });
+  }
 
   if (!isMobile.value) {
     return;

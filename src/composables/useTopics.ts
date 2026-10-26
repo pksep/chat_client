@@ -15,7 +15,9 @@ import { groups, updateLocalGroupInfo } from '../composables/useGroup';
 import {
   deleteMessageFromLocal,
   getFullMessagesByTopicId,
-  hasKnownTopicMessagesState
+  hasKnownTopicMessagesState,
+  isDeletedMessageForTopic,
+  rememberPersistedDeletedMessageIds
 } from '../services/useMessages';
 import { useUrlWatcher } from './navigation';
 import { authedUser } from './useAuth';
@@ -289,7 +291,13 @@ const createTopicsApi = () => {
     const localLastMessage = hideSystemMessages
       ? [...localMessages].reverse().find(message => !message.isSystem)
       : localMessages.at(-1);
-    const candidates = [topic.lastMessage, localLastMessage, lastMessage];
+    const candidates = [
+      topic.lastMessage,
+      localLastMessage,
+      lastMessage
+    ].filter(
+      message => !message || !isDeletedMessageForTopic(topic.id, message)
+    );
 
     return getLatestMessage(
       hideSystemMessages
@@ -735,9 +743,35 @@ const createTopicsApi = () => {
     });
   };
 
+  const reconcileCachedPendingPreviews = (
+    items: ITopic[],
+    userId?: string
+  ): void => {
+    for (const topic of items) {
+      if (
+        topic.lastMessage?.senderUserId !== userId ||
+        ![MessageStatus.Wait, MessageStatus.NotDelivered].includes(
+          topic.lastMessage?.status as MessageStatus
+        )
+      )
+        continue;
+      void rememberPersistedDeletedMessageIds(topic.id, userId)
+        .then(() => {
+          if (authedUser.value?.id !== userId) return;
+          const current = topicsById.value.get(topic.id)?.lastMessage;
+          if (current && isDeletedMessageForTopic(topic.id, current))
+            updateLocalLastMessageTopic(topic.id);
+        })
+        .catch(error =>
+          console.warn('Не удалось проверить локальное превью отправки:', error)
+        );
+    }
+  };
+
   const hydrateTopicsFromCache = async (userId?: string): Promise<ITopic[]> => {
     unreadTopicSummaries.value = loadCachedUnreadTopicSummaries(userId);
     if (topics.value.length > 0) {
+      reconcileCachedPendingPreviews(topics.value, userId);
       await warmShadowUnreadStateForTopics(topics.value, userId);
       return topics.value;
     }
@@ -756,6 +790,7 @@ const createTopicsApi = () => {
 
     if (cachedTopics.length > 0) {
       topics.value = normalizeTopics(cachedTopics, userId);
+      reconcileCachedPendingPreviews(topics.value, userId);
       await warmShadowUnreadStateForTopics(topics.value, userId);
     }
 
@@ -810,6 +845,8 @@ const createTopicsApi = () => {
       summaries.set(
         topic.id,
         summary &&
+          (!summary.lastMessage ||
+            !isDeletedMessageForTopic(topic.id, summary.lastMessage)) &&
           getMessageTimestamp(summary.lastMessage) >
             getMessageTimestamp(topic.lastMessage)
           ? {
@@ -1254,7 +1291,9 @@ const createTopicsApi = () => {
         topic.lastMessage = resolveLastMessageAfterLocalSync(
           topic.lastMessage,
           incomingMessage,
-          hasKnownTopicMessagesState(topicId)
+          hasKnownTopicMessagesState(topicId) ||
+            (!!topic.lastMessage &&
+              isDeletedMessageForTopic(topicId, topic.lastMessage))
         );
       }
 
