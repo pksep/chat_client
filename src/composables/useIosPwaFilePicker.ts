@@ -1,15 +1,28 @@
 import { watch, type Ref } from 'vue';
 import { isIosWeb } from '../utils/ios-pwa-viewport';
+import { snapshotFile } from '../utils/snapshot-file';
+import { getUploadFileSizeError } from '../services/useChatSDK/multipart-upload';
+import { showErrorNotification } from './useNotifications';
 
 export function useIosPwaFilePicker(
   host: Ref<HTMLElement | null>,
-  onFiles: (files: FileList, onlyMedia: boolean) => void
+  onFiles: (files: FileList, onlyMedia: boolean) => void,
+  validateFiles?: (files: File[]) => void
 ) {
   watch(
     host,
     (element, _previous, onCleanup) => {
       if (!element || !isIosWeb()) return;
-      let pendingInput: HTMLInputElement | undefined;
+      const pendingInputs = new Map<HTMLInputElement, () => Promise<void>>();
+      let disposed = false;
+      let resumeFrame = 0;
+      const recoverSelection = () => {
+        if (document.hidden || disposed || !pendingInputs.size) return;
+        const recover = () => pendingInputs.forEach(read => void read());
+        recover();
+        cancelAnimationFrame(resumeFrame);
+        resumeFrame = requestAnimationFrame(recover);
+      };
       const handleClick = (event: MouseEvent) => {
         if (!(event.target instanceof Element)) return;
         const trigger = event.target.closest('.attach-file-button');
@@ -34,19 +47,57 @@ export function useIosPwaFilePicker(
         if (label !== 'Фото или видео' && label !== 'Файл') return;
         event.preventDefault();
         event.stopImmediatePropagation();
-        pendingInput?.remove();
         const input = document.createElement('input');
-        pendingInput = input;
         input.type = 'file';
         input.multiple = true;
         input.hidden = true;
         const onlyMedia = label === 'Фото или видео';
         if (onlyMedia) input.accept = 'image/*,video/*';
+        const cleanupInput = () => {
+          pendingInputs.delete(input);
+          input.remove();
+        };
+        let processing = false;
+        const readSelection = async () => {
+          if (disposed || processing || !input.files?.length) return;
+          processing = true;
+          try {
+            const files = Array.from(input.files);
+            const sizeError = files.map(getUploadFileSizeError).find(Boolean);
+            if (sizeError) {
+              showErrorNotification(sizeError);
+              return;
+            }
+            try {
+              validateFiles?.(files);
+            } catch (error) {
+              showErrorNotification(error);
+              return;
+            }
+            const selection = new DataTransfer();
+            for (const file of files) {
+              selection.items.add(await snapshotFile(file));
+              if (disposed) return;
+            }
+            if (!disposed) onFiles(selection.files, onlyMedia);
+          } catch {
+            if (!disposed) {
+              showErrorNotification(
+                'Не удалось прочитать файл. Выберите его ещё раз.'
+              );
+            }
+          } finally {
+            cleanupInput();
+          }
+        };
+        pendingInputs.set(input, readSelection);
+        input.addEventListener('cancel', cleanupInput, { once: true });
+        input.addEventListener('input', readSelection);
         input.addEventListener('change', () => {
-          if (input.files?.length) onFiles(input.files, onlyMedia);
+          if (input.files?.length) void readSelection();
+          else cleanupInput();
         });
         // WebKit нужен input в документе и вызов прямо в пользовательском клике.
-        // Событие change проходит через штатную проверку ограничений вложений.
         element.append(input);
         option
           ?.closest('.popover-yui-kit')
@@ -55,9 +106,19 @@ export function useIosPwaFilePicker(
         input.click();
       };
       element.addEventListener('click', handleClick, true);
+      // После камеры WebKit может заполнить files без события change.
+      window.addEventListener('focus', recoverSelection);
+      window.addEventListener('pageshow', recoverSelection);
+      document.addEventListener('visibilitychange', recoverSelection);
       onCleanup(() => {
+        disposed = true;
+        cancelAnimationFrame(resumeFrame);
         element.removeEventListener('click', handleClick, true);
-        pendingInput?.remove();
+        window.removeEventListener('focus', recoverSelection);
+        window.removeEventListener('pageshow', recoverSelection);
+        document.removeEventListener('visibilitychange', recoverSelection);
+        pendingInputs.forEach((_read, input) => input.remove());
+        pendingInputs.clear();
       });
     },
     { flush: 'post' }

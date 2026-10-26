@@ -310,6 +310,114 @@ test('PNG и JPEG в медиа открываются через оригина
     .toBe(true);
 });
 
+for (const persistence of ['service-worker', 'worker']) {
+  test(`видео сохраняется без createWritable в ${persistence}`, async ({
+    page,
+    browserName
+  }) => {
+    test.setTimeout(60_000);
+    let intercepted = 0;
+    await page.route(
+      '**/src/services/pending-upload-cache.worker.ts?*',
+      async route => {
+        const response = await route.fetch();
+        intercepted++;
+        await route.fulfill({
+          response,
+          body:
+            `const legacyDirectory = {
+              getDirectoryHandle: async () => legacyDirectory,
+              getFileHandle: async () => ({}),
+              removeEntry: async () => {}
+            };
+            Object.defineProperty(navigator, 'storage', {
+              value: { getDirectory: async () => legacyDirectory }
+            });\n` + (await response.text())
+        });
+      }
+    );
+    if (persistence === 'service-worker') {
+      await page.addInitScript(() => {
+        const register = navigator.serviceWorker.register.bind(
+          navigator.serviceWorker
+        );
+        navigator.serviceWorker.register = (scriptURL, options) =>
+          register(
+            String(scriptURL).includes('pending-upload-service-worker.js')
+              ? '/e2e/fixtures/legacy-opfs-service-worker.js'
+              : scriptURL,
+            { ...options, scope: '/e2e/fixtures/' }
+          );
+      });
+    } else {
+      await page.addInitScript(() =>
+        Object.defineProperty(navigator, 'serviceWorker', { value: undefined })
+      );
+    }
+    await page.goto('/e2e/fixtures/ios-requests.html?kind=participants');
+    await page.evaluate(async () => {
+      const cache = await import('/src/services/useTopicMessagesCache.ts');
+      const bytes = new Uint8Array(32 * 1024 * 1024 + 3);
+      bytes[0] = 19;
+      bytes[4 * 1024 * 1024] = 73;
+      bytes[bytes.length - 1] = 241;
+      await cache.savePendingUploadFile({
+        topicId: 'camera-video',
+        messageId: 'camera-message',
+        fileId: '0',
+        userId: 'camera-user',
+        file: new File([bytes], 'IMG_1234.MOV', {
+          type: 'video/quicktime',
+          lastModified: 12345
+        }),
+        isMedia: true
+      });
+    });
+    if (persistence === 'service-worker') expect(intercepted).toBe(0);
+    await page.reload();
+    const result = await page.evaluate(async () => {
+      const cache = await import('/src/services/useTopicMessagesCache.ts');
+      const record = await cache.loadPendingUploadFile(
+        'camera-video',
+        'camera-message',
+        '0',
+        'camera-user'
+      );
+      if (!record) return null;
+      const restored = new Uint8Array(await record.file.arrayBuffer());
+      return {
+        size: record.file.size,
+        name: record.file.name,
+        type: record.file.type,
+        lastModified: record.file.lastModified,
+        bytes: [
+          restored[0],
+          restored[4 * 1024 * 1024],
+          restored[restored.length - 1]
+        ]
+      };
+    });
+    if (browserName === 'webkit') expect(intercepted).toBe(0);
+    else if (persistence === 'worker') expect(intercepted).toBeGreaterThan(0);
+    else {
+      expect(
+        await page.evaluate(async () => {
+          const registration =
+            await navigator.serviceWorker.getRegistration('/e2e/fixtures/');
+          return registration?.active?.scriptURL;
+        })
+      ).toContain('/e2e/fixtures/legacy-opfs-service-worker.js');
+    }
+    expect(result).toEqual({
+      size: 32 * 1024 * 1024 + 3,
+      name: 'IMG_1234.MOV',
+      type: 'video/quicktime',
+      lastModified: 12345,
+      bytes: [19, 73, 241]
+    });
+  });
+}
+
 test('фото с камеры не ждёт бесконечно размер миниатюры', async ({ page }) => {
   await page.goto('/e2e/fixtures/ios-requests.html?kind=participants');
   const result = await page.evaluate(async () => {

@@ -142,6 +142,102 @@ test('возврат после разрыва загружает пустую �
   expect(state.errors).toEqual([]);
 });
 
+for (const blocked of ['users', 'topics']) {
+  test(`восстановление открытого чата не ждёт медленный ${blocked}`, async ({
+    page
+  }) => {
+    const state = await prepareConnection(page);
+    await openTopic(page, 0);
+    await expect(message(page, 0)).toBeVisible();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => (release = resolve));
+    let bulkRequests = 0;
+    let historyRequests = 0;
+    await page.route(`**/performance-api/${blocked}?*`, async route => {
+      if (new URL(route.request().url()).searchParams.has('_'))
+        return route.fallback();
+      bulkRequests++;
+      await gate;
+      await route.fallback();
+    });
+    await page.route(
+      '**/performance-api/messages/topic/performance-0?*',
+      async route => {
+        historyRequests++;
+        await route.fulfill({ json: makeMessages('performance-0', 21) });
+      }
+    );
+    try {
+      await page.evaluate(() => {
+        (window as any).networkConnection.loseConnection();
+        window.dispatchEvent(new Event('focus'));
+      });
+      await expect.poll(() => bulkRequests).toBe(1);
+      // Свежая история должна появиться, пока фоновый HTTP ещё заблокирован.
+      await expect(message(page, 0, 20)).toBeVisible({ timeout: 3000 });
+      expect(historyRequests).toBe(1);
+    } finally {
+      release();
+    }
+    await page.waitForTimeout(1000);
+    expect(historyRequests).toBe(1);
+    await expect(message(page, 0, 20)).toBeVisible();
+    expect(state.errors).toEqual([]);
+  });
+}
+
+test('поздняя история восстановления не подменяет чат после перехода', async ({
+  page
+}) => {
+  const state = await prepareConnection(page);
+  await openTopic(page, 0);
+  await expect(message(page, 0)).toBeVisible();
+  let releaseHistory!: () => void;
+  let releaseUsers!: () => void;
+  const historyGate = new Promise<void>(resolve => (releaseHistory = resolve));
+  const usersGate = new Promise<void>(resolve => (releaseUsers = resolve));
+  let historyRequests = 0;
+  await page.route('**/performance-api/users?*', async route => {
+    await usersGate;
+    await route.fallback();
+  });
+  await page.route(
+    '**/performance-api/messages/topic/performance-0?*',
+    async route => {
+      historyRequests++;
+      await historyGate;
+      await route.fulfill({ json: makeMessages('performance-0', 21) });
+    }
+  );
+  try {
+    await page.evaluate(() => {
+      (window as any).networkConnection.loseConnection();
+      window.dispatchEvent(new Event('focus'));
+    });
+    await expect.poll(() => historyRequests).toBe(1);
+    await openTopic(page, 1);
+    await expect(message(page, 1)).toBeVisible();
+    releaseHistory();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as any).topicPerformance.messages
+              .getFullMessagesByTopicId('performance-0')
+              .at(-1)?.id
+        )
+      )
+      .toBe('performance-0-message-20');
+    await expect(message(page, 0, 20)).toHaveCount(0);
+    await expect(message(page, 1)).toBeVisible();
+    expect(historyRequests).toBe(1);
+  } finally {
+    releaseHistory();
+    releaseUsers();
+  }
+  expect(state.errors).toEqual([]);
+});
+
 test('700 одновременных чтений справочников и контекста дают 7 HTTP', async ({
   page
 }) => {
@@ -214,6 +310,10 @@ test('долгое отсутствие обновляет активную и �
 }) => {
   await page.clock.install();
   const state = await prepareConnection(page);
+  // Сначала завершаем начальное HTTP-окно мобильного чата, затем добавляем
+  // резидентную историю: проверяем reconnect, а не замену стартового preview.
+  await openTopic(page, 0);
+  await expect(message(page, 0)).toBeVisible();
   for (const index of [0, 1]) {
     const topicId = `performance-${index}`;
     const older = makeMessages(topicId, 300).map((row, index) => ({
@@ -230,8 +330,16 @@ test('долгое отсутствие обновляет активную и �
       }
     );
   }
-  await openTopic(page, 0);
-  await expect(message(page, 0)).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      [0, 1].map(
+        index =>
+          (window as any).topicPerformance.messages.getFullMessagesByTopicId(
+            `performance-${index}`
+          ).length
+      )
+    )
+  ).toEqual([305, 305]);
   await page.clock.pauseAt(Date.now() + 1000);
   const histories: string[] = [];
   page.on('request', request => {

@@ -466,7 +466,13 @@ const runMessageSearch = async (
 
   isMessageSearchLoading.value = true;
 
-  const { results } = await searchMessages(query, { limit: 50 });
+  const { results } = await searchMessages(query, {
+    limit: 50,
+    onLocalResults: ({ results: localResults }) => {
+      if (requestToken === messageSearchRequestToken)
+        messageSearchResults.value = localResults;
+    }
+  });
 
   if (requestToken !== messageSearchRequestToken) {
     return;
@@ -554,7 +560,7 @@ onMounted(() => {
 });
 
 watch(
-  [() => toolbarState.search, isShareSelectionActive],
+  [() => toolbarState.search, isShareSelectionActive, authUserId],
   () => {
     const query = normalizeAtSearchQuery(toolbarState.search);
     const requestToken = ++messageSearchRequestToken;
@@ -581,6 +587,7 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  messageSearchRequestToken++;
   if (messageSearchDebounceTimer) {
     clearTimeout(messageSearchDebounceTimer);
     messageSearchDebounceTimer = null;

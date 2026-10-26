@@ -44,7 +44,7 @@ function response(
   return Response.json({ userId, effective });
 }
 
-function fixture(): {
+function fixture(cached: ChatAccessValues | null = null): {
   module: AccessModule;
   state: AccessState;
   user: vue.Ref<ProbeUser | null>;
@@ -77,6 +77,13 @@ function fixture(): {
     '../utils/menu-layout-cache': {
       readMenuLayout: (): null => null,
       saveMenuLayout: (): void => {}
+    },
+    '../utils/chat-access-cache': {
+      readChatAccess: (id: string, base: string): ChatAccessValues | null =>
+        id === 'actor-a' && base === 'https://synthetic.invalid/api'
+          ? cached
+          : null,
+      saveChatAccess: (): void => {}
     }
   };
   const scope = vue.effectScope();
@@ -128,6 +135,32 @@ afterEach((): void => {
 });
 
 describe('стабильное меню без выдачи непроверенных прав', (): void => {
+  test('смена токена прерывает прежний AI-поток, даже если меню восстановлено из кэша', async () => {
+    const probe = fixture({ client: true, ai: true });
+    await probe.module.refreshChatAccess();
+    await probe.module.fetchWithAiAccess('https://unused.invalid');
+    probe.setToken('synthetic-session-b');
+    probe.setRequest(async () => new Response('', { status: 503 }));
+    await expect(probe.module.requireAiAccess()).rejects.toThrow(
+      'Не удалось проверить доступ'
+    );
+    expect(probe.signals[0].aborted).toBe(true);
+    expect(probe.state.access.value).toEqual({ client: true, ai: true });
+  });
+  test('локальный снимок сразу показывает меню, но не разрешает AI-запрос без сети', async () => {
+    const probe = fixture({ client: true, ai: true });
+    expect(probe.state.access.value).toEqual({ client: true, ai: true });
+    expect(probe.state.settled.value).toBe(true);
+    expect(probe.state.ready.value).toBe(false);
+    probe.setRequest(async () => {
+      throw new TypeError('Нет сети');
+    });
+    await expect(
+      probe.module.fetchWithAiAccess('https://unused.invalid')
+    ).rejects.toThrow('Не удалось проверить доступ');
+    expect(probe.signals).toHaveLength(0);
+    expect(probe.state.access.value).toEqual({ client: true, ai: true });
+  });
   for (const status of [429, 500, 502, 503]) {
     test(`HTTP ${status} сохраняет меню, но не подтверждает новые действия`, async (): Promise<void> => {
       const probe = fixture();

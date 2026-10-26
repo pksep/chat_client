@@ -70,20 +70,21 @@ if (
   );
 // Нагрузочный прогон публикует десятки системных уведомлений. На выделенном
 // AVD звук не нужен и мешает локальной работе рядом с Android Studio.
-await Promise.allSettled(
-  ['2', '3', '5'].map(stream =>
-    adb(
-      'shell',
-      'cmd',
-      'media_session',
-      'volume',
-      '--stream',
-      stream,
-      '--set',
-      '0'
+if (isEmulator)
+  await Promise.allSettled(
+    ['2', '3', '5'].map(stream =>
+      adb(
+        'shell',
+        'cmd',
+        'media_session',
+        'volume',
+        '--stream',
+        stream,
+        '--set',
+        '0'
+      )
     )
-  )
-);
+  );
 const fixture = await createAndroidPerformanceServer({
   topicCount: Number(process.env.ANDROID_PERFORMANCE_TOPIC_COUNT || 12)
 });
@@ -707,43 +708,165 @@ try {
   await saveDeviceScreenshot('cold-list.png');
   fixture.latency.users = 0;
   fixture.latency.topics = 0;
-  fixture.latency.messages = 1200;
-  fixture.latency.around = 1200;
-  if (isEmulator) {
-    await adb('shell', 'am', 'force-stop', packageId);
-    await publish(1);
-  } else {
-    await publish(1);
-    await adb('shell', 'input', 'keyevent', 'KEYCODE_HOME');
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    // Xiaomi блокирует broadcast после force-stop; сохраняем настоящий PendingIntent.
-    await adb('shell', 'am', 'kill', packageId);
-    let alive = '';
-    try {
-      alive = (await adb('shell', 'pidof', packageId)).trim();
-    } catch {}
-    expect(
-      alive,
-      'Процесс перед холодным уведомлением должен завершиться'
-    ).toBe('');
+  if (process.env.ANDROID_PERFORMANCE_SLOW_HISTORY !== '1') {
+    fixture.latency.messages = 1200;
+    fixture.latency.around = 1200;
+    if (isEmulator) {
+      await adb('shell', 'am', 'force-stop', packageId);
+      await publish(1);
+    } else {
+      await publish(1);
+      await adb('shell', 'input', 'keyevent', 'KEYCODE_HOME');
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      // Xiaomi блокирует broadcast после force-stop; сохраняем настоящий PendingIntent.
+      await adb('shell', 'am', 'kill', packageId);
+      let alive = '';
+      try {
+        alive = (await adb('shell', 'pidof', packageId)).trim();
+      } catch {}
+      expect(
+        alive,
+        'Процесс перед холодным уведомлением должен завершиться'
+      ).toBe('');
+    }
+    requestIndex = fixture.requests.length;
+    started = performance.now();
+    await tap(1);
+    page = await connectPage();
+    await observe(page, 1);
+    await waitForTopic(1);
+    await capture(
+      'cold-notification-cached-slow-network',
+      started,
+      requestIndex
+    );
+    await saveDeviceScreenshot('cold-notification.png');
+    // Завершить обновление списка после холодного запуска до отдельного тёплого сценария.
+    await page.waitForTimeout(4000);
+    await publish(2);
+    await observe(page, 2);
+    requestIndex = fixture.requests.length;
+    started = performance.now();
+    await tap(2);
+    await waitForTopic(2);
+    await capture(
+      'warm-notification-cached-slow-network',
+      started,
+      requestIndex
+    );
   }
-  requestIndex = fixture.requests.length;
-  started = performance.now();
-  await tap(1);
-  page = await connectPage();
-  await observe(page, 1);
-  await waitForTopic(1);
-  await capture('cold-notification-cached-slow-network', started, requestIndex);
-  await saveDeviceScreenshot('cold-notification.png');
-  // Завершить обновление списка после холодного запуска до отдельного тёплого сценария.
-  await page.waitForTimeout(4000);
-  await publish(2);
-  await observe(page, 2);
-  requestIndex = fixture.requests.length;
-  started = performance.now();
-  await tap(2);
-  await waitForTopic(2);
-  await capture('warm-notification-cached-slow-network', started, requestIndex);
+  if (process.env.ANDROID_PERFORMANCE_SLOW_HISTORY === '1') {
+    fixture.latency.messages = 3000;
+    fixture.latency.around = 0;
+    const cachedTopic = page
+      .locator(`[data-topic-id="${fixture.topics[1].id}"]:visible`)
+      .first();
+    await expect(cachedTopic).toBeVisible();
+    await observe(page, 1);
+    requestIndex = fixture.requests.length;
+    started = performance.now();
+    await cachedTopic.click();
+    await waitForTopic(1);
+    // Дать кадровому наблюдателю зафиксировать видимое содержимое.
+    await page.evaluate(
+      () =>
+        new Promise<void>(resolve =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        )
+    );
+    const cached = await capture(
+      'cached-topic-3000ms-network',
+      started,
+      requestIndex
+    );
+    expect(cached.wrongTopicFrames).toBe(0);
+    expect(cached.maxMessageNodes).toBeLessThanOrEqual(72);
+    expect(
+      cached.requests.filter(request =>
+        request.path.startsWith(`/api/messages/topic/${fixture.topics[1].id}?`)
+      )
+    ).toHaveLength(1);
+    if (!isBaseline) expect(cached.routeToReadyMs).toBeLessThan(1500);
+    await saveDeviceScreenshot('cached-topic-slow-network.png');
+    await page.waitForTimeout(3500);
+    await waitForTopic(1);
+
+    await page.locator('[data-testid$="-Header-BackButton"]').click();
+    const uncachedTopic = page
+      .locator(`[data-topic-id="${fixture.topics[3].id}"]:visible`)
+      .first();
+    await expect(uncachedTopic).toBeVisible();
+    await observe(page, 3);
+    requestIndex = fixture.requests.length;
+    started = performance.now();
+    await uncachedTopic.click();
+    await waitForTopic(3);
+    await page.evaluate(
+      () =>
+        new Promise<void>(resolve =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        )
+    );
+    const uncached = await capture(
+      'uncached-topic-3000ms-network',
+      started,
+      requestIndex
+    );
+    expect(uncached.wrongTopicFrames).toBe(0);
+    expect(uncached.maxMessageNodes).toBeLessThanOrEqual(72);
+    expect(uncached.routeToReadyMs).toBeGreaterThan(2500);
+    fixture.latency.messages = 0;
+
+    const network = await page.context().newCDPSession(page);
+    try {
+      await network.send('Network.enable');
+      await network.send('Network.emulateNetworkConditions', {
+        offline: true,
+        latency: 0,
+        downloadThroughput: 0,
+        uploadThroughput: 0
+      });
+      await expect
+        .poll(() => page.evaluate(() => navigator.onLine))
+        .toBe(false);
+      await page.locator('[data-testid$="-Header-BackButton"]').click();
+      await observe(page, 1);
+      requestIndex = fixture.requests.length;
+      started = performance.now();
+      await page
+        .locator(`[data-topic-id="${fixture.topics[1].id}"]:visible`)
+        .first()
+        .click();
+      await waitForTopic(1);
+      await page.evaluate(
+        () =>
+          new Promise<void>(resolve =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+          )
+      );
+      const offline = await capture(
+        'cached-topic-offline',
+        started,
+        requestIndex
+      );
+      expect(offline.wrongTopicFrames).toBe(0);
+      expect(offline.routeToReadyMs).toBeLessThan(1500);
+      expect(
+        offline.requests.filter(request =>
+          request.path.startsWith('/api/messages/topic/')
+        )
+      ).toHaveLength(0);
+    } finally {
+      await network.send('Network.emulateNetworkConditions', {
+        offline: false,
+        latency: 0,
+        downloadThroughput: -1,
+        uploadThroughput: -1
+      });
+      await network.detach();
+    }
+    expect(pageErrors).toEqual([]);
+  }
   if (process.env.ANDROID_PERFORMANCE_TOPICS === '1') {
     fixture.latency.messages = 0;
     const samples: any[] = [];

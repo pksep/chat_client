@@ -2615,9 +2615,15 @@ export const setVisibleMessagesLimitForTopic = (
 
   const fullMessages = getFullMessagesByTopicId(topicId);
   const visibleMessages = getMessagesByTopicId(topicId);
-  const sourceMessages = fullMessages.length ? fullMessages : visibleMessages;
+  const sourceMessages =
+    fullMessages.length || canonicalTopicStateIds.has(topicId)
+      ? fullMessages
+      : visibleMessages;
 
   if (!sourceMessages.length) {
+    // Подтверждённая пустая история не восстанавливается из старого окна UI.
+    if (opts?.allowShrink && visibleMessages.length)
+      messagesStore[topicId] = [];
     return [];
   }
 
@@ -2795,21 +2801,37 @@ export const hydrateMessagesFromCache = async (
 export const hydrateMessagePreviewFromCache = async (
   topicId: string,
   userId?: string,
-  visibleLimit = 48
+  visibleLimit = 48,
+  opts?: { fallbackToSnapshot?: boolean }
 ): Promise<IMessage[]> => {
-  if (!topicId || !isShadowSyncEnabled()) {
+  if (!topicId || (!isShadowSyncEnabled() && !opts?.fallbackToSnapshot)) {
     return [];
   }
 
   const resolvedUserId =
     userId || authedUser.value?.id || getChatAuthSession()?.user?.id || '';
-  const previewMessages = await loadShadowTopicPreview(topicId, resolvedUserId);
+  let [previewMessages] = await Promise.all([
+    loadShadowTopicPreview(topicId, resolvedUserId),
+    rememberPersistedDeletedMessageIds(topicId, resolvedUserId)
+  ]);
+  // Старые установки могут иметь полный снимок без короткого preview.
+  if (
+    !previewMessages.length &&
+    opts?.fallbackToSnapshot &&
+    !canonicalTopicStateIds.has(topicId)
+  ) {
+    previewMessages = await loadShadowTopicSnapshot(topicId, resolvedUserId);
+    if (!previewMessages.length)
+      previewMessages = await loadCachedTopicMessages(topicId, resolvedUserId);
+  }
+  if (
+    (authedUser.value?.id || getChatAuthSession()?.user?.id || '') !==
+    resolvedUserId
+  )
+    return [];
 
   // Сеть или полное восстановление могли уже заполнить историю, пока читался preview.
-  if (
-    canonicalTopicStateIds.has(topicId) &&
-    getFullMessagesByTopicId(topicId).length
-  ) {
+  if (canonicalTopicStateIds.has(topicId)) {
     return getMessagesByTopicId(topicId);
   }
 
@@ -2820,7 +2842,7 @@ export const hydrateMessagePreviewFromCache = async (
   // Native-снимок может принести новое сообщение, пока старый preview читается с диска.
   const normalizedMessages = prepareMessagesForPersistence(
     dedupeMessagesForTopic([
-      ...previewMessages,
+      ...previewMessages.slice(-visibleLimit),
       ...getFullMessagesByTopicId(topicId)
     ])
   );

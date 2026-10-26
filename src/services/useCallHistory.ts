@@ -58,12 +58,17 @@ let callHistorySdk: CallHistorySdk | null = null;
 let shouldBootstrapWhenSdkReady = false;
 const pendingUpserts = new Map<string, ServerCallHistoryItem>();
 const pendingRemovals = new Set<string>();
+const pendingCallTopics = new Map<
+  string,
+  { userId: string; sdk: CallHistorySdk | null }
+>();
 
 const resolveCallHistoryUserId = (): string => getAuthUser()?.id || '';
 
 const resetRuntimeState = (): void => {
   pendingUpserts.clear();
   pendingRemovals.clear();
+  pendingCallTopics.clear();
   bootstrapPromise = null;
   loadMorePromise = null;
   shouldBootstrapWhenSdkReady = false;
@@ -130,8 +135,13 @@ const uniqCallHistoryItems = (
 
 const refreshMissingCallTopics = async (
   items: ServerCallHistoryItem[],
-  sdk?: CallHistorySdk | null
+  userId: string,
+  sdk: CallHistorySdk | null = callHistorySdk
 ): Promise<void> => {
+  const isCurrent = () =>
+    resolveCallHistoryUserId() === userId && callHistorySdk === sdk;
+  if (!isCurrent()) return;
+
   const callTopicIds = [
     ...new Set(
       items
@@ -145,21 +155,33 @@ const refreshMissingCallTopics = async (
   }
 
   const topicsApi = useTopics();
-  const missingCallTopicIds = callTopicIds.filter(
-    topicId => !topicsApi.getSelectedTopic(topicId)
-  );
+  const missingCallTopicIds = callTopicIds.filter(topicId => {
+    const pending = pendingCallTopics.get(topicId);
+    return (
+      !topicsApi.getSelectedTopic(topicId) &&
+      !(pending?.userId === userId && pending.sdk === sdk)
+    );
+  });
 
   if (!missingCallTopicIds.length) {
     return;
   }
 
+  const scope = { userId, sdk };
+  missingCallTopicIds.forEach(topicId => pendingCallTopics.set(topicId, scope));
   try {
     await topicsApi.fetchAllTopics();
+    if (!isCurrent()) return;
     await Promise.all(
       missingCallTopicIds.map(topicId => sdk?.joinTopic?.(topicId))
     );
   } catch (error) {
     console.error('Failed to refresh call topics:', error);
+  } finally {
+    missingCallTopicIds.forEach(topicId => {
+      if (pendingCallTopics.get(topicId) === scope)
+        pendingCallTopics.delete(topicId);
+    });
   }
 };
 
@@ -169,7 +191,8 @@ const applyCallHistory = async (
   sdk?: CallHistorySdk | null
 ): Promise<void> => {
   rawCallHistory.value = uniqCallHistoryItems(items);
-  await refreshMissingCallTopics(rawCallHistory.value, sdk);
+  // Имена и чаты звонков уточняются в фоне, не задерживая офлайн-кэш и страницы.
+  void refreshMissingCallTopics(rawCallHistory.value, userId, sdk);
   await saveShadowSyncMeta(
     CALL_HISTORY_CACHE_KEY,
     rawCallHistory.value,

@@ -9,6 +9,7 @@ import { getConfig } from '../services/useConfig';
 import type { ChatAccessValues, ChatUserAccess } from '../types/chat-access';
 import { parseUserEx } from '../utils/parseUserEx';
 import { readMenuLayout, saveMenuLayout } from '../utils/menu-layout-cache';
+import { readChatAccess, saveChatAccess } from '../utils/chat-access-cache';
 
 const access = ref<ChatAccessValues>({ client: false, ai: false });
 const ready = ref(false);
@@ -39,13 +40,18 @@ function invalidateAccessCheck(): void {
 
 function resetChatAccess(): void {
   invalidateAccessCheck();
+  aiController.abort();
+  aiController = new AbortController();
   checkedToken = undefined;
-  settled.value = false;
+  const cached = parseUserEx(authedUser.value?.ex).isDeletedBot
+    ? null
+    : readChatAccess(authedUser.value?.id, getConfig().CHAT_API_DOMAIN);
+  settled.value = cached !== null;
   cachedMenuCount.value = readMenuLayout(
     authedUser.value?.id,
     getConfig().CHAT_API_DOMAIN
   );
-  access.value = { client: false, ai: false };
+  access.value = cached || { client: false, ai: false };
 }
 
 function applyChatAccess(
@@ -57,6 +63,7 @@ function applyChatAccess(
   ready.value = true;
   cachedMenuCount.value = 3 + Number(values.client) + Number(values.ai);
   saveMenuLayout(userId, base, cachedMenuCount.value);
+  saveChatAccess(userId, base, access.value);
 }
 
 watch(
@@ -75,7 +82,7 @@ watch(
 
     if (subscribers) void refreshChatAccess();
   },
-  { flush: 'sync' }
+  { flush: 'sync', immediate: true }
 );
 
 watch(
@@ -208,6 +215,7 @@ export function useChatAccessSubscription(): void {
     if (++subscribers === 1) {
       timer = setInterval(refreshOnFocus, 10000);
       window.addEventListener('focus', refreshOnFocus);
+      window.addEventListener('online', refreshOnFocus);
     }
     refreshOnFocus();
   });
@@ -215,6 +223,7 @@ export function useChatAccessSubscription(): void {
     if (--subscribers === 0) {
       clearInterval(timer);
       window.removeEventListener('focus', refreshOnFocus);
+      window.removeEventListener('online', refreshOnFocus);
       resetChatAccess();
     }
   });

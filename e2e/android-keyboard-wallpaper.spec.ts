@@ -1,13 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
+import {
+  androidBack,
+  installAndroidBackMock
+} from './fixtures/android-back-mock';
 
-test.beforeEach(({}, testInfo) => {
-  test.skip(testInfo.project.name !== 'chromium-mobile');
-});
+test.skip(
+  ({ browserName, isMobile }) => browserName !== 'chromium' || !isMobile
+);
 
 async function openChat(page: Page, platform = 'android', count = 40) {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.route('**/*', route => {
+  await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     if (!['localhost', '127.0.0.1'].includes(url.hostname))
       return route.abort();
@@ -30,9 +34,15 @@ async function openChat(page: Page, platform = 'android', count = 40) {
           info: {}
         }
       });
+    if (url.pathname.endsWith('/messages/topic/mobile-search-fixture'))
+      return route.fulfill({
+        json: await page.evaluate(
+          () => (window as any).iosPwaFixture.historyMessages
+        )
+      });
     if (url.pathname.startsWith('/e2e/ios-api/'))
       return route.fulfill({ json: [] });
-    return route.continue();
+    return route.fallback();
   });
   await page.setViewportSize({ width: 392, height: 832 });
   await page.goto(
@@ -43,6 +53,7 @@ async function openChat(page: Page, platform = 'android', count = 40) {
   await expect(page.locator('.chat__input .ProseMirror')).toBeVisible({
     timeout: 15000
   });
+  await expect(page.locator('.chat__input--booting')).toHaveCount(0);
   await expect(
     page.locator(`[data-message-id="message-${count - 1}"]`).first()
   ).toBeVisible();
@@ -615,4 +626,31 @@ test('Android IME: закрытие вложений через native Back со
     .locator('.chat__input')
     .evaluate(el => el.getBoundingClientRect().bottom);
   expect(Math.abs(bottom - 506)).toBeLessThan(2);
+});
+
+test('Android IME: закрытие клавиатуры определяется нативным inset при изменении окна', async ({
+  page
+}) => {
+  await installAndroidBackMock(page);
+  await mockNativeKeyboard(page);
+  const errors = await openChat(page);
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-android-back-listeners',
+    '1'
+  );
+  const topicUrl = page.url();
+  const editor = page.locator('.chat__input .ProseMirror');
+  await editor.tap();
+  await setAndroidKeyboard(page, 326);
+  await page.evaluate(() => {
+    const viewport = window.visualViewport!;
+    const reducedHeight = viewport.height - 200;
+    Object.defineProperty(viewport, 'height', { get: () => reducedHeight });
+    viewport.dispatchEvent(new Event('resize'));
+  });
+  await setAndroidKeyboard(page, 0);
+  await androidBack(page);
+  await expect(page).not.toHaveURL(topicUrl);
+  await expect(page.locator('.chat__input')).toHaveCount(0);
+  expect(errors).toEqual([]);
 });

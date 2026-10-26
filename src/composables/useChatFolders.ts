@@ -1,6 +1,8 @@
 import { computed, reactive, readonly, ref, watch } from 'vue';
 import { authedUser, getAuthUser } from './useAuth';
 import { getChatSDK } from '../services/useChat';
+import { getConfig } from '../services/useConfig';
+import { readChatFolders, saveChatFolders } from '../utils/chat-folder-cache';
 import { sortChatFolders } from '../utils/chat-folder-order';
 import { showNotification } from './useNotifications';
 import type { ChatSDK } from '../services/useChatSDK';
@@ -224,10 +226,12 @@ const loadFolders = async (force = false): Promise<void> => {
     if (revision !== loadRevision) return;
     state.error =
       error instanceof Error ? error.message : 'Не удалось загрузить папки';
-    showNotification({
-      title: 'Не удалось загрузить папки',
-      description: error
-    });
+    if (!window.matchMedia('(max-width: 768px)').matches) {
+      showNotification({
+        title: 'Не удалось загрузить папки',
+        description: error
+      });
+    }
   } finally {
     if (revision === loadRevision) {
       isLoading.value = false;
@@ -414,7 +418,7 @@ const closeFolderManager = (): void => {
 };
 
 watch(
-  () => authedUser.value?.id,
+  [() => authedUser.value?.id, () => getConfig().CHAT_API_DOMAIN],
   () => {
     ++loadRevision;
     ++sessionRevision;
@@ -425,7 +429,9 @@ watch(
     deletedFolderIds.clear();
     loadedUserId = '';
     refreshPending = false;
-    folders.value = [];
+    folders.value = sortFolders(
+      readChatFolders(authedUser.value?.id, getConfig().CHAT_API_DOMAIN)
+    );
     topicUpdateQueue.clear();
     isLoading.value = false;
     state.error = '';
@@ -435,7 +441,17 @@ watch(
       selection.isReordering.value = false;
     }
   },
-  { flush: 'sync' }
+  { flush: 'sync', immediate: true }
+);
+
+watch(
+  folders,
+  value => {
+    const userId = authedUser.value?.id;
+    const apiBase = getConfig().CHAT_API_DOMAIN;
+    if (userId && apiBase) saveChatFolders(userId, apiBase, value);
+  },
+  { deep: true }
 );
 
 export const useChatFolders = (scope: ChatFolderScope = 'chats') => ({

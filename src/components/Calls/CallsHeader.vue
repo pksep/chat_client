@@ -4,6 +4,7 @@
     :data-testid="`${props.dataTestid}-Container`"
   >
     <MenuSectionHeading
+      network-status
       as="div"
       class="chats-toolbar__headline calls-page__headline"
     >

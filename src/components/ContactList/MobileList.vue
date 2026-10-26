@@ -628,7 +628,13 @@ const runMessageSearch = async (
 
   isMessageSearchLoading.value = true;
 
-  const { results } = await searchMessages(query, { limit: 50 });
+  const { results } = await searchMessages(query, {
+    limit: 50,
+    onLocalResults: ({ results: localResults }) => {
+      if (requestToken === messageSearchRequestToken)
+        messageSearchResults.value = localResults;
+    }
+  });
 
   if (requestToken !== messageSearchRequestToken) {
     return;
@@ -763,7 +769,7 @@ const handleDropFiles = async (event: DragEvent): Promise<void> => {
 };
 
 watch(
-  [() => toolbarState.search, isShareSelectionActive],
+  [() => toolbarState.search, isShareSelectionActive, authUserId],
   () => {
     const query = normalizeAtSearchQuery(toolbarState.search);
     const requestToken = ++messageSearchRequestToken;
@@ -835,6 +841,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  messageSearchRequestToken++;
   saveChatsScrollPosition();
   finishChatsScrollRestore();
   clearDirectSectionTransitionState();

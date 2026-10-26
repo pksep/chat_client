@@ -17,9 +17,10 @@ const PENDING_UPLOAD_META_STORE_NAME = 'pendingUploadMeta';
 const PENDING_UPLOAD_CHUNKS_STORE_NAME = 'pendingUploadChunks';
 const PENDING_UPLOADS_OPFS_DIRECTORY = 'pending-uploads';
 const PENDING_UPLOAD_WORKER_THRESHOLD = 32 * 1024 * 1024;
+const PENDING_UPLOAD_CHUNK_SIZE = 4 * 1024 * 1024;
 const PENDING_UPLOAD_WORKER_LOAD_TIMEOUT_MS = 5000;
 const PENDING_UPLOAD_SERVICE_WORKER_URL =
-  '/pending-upload-service-worker.js?v=20260901-10';
+  '/pending-upload-service-worker.js?v=20261026-1';
 const PENDING_UPLOAD_SERVICE_WORKER_SCOPE = '/pending-upload-cache-v3/';
 
 interface CachedTopicMessages {
@@ -49,6 +50,8 @@ interface CachedPendingUpload {
   originName?: string;
   contentType?: string;
   lastModified?: number;
+  fileSize?: number;
+  chunkCount?: number;
   isMedia: boolean;
   updatedAt: string;
 }
@@ -521,6 +524,38 @@ const loadDurablePendingUploadFile = async (
       lastModified: cached.lastModified
     });
   }
+  if (cached.chunkCount) {
+    const db = await openDb();
+    if (!db) return null;
+    const chunks = await new Promise<
+      { chunkIndex: number; data: Blob | ArrayBuffer }[]
+    >((resolve, reject) => {
+      const tx = db.transaction(PENDING_UPLOAD_CHUNKS_STORE_NAME, 'readonly');
+      const request = tx
+        .objectStore(PENDING_UPLOAD_CHUNKS_STORE_NAME)
+        .getAll(
+          IDBKeyRange.bound(
+            [cached.cacheKey, 0],
+            [cached.cacheKey, cached.chunkCount - 1]
+          )
+        );
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    if (chunks.length !== cached.chunkCount) return null;
+    chunks.sort((first, second) => first.chunkIndex - second.chunkIndex);
+    const file = new File(
+      chunks.map(chunk => chunk.data),
+      cached.originName,
+      {
+        type: cached.contentType,
+        lastModified: cached.lastModified
+      }
+    );
+    return cached.fileSize === undefined || file.size === cached.fileSize
+      ? file
+      : null;
+  }
   if (!cached.opfsFileName) {
     return null;
   }
@@ -777,6 +812,62 @@ export const saveCachedPinnedMessages = async (
   }
 };
 
+const savePendingUploadBytes = async (
+  db: IDBDatabase,
+  payload: CachedPendingUpload,
+  onProgress?: (percent: number) => void
+): Promise<void> => {
+  const file = payload.file!;
+  const write = (stores: string[], operation: (tx: IDBTransaction) => void) =>
+    new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(stores, 'readwrite');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+      operation(tx);
+    });
+  await write(
+    [PENDING_UPLOADS_STORE_NAME, PENDING_UPLOAD_CHUNKS_STORE_NAME],
+    tx => {
+      tx.objectStore(PENDING_UPLOADS_STORE_NAME).delete(payload.cacheKey);
+      tx.objectStore(PENDING_UPLOAD_CHUNKS_STORE_NAME).delete(
+        IDBKeyRange.bound(
+          [payload.cacheKey, 0],
+          [payload.cacheKey, Number.MAX_SAFE_INTEGER]
+        )
+      );
+    }
+  );
+  const chunkCount = Math.ceil(file.size / PENDING_UPLOAD_CHUNK_SIZE);
+  for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
+    const start = chunkIndex * PENDING_UPLOAD_CHUNK_SIZE;
+    const end = Math.min(file.size, start + PENDING_UPLOAD_CHUNK_SIZE);
+    const data = await file.slice(start, end).arrayBuffer();
+    if (data.byteLength !== end - start) {
+      throw new Error('Не удалось прочитать файл. Выберите его ещё раз.');
+    }
+    await write([PENDING_UPLOAD_CHUNKS_STORE_NAME], tx => {
+      tx.objectStore(PENDING_UPLOAD_CHUNKS_STORE_NAME).put({
+        cacheKey: payload.cacheKey,
+        chunkIndex,
+        data
+      });
+    });
+    onProgress?.(Math.round(((chunkIndex + 1) / chunkCount) * 100));
+  }
+  await write([PENDING_UPLOADS_STORE_NAME], tx => {
+    tx.objectStore(PENDING_UPLOADS_STORE_NAME).put({
+      ...payload,
+      file: undefined,
+      originName: file.name,
+      contentType: file.type,
+      lastModified: file.lastModified,
+      fileSize: file.size,
+      chunkCount
+    });
+  });
+};
+
 export const savePendingUploadFile = async (params: {
   topicId: string;
   messageId: string;
@@ -815,6 +906,12 @@ export const savePendingUploadFile = async (params: {
     };
 
     if (params.file.size >= PENDING_UPLOAD_WORKER_THRESHOLD) {
+      // WebKit может потерять доступ к File после передачи в worker.
+      // Байты камеры читаем здесь порциями и сохраняем до начала отправки.
+      if (isIosWeb()) {
+        await savePendingUploadBytes(db, payload, params.onProgress);
+        return;
+      }
       // Multipart upload must not start until the complete source file is in
       // durable browser storage. A service worker can finish this copy across
       // a refresh; the next page then resumes multipart from OPFS.
@@ -895,6 +992,24 @@ export const loadPendingUploadFile = async (
       fileId,
       userId
     );
+
+    if (isIosWeb()) {
+      const cached = await new Promise<CachedPendingUpload | undefined>(
+        (resolve, reject) => {
+          const tx = db.transaction(PENDING_UPLOADS_STORE_NAME, 'readonly');
+          const request = tx
+            .objectStore(PENDING_UPLOADS_STORE_NAME)
+            .get(cacheKey);
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        }
+      );
+      if (cached) {
+        const file =
+          (await loadDurablePendingUploadFile(cached)) || cached.file;
+        if (file) return { file, isMedia: cached.isMedia };
+      }
+    }
 
     try {
       // If refresh happened while the durable copy was still running, wait

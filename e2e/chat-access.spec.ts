@@ -16,6 +16,71 @@ async function refreshAccess(page: Page): Promise<void> {
   });
 }
 
+for (const flags of [
+  { client: true, ai: false },
+  { client: false, ai: true },
+  { client: true, ai: true }
+]) {
+  test(`перезапуск без сети сразу восстанавливает точное меню ${JSON.stringify(flags)}`, async ({
+    page
+  }) => {
+    test.setTimeout(60000);
+    let reloaded = false;
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    await page.route('**/users/me/access', async route => {
+      if (reloaded) {
+        await gate;
+        return route.fulfill({ status: 503, json: {} });
+      }
+      return route.fulfill({
+        json: { userId: 'local-ui-test-user', effective: flags }
+      });
+    });
+    await page.goto('/');
+    const nav = page.locator('.menu-bottom-nav:visible');
+    await expect(nav).toBeVisible({ timeout: 30000 });
+    await expect(nav).toHaveAttribute('aria-busy', 'false');
+    await expect(nav.locator('button')).toHaveCount(
+      3 + Number(flags.ai) + Number(flags.client)
+    );
+    reloaded = true;
+    try {
+      await page.reload();
+      await expect(nav).toBeVisible({ timeout: 30000 });
+      await expect(nav).toHaveAttribute('aria-busy', 'false');
+      await expect(
+        nav.locator('[data-testid$="MenuBottomNav-AI"]')
+      ).toHaveCount(Number(flags.ai));
+      await expect(
+        nav.locator('[data-testid$="MenuBottomNav-Clients"]')
+      ).toHaveCount(Number(flags.client));
+    } finally {
+      release();
+    }
+    await refreshAccess(page);
+    await expect(nav.locator('button')).toHaveCount(
+      3 + Number(flags.ai) + Number(flags.client)
+    );
+    await page.unroute('**/users/me/access');
+    await page.route('**/users/me/access', route =>
+      route.fulfill({
+        json: {
+          userId: 'local-ui-test-user',
+          effective: { client: false, ai: false }
+        }
+      })
+    );
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    await expect(nav.locator('button')).toHaveCount(3);
+    await page.reload();
+    await expect(nav).toBeVisible({ timeout: 30000 });
+    await expect(nav.locator('button')).toHaveCount(3);
+  });
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     const url = 'http://127.0.0.1:65530';
@@ -57,6 +122,47 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/automations', route =>
     route.fulfill({ json: { automations: [] } })
   );
+});
+
+test('ожидание сети по центру каждого мобильного раздела', async ({
+  page,
+  isMobile
+}) => {
+  test.skip(!isMobile);
+  test.setTimeout(60000);
+  await page.route('**/topics**', route =>
+    route.fulfill({
+      json: {
+        data: [],
+        meta: { totalItems: 0, totalPages: 1, currentPage: 1 }
+      }
+    })
+  );
+  await page.route('**/users/me/access', route =>
+    route.fulfill({
+      json: {
+        userId: 'local-ui-test-user',
+        effective: { client: true, ai: true }
+      }
+    })
+  );
+  await page.goto('/');
+  const nav = page.locator('.menu-bottom-nav:visible');
+  await expect(nav.locator('button')).toHaveCount(5);
+  for (const section of ['Chats', 'Calls', 'Clients', 'AI', 'Profile']) {
+    await nav.locator(`[data-testid$="MenuBottomNav-${section}"]`).click();
+    const region = page.locator(
+      '.mobile-list-container__section[aria-hidden="false"]'
+    );
+    const status = region.locator('.menu-section-heading__network');
+    await expect(status).toBeVisible({ timeout: 8000 });
+    const box = (await status.boundingBox())!;
+    const container = (await region.boundingBox())!;
+    expect(
+      Math.abs(box.x + box.width / 2 - container.x - container.width / 2)
+    ).toBeLessThan(1.5);
+    await expect(status).toContainText('Ожидание сети');
+  }
 });
 
 test('до проверки прав меню показывает скелетон, после отказа — три пункта', async ({

@@ -349,6 +349,239 @@ test('вложения: подключённый input открывает фот
   );
 });
 
+for (const [name, mimeType, mediaType, buffer] of [
+  [
+    'IMG_1234.png',
+    'image/png',
+    'IMAGE',
+    Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1sAAAAASUVORK5CYII=',
+      'base64'
+    )
+  ],
+  [
+    'IMG_1234.MOV',
+    'video/quicktime',
+    'VIDEO',
+    // Отправка исходника работает и без декодируемой локальной обложки.
+    Buffer.from([0, 0, 0, 20, 102, 116, 121, 112, 113, 116, 32, 32, 0, 0, 0, 0])
+  ]
+] as const) {
+  for (const completion of ['events', 'resume']) {
+    test(`камера PWA: ${name}, ${completion}, копируется до загрузки и отправляется один раз`, async ({
+      page
+    }) => {
+      let uploads = 0;
+      await page.route('**/e2e/ios-api/media/upload-target', route =>
+        route.fulfill({
+          json: {
+            objectName: name,
+            uploadUrl: 'http://localhost:5173/e2e/ios-api/camera-storage'
+          }
+        })
+      );
+      await page.route('**/e2e/ios-api/camera-storage', route => {
+        uploads++;
+        return route.fulfill({ status: 200, body: '' });
+      });
+      await page.route('**/e2e/ios-api/media/upload', route =>
+        route.fulfill({ json: { objectName: name, thumbnailObjectName: null } })
+      );
+      await page.goto('/e2e/fixtures/ios-pwa.html?kind=group&no-pinned&shell');
+      await expect(page.locator('.chat__input--booting')).toHaveCount(0);
+      await expect(page.locator('.chat__input .ProseMirror')).toBeVisible({
+        timeout: 60_000
+      });
+      await page.evaluate(async completion => {
+        const path = '/e2e/fixtures/network-harness.ts';
+        (await import(/* @vite-ignore */ path)).controlConnection();
+        const state = {
+          copiedBytes: 0,
+          sent: [] as any[],
+          input: null as any,
+          uploadReads: [] as Promise<number[]>[]
+        };
+        (window as any).cameraRegression = state;
+        (window as any).iosPwaFixture.sdk.sendWebSocketEvent = (
+          _type: string,
+          payload: any
+        ) => {
+          if (payload.medias) state.sent.push(payload);
+          return true;
+        };
+        const send = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function (body) {
+          if (body instanceof Blob) {
+            state.uploadReads.push(
+              body.arrayBuffer().then(bytes => [...new Uint8Array(bytes)])
+            );
+          }
+          return send.call(this, body);
+        };
+        const captureSelection = (event: Event) => {
+          const input = event.target as HTMLInputElement;
+          if (input.type !== 'file') return;
+          if (completion === 'resume') event.stopImmediatePropagation();
+          if (state.input === input) return;
+          state.input = input;
+          for (const file of Array.from(input.files || [])) {
+            const slice = file.slice.bind(file);
+            file.slice = (...args) => {
+              const part = slice(...args);
+              const read = part.arrayBuffer.bind(part);
+              part.arrayBuffer = async () => {
+                const bytes = await read();
+                state.copiedBytes += bytes.byteLength;
+                return bytes;
+              };
+              return part;
+            };
+          }
+        };
+        document.addEventListener('input', captureSelection, true);
+        document.addEventListener('change', captureSelection, true);
+      }, completion);
+      await page.locator('.chat__input .attach-file-button:visible').tap();
+      const selection = page.waitForEvent('filechooser');
+      await page
+        .locator('.attach-file-popover .popover-yui-kit__content:visible')
+        .getByText('Фото или видео', { exact: true })
+        .tap();
+      await (await selection).setFiles({ name, mimeType, buffer });
+      if (completion === 'resume') {
+        await page.evaluate(() => {
+          window.dispatchEvent(new Event('focus'));
+          document.dispatchEvent(new Event('visibilitychange'));
+        });
+      }
+      await expect
+        .poll(() =>
+          page.evaluate(() => (window as any).cameraRegression.sent.length)
+        )
+        .toBe(1);
+      expect(uploads).toBe(1);
+      expect(
+        await page.evaluate(async () => {
+          const state = (window as any).cameraRegression;
+          return {
+            copiedBytes: state.copiedBytes,
+            inputConnected: state.input.isConnected,
+            uploadedBytes: await Promise.all(state.uploadReads),
+            media: state.sent[0].medias.map((media: any) => ({
+              path: media.path,
+              type: media.type
+            }))
+          };
+        })
+      ).toEqual({
+        copiedBytes: buffer.length,
+        inputConnected: false,
+        uploadedBytes: [[...buffer]],
+        media: [{ path: name, type: mediaType }]
+      });
+    });
+  }
+}
+
+test('выбор файлов PWA сохраняет проверку лимита вложений ИИ', async ({
+  page
+}) => {
+  await page.goto('/e2e/fixtures/ios-pwa.html?kind=ai&no-pinned');
+  const editor = page.locator('.chat__input .ProseMirror');
+  await expect(editor).toBeVisible({ timeout: 60_000 });
+  await editor.fill('Черновик с вложениями');
+  await page.locator('.chat__input .attach-file-button:visible').tap();
+  const selection = page.waitForEvent('filechooser');
+  await page
+    .locator('.attach-file-popover .popover-yui-kit__content:visible')
+    .getByText('Файл', { exact: true })
+    .tap();
+  await (
+    await selection
+  ).setFiles(
+    Array.from({ length: 11 }, (_, index) => ({
+      name: `file-${index}.txt`,
+      mimeType: 'text/plain',
+      buffer: Buffer.from('test')
+    }))
+  );
+  await expect(page.getByRole('alert')).toContainText('не более 10 файлов');
+  await expect(page.locator('.attach-modal')).toHaveCount(0);
+  await expect(editor).toHaveText('Черновик с вложениями');
+});
+
+test('список чатов PWA: удержание открывает меню и не открывает чат при отпускании', async ({
+  page,
+  browserName
+}) => {
+  await page.goto('/e2e/fixtures/ios-pwa.html?kind=menu');
+  const row = page.locator(
+    '[data-topic-id="iphone-chat-0"] .contact-list__item'
+  );
+  await expect(row).toBeVisible({ timeout: 60_000 });
+  const url = page.url();
+  const box = (await row.boundingBox())!;
+  const point = {
+    pointerId: 1,
+    pointerType: 'touch',
+    isPrimary: true,
+    clientX: box.x + 150,
+    clientY: box.y + 20
+  };
+  const touch =
+    browserName === 'chromium'
+      ? await page.context().newCDPSession(page)
+      : null;
+  if (touch) {
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: point.clientX, y: point.clientY }]
+    });
+  } else await row.dispatchEvent('pointerdown', point);
+  const menu = page.locator('.topic-folder-context-menu:visible');
+  await expect(menu).toBeVisible();
+  if (touch) {
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchEnd',
+      touchPoints: []
+    });
+    await touch.detach();
+  } else {
+    await row.dispatchEvent('pointerup', point);
+    await row.dispatchEvent('click', { ...point, detail: 1 });
+  }
+  await expect(menu).toBeVisible();
+  await expect(menu.getByText('Закрепить', { exact: true })).toBeVisible();
+  await expect(
+    menu.getByText('Отметить прочитанным', { exact: true })
+  ).toBeVisible();
+  await expect(row.locator('.contact-list__title').first()).toHaveCSS(
+    '-webkit-user-select',
+    'none'
+  );
+  await expect(page).toHaveURL(url);
+  await page.touchscreen.tap(10, 10);
+  await expect(menu).toHaveCount(0);
+  for (const cancel of ['pointermove', 'pointercancel', 'scroll']) {
+    await row.dispatchEvent('pointerdown', point);
+    if (cancel === 'scroll') {
+      await row.evaluate(element =>
+        element.closest('ul')!.dispatchEvent(new Event('scroll'))
+      );
+    } else {
+      await row.dispatchEvent(cancel, {
+        ...point,
+        clientY: point.clientY + 30
+      });
+    }
+    await row.dispatchEvent('pointerup', point);
+    await page.waitForTimeout(500);
+    await expect(menu).toHaveCount(0);
+  }
+  await row.tap();
+  await expect(page).toHaveURL(/\/group\/iphone-chat-0/);
+});
+
 test('настройки фона не исчезают после раскрытия и смены раздела', async ({
   page
 }, testInfo) => {
