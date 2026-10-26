@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test
+} from 'bun:test';
 import { setConfig } from '../src/services/useConfig';
 import {
   clearChatAuthSession,
@@ -39,11 +47,20 @@ const encodeJwtPart = (value: Record<string, unknown>): string =>
     .replace(/\+/g, '-')
     .replace(/\//g, '_');
 
-const sharedToken = (suffix: string): string => {
+const sharedToken = (
+  suffix: string,
+  timing: { iat?: number; exp?: number } = {}
+): string => {
   const now = Math.floor(Date.now() / 1000);
   return [
     encodeJwtPart({ alg: 'RS256', typ: 'JWT', kid: 'test-key' }),
-    encodeJwtPart({ sub: 'user-1', iat: now, exp: now + 900, suffix }),
+    encodeJwtPart({
+      sub: 'user-1',
+      iat: now,
+      exp: now + 900,
+      ...timing,
+      suffix
+    }),
     suffix
   ].join('.');
 };
@@ -156,10 +173,143 @@ describe('обновление общей сессии чата', () => {
     );
 
     const requestedUrls: string[] = [];
+    globalThis.fetch = mock(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        requestedUrls.push(url);
+        if (url === 'http://erp.test/api/auth/refresh') {
+          expect(init?.method).toBe('POST');
+          expect(init?.credentials).toBe('include');
+          return Response.json({ ok: true, token: newToken });
+        }
+        if (url === 'http://chat.test/api/auth/session') {
+          expect(new Headers(init?.headers).get('Authorization')).toBe(
+            `Bearer ${newToken}`
+          );
+          return Response.json(user);
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      }
+    ) as typeof fetch;
+
+    await expect(tryRefreshErpSession()).resolves.toMatchObject({
+      token: newToken,
+      source: 'erp_bootstrap'
+    });
+    expect(requestedUrls).toEqual([
+      'http://erp.test/api/auth/refresh',
+      'http://chat.test/api/auth/session'
+    ]);
+    expect(getChatAuthSession()?.token).toBe(newToken);
+  });
+
+  test('пограничный ERP-токен обновляется при опережении часов браузера', async () => {
+    const serverNow = Math.floor(Date.now() / 1000);
+    const oldToken = sharedToken('erp-expiring', {
+      iat: serverNow - 899,
+      exp: serverNow + 1
+    });
+    const newToken = sharedToken('erp-rotated', {
+      iat: serverNow,
+      exp: serverNow + 900
+    });
+    spyOn(Date, 'now').mockReturnValue((serverNow + 6) * 1000);
+    setAuthToken(oldToken, 1);
+    saveChatAuthSession({ token: oldToken, user, source: 'erp_bootstrap' });
+
+    const requestedUrls: string[] = [];
+    globalThis.fetch = mock(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        requestedUrls.push(url);
+        if (url === 'http://erp.test/api/auth/session') {
+          return Response.json({ ok: true, token: oldToken });
+        }
+        if (url === 'http://erp.test/api/auth/refresh') {
+          expect(init?.method).toBe('POST');
+          return Response.json({ ok: true, token: newToken });
+        }
+        if (url === 'http://chat.test/api/auth/session') {
+          return new Headers(init?.headers).get('Authorization') ===
+            `Bearer ${newToken}`
+            ? Response.json(user)
+            : new Response(null, { status: 401 });
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      }
+    ) as typeof fetch;
+
+    await expect(tryRefreshErpSession()).resolves.toMatchObject({
+      token: newToken,
+      source: 'erp_bootstrap'
+    });
+    expect(requestedUrls).toEqual([
+      'http://erp.test/api/auth/refresh',
+      'http://chat.test/api/auth/session'
+    ]);
+    expect(getAuthToken()).toBe(newToken);
+    expect(getChatAuthSession()?.token).toBe(newToken);
+  });
+
+  for (const source of ['erp_bootstrap', 'unknown_shared'] as const) {
+    test(`${source}: продление запланировано до истечения с учётом часов браузера`, () => {
+      const serverNow = Math.floor(Date.now() / 1000);
+      const token = sharedToken(`proactive-${source}`, {
+        iat: serverNow,
+        exp: serverNow + 900
+      });
+      spyOn(Date, 'now').mockReturnValue((serverNow + 6) * 1000);
+      const timers = spyOn(globalThis, 'setTimeout');
+
+      setAuthToken(token, 894);
+      saveChatAuthSession({ token, user, source });
+
+      expect(timers.mock.calls.at(-1)?.[1]).toBe(834_000);
+    });
+  }
+
+  test('параллельные ERP-запросы обновляют сессию один раз', async () => {
+    const oldToken = sharedToken('concurrent-erp-old');
+    const newToken = sharedToken('concurrent-erp-new');
+    setAuthToken(oldToken, 900);
+    saveChatAuthSession({ token: oldToken, user, source: 'erp_bootstrap' });
+    const requestedUrls: string[] = [];
     globalThis.fetch = mock(async (input: RequestInfo | URL) => {
       const url = String(input);
       requestedUrls.push(url);
-      if (url === 'http://erp.test/api/auth/session') {
+      if (url === 'http://erp.test/api/auth/refresh') {
+        return Response.json({ ok: true, token: newToken });
+      }
+      if (url === 'http://chat.test/api/auth/session') {
+        return Response.json(user);
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    }) as typeof fetch;
+
+    const refreshed = await Promise.all(
+      Array.from({ length: 20 }, () => tryRefreshErpSession())
+    );
+
+    expect(requestedUrls).toEqual([
+      'http://erp.test/api/auth/refresh',
+      'http://chat.test/api/auth/session'
+    ]);
+    expect(refreshed.every(result => result?.token === newToken)).toBe(true);
+  });
+
+  test('старая общая сессия без chat-cookie обновляется через ERP', async () => {
+    const oldToken = sharedToken('unknown-old');
+    const newToken = sharedToken('unknown-new');
+    setAuthToken(oldToken, 900);
+    saveChatAuthSession({ token: oldToken, user, source: 'unknown_shared' });
+    const requestedUrls: string[] = [];
+    globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requestedUrls.push(url);
+      if (url === 'http://chat.test/api/auth/refresh') {
+        return Response.json({ code: 'CHAT_REFRESH_MISSING' }, { status: 401 });
+      }
+      if (url === 'http://erp.test/api/auth/refresh') {
         return Response.json({ ok: true, token: newToken });
       }
       if (url === 'http://chat.test/api/auth/session') {
@@ -170,14 +320,60 @@ describe('обновление общей сессии чата', () => {
 
     await expect(tryRefreshErpSession()).resolves.toMatchObject({
       token: newToken,
-      source: 'erp_bootstrap'
+      source: 'unknown_shared'
     });
     expect(requestedUrls).toEqual([
-      'http://erp.test/api/auth/session',
+      'http://chat.test/api/auth/refresh',
+      'http://erp.test/api/auth/refresh',
       'http://chat.test/api/auth/session'
     ]);
-    expect(getChatAuthSession()?.token).toBe(newToken);
   });
+
+  test('401 от ERP refresh подтверждает недействительность сессии', async () => {
+    const token = sharedToken('erp-revoked');
+    setAuthToken(token, 900);
+    saveChatAuthSession({ token, user, source: 'erp_bootstrap' });
+    const fetchMock = mock(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe('http://erp.test/api/auth/refresh');
+      return new Response(null, { status: 401 });
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await expect(tryRefreshErpSession()).resolves.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  for (const failure of ['503', 'timeout'] as const) {
+    test(`ошибка ERP ${failure} сохраняет сессию и разрешает повтор`, async () => {
+      const oldToken = sharedToken(`erp-${failure}-old`);
+      const newToken = sharedToken(`erp-${failure}-new`);
+      setAuthToken(oldToken, 900);
+      saveChatAuthSession({ token: oldToken, user, source: 'erp_bootstrap' });
+      globalThis.fetch = mock(async () => {
+        if (failure === 'timeout') {
+          throw new DOMException('Сервер не ответил вовремя', 'TimeoutError');
+        }
+        return Response.json({ code: 'AUTH_UNAVAILABLE' }, { status: 503 });
+      }) as typeof fetch;
+
+      await expect(tryRefreshErpSession()).rejects.toMatchObject(
+        failure === 'timeout' ? { name: 'TimeoutError' } : { status: 503 }
+      );
+      expect(getAuthToken()).toBe(oldToken);
+      expect(getChatAuthSession()?.token).toBe(oldToken);
+
+      globalThis.fetch = mock(async (input: RequestInfo | URL) =>
+        Response.json(
+          String(input) === 'http://erp.test/api/auth/refresh'
+            ? { ok: true, token: newToken }
+            : user
+        )
+      ) as typeof fetch;
+      await expect(tryRefreshErpSession()).resolves.toMatchObject({
+        token: newToken
+      });
+    });
+  }
 
   test('параллельные запросы используют один refresh и не создают гонку ротации', async () => {
     const oldToken = sharedToken('concurrent-old');
@@ -218,7 +414,7 @@ describe('обновление общей сессии чата', () => {
     let refreshRequests = 0;
     globalThis.fetch = mock(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === 'http://erp.test/api/auth/session') {
+      if (url === 'http://erp.test/api/auth/refresh') {
         refreshRequests++;
         await refreshGate;
         return Response.json({ ok: true, token });
