@@ -256,7 +256,7 @@ export const saveChatAuthSession = (
   authSessionRevision++;
   secondaryStorage.removeItem(CHAT_AUTH_SESSION_KEY);
   storage.setItem(CHAT_AUTH_SESSION_KEY, JSON.stringify(normalizedSession));
-  scheduleSharedTokenRefresh(normalizedSession.token, normalizedSession.source);
+  scheduleSharedTokenRefresh(normalizedSession.token);
 };
 
 export const getStoredChatAccessToken = (): string | null => {
@@ -632,18 +632,18 @@ const refreshThroughErp = async (
   const config = getConfig();
   const erpUrl = config.CHAT_ERP_URL?.trim();
 
-  let erpSessionUrl: URL | undefined;
+  let erpRefreshUrl: URL | undefined;
   try {
     if (erpUrl) {
-      erpSessionUrl = new URL(`${erpUrl.replace(/\/+$/, '')}/api/auth/session`);
+      erpRefreshUrl = new URL(`${erpUrl.replace(/\/+$/, '')}/api/auth/refresh`);
     }
   } catch {
     // Повторный запрос не исправит некорректный адрес в конфигурации.
   }
 
   if (
-    !erpSessionUrl ||
-    (erpSessionUrl.protocol !== 'https:' && erpSessionUrl.protocol !== 'http:')
+    !erpRefreshUrl ||
+    (erpRefreshUrl.protocol !== 'https:' && erpRefreshUrl.protocol !== 'http:')
   ) {
     console.warn(
       'Адрес ERP для обновления сессии не настроен или некорректен, требуется повторная авторизация'
@@ -651,7 +651,8 @@ const refreshThroughErp = async (
     return null;
   }
 
-  const response = await fetchAuthWithCookies(erpSessionUrl.href, 'GET');
+  // Проверка ERP-сессии может вернуть JWT на границе истечения; обновляем явно.
+  const response = await fetchAuthWithCookies(erpRefreshUrl.href, 'POST');
 
   if (response.status === 401) {
     return null;
@@ -918,10 +919,7 @@ const handleAuthRefreshBroadcast = async (
   );
 };
 
-const scheduleSharedTokenRefresh = (
-  token: string,
-  source?: ChatAuthSessionSource
-): void => {
+const scheduleSharedTokenRefresh = (token: string): void => {
   if (proactiveRefreshTimer) {
     clearTimeout(proactiveRefreshTimer);
     proactiveRefreshTimer = null;
@@ -934,13 +932,8 @@ const scheduleSharedTokenRefresh = (
 
   const lifetimeSeconds =
     typeof iat === 'number' && exp > iat ? exp - iat : 15 * 60;
-  // ERP /auth/session rotates only after the access cookie expires. Calling it
-  // early returns the same JWT and would create a tight refresh loop.
-  const refreshAfterExpiry =
-    source === 'erp_bootstrap' || source === 'unknown_shared';
-  const leadSeconds = refreshAfterExpiry
-    ? -0.25
-    : lifetimeSeconds <= 30
+  const leadSeconds =
+    lifetimeSeconds <= 30
       ? Math.max(2, Math.min(3, lifetimeSeconds * 0.2))
       : Math.min(60, Math.max(10, lifetimeSeconds * 0.1));
   const delayMs = Math.max(250, (exp - Date.now() / 1000 - leadSeconds) * 1000);
@@ -960,7 +953,7 @@ const scheduleSharedTokenRefresh = (
         );
         if ((getAuthToken() || getStoredChatAccessToken()) === token) {
           proactiveRefreshTimer = setTimeout(
-            () => scheduleSharedTokenRefresh(token, source),
+            () => scheduleSharedTokenRefresh(token),
             5000
           );
         }
