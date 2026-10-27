@@ -394,6 +394,54 @@ for (const endCall of [false, true]) {
   });
 }
 
+test('готовность сокета журналирует источник сброса и восстановления без дублирования ACK', async ({
+  page
+}) => {
+  const fixture = await localChat(page);
+  try {
+    await fixture.initialize();
+    await expect.poll(connected.bind(null, page)).toBe(true);
+    await page.evaluate(async () => {
+      const fixture = (window as any).networkRecovery;
+      fixture.sdk.emitConnectionState(false);
+      await fixture.sdk.checkConnectionHealth();
+      fixture.sdk.emitConnectionState(true);
+    });
+    const events = await page.evaluate(() =>
+      JSON.parse(
+        localStorage.getItem('chat.telemetry.network.pending.v1') || '[]'
+      ).filter(
+        (event: any) => event.name === 'network.websocket.readiness_changed'
+      )
+    );
+    expect(events.slice(-2)).toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          reason: 'sdk-connection-state',
+          previousReady: true,
+          ready: false,
+          socketConnected: true,
+          sendAvailable: false
+        })
+      }),
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          reason: 'sdk-connection-state',
+          previousReady: false,
+          ready: true,
+          socketConnected: true,
+          sendAvailable: true
+        })
+      })
+    ]);
+    expect(
+      events.filter((event: any) => event.payload.ready === true)
+    ).toHaveLength(2);
+  } finally {
+    await fixture.close();
+  }
+});
+
 test('таймаут отправки диагностики сохраняет очередь и разрешает следующую отправку', async ({
   page
 }) => {

@@ -1,5 +1,6 @@
 import { refreshChatAccess } from '../../composables/useChatAccess';
 import { watchIosUpload } from '../../utils/ios-upload-watchdog';
+import { observeUploadRequest } from '../upload-request-telemetry';
 import { bindIncomingChatEvents } from './incoming-events';
 import { createSocketReconnectScheduler } from '../socket-reconnect';
 import {
@@ -129,6 +130,7 @@ export interface UploadTelemetryContext {
   fileId?: string;
   source?: string;
   signal?: AbortSignal;
+  getConnectionState?: () => Record<string, unknown>;
 }
 
 export interface NetworkReachabilityProbeResult {
@@ -299,7 +301,8 @@ export class ChatSDK {
   private uploadFileToMinio(
     uploadUrl: string,
     file: File,
-    onProgress?: (percent: number) => void
+    onProgress?: (percent: number) => void,
+    telemetry?: UploadTelemetryContext & { objectName: string }
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
@@ -336,8 +339,34 @@ export class ChatSDK {
         reject(new Error('Failed to upload media to storage: upload aborted'));
       };
 
-      watchIosUpload(xhr);
-      xhr.send(file);
+      const diagnostics = observeUploadRequest(xhr, {
+        traceId: telemetry?.traceId || createTelemetryTraceId('upload-put'),
+        entityId: telemetry?.messageId || telemetry?.fileId,
+        totalBytes: file.size,
+        uploadHost: new URL(uploadUrl, location.href).host,
+        payload: {
+          ...getFileTelemetryPayload(file),
+          topicId: telemetry?.topicId,
+          messageId: telemetry?.messageId,
+          fileId: telemetry?.fileId,
+          source: telemetry?.source,
+          objectName: telemetry?.objectName
+        },
+        getConnectionState: () => ({
+          ...telemetry?.getConnectionState?.(),
+          socketConnected: this.isConnected(),
+          socketHealthSupported: this.socketHealthSupported,
+          socketHealthFailures: this.socketHealthFailures
+        })
+      });
+      const stopIosWatch = watchIosUpload(xhr);
+      try {
+        xhr.send(file);
+      } catch (error) {
+        diagnostics.sendFailed();
+        stopIosWatch();
+        reject(error);
+      }
     });
   }
 
@@ -521,7 +550,16 @@ export class ChatSDK {
         false,
         traceId
       );
-      await this.uploadFileToMinio(uploadTarget.uploadUrl, coverFile);
+      await this.uploadFileToMinio(
+        uploadTarget.uploadUrl,
+        coverFile,
+        undefined,
+        {
+          traceId,
+          source: 'video_cover',
+          objectName: uploadTarget.objectName
+        }
+      );
 
       recordTelemetryEvent({
         category: 'upload',
@@ -1892,7 +1930,8 @@ export class ChatSDK {
         await this.uploadFileToMinio(
           uploadTarget.uploadUrl,
           file,
-          reportUploadProgress
+          reportUploadProgress,
+          { ...telemetry, traceId, objectName: uploadTarget.objectName }
         );
       }
 
