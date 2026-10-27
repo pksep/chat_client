@@ -1978,6 +1978,9 @@ const hardReconnectChatAfterNetworkChange = (
       reason
     });
     reconnectChatOnResume();
+    void chatSDK.checkConnectionHealth({
+      canReconnect: () => !hasActiveCallRuntime()
+    });
     return;
   }
 
@@ -2523,6 +2526,8 @@ export const initializeChat = async (options: {
     if (connected) confirmBrowserNetworkAvailable();
     isWebsocketConnecting.value = browserOnline.value && !connected;
     hasWebsocketConnection.value = connected;
+
+    if (connected && wasConnected && hasCompletedInitialConnection) return;
 
     void saveShadowSyncMeta('ws_connection', {
       connected,

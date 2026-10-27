@@ -1293,8 +1293,9 @@ export class ChatSDK {
         if (response?.success !== true) {
           throw new Error('Сервер не подтвердил готовность соединения чата');
         }
+        // HTTP/resume мог сбросить готовность UI без сбоя проверки сокета.
+        this.emitConnectionState(true);
         if (this.socketHealthFailures > 0) {
-          this.emitConnectionState(true);
           recordTelemetryEvent({
             category: 'network',
             name: 'network.websocket.health_recovered',
