@@ -16,6 +16,11 @@ import { buildGroupCallInviteAuthorizationUrl } from '../utils/groupCallInviteUr
 import { withNetworkTimeout } from '../utils/network-timeout';
 import { fetchAuthWithCookies } from '../utils/auth-http';
 import { getAccessTokenFromResponse } from '../utils/auth-response-token';
+import {
+  recordTelemetryEvent,
+  flushTelemetryEvents,
+  createTelemetryTraceId
+} from '../services/useTelemetry';
 export {
   CHAT_AUTH_SESSION_KEY,
   getChatAuthSession
@@ -371,10 +376,28 @@ const redirectToAuthorizationInternal = (broadcast: boolean): void => {
 
 const endChatSession = (
   logoutOnServer: boolean,
-  broadcast: boolean
+  broadcast: boolean,
+  clientIntent:
+    | 'manual_user'
+    | 'auth_inactive'
+    | 'remote_logout'
+    | 'authorization_redirect'
 ): Promise<void> => {
   if (sessionEndingPromise) return sessionEndingPromise;
 
+  const clientAttemptId = createTelemetryTraceId('logout');
+  // Фиксируем намерение до отключения сокета и очистки авторизации.
+  try {
+    recordTelemetryEvent({
+      category: 'lifecycle',
+      name: 'auth.session.end_requested',
+      traceId: clientAttemptId,
+      payload: { clientIntent, clientAttemptId, logoutOnServer }
+    });
+    void flushTelemetryEvents();
+  } catch {
+    // Диагностика не должна мешать выходу.
+  }
   isEndingSession = true;
   authSessionRevision++;
   if (proactiveRefreshTimer) {
@@ -402,7 +425,7 @@ const endChatSession = (
     await pendingRefresh?.catch(() => undefined);
     if (logoutOnServer) {
       try {
-        const response = await requestChatLogout();
+        const response = await requestChatLogout(clientIntent, clientAttemptId);
         if (!response.ok) {
           console.warn(
             'Не удалось завершить серверную сессию чата:',
@@ -421,7 +444,7 @@ const endChatSession = (
 };
 
 export const redirectToAuthorization = (): Promise<void> => {
-  return endChatSession(false, true);
+  return endChatSession(false, true, 'authorization_redirect');
 };
 
 const readAuthErrorBody = async (
@@ -578,15 +601,19 @@ export const tryRefreshErpSession = (): Promise<AuthResponse | null> => {
 };
 
 export const logoutChatSession = async (): Promise<void> => {
-  await endChatSession(true, true);
+  await endChatSession(true, true, 'manual_user');
 };
 
-const requestChatLogout = (): Promise<Response> => {
+const requestChatLogout = (
+  clientIntent: string,
+  clientAttemptId: string
+): Promise<Response> => {
   const config = getConfig();
 
   return fetchAuthWithCookies(
     `${config.CHAT_API_DOMAIN.replace(/\/+$/, '')}/auth/logout`,
-    'POST'
+    'POST',
+    { clientIntent, clientAttemptId }
   );
 };
 
@@ -889,7 +916,7 @@ const handleAuthRefreshBroadcast = async (
       return;
     }
 
-    await endChatSession(false, false);
+    await endChatSession(false, false, 'remote_logout');
     return;
   }
 
@@ -962,7 +989,7 @@ const scheduleSharedTokenRefresh = (token: string): void => {
 };
 
 export const handleConfirmedInactiveSession = async (): Promise<void> => {
-  await endChatSession(true, true);
+  await endChatSession(true, true, 'auth_inactive');
 };
 
 export const withAuthResponseRefresh = async (

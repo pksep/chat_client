@@ -9,9 +9,25 @@
       :loading="isFoldersLoading"
       :selected-folder-id="activeFolderId"
       @close="closeFolderManager"
-      @select-folder="selectFolder"
+      @select-folder="selectMobileFolder"
       @select-topic="openTopic"
-    />
+    >
+      <template v-if="isMobile" #folders>
+        <ClientsFolderRail
+          :loading="isFoldersLoading"
+          :folders="clientFolders"
+          :topics="folderTopics"
+          :selected-folder-id="activeFolderId"
+          is-managing
+          :selected-system-folder="mobileSystemFolder"
+          :system-folders="mobileSystemFolders"
+          :auth-user-id="getAuthUser()?.id"
+          @select="selectMobileFolder"
+          @select-system="selectMobileSystemFolder"
+          @manage="closeFolderManager"
+        />
+      </template>
+    </ChatFoldersPanel>
     <ChatsToolbar
       v-else-if="!isCollapse"
       v-model="search"
@@ -21,45 +37,19 @@
       data-testid="Clients"
     >
       <template v-if="isMobile" #folders>
-        <ChatFolderRail
-          mobile
-          scope="clients"
+        <ClientsFolderRail
           :loading="isFoldersLoading"
           :folders="clientFolders"
           :topics="folderTopics"
           :selected-folder-id="activeFolderId"
           :is-managing="false"
-          :system-active="!!mobileSystemFolder"
-          is-active
+          :selected-system-folder="mobileSystemFolder"
+          :system-folders="mobileSystemFolders"
           :auth-user-id="getAuthUser()?.id"
           @select="selectMobileFolder"
+          @select-system="selectMobileSystemFolder"
           @manage="openFolderManager"
-        >
-          <template #system-folders>
-            <button
-              v-for="folder in mobileSystemFolders"
-              :key="folder.id"
-              type="button"
-              class="chat-folder-rail__item"
-              :class="{
-                'chat-folder-rail__item--active':
-                  mobileSystemFolder === folder.id
-              }"
-              :aria-pressed="mobileSystemFolder === folder.id"
-              :data-testid="`Clients-SystemFolder-${folder.id}`"
-              @click="selectMobileSystemFolder(folder.id)"
-            >
-              <span class="chat-folder-rail__avatar">
-                <ClientPlatformIcon
-                  v-if="folder.platform && !folder.icon"
-                  :platform="folder.platform"
-                />
-                <Icon v-else-if="folder.icon" :name="folder.icon" />
-              </span>
-              <span class="chat-folder-rail__label">{{ folder.label }}</span>
-            </button>
-          </template>
-        </ChatFolderRail>
+        />
       </template>
       <template #filters>
         <div class="clients-panel__filter-rows">
@@ -115,7 +105,7 @@
 </template>
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { Icon, IconNameEnum } from '@pksep/yui';
+import { IconNameEnum } from '@pksep/yui';
 import {
   clientName,
   clientPlatform,
@@ -133,7 +123,7 @@ import ChatsToolbar from '../Menu/ChatsToolbar.vue';
 import MenuEmptyState from '../Menu/MenuEmptyState.vue';
 import type { ITopic } from '../interfaces/interfaces';
 import { useChatFolders } from '../../composables/useChatFolders';
-import ChatFolderRail from '../Menu/ChatFolderRail.vue';
+import ClientsFolderRail from './ClientsFolderRail.vue';
 import ChatFoldersPanel from '../Menu/ChatFoldersPanel.vue';
 const props = defineProps<{ isCollapse?: boolean; isMobile?: boolean }>();
 const { inquiries, allowed, loading: inquiriesLoading } = useManagerInquiries();
@@ -208,7 +198,8 @@ const selectMobileFolder = (folderId: string | null) => {
   selectFolder(folderId);
 };
 const selectMobileSystemFolder = (folderId: string) => {
-  const wasSelected = mobileSystemFolder.value === folderId;
+  const wasSelected =
+    !isManagingFolders.value && mobileSystemFolder.value === folderId;
   selectMobileFolder(null);
   if (wasSelected) return;
   const folder = mobileSystemFolders.find(item => item.id === folderId)!;

@@ -1264,6 +1264,26 @@ const getMessageVersionTimestamp = (
   );
 };
 
+const isResidentHistoryCurrent = (
+  topicId: string,
+  messages: IMessage[]
+): boolean => {
+  const lastMessage = getSelectedTopic(topicId)?.lastMessage;
+  if (!lastMessage?.id) return true;
+
+  const residentLastMessage = messages.find(
+    message => message.id === lastMessage.id
+  );
+  return (
+    !!residentLastMessage &&
+    messages.at(-1)?.id === lastMessage.id &&
+    getMessageVersionTimestamp(residentLastMessage) >=
+      getMessageVersionTimestamp(lastMessage) &&
+    (typeof lastMessage.text !== 'string' ||
+      residentLastMessage.text === lastMessage.text)
+  );
+};
+
 const getActiveTopicLastMessageFingerprint = computed(() => {
   const lastMessage = activeTopic.value?.lastMessage;
 
@@ -3000,12 +3020,25 @@ const refreshAroundMessageAfterOptimisticJump = async (
     forcePreserve: true,
     preferredMessageId: messageId
   });
+  const visibleMessages = getMessagesByTopicId(topicId);
+  const visibleIds = new Set(visibleMessages.map(message => message.id));
+  const firstVisibleTime = new Date(visibleMessages[0]?.createdAt).getTime();
+  const lastVisibleTime = new Date(visibleMessages.at(-1)?.createdAt).getTime();
+  const hasGapInVisibleContext = messages.some(message => {
+    const time = new Date(message.createdAt).getTime();
+    return (
+      time >= firstVisibleTime &&
+      time <= lastVisibleTime &&
+      !visibleIds.has(message.id)
+    );
+  });
   mergeMessagesForTopic(topicId, messages, 'replace', {
     syncLastMessage: false,
     windowMode: 'around-anchor',
     anchorMessageId: messageId,
     // Контекст уже показанной цитаты может не включать конец открытого чата.
-    visibleMessages: preserveVisibleWindow ? undefined : messages
+    visibleMessages:
+      preserveVisibleWindow && !hasGapInVisibleContext ? undefined : messages
   });
   await nextTick();
   if (!isCurrent()) return;
@@ -3767,10 +3800,33 @@ watch(
       return;
     }
     const topicSwitchToken = ++activeTopicSwitchToken;
-    // При наличии сети переписка открывается только после свежего ответа.
+    const topicUnreadCount = getTopicUnreadBadgeCount(
+      getSelectedTopic(topicId),
+      authUser.value?.id
+    );
+    const residentMessages = getFullMessagesByTopicId(topicId).length
+      ? getFullMessagesByTopicId(topicId)
+      : getMessagesByTopicId(topicId);
+    const residentUnreadMessages = residentMessages.filter(
+      message =>
+        isUnreadTrackableMessage(message) &&
+        message.senderUserId !== authUser.value?.id &&
+        message.isReadByMe !== true
+    );
+    const canReuseResidentHistory =
+      routeType !== RouteTypes.AI &&
+      !shouldScrollToBottomForNotification &&
+      getPendingSearchNavigation()?.topicId !== topicId &&
+      (residentMessages.length > 0 || isTopicMessagesKnownEmpty(topicId)) &&
+      isResidentHistoryCurrent(topicId, residentMessages) &&
+      residentUnreadMessages.length >= topicUnreadCount;
+    // Готовый чат обновляется в фоне. Заведомо старое окно ждёт свежую историю.
     isAwaitingInitialHistory.value =
-      routeType !== RouteTypes.AI && getHasHistoryNetwork();
-    isInitialHistoryPositioning.value = routeType !== RouteTypes.AI;
+      routeType !== RouteTypes.AI &&
+      getHasHistoryNetwork() &&
+      !canReuseResidentHistory;
+    isInitialHistoryPositioning.value =
+      routeType !== RouteTypes.AI && !canReuseResidentHistory;
     initialHistoryRefreshFailed.value = false;
     paintedUserMessageTopicId.value = '';
     lastFloatingDateDividerScrollTop = null;
@@ -3827,10 +3883,6 @@ watch(
     suspendHistoryFetch(TOPIC_SWITCH_HISTORY_FETCH_GRACE_MS);
     applyUnreadMarkerStateForTopic(topicId);
 
-    const topicUnreadCount = getTopicUnreadBadgeCount(
-      getSelectedTopic(topicId),
-      authUser.value?.id
-    );
     const { initialLimit: initialMessagesLimit, expandedLimit } =
       getTopicSwitchFetchLimits(topicUnreadCount);
     const fastInitialMessagesLimit = getFastInitialMessagesLimit(
@@ -3883,6 +3935,21 @@ watch(
       });
     }
 
+    const residentUnreadMessage =
+      canReuseResidentHistory && topicUnreadCount > 0
+        ? residentUnreadMessages[0]
+        : undefined;
+    if (residentUnreadMessage) {
+      unreadMarkerMessageIdsByTopic[topicId] = residentUnreadMessage.id;
+      applyUnreadMarkerStateForTopic(topicId);
+      mergeMessagesForTopic(topicId, residentMessages, 'replace', {
+        syncLastMessage: false,
+        windowMode: 'around-anchor',
+        anchorMessageId: residentUnreadMessage.id,
+        visibleLimit: Math.max(fastInitialMessagesLimit, 48)
+      });
+    }
+
     if (!shouldScrollToBottomForNotification) {
       void fetchPinnedMessagesForTopic(topicId, {
         maxAgeMs: TOPIC_SWITCH_CACHE_MAX_AGE_MS
@@ -3901,7 +3968,7 @@ watch(
           visibleLimit: fastInitialMessagesLimit,
           allowVisibleShrink: true
         });
-      if (shouldRefreshHistoryBeforePaint) {
+      if (shouldRefreshHistoryBeforePaint || canReuseResidentHistory) {
         return hydratePendingMessagesFromCache(
           topicId,
           undefined,
@@ -3973,6 +4040,33 @@ watch(
             });
     }
 
+    if (canReuseResidentHistory) {
+      await nextTick();
+      if (isStaleTopicSwitch()) return;
+      await scrollToBottom({
+        preferUnreadMarker: !!residentUnreadMessage,
+        smooth: false,
+        isCurrent: () => !isStaleTopicSwitch()
+      });
+      if (isStaleTopicSwitch()) return;
+      scrollAnchor.initialize();
+      isLoadingInitialMessages.value = false;
+      completedTopicSwitchToken = topicSwitchToken;
+      lastFloatingDateDividerScrollTop =
+        chatWrapperRef.value?.scrollTop ?? null;
+      setReadReceiptsEnabled(true);
+      setupIntersectionObserver();
+      syncVisibleUnreadAfterAutoScroll();
+      scheduleVisibleTopicMediaWarm(topicId, isStaleTopicSwitch);
+      if (!residentUnreadMessage) {
+        scheduleVisibleMessagesExpansion(
+          topicId,
+          expandedLimit,
+          topicSwitchToken
+        );
+      }
+    }
+
     // Готовый HTTP, в том числе для уведомления, не ждёт локальных вложений.
     const hydratedMessages = await (shouldRefreshHistoryBeforePaint &&
     initialMessagesFetch
@@ -4001,6 +4095,7 @@ watch(
     }
 
     if (
+      !canReuseResidentHistory &&
       !isAwaitingInitialHistory.value &&
       (getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
         getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId))
@@ -4061,6 +4156,74 @@ watch(
     const initialMessages = (await initialMessagesFetch) || [];
 
     if (isStaleTopicSwitch()) return;
+    if (canReuseResidentHistory) {
+      if (
+        !initialHistoryIsFresh ||
+        initialNavigationRevision !== messageNavigationRevision
+      )
+        return;
+
+      // Ответ сети обновляет уже открытое окно, не повторяя вход и unread-скролл.
+      const anchor = scrollAnchor.captureViewportAnchor();
+      const keepBottom = shouldKeepCurrentTopicBottomPosition();
+      const visibleLimit = Math.max(
+        fastInitialMessagesLimit,
+        getMessagesByTopicId(topicId).length
+      );
+      // Полная последняя страница не отменяет уже открытую историю старше неё.
+      const oldestFreshTimestamp =
+        initialMessages.length >= initialNetworkMessagesLimit
+          ? Math.min(
+              ...initialMessages.map(message =>
+                new Date(message.createdAt).getTime()
+              )
+            )
+          : 0;
+      const olderVisibleMessages = getMessagesByTopicId(topicId).filter(
+        message =>
+          !keepBottom &&
+          new Date(message.createdAt).getTime() < oldestFreshTimestamp
+      );
+      const freshMessages = [
+        ...olderVisibleMessages,
+        ...getFullMessagesByTopicId(topicId)
+      ];
+      mergeMessagesForTopic(topicId, freshMessages, 'replace', {
+        syncLastMessage: false,
+        windowMode: keepBottom ? 'latest' : 'around-anchor',
+        anchorMessageId: anchor?.messageId,
+        visibleMessages: freshMessages,
+        visibleLimit
+      });
+      setTopicMessagesKnownEmpty(
+        topicId,
+        getRenderedTopicMessages(topicId, freshMessages).length === 0
+      );
+      if (
+        state.unreadMarkerMessageId &&
+        !freshMessages.some(
+          message => message.id === state.unreadMarkerMessageId
+        )
+      ) {
+        unreadMarkerMessageIdsByTopic[topicId] = null;
+        refreshUnreadMarkerState(true);
+      }
+      await nextTick();
+      if (isStaleTopicSwitch()) return;
+      if (keepBottom) {
+        await scrollToBottom({ preferUnreadMarker: false, smooth: false });
+      } else if (anchor) {
+        const mutation = scrollAnchor.beginViewportMutation('replace', {
+          forcePreserve: true
+        });
+        scrollAnchor.commitViewportMutation(mutation.revision, {
+          forceAnchor: anchor
+        });
+      }
+      setupIntersectionObserver();
+      syncVisibleUnreadAfterAutoScroll();
+      return;
+    }
     if (
       isAwaitingInitialHistory.value &&
       !(shouldScrollToBottomForNotification

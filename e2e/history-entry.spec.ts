@@ -38,13 +38,20 @@ test('свежая пустая история заменяет кеш и ста
 });
 
 for (const cacheSource of ['память', 'IndexedDB']) {
-  test(`онлайн: кеш скрыт до свежей истории, первый кадр у непрочитанных: ${cacheSource}`, async ({
+  test(`онлайн: устаревший кеш скрыт до свежей истории, первый кадр у непрочитанных: ${cacheSource}`, async ({
     page
   }) => {
     const state = await openFixture(page, { shell: true, unreadCount: 60 });
+    const rows = makeMessages('performance-0', 140).map((row, index) => ({
+      ...row,
+      isReadByMe: index < 80
+    }));
     await page.evaluate(
-      async ({ rows, cacheSource }) => {
+      async ({ rows, cacheSource, lastMessage }) => {
         const fixture = (window as any).topicPerformance;
+        fixture.setTopics([
+          { ...fixture.getSelectedTopic('performance-0'), lastMessage }
+        ]);
         if (cacheSource === 'память') fixture.seed('performance-0', rows);
         else
           await fixture.shadow.saveShadowTopicSnapshot(
@@ -55,12 +62,12 @@ for (const cacheSource of ['память', 'IndexedDB']) {
             { replace: true }
           );
       },
-      { rows: makeMessages('performance-0', 20), cacheSource }
+      {
+        rows: makeMessages('performance-0', 20),
+        cacheSource,
+        lastMessage: rows.at(-1)
+      }
     );
-    const rows = makeMessages('performance-0', 140).map((row, index) => ({
-      ...row,
-      isReadByMe: index < 80
-    }));
     let release!: () => void;
     const gate = new Promise<void>(resolve => (release = resolve));
     await page.route('**/messages/topic/performance-0?*', async route => {
@@ -139,8 +146,17 @@ test('ошибка онлайн не показывает старый кеш, �
 }) => {
   const state = await openFixture(page, { shell: true });
   await page.evaluate(
-    rows => (window as any).topicPerformance.seed('performance-0', rows),
-    makeMessages('performance-0', 20)
+    ({ rows, lastMessage }) => {
+      const fixture = (window as any).topicPerformance;
+      fixture.seed('performance-0', rows);
+      fixture.setTopics([
+        { ...fixture.getSelectedTopic('performance-0'), lastMessage }
+      ]);
+    },
+    {
+      rows: makeMessages('performance-0', 20),
+      lastMessage: makeMessages('performance-0', 21).at(-1)
+    }
   );
   let failed = true;
   await page.route('**/messages/topic/performance-0?*', route =>

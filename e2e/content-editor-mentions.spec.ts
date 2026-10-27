@@ -11,7 +11,7 @@ const mention = `<span class="link" data-user-id="${userId}" data-span="">${labe
 const editor = (page: Page) =>
   page.locator('.chat__input .ProseMirror[contenteditable="true"]');
 const clearEditor = async (page: Page) => {
-  await editor(page).press('ControlOrMeta+a');
+  await editor(page).selectText();
   await editor(page).press('Backspace');
   await expect(editor(page)).toHaveText('');
 };
@@ -62,6 +62,9 @@ test.beforeEach(async ({ page }) => {
   await openFixture(page, { count: 0, topicCount: 2 });
   await openTopic(page, 0);
   await expect(editor(page)).toBeVisible();
+  await expect(
+    page.getByText('Сообщений пока нет', { exact: true })
+  ).toBeVisible();
 });
 
 test('копирование сообщения сохраняет имя, перенос строки и ID упоминания при отправке', async ({

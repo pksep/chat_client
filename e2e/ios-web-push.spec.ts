@@ -185,6 +185,63 @@ test('существующая Apple-подписка сохраняется и 
   await expect(page.getByTestId('IosPushNotificationPrompt')).toHaveCount(0);
 });
 
+for (const theme of ['light', 'dark']) {
+  test(`окно уведомлений соответствует макету и учитывает safe area: ${theme}`, async ({
+    page
+  }, testInfo) => {
+    await prepare(page);
+    await page.evaluate(theme => {
+      document.documentElement.classList.add('chat-ios-pwa');
+      document.documentElement.classList.remove('theme-light', 'theme-dark');
+      document.documentElement.classList.add(`theme-${theme}`);
+      document.documentElement.setAttribute('data-theme', theme);
+      document.documentElement.style.setProperty('--ios-safe-bottom', '34px');
+    }, theme);
+    await page.evaluate(() => document.fonts.ready);
+    const prompt = page.getByTestId('IosPushNotificationPrompt');
+    const modal = page.locator('dialog.ios-push-modal');
+    const heading = prompt.getByRole('heading', {
+      name: 'Включить уведомления чата',
+      exact: true
+    });
+    await expect(heading).toHaveCSS('font-size', '20px');
+    await expect(heading).toHaveCSS('font-weight', '700');
+    await expect(prompt).toHaveCSS('text-align', 'center');
+    await expect(prompt.locator('p')).toHaveText(
+      'Получайте уведомления о новых сообщениях, даже когда чат свёрнут или закрыт'
+    );
+    await expect(prompt.locator('p')).toHaveCSS('font-size', '14px');
+    await expect(prompt.locator('p')).toHaveCSS('font-weight', '700');
+    await expect
+      .poll(async () => {
+        const box = (await modal.boundingBox())!;
+        return Math.round(box.y + box.height);
+      })
+      .toBe(844);
+    const modalBox = (await modal.boundingBox())!;
+    expect(modalBox.x).toBe(0);
+    expect(modalBox.width).toBe(390);
+    for (const label of ['Включить', 'Настроить позже']) {
+      const button = prompt.getByRole('button', { name: label, exact: true });
+      await expect(button).toHaveCSS('font-size', '20px');
+      const box = (await button.boundingBox())!;
+      expect(box.height).toBe(50);
+      expect(box.x).toBe(15);
+      expect(box.width).toBe(360);
+      expect(box.y + box.height).toBeLessThanOrEqual(844 - 34);
+    }
+    await page.screenshot({
+      path: testInfo.outputPath(`ios-notifications-${theme}.png`),
+      animations: 'disabled'
+    });
+    await prompt.getByRole('button', { name: 'Настроить позже' }).click();
+    await expect(prompt).toHaveCount(0);
+    expect(
+      await page.evaluate(() => (window as any).webPushFixture.requests)
+    ).toBe(0);
+  });
+}
+
 test('подписка восстанавливается после ошибки сети, одновременные попытки объединяются', async ({
   page
 }) => {

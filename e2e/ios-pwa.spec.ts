@@ -18,7 +18,9 @@ test.beforeEach(async ({ page }, testInfo) => {
   await page.addLocatorHandler(
     page.locator('dialog.ios-push-modal[open]'),
     async dialog => {
-      await dialog.getByRole('button', { name: 'Позже', exact: true }).click();
+      await dialog
+        .getByRole('button', { name: 'Настроить позже', exact: true })
+        .click();
     }
   );
   await page.route('**/e2e/ios-api/**', route => {

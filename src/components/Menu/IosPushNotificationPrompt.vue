@@ -12,19 +12,23 @@
       data-testid="IosPushNotificationPrompt"
       aria-label="Уведомления на iPhone"
     >
-      <strong>Уведомления о сообщениях</strong>
+      <h2>Включить уведомления чата</h2>
       <p aria-live="polite">{{ description }}</p>
       <div class="ios-push-prompt__actions">
         <Button
           v-if="canEnable || status === 'install'"
           :type="ButtonTypeEnum.primary"
-          :size="SizesEnum.small"
+          :size="SizesEnum.medium"
           @click="handleAction"
         >
           {{ status === 'install' ? 'Как установить' : 'Включить' }}
         </Button>
-        <Button :type="ButtonTypeEnum.secondary" @click="dismissed = true">
-          Позже
+        <Button
+          :type="ButtonTypeEnum.secondary"
+          :size="SizesEnum.medium"
+          @click="dismissed = true"
+        >
+          Настроить позже
         </Button>
       </div>
     </section>
@@ -71,7 +75,7 @@ const description = computed(() => {
     case 'error':
       return 'Не удалось включить уведомления. Проверьте соединение и попробуйте ещё раз.';
     default:
-      return 'Получайте новые сообщения, даже когда чат свёрнут или закрыт.';
+      return 'Получайте уведомления о новых сообщениях, даже когда чат свёрнут или закрыт';
   }
 });
 
@@ -95,30 +99,50 @@ onBeforeUnmount(() => {
 <style scoped>
 .ios-push-prompt {
   display: grid;
-  gap: 12px;
-  padding: 10px;
+  gap: 10px;
+  padding: 30px 15px;
   color: var(--text-primary);
-  font-size: 14px;
-  line-height: 1.4;
+  text-align: center;
+}
+.ios-push-prompt h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 24px;
 }
 .ios-push-prompt p {
   margin: 0;
   color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 17px;
 }
 .ios-push-prompt__actions {
   display: grid;
   gap: 10px;
+  margin-top: 10px;
 }
 </style>
 
 <style>
-dialog.mobile-modal.ios-push-modal {
+dialog.mobile__modal.mobile-modal.ios-push-modal {
+  box-sizing: border-box;
+  width: 100dvw;
+  max-width: 100dvw;
   height: auto !important;
+  border: 0 !important;
+  border-radius: 15px 15px 0 0;
 }
 .ios-push-modal .modal-yui-kit__modal-content {
-  padding: 10px;
+  width: 100%;
+  padding: 0;
 }
 .ios-push-modal button.button-yui-kit {
+  width: 100%;
+  min-height: 50px;
   margin-top: 0;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 24px;
 }
 </style>

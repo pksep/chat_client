@@ -273,7 +273,7 @@ test('SliderModal coalesces concurrent PDF loading without application blobs', a
   await page.route('**/__slider-pdf', route =>
     route.fulfill({
       contentType: 'text/html',
-      body: '<!doctype html><html><body></body></html>'
+      body: '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body></body></html>'
     })
   );
   await page.route('**/__slider-document.pdf*', async route => {
@@ -303,7 +303,26 @@ test('SliderModal coalesces concurrent PDF loading without application blobs', a
       ]);
   });
 
-  await expect(page.locator('.slider-modal__pdf').first()).toBeVisible();
+  const canvas = page
+    .locator('.slider-modal__item canvas.slider-modal__pdf')
+    .first();
+  await expect(canvas).toBeVisible();
+  await expect
+    .poll(() =>
+      canvas.evaluate((element: HTMLCanvasElement) =>
+        Array.from(
+          element
+            .getContext('2d')!
+            .getImageData(
+              Math.floor(element.width / 2),
+              Math.floor(element.height / 2),
+              1,
+              1
+            ).data
+        )
+      )
+    )
+    .toEqual([255, 255, 255, 255]);
   await expect.poll(() => pdfRequests).toBe(1);
 });
 

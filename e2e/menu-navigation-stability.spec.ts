@@ -1,6 +1,14 @@
 import { expect, test, type Page } from './fixtures/ai-history';
 
 test.beforeEach(async ({ page }) => {
+  await page.addLocatorHandler(
+    page.locator('dialog.ios-push-modal[open]'),
+    async dialog => {
+      await dialog
+        .getByRole('button', { name: 'Настроить позже', exact: true })
+        .click();
+    }
+  );
   await page.addInitScript(() => {
     const url = 'http://127.0.0.1:65530';
     Object.defineProperty(navigator, 'standalone', {
@@ -117,6 +125,176 @@ test('Мобильные папки заменяют фильтры и не на
   await chats.getByTestId('ChatFolders-Rail-Manage').tap();
   await expect(chats.getByTestId('ChatFolders-Panel')).toBeVisible();
 });
+
+for (const scope of ['chats', 'clients'] as const) {
+  test(`Панель папок сохраняет возврат к спискам: ${scope}`, async ({
+    page,
+    isMobile
+  }, testInfo) => {
+    test.skip(!isMobile);
+    test.setTimeout(60000);
+    const channels = ['widget', 'avito', 'vk', 'telegram', 'max', 'support'];
+    await page.route('**/manager/inquiries?*', route =>
+      route.fulfill({
+        json: channels.map((channel, index) => ({
+          id: `inquiry-${index}`,
+          topic_id: `client-${index}`,
+          name: `Клиент ${index}`,
+          contacts: {},
+          source: { channel },
+          manager_ids: index === 0 ? [] : ['local-ui-test-user'],
+          metadata_version: 1
+        }))
+      })
+    );
+    await page.goto('/');
+    const nav = page.locator('.menu-bottom-nav:visible');
+    await expect(nav).toBeVisible({ timeout: 30000 });
+    await expect(
+      nav.locator('[data-testid$="MenuBottomNav-Clients"]')
+    ).toBeVisible();
+    await page.evaluate(async () => {
+      const moduleUrl = (path: string) => {
+        const url = performance
+          .getEntriesByType('resource')
+          .map(entry => entry.name)
+          .find(url => new URL(url).pathname === path);
+        if (!url) throw new Error(`Модуль ${path} ещё не загружен`);
+        return url;
+      };
+      const { getChatSDK } = await import(
+        moduleUrl('/src/services/useChat.ts')
+      );
+      const sdk = getChatSDK();
+      if (!sdk) throw new Error('SDK ещё не инициализирован');
+      sdk.getChatFolders = async () =>
+        ['chats', 'clients'].flatMap(scope => [
+          {
+            id: `${scope}-work`,
+            name: 'Работа',
+            icon: 'briefcase',
+            scope,
+            topicIds: [scope === 'clients' ? 'client-1' : 'ordinary-1'],
+            createdAt: '',
+            updatedAt: ''
+          },
+          {
+            id: `${scope}-empty`,
+            name: 'Пустая',
+            icon: 'folder',
+            scope,
+            topicIds: [],
+            createdAt: '',
+            updatedAt: ''
+          }
+        ]);
+      const { setTopics } = await import(
+        moduleUrl('/src/composables/useTopics.ts')
+      );
+      setTopics([
+        ...Array.from({ length: 2 }, (_, index) => ({
+          id: `ordinary-${index}`,
+          type: 'GROUP',
+          name: `Обычный ${index}`,
+          group: { id: `ordinary-${index}`, name: `Обычный ${index}` },
+          info: {}
+        })),
+        ...Array.from({ length: 6 }, (_, index) => ({
+          id: `client-${index}`,
+          type: 'GROUP',
+          name: `Клиент ${index}`,
+          group: { id: `client-${index}`, name: `Клиент ${index}` },
+          info: {}
+        }))
+      ]);
+      const { useChatFolders } = await import(
+        moduleUrl('/src/composables/useChatFolders.ts')
+      );
+      await useChatFolders().loadFolders(true);
+    });
+    await refreshInquiries(page);
+    await nav
+      .locator(
+        `[data-testid$="MenuBottomNav-${scope === 'clients' ? 'Clients' : 'Chats'}"]`
+      )
+      .click();
+    const section = page.locator(`.mobile-list-container__section--${scope}`);
+    const panel = section.getByTestId('ChatFolders-Panel');
+    const visibleTopic = (index: number) =>
+      section.getByRole('heading', {
+        name: scope === 'clients' ? `Клиент ${index}` : `Обычный ${index}`,
+        exact: true
+      });
+    await expect(visibleTopic(0)).toBeVisible();
+    for (const folder of ['work', 'empty']) {
+      await section.getByTestId('ChatFolders-Rail-Manage').click();
+      await expect(panel).toBeVisible();
+      await expect(panel.getByTestId('ChatFolders-Rail-All')).toBeVisible();
+      await expect(
+        panel.getByTestId('ChatFolders-Rail-Manage')
+      ).toHaveAttribute('aria-pressed', 'true');
+      await page.screenshot({
+        path: testInfo.outputPath(`${scope}-folder-navigation-${folder}.png`),
+        animations: 'disabled'
+      });
+      await panel
+        .getByTestId(`ChatFolders-Rail-Folder-${scope}-${folder}`)
+        .click();
+      await expect(panel).toHaveCount(0);
+      await expect(
+        section.getByTestId(`ChatFolders-Rail-Folder-${scope}-${folder}`)
+      ).toHaveAttribute('aria-pressed', 'true');
+      if (folder === 'work') {
+        await expect(visibleTopic(1)).toBeVisible();
+        await expect(visibleTopic(0)).toHaveCount(0);
+        // Повторный выбор уже активной папки из управления сохраняет её.
+        await section.getByTestId('ChatFolders-Rail-Manage').click();
+        await panel
+          .getByTestId(`ChatFolders-Rail-Folder-${scope}-work`)
+          .click();
+        await expect(visibleTopic(1)).toBeVisible();
+        await expect(visibleTopic(0)).toHaveCount(0);
+      } else await expect(visibleTopic(1)).toHaveCount(0);
+      await section.getByTestId('ChatFolders-Rail-Manage').click();
+      await panel.getByTestId('ChatFolders-Rail-All').click();
+      await expect(panel).toHaveCount(0);
+      await expect(visibleTopic(0)).toBeVisible();
+    }
+    if (scope === 'clients') {
+      const filters = [
+        'site',
+        'avito',
+        'vk',
+        'telegram',
+        'max',
+        'support',
+        'new'
+      ];
+      for (const [index, filter] of filters.entries()) {
+        await section.getByTestId('ChatFolders-Rail-Manage').click();
+        await panel.getByTestId(`Clients-SystemFolder-${filter}`).click();
+        await expect(panel).toHaveCount(0);
+        await expect(
+          section.getByTestId(`Clients-SystemFolder-${filter}`)
+        ).toHaveAttribute('aria-pressed', 'true');
+        await expect(visibleTopic(index === 6 ? 0 : index)).toBeVisible();
+        await expect(
+          visibleTopic(index === 0 || index === 6 ? 1 : 0)
+        ).toHaveCount(0);
+        await section.getByTestId('ChatFolders-Rail-Manage').click();
+        await panel.getByTestId(`Clients-SystemFolder-${filter}`).click();
+        await expect(panel).toHaveCount(0);
+        await expect(
+          section.getByTestId(`Clients-SystemFolder-${filter}`)
+        ).toHaveAttribute('aria-pressed', 'true');
+      }
+      await section.getByTestId('ChatFolders-Rail-Manage').click();
+      await panel.getByTestId('ChatFolders-Rail-All').click();
+      await expect(visibleTopic(0)).toBeVisible();
+      await expect(visibleTopic(1)).toBeVisible();
+    }
+  });
+}
 
 for (const section of ['Calls', 'Profile']) {
   test(`Обновление обращений сохраняет выбранный раздел ${section}`, async ({

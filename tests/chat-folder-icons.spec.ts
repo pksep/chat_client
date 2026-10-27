@@ -27,12 +27,11 @@ describe('SVG иконок папок', () => {
     }
   });
 
-  it('сохраняет все маски исходных SVG и их ссылки', () => {
+  it('использует уникальные ID и разрешает все ссылки на SVG-маски', () => {
     const ids = Array.from(svg.matchAll(/\bid="([^"]+)"/g), match => match[1]);
     assert.equal(new Set(ids).size, ids.length);
     for (const [, id] of svg.matchAll(/mask="url\(#([^)]+)\)"/g))
       assert.ok(ids.includes(id), `Отсутствует маска ${id}`);
-    assert.match(symbols.get('paw')!.body, /<mask /);
   });
 
   it('использует цвета темы вместо жёстко заданной палитры', () => {

@@ -305,7 +305,7 @@ test('в группе у стикера остаётся аватар без и�
   await expect(picker).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Стикеры', exact: true })
-  ).toHaveClass(/switch-yui-kit-active/);
+  ).toHaveAttribute('aria-pressed', 'true');
   await expect(
     picker.locator('.chat-sticker-picker__packs button[aria-pressed="true"]')
   ).toHaveAttribute('aria-label', 'Рыба Прометей');
@@ -398,7 +398,7 @@ test('первое нажатие открывает нужный набор п�
   await expect(picker).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Стикеры', exact: true })
-  ).toHaveClass(/switch-yui-kit-active/);
+  ).toHaveAttribute('aria-pressed', 'true');
   await expect(
     picker.locator('.chat-sticker-picker__packs button[aria-pressed="true"]')
   ).toHaveAttribute('aria-label', 'Рыба Прометей');
@@ -410,7 +410,7 @@ test('первое нажатие открывает нужный набор п�
   await smile.click();
   await expect(
     page.getByRole('button', { name: 'Эмодзи', exact: true })
-  ).toHaveClass(/switch-yui-kit-active/);
+  ).toHaveAttribute('aria-pressed', 'true');
   await expect(picker).toHaveCount(0);
   await smile.click();
   if (isMobile) await image.tap();
@@ -450,7 +450,7 @@ test('закрытие панели до её загрузки отменяет 
   await smile.click();
   await expect(
     page.getByRole('button', { name: 'Эмодзи', exact: true })
-  ).toHaveClass(/switch-yui-kit-active/);
+  ).toHaveAttribute('aria-pressed', 'true');
   await expect(
     page.getByRole('region', { name: 'Каталог стикеров' })
   ).toHaveCount(0);
