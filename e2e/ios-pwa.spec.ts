@@ -738,6 +738,80 @@ test('эмодзи помещаются на узком iPhone, поиск не 
   );
 });
 
+for (const standalone of [true, false]) {
+  test(`${standalone ? 'PWA' : 'Safari'}: эмодзи в черновике используют системный шрифт и сохраняются при отправке`, async ({
+    page
+  }, testInfo) => {
+    await page.addLocatorHandler(
+      page.getByRole('button', { name: 'Остаться в браузере', exact: true }),
+      button => button.tap()
+    );
+    const fontRequests: string[] = [];
+    await page.route('**/emoji/noto/fonts/**', route => {
+      fontRequests.push(route.request().url());
+      return route.abort();
+    });
+    await page.addInitScript(standalone => {
+      Object.defineProperty(navigator, 'standalone', {
+        value: standalone,
+        configurable: true
+      });
+    }, standalone);
+    await page.goto('/e2e/fixtures/ios-pwa.html?kind=group&no-pinned&shell');
+    const editor = page.locator('.chat__input .ProseMirror');
+    await expect(editor).toBeVisible({ timeout: 60_000 });
+    await page.evaluate(async () => {
+      const fontPath = '/src/composables/useEmojiStyle.ts';
+      (await import(/* @vite-ignore */ fontPath)).installNotoEmojiFontFaces();
+      const connectionPath = '/e2e/fixtures/network-harness.ts';
+      (await import(/* @vite-ignore */ connectionPath)).controlConnection();
+      const fixture = (window as any).iosPwaFixture;
+      fixture.sent = [];
+      fixture.sdk.sendWebSocketEvent = (type: string, payload: any) => {
+        if (type === 'sendMessage') fixture.sent.push(payload);
+        return true;
+      };
+    });
+    const typed = 'Привет 😁 😂 💫 👩🏽‍💻 👨‍👩‍👧‍👦 🇦🇲 ❤️';
+    await editor.tap();
+    await page.keyboard.insertText(typed);
+    await expect(editor).toHaveText(typed);
+    const font = await editor
+      .locator('p')
+      .evaluate(el => getComputedStyle(el).fontFamily);
+    expect(font).toMatch(/Inter Variable.*Apple Color Emoji/);
+    expect(font).not.toMatch(/Noto.*Web/);
+    await page.locator('.chat__input .smile-button:visible').tap();
+    const picker = page.locator(
+      '.chat__input .emoji-picker--open .v3-emoji-picker'
+    );
+    const emoji = picker.locator('.v3-emojis button:visible').first();
+    await expect(emoji).toBeVisible();
+    await expect(emoji.locator('span')).toHaveCSS(
+      'font-family',
+      /Apple Color Emoji/
+    );
+    const selected = (await emoji.innerText()).trim();
+    await emoji.tap();
+    await expect(editor).toHaveText(typed + selected);
+    await expect(editor).toBeFocused();
+    await page.keyboard.insertText('!');
+    await expect(editor).toHaveText(typed + selected + '!');
+    await page.evaluate(() => document.fonts.ready);
+    expect(fontRequests).toEqual([]);
+    await page.screenshot({
+      path: testInfo.outputPath('emoji-draft-iphone.png')
+    });
+    await page.locator('.chat__input .toolbar-button.right:visible').tap();
+    await expect
+      .poll(() => page.evaluate(() => (window as any).iosPwaFixture.sent))
+      .toEqual([
+        expect.objectContaining({ text: `<p>${typed}${selected}!</p>` })
+      ]);
+    await expect(editor).toHaveText('');
+  });
+}
+
 test('обычная вкладка Safari не получает фиксацию экрана PWA', async ({
   page
 }) => {
