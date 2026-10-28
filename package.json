@@ -30,6 +30,7 @@
     "build:android": "cross-env VITE_EMOJI_ASSET_BASE_URL=https://chat.pksep.ru/emoji/noto VITE_CALL_BACKGROUND_ASSET_BASE_URL=https://chat.pksep.ru/call-background VITE_REACTION_VIDEO_ASSET_BASE_URL=https://chat.pksep.ru/video vite build",
     "sync:android": "bun run build:android && npx cap sync android",
     "generate:assets": "npx capacitor-assets generate --ios",
+    "generate:ios-splash": "bun scripts/generate-ios-splash.ts",
     "tauri": "tauri",
     "tauri:serve": "node ./scripts/ensure-tauri-dev-server.mjs",
     "tauri:dev": "tauri dev",

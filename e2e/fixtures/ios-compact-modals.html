@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Проверка подтверждений iPhone</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h, ref } from 'vue';
+      import '../../src/assets/chat-container.css';
+      import { initIosPwaViewport } from '../../src/utils/ios-pwa-viewport';
+      import ConfirmModal from '../../src/components/UI/ConfirmModal.vue';
+      import PinConfirmModal from '../../src/components/UI/PinConfirmModal.vue';
+      import VpnConfirmModal from '../../src/components/UI/VpnConfirmModal.vue';
+      import MobileModal from '../../src/components/UI/MobileModal.vue';
+      initIosPwaViewport();
+      document.documentElement.style.setProperty('--ios-safe-top', '47px');
+      document.documentElement.style.setProperty('--ios-safe-bottom', '34px');
+      createApp({
+        setup() {
+          const active = ref('');
+          const confirmed = ref(0);
+          const close = () => {
+            active.value = '';
+          };
+          const confirm = () => {
+            confirmed.value++;
+            close();
+          };
+          return () =>
+            h('main', [
+              ...['delete', 'pin', 'vpn', 'profile'].map(name =>
+                h(
+                  'button',
+                  {
+                    onClick: () => {
+                      active.value = name;
+                    }
+                  },
+                  name
+                )
+              ),
+              h('output', { 'data-testid': 'confirmed' }, confirmed.value),
+              h(ConfirmModal, {
+                open: active.value === 'delete',
+                title: 'Удалить сообщение',
+                description: 'Вы действительно хотите удалить сообщение?',
+                'onUnmount-close': close,
+                'onUnmount-confirm': confirm
+              }),
+              h(PinConfirmModal, {
+                open: active.value === 'pin',
+                title: 'Закрепить сообщение',
+                description: 'Закрепить выбранное сообщение?',
+                scopeLabel: 'Для всех',
+                pinForEveryone: true,
+                'onUnmount-close': close,
+                'onUnmount-confirm': confirm
+              }),
+              h(VpnConfirmModal, {
+                open: active.value === 'vpn',
+                onClose: close,
+                onOpenSettings: confirm
+              }),
+              h(
+                MobileModal,
+                {
+                  open: active.value === 'profile',
+                  title: 'Информация группы',
+                  'onUnmount-close': close
+                },
+                () => h('p', 'Профиль группы')
+              )
+            ]);
+        }
+      }).mount('#app');
+    </script>
+  </body>
+</html>

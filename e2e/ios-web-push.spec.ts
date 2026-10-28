@@ -246,9 +246,7 @@ test('подписка восстанавливается после ошибк�
   page
 }) => {
   const fixture = await prepare(page, { permission: 'granted', fail: true });
-  await expect(page.getByTestId('IosPushNotificationPrompt')).toContainText(
-    'Не удалось'
-  );
+  await expect(page.getByTestId('IosPushNotificationPrompt')).toHaveCount(0);
   fixture.restore();
   await page.evaluate(async () => {
     window.dispatchEvent(new Event('online'));
@@ -264,6 +262,85 @@ test('подписка восстанавливается после ошибк�
     await page.evaluate(() => (window as any).webPushFixture.subscriptions)
   ).toBe(1);
   expect(fixture.state.errors).toEqual([]);
+});
+
+test('фоновая регистрация при возврате в PWA не открывает окно уведомлений', async ({
+  page
+}) => {
+  const fixture = await prepare(page, {
+    permission: 'granted',
+    existing: true
+  });
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  await page.route('**/performance-api/push/subscribe', async route => {
+    await pending;
+    await route.fulfill({ json: { success: true } });
+  });
+  await page.evaluate(() => {
+    const fixture = (window as any).webPushFixture;
+    fixture.promptAppearances = 0;
+    new MutationObserver(records => {
+      for (const record of records)
+        for (const node of record.addedNodes)
+          if (
+            node instanceof Element &&
+            (node.matches('.ios-push-modal') ||
+              node.querySelector('.ios-push-modal'))
+          )
+            fixture.promptAppearances++;
+    }).observe(document.body, { childList: true, subtree: true });
+    const now = Date.now();
+    Date.now = () => now + 6 * 60_000;
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  try {
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const { webPushStatus } = await import(
+            '/src/services/web-push-status.ts'
+          );
+          return webPushStatus.value;
+        })
+      )
+      .toBe('registering');
+    await expect(page.getByTestId('IosPushNotificationPrompt')).toHaveCount(0);
+  } finally {
+    release();
+  }
+  await page.evaluate(() => (window as any).pushModule.initPushNotifications());
+  expect(
+    await page.evaluate(() => {
+      const fixture = (window as any).webPushFixture;
+      return [
+        fixture.promptAppearances,
+        fixture.requests,
+        fixture.subscriptions,
+        fixture.unsubscribes
+      ];
+    })
+  ).toEqual([0, 0, 0, 0]);
+  expect(fixture.state.errors).toEqual([]);
+});
+
+test('ошибка после кнопки включения остаётся видимой и допускает повтор', async ({
+  page
+}) => {
+  const fixture = await prepare(page, { fail: true });
+  const prompt = page.getByTestId('IosPushNotificationPrompt');
+  await prompt.getByRole('button', { name: 'Включить', exact: true }).click();
+  await expect(prompt).toContainText('Не удалось');
+  fixture.restore();
+  await prompt.getByRole('button', { name: 'Включить', exact: true }).click();
+  await expect(prompt).toHaveCount(0);
+  expect(fixture.requests).toHaveLength(2);
+  expect(
+    await page.evaluate(() => (window as any).webPushFixture.requests)
+  ).toBe(1);
 });
 
 for (const permission of ['default', 'denied']) {

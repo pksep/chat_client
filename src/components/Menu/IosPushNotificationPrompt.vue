@@ -37,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { Button, ButtonTypeEnum, SizesEnum } from '@pksep/yui';
 import { isIosWeb } from '../../utils/ios-pwa-viewport';
 import {
@@ -54,11 +54,19 @@ const props = withDefaults(defineProps<{ active?: boolean }>(), {
 });
 const dismissed = ref(false);
 const installOpen = ref(false);
+const enablingFromPrompt = ref(false);
+watch(status, value => {
+  if (value === 'subscribed') enablingFromPrompt.value = false;
+});
 const isPromptOpen = computed(
   () =>
     isIos &&
     props.active &&
     !dismissed.value &&
+    (!['registering', 'error'].includes(status.value) ||
+      enablingFromPrompt.value ||
+      (status.value === 'error' &&
+        globalThis.Notification?.permission !== 'granted')) &&
     !['idle', 'subscribed'].includes(status.value)
 );
 const canEnable = computed(() => ['prompt', 'error'].includes(status.value));
@@ -81,7 +89,10 @@ const description = computed(() => {
 
 const handleAction = (): void => {
   if (status.value === 'install') installOpen.value = true;
-  else void requestWebPushNotifications();
+  else {
+    enablingFromPrompt.value = true;
+    void requestWebPushNotifications();
+  }
 };
 const refresh = (): void => {
   if (isIos && document.visibilityState === 'visible')

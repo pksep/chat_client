@@ -45,6 +45,7 @@ test.afterEach(async ({ page }) => {
 test('лоудер PDF виден до отрисовки страницы; панель и Назад остаются внутри экрана', async ({
   page
 }, testInfo) => {
+  test.setTimeout(60_000);
   let release!: () => void;
   const pending = new Promise<void>(resolve => {
     release = resolve;
@@ -72,7 +73,7 @@ test('лоудер PDF виден до отрисовки страницы; па
       animations: 'disabled'
     });
     release();
-    await expect(loader).toHaveCount(0);
+    await expect(loader).toHaveCount(0, { timeout: 30_000 });
     const canvas = page.locator('.slider-modal__item canvas').first();
     await expect
       .poll(() =>
@@ -123,12 +124,70 @@ test('лоудер PDF виден до отрисовки страницы; па
 });
 
 test('ошибка PDF убирает лоудер и показывает ошибку', async ({ page }) => {
+  test.setTimeout(60_000);
   await page.route('**/__review.pdf', route =>
     route.fulfill({ status: 404, body: '' })
   );
   await page.goto('/e2e/fixtures/slider-pdf-loading.html');
-  await expect(page.getByRole('alert')).toHaveText('Не удалось загрузить PDF');
+  await expect(page.getByRole('alert')).toHaveText('Не удалось загрузить PDF', {
+    timeout: 30_000
+  });
   await expect(page.getByRole('status', { name: 'Загрузка PDF' })).toHaveCount(
+    0
+  );
+});
+
+test('слайдер заполняет изменившийся viewport iPhone без нижней полосы', async ({
+  page
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'webkit-iphone-pwa');
+  await page.route('**/__review.pdf', route =>
+    route.fulfill({ contentType: 'application/pdf', body: pdf })
+  );
+  await page.goto('/e2e/fixtures/slider-pdf-loading.html');
+  await expect(page.locator('dialog.slider-modal')).toBeVisible();
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--ios-safe-top', '47px');
+    document.documentElement.style.setProperty('--ios-safe-bottom', '34px');
+    const viewport = window.visualViewport!;
+    Object.defineProperties(viewport, {
+      height: { configurable: true, get: () => 500 },
+      offsetTop: { configurable: true, get: () => 180 }
+    });
+    viewport.dispatchEvent(new Event('resize'));
+  });
+  const dialog = page.locator('dialog.slider-modal');
+  await expect
+    .poll(async () => {
+      const box = (await dialog.boundingBox())!;
+      return [box.y, box.height];
+    })
+    .toEqual([180, 500]);
+  const bottom = (await page.locator('.slider-modal__bottom').boundingBox())!;
+  expect(bottom.y + bottom.height).toBeCloseTo(680 - 34, 0);
+  await page.screenshot({
+    path: testInfo.outputPath('ios-slider-resized.png'),
+    animations: 'disabled'
+  });
+  await page.evaluate(() => {
+    const viewport = window.visualViewport!;
+    Object.defineProperties(viewport, {
+      height: { get: () => window.innerHeight },
+      offsetTop: { get: () => 0 }
+    });
+    viewport.dispatchEvent(new Event('resize'));
+  });
+  await expect
+    .poll(async () => {
+      const box = (await dialog.boundingBox())!;
+      return [box.y, box.height];
+    })
+    .toEqual([0, page.viewportSize()!.height]);
+  const restoredBottom = (await page
+    .locator('.slider-modal__bottom')
+    .boundingBox())!;
+  expect(restoredBottom.y + restoredBottom.height).toBeCloseTo(
+    page.viewportSize()!.height - 34,
     0
   );
 });

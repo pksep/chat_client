@@ -44,6 +44,8 @@ export default defineConfig({
       name: 'webkit-iphone-pwa',
       testMatch: [
         'ios-pwa.spec.ts',
+        'ios-compact-modals.spec.ts',
+        'startup-logo.spec.ts',
         'slider-pdf-loading.spec.ts',
         'slider-download-focus.spec.ts',
         'content-editor-button-colors.spec.ts',

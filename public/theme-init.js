@@ -24,6 +24,17 @@
   rootElement.classList.add(themeClass);
   rootElement.style.colorScheme = isDarkTheme ? 'dark' : 'light';
 
+  const isIos =
+    /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (
+    isIos &&
+    (navigator.standalone === true ||
+      window.matchMedia('(display-mode: standalone)').matches)
+  ) {
+    rootElement.classList.add('startup-shell-logo');
+  }
+
   document
     .querySelector('meta[name="theme-color"]')
     ?.setAttribute('content', isDarkTheme ? '#262a38' : '#ffffff');

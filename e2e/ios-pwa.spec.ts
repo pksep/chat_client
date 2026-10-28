@@ -418,7 +418,7 @@ for (const [name, mimeType, mediaType, buffer] of [
     Buffer.from([0, 0, 0, 20, 102, 116, 121, 112, 113, 116, 32, 32, 0, 0, 0, 0])
   ]
 ] as const) {
-  for (const completion of ['events', 'resume']) {
+  for (const completion of ['events', 'resume', 'delayed-resume']) {
     test(`камера PWA: ${name}, ${completion}, копируется до загрузки и отправляется один раз`, async ({
       page
     }) => {
@@ -472,10 +472,23 @@ for (const [name, mimeType, mediaType, buffer] of [
         const captureSelection = (event: Event) => {
           const input = event.target as HTMLInputElement;
           if (input.type !== 'file') return;
-          if (completion === 'resume') event.stopImmediatePropagation();
+          if (completion !== 'events') event.stopImmediatePropagation();
           if (state.input === input) return;
           state.input = input;
-          for (const file of Array.from(input.files || [])) {
+          const selected = input.files;
+          if (completion === 'delayed-resume') {
+            Object.defineProperty(input, 'files', {
+              configurable: true,
+              get: () => null
+            });
+            setTimeout(() => {
+              Object.defineProperty(input, 'files', {
+                configurable: true,
+                get: () => selected
+              });
+            }, 500);
+          }
+          for (const file of Array.from(selected || [])) {
             const slice = file.slice.bind(file);
             file.slice = (...args) => {
               const part = slice(...args);
@@ -499,7 +512,7 @@ for (const [name, mimeType, mediaType, buffer] of [
         .getByText('Фото или видео', { exact: true })
         .tap();
       await (await selection).setFiles({ name, mimeType, buffer });
-      if (completion === 'resume') {
+      if (completion !== 'events') {
         await page.evaluate(() => {
           window.dispatchEvent(new Event('focus'));
           document.dispatchEvent(new Event('visibilitychange'));
