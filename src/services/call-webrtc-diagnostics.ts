@@ -388,6 +388,9 @@ export const createCallWebRtcDiagnostics = (
       void capture(room, 'connected', 'info');
     },
     capture,
+    snapshot(room: Room) {
+      return states.get(room)?.lastSnapshot ?? null;
+    },
     stop(room: Room) {
       const state = states.get(room);
       if (state?.timer) clearInterval(state.timer);
