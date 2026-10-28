@@ -266,7 +266,7 @@ for (const kind of ['group', 'ai']) {
           kind === 'ai' ? '.ai-assistant__scroll' : '.chat__message-wrapper'
         )
         .boundingBox())!;
-      expect(input.y + input.height).toBeLessThanOrEqual(top + height + 1);
+      expect(input.y + input.height).toBeCloseTo(top + height, 0);
       expect(history.y).toBeGreaterThanOrEqual(head.y + head.height - 1);
       expect(history.height).toBeGreaterThan(100);
       expect(history.y + history.height).toBeLessThanOrEqual(input.y + 1);
@@ -350,6 +350,55 @@ test('вложения: подключённый input открывает фот
     'Черновик с вложением'
   );
 });
+
+test('PWA без клавиатуры заполняет экран, даже если visualViewport исключает системный низ', async ({
+  page
+}) => {
+  await page.goto('/e2e/fixtures/ios-pwa.html?kind=group&no-pinned&beta');
+  await expect(page.locator('.chat__input .ProseMirror')).toBeVisible({
+    timeout: 60_000
+  });
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--ios-safe-top', '47px');
+    (window as any).setIosViewport(810);
+  });
+  await expect
+    .poll(async () => {
+      const box = (await page.locator('.chat__input').boundingBox())!;
+      return Math.round(box.y + box.height);
+    })
+    .toBe(844);
+  await expect(page.locator('html')).not.toHaveClass(/chat-ios-keyboard-open/);
+});
+
+for (const theme of ['light', 'dark']) {
+  test(`редактор ${theme}: кнопки вложения и эмодзи используют нейтральный цвет`, async ({
+    page
+  }) => {
+    await page.goto(
+      `/e2e/fixtures/ios-pwa.html?kind=group&no-pinned&theme=${theme}`
+    );
+    const editor = page.locator('.chat__input .ProseMirror');
+    await expect(editor).toBeVisible({ timeout: 60_000 });
+    for (const selector of ['.attach-file-button', '.smile-button']) {
+      const button = page.locator(`.chat__input ${selector}:visible`);
+      await expect
+        .poll(() =>
+          button.evaluate(el => ({
+            actual: getComputedStyle(el).color,
+            expected: getComputedStyle(el)
+              .getPropertyValue('--text-secondary')
+              .trim()
+          }))
+        )
+        .toEqual(
+          theme === 'dark'
+            ? { actual: 'rgb(142, 152, 183)', expected: '#8e98b7' }
+            : { actual: 'rgb(117, 125, 138)', expected: '#757d8a' }
+        );
+    }
+  });
+}
 
 for (const [name, mimeType, mediaType, buffer] of [
   [
@@ -797,10 +846,32 @@ test('PWA: инпут, вложения, стикеры и хэдер работ
 test('PWA: реакция из долгого нажатия дожидается восстановления соединения', async ({
   page
 }) => {
+  // Полная оболочка обновляет историю через API после загрузки локальных данных.
+  await page.route(
+    '**/e2e/ios-api/messages/topic/mobile-search-fixture*',
+    route =>
+      route.fulfill({
+        json: [
+          {
+            id: 'reaction-message',
+            topicId: 'mobile-search-fixture',
+            senderUserId: 'mobile-search-user',
+            senderUser: { id: 'mobile-search-user', initials: 'Тест' },
+            text: 'Проверка реакции после восстановления связи',
+            createdAt: new Date(2026, 9, 5, 10).toISOString(),
+            media: [],
+            isReadByMe: true
+          }
+        ]
+      })
+  );
   await page.goto('/e2e/fixtures/ios-pwa.html?kind=group&no-pinned&shell');
   await expect(page.locator('.chat__input .ProseMirror')).toBeVisible({
     timeout: 60_000
   });
+  await expect(
+    page.locator('.message[data-message-id="reaction-message"]')
+  ).toBeVisible();
   await page.evaluate(() => {
     const fixture = (window as any).iosPwaFixture;
     fixture.sent = [];

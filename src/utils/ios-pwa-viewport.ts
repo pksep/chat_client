@@ -26,8 +26,11 @@ export function initIosPwaViewport(): () => void {
     frame = 0;
     // При увеличении страницы сохраняем масштабирование и панорамирование iOS.
     if (viewport && Math.abs(viewport.scale - 1) > 0.01) return;
-    const height = viewport?.height || window.innerHeight;
-    const keyboardOpen = window.innerHeight - height > 100;
+    const visualHeight = viewport?.height || window.innerHeight;
+    const keyboardOpen = window.innerHeight - visualHeight > 100;
+    // Без клавиатуры visualViewport в standalone WebKit может исключать
+    // системную область снизу. Она уже учитывается отступами компонентов.
+    const height = keyboardOpen ? visualHeight : window.innerHeight;
     // После клавиатуры/возврата в PWA iOS может сохранить прокрутку документа.
     // Скроллится только история внутри приложения, а не корневой viewport.
     if (!keyboardOpen && (window.scrollX || window.scrollY)) {

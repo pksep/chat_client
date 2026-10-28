@@ -869,8 +869,8 @@
   cursor: pointer;
 }
 
-.ai-assistant__permission-trigger,
-.ai-assistant__response-trigger {
+.ai-assistant__editor button.ai-assistant__permission-trigger,
+.ai-assistant__editor button.ai-assistant__response-trigger {
   display: flex;
   align-items: center;
   gap: 6px;

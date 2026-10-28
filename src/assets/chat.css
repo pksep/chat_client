@@ -553,14 +553,6 @@ p.chat__nothing-paragraph {
     height: 100%;
   }
 
-  .chat__message-bubble__scroll-indicators {
-    margin-bottom: calc(var(--chat-input-height, 70px) + 10px);
-  }
-
-  .chat__mobile-route-view--call .chat__message-bubble__scroll-indicators {
-    margin-bottom: 10px;
-  }
-
   .chat:has(.chat__input) {
     --basic-height: calc(var(--default-height) - var(--header-height));
   }
@@ -1158,6 +1150,13 @@ p.chat__nothing-paragraph {
 }
 
 @media screen and (width <=480px) {
+  /* Только закреплённый поверх ленты редактор требует компенсации его высоты. */
+  :root:not(.chat-ios-pwa)
+    .chat__mobile-route-view--messages:not(.chat__mobile-route-view--call)
+    > .chat__message-bubble__scroll-indicators {
+    margin-bottom: calc(var(--chat-input-height, 70px) + 10px);
+  }
+
   .selected-messages {
     position: fixed;
     bottom: 0;
