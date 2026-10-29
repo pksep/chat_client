@@ -1929,6 +1929,12 @@ div.message-content__file {
   padding: 0;
 }
 
+@media screen and (width <= 768px) {
+  .slider-modal .slider-modal__content {
+    gap: 0;
+  }
+}
+
 .message-content__media-loading__icon {
   animation: spin 1s linear infinite;
 }

@@ -516,7 +516,7 @@ const contentEditorRef =
 const inputContainerRef = useTemplateRef<HTMLElement>('inputContainerRef');
 const composerKeyboard = useComposerKeyboard(inputContainerRef);
 useIosPwaFilePicker(inputContainerRef, (files, onlyMedia) => {
-  void contentEditorRef.value?.emitAttachFiles(files, onlyMedia);
+  return contentEditorRef.value?.emitAttachFiles(files, onlyMedia);
 });
 const isTauriFileDragging = ref(false);
 const isEditorReady = ref(false);

@@ -65,6 +65,21 @@ test('лоудер PDF виден до отрисовки страницы; па
         document.documentElement.style.setProperty('--ios-safe-bottom', '34px');
       });
     const viewport = page.viewportSize()!;
+    if (viewport.width <= 768) {
+      await expect
+        .poll(() =>
+          page.locator('.slider-modal__content').evaluate(element => {
+            const header = element
+              .querySelector('.slider-modal__mobile-header')!
+              .getBoundingClientRect();
+            const name = element
+              .querySelector('.slider-modal__name')!
+              .getBoundingClientRect();
+            return name.top - header.bottom;
+          })
+        )
+        .toBeLessThanOrEqual(1);
+    }
     const spinner = page.locator('.slider-modal__loading-spinner');
     await expect(spinner).toHaveCSS('width', '64px');
     await expect(spinner).toHaveCSS('height', '64px');

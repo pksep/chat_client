@@ -13,7 +13,9 @@ import {
   getChatAuthSession,
   saveChatAuthSession,
   tryRefreshErpSession,
-  withAuthResponseRefresh
+  withAuthResponseRefresh,
+  setAuthUser,
+  getAuthUser
 } from '../src/composables/useAuth';
 import {
   getAuthToken,
@@ -125,6 +127,27 @@ describe('обновление общей сессии чата', () => {
     useLogout();
     mock.restore();
   });
+
+  for (const activeUser of [true, false]) {
+    test(`обновление сохраняет аватар в профиле и сессии, профиль загружен: ${activeUser}`, async () => {
+      const oldToken = sharedToken('avatar-old');
+      const nextToken = sharedToken('avatar-new');
+      const knownUser = { ...user, avatarUrl: 'profile-photo.webp' };
+      setAuthUser(activeUser ? knownUser : null);
+      setAuthToken(oldToken, 900);
+      saveChatAuthSession(
+        { token: oldToken, user: knownUser, source: 'chat_credentials' },
+        true
+      );
+      const { avatarUrl: _avatar, ...partialUser } = user;
+      globalThis.fetch = mock(async () =>
+        Response.json({ token: nextToken, user: partialUser })
+      ) as typeof fetch;
+      await tryRefreshErpSession();
+      expect(getAuthUser()?.avatarUrl).toBe(knownUser.avatarUrl);
+      expect(getChatAuthSession()?.user?.avatarUrl).toBe(knownUser.avatarUrl);
+    });
+  }
 
   test('после 401 обновляет chat-owned токен и повторяет запрос один раз', async () => {
     const oldToken = sharedToken('old-chat');

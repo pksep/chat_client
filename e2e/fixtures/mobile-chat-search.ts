@@ -76,6 +76,10 @@ const [
   import('../../src/components/Menu/ChatsToolbar.vue')
 ]);
 const fullShell = params.has('shell');
+const wallpaper = params.has('wallpaper')
+  ? (await import('../../src/composables/useChatWallpaper')).useChatWallpaper()
+  : null;
+wallpaper?.selectWallpaper('wallpaper1');
 const { default: ChatContainer } = fullShell
   ? await import('../../src/components/ChatContainer.vue')
   : { default: null };
@@ -104,7 +108,16 @@ setTopics([
     name: 'Проверка поиска',
     isAdmin: true,
     members: [],
-    group: { id: 'fixture-group-id', title: 'Проверка поиска' },
+    group: {
+      id: 'fixture-group-id',
+      title: 'Проверка поиска',
+      ...(params.has('call-topic') && !params.has('missing-call-meta')
+        ? {
+            description:
+              'sep-chat:call-topic:v1:fixture-room:mobile-search-user'
+          }
+        : {})
+    },
     info: { unreadCount: 0 }
   } as ITopic
 ]);
@@ -118,6 +131,14 @@ const historyMessages = Array.from(
     text: `Сообщение ${index + 1}: проверка поиска и сохранения прокрутки`,
     createdAt: new Date(2026, 9, 5, 10, index).toISOString(),
     media: [],
+    ...(params.has('call-topic') && index === 0
+      ? {
+          ex: {
+            type: 'call-topic-default',
+            callTopicDefault: { roomId: 'fixture-room' }
+          }
+        }
+      : {}),
     isReadByMe: true
   })
 ) as IMessage[];
@@ -126,7 +147,11 @@ saveMessagesToLocal(topicId, historyMessages, {
   skipPersist: true,
   syncLastMessage: false
 });
-history.replaceState({}, '', `/${isAi ? 'ai' : 'group'}/${topicId}`);
+history.replaceState(
+  {},
+  '',
+  `/${isAi ? 'ai' : params.has('call-topic') ? 'call' : 'group'}/${topicId}`
+);
 initRoute();
 if (params.has('call')) {
   callUser.value = {
@@ -162,41 +187,50 @@ createApp({
       params.has('beta')
         ? h('div', { class: 'chat_container_alert' }, 'beta')
         : null,
-      h('main', { class: 'chat-container' }, [
-        h(Header, { class: 'chat__header', dataTestid: 'Fixture' }),
-        h('aside', { hidden: true }, [
-          h(ChatsToolbar, {
-            dataTestid: 'Fixture-Chats',
-            modelValue: '',
-            showCreate: false
-          })
-        ]),
-        h(
-          'section',
-          {
-            class: `chat chat__messages ${isAi ? 'chat--ai-route' : 'chat--mobile-route'}`
-          },
-          isAi
-            ? [h(AIAssistant)]
-            : [
-                h(
-                  'div',
-                  {
-                    class:
-                      'chat__mobile-route-view chat__mobile-route-view--messages'
-                  },
-                  [
-                    hasPinnedMessage
-                      ? h(PinnedMessageBanner, {
-                          previewText: 'Проверка закреплённого сообщения'
-                        })
-                      : null,
-                    h(MessageList, { dataTestid: 'Fixture' })
-                  ]
-                )
-              ]
-        )
-      ])
+      h(
+        'main',
+        {
+          class: [
+            'chat-container',
+            { 'chat-container--wallpaper': wallpaper?.isWallpaperApplied.value }
+          ],
+          style: wallpaper?.currentWallpaperStyle.value
+        },
+        [
+          h(Header, { class: 'chat__header', dataTestid: 'Fixture' }),
+          h('aside', { hidden: true }, [
+            h(ChatsToolbar, {
+              dataTestid: 'Fixture-Chats',
+              modelValue: '',
+              showCreate: false
+            })
+          ]),
+          h(
+            'section',
+            {
+              class: `chat chat__messages ${isAi ? 'chat--ai-route' : 'chat--mobile-route'}`
+            },
+            isAi
+              ? [h(AIAssistant)]
+              : [
+                  h(
+                    'div',
+                    {
+                      class: `chat__mobile-route-view chat__mobile-route-view--${params.has('call-topic') ? 'call' : 'messages'}`
+                    },
+                    [
+                      hasPinnedMessage
+                        ? h(PinnedMessageBanner, {
+                            previewText: 'Проверка закреплённого сообщения'
+                          })
+                        : null,
+                      h(MessageList, { dataTestid: 'Fixture' })
+                    ]
+                  )
+                ]
+          )
+        ]
+      )
     ];
   }
 })

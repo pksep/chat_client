@@ -29,6 +29,13 @@ export {
 type AuthUser = IUser;
 
 export const authedUser: Ref<AuthUser | null> = ref(null);
+const preserveAuthAvatar = (
+  user: AuthUser,
+  previousUser: AuthUser | null | undefined = authedUser.value
+): AuthUser =>
+  user.id === previousUser?.id && user.avatarUrl === undefined
+    ? { ...user, avatarUrl: previousUser.avatarUrl }
+    : user;
 export const ERP_BOOTSTRAP_TOKEN_KEY = 'erp_bootstrap_token';
 const SKIP_STARTUP_SHELL_ON_AUTH_REDIRECT_KEY =
   'chat_skip_startup_shell_on_auth_redirect';
@@ -808,8 +815,11 @@ const applyRefreshedSession = (
 
   const storedSession = getChatAuthSession();
   const source = authResponse.source || inferSessionSource(storedSession);
-  const user =
+  const sourceUser =
     authResponse.user || storedSession?.user || authedUser.value || undefined;
+  const user = sourceUser
+    ? preserveAuthAvatar(sourceUser, authedUser.value || storedSession?.user)
+    : undefined;
   const expireTimeSeconds =
     authResponse.expireTimeSeconds ||
     getTokenExpiresInSeconds(authResponse.token);
@@ -1040,7 +1050,7 @@ export const setAuthUser = (user: AuthUser | null) => {
   if (!user || (authedUser.value?.id && authedUser.value.id !== user.id)) {
     configureCustomBackgroundSync(null);
   }
-  authedUser.value = user;
+  authedUser.value = user ? preserveAuthAvatar(user) : null;
 };
 
 export const getAuthUser = () => authedUser.value;
@@ -1085,10 +1095,10 @@ export const mergeAuthUser = (
     return;
   }
 
-  const nextUser = {
+  const nextUser = preserveAuthAvatar({
     ...authedUser.value,
     ...patch
-  } as AuthUser;
+  } as AuthUser);
 
   authedUser.value = nextUser;
   updateStoredChatSessionUser(nextUser);

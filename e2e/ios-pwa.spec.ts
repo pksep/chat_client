@@ -91,6 +91,85 @@ test.afterEach(async ({ page }) => {
   expect(pageErrors.get(page) || []).toEqual([]);
 });
 
+for (const metadata of ['', '&missing-call-meta']) {
+  test(`замечания 29 октября: меню звонилки открывается касанием ${metadata}`, async ({
+    page
+  }, testInfo) => {
+    const rooms: (string | null)[] = [];
+    await page.route(/\/calls\/summaries\/latest\?/, route => {
+      rooms.push(new URL(route.request().url()).searchParams.get('roomId'));
+      return route.fulfill({
+        json: {
+          id: 'fixture-summary',
+          roomId: 'fixture-room',
+          topicId: 'source-topic',
+          recorderUserId: 'mobile-search-user',
+          status: 'READY',
+          hasTranscript: true
+        }
+      });
+    });
+    await page.goto(
+      `/e2e/fixtures/ios-pwa.html?kind=group&no-pinned&call-topic&message-count=40${metadata}`
+    );
+    const toggle = page.locator('.chat__input-prompt-toggle');
+    await expect(toggle).toBeVisible({ timeout: 60_000 });
+    await toggle.tap();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const action = page.getByRole('button', {
+      name: 'Сделать краткое содержание'
+    });
+    await expect(action).toBeInViewport();
+    await expect(action).toBeEnabled();
+    expect(rooms).toContain('fixture-room');
+    await page.screenshot({ path: testInfo.outputPath('call-actions.png') });
+    await toggle.tap();
+    await expect(action).toHaveCount(0);
+  });
+}
+
+test('замечания 29 октября: обои ИИ остаются видимыми на iPhone', async ({
+  page
+}, testInfo) => {
+  await page.goto('/e2e/fixtures/ios-pwa.html?kind=ai&no-pinned&wallpaper');
+  await expect(page.locator('.ai-assistant')).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator('.chat-container')).toHaveClass(
+    /chat-container--wallpaper/
+  );
+  await expect(page.locator('.chat-container')).not.toHaveCSS(
+    'background-image',
+    'none'
+  );
+  await expect(page.locator('.ai-assistant')).toHaveCSS(
+    'background-color',
+    'rgba(0, 0, 0, 0)'
+  );
+  await page.screenshot({ path: testInfo.outputPath('ai-wallpaper.png') });
+});
+
+test('замечания 29 октября: Спасибо полностью помещается в предпросмотр обоев', async ({
+  page
+}, testInfo) => {
+  await page.goto('/e2e/fixtures/ios-pwa.html?kind=profile');
+  await page.getByText('Обои для чатов', { exact: true }).tap();
+  await page.locator('.menu-profile__wallpaper-tile').nth(1).tap();
+  const surface = page.locator(
+    '.menu-profile__wallpaper-preview-mobile .menu-profile__wallpaper-preview-surface'
+  );
+  await expect(surface).toBeVisible();
+  for (const height of [844, 667]) {
+    await page.setViewportSize({ width: 390, height });
+    const bounds = (await surface.boundingBox())!;
+    const message = surface.locator('.message').last();
+    const bubble = (await message.boundingBox())!;
+    expect(bubble.y + bubble.height).toBeLessThanOrEqual(
+      bounds.y + bounds.height - 10
+    );
+    await expect(message).toContainText('Спасибо');
+  }
+  await page.screenshot({ path: testInfo.outputPath('wallpaper-preview.png') });
+});
+
 test('PWA: информация группы и кнопка назад остаются ниже системной строки', async ({
   page
 }, testInfo) => {
@@ -418,10 +497,16 @@ for (const [name, mimeType, mediaType, buffer] of [
     Buffer.from([0, 0, 0, 20, 102, 116, 121, 112, 113, 116, 32, 32, 0, 0, 0, 0])
   ]
 ] as const) {
-  for (const completion of ['events', 'resume', 'delayed-resume']) {
+  for (const completion of [
+    'events',
+    'resume',
+    'delayed-resume',
+    'empty-return'
+  ]) {
     test(`камера PWA: ${name}, ${completion}, копируется до загрузки и отправляется один раз`, async ({
       page
     }) => {
+      test.setTimeout(60_000);
       let uploads = 0;
       await page.route('**/e2e/ios-api/media/upload-target', route =>
         route.fulfill({
@@ -469,37 +554,41 @@ for (const [name, mimeType, mediaType, buffer] of [
           }
           return send.call(this, body);
         };
+        const slice = File.prototype.slice;
+        File.prototype.slice = function (...args) {
+          const part = slice.apply(this, args);
+          const read = part.arrayBuffer.bind(part);
+          part.arrayBuffer = async () => {
+            const bytes = await read();
+            if (state.input?.isConnected) state.copiedBytes += bytes.byteLength;
+            return bytes;
+          };
+          return part;
+        };
         const captureSelection = (event: Event) => {
           const input = event.target as HTMLInputElement;
           if (input.type !== 'file') return;
-          if (completion !== 'events') event.stopImmediatePropagation();
+          if (completion !== 'events' && completion !== 'empty-return')
+            event.stopImmediatePropagation();
           if (state.input === input) return;
           state.input = input;
           const selected = input.files;
-          if (completion === 'delayed-resume') {
+          if (
+            completion === 'delayed-resume' ||
+            completion === 'empty-return'
+          ) {
             Object.defineProperty(input, 'files', {
               configurable: true,
               get: () => null
             });
+            if (completion === 'empty-return')
+              input.dispatchEvent(new Event('cancel'));
             setTimeout(() => {
               Object.defineProperty(input, 'files', {
                 configurable: true,
                 get: () => selected
               });
             }, 500);
-          }
-          for (const file of Array.from(selected || [])) {
-            const slice = file.slice.bind(file);
-            file.slice = (...args) => {
-              const part = slice(...args);
-              const read = part.arrayBuffer.bind(part);
-              part.arrayBuffer = async () => {
-                const bytes = await read();
-                state.copiedBytes += bytes.byteLength;
-                return bytes;
-              };
-              return part;
-            };
           }
         };
         document.addEventListener('input', captureSelection, true);
@@ -519,8 +608,10 @@ for (const [name, mimeType, mediaType, buffer] of [
         });
       }
       await expect
-        .poll(() =>
-          page.evaluate(() => (window as any).cameraRegression.sent.length)
+        .poll(
+          () =>
+            page.evaluate(() => (window as any).cameraRegression.sent.length),
+          { timeout: 25_000 }
         )
         .toBe(1);
       expect(uploads).toBe(1);

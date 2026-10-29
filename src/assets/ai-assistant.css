@@ -480,15 +480,6 @@
   grid-row: 3;
 }
 
-.chat-container--wallpaper:has(.chat--ai-route) {
-  background-color: var(--chat-wallpaper-background, var(--blue15));
-  background-image: linear-gradient(
-      rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1))),
-      rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1)))
-    ),
-    var(--chat-wallpaper-image);
-}
-
 .chat-container--wallpaper .chat--ai-route .ai-assistant {
   background: transparent;
 }

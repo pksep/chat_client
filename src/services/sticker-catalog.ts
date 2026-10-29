@@ -1,5 +1,8 @@
 import { getAuthToken } from '../composables/useLogin';
-import { getStoredChatAccessToken } from '../composables/useAuth';
+import {
+  getStoredChatAccessToken,
+  withAuthResponseRefresh
+} from '../composables/useAuth';
 import {
   getStickerApiBaseUrl,
   buildStickerAssetUrl
@@ -49,18 +52,55 @@ const request = async <T>(
   references?: StickerReference[],
   base = getStickerApiBaseUrl()
 ): Promise<T> => {
-  const token = getAuthToken() || getStoredChatAccessToken();
-  const response = await fetch(`${base}${path}`, {
-    signal,
-    method: references ? 'POST' : 'GET',
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(references ? { 'Content-Type': 'application/json' } : {})
-    },
-    body: references ? JSON.stringify({ references }) : undefined
-  });
-  if (!response.ok) throw new Error('Не удалось загрузить стикеры');
-  return response.json();
+  for (let attempt = 0; ; attempt++) {
+    signal?.throwIfAborted();
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal?.addEventListener('abort', abort, { once: true });
+    const timeout = setTimeout(abort, 8000);
+    let retryable = true;
+    try {
+      const response = await withAuthResponseRefresh(() => {
+        controller.signal.throwIfAborted();
+        const token = getAuthToken() || getStoredChatAccessToken();
+        return fetch(`${base}${path}`, {
+          signal: controller.signal,
+          method: references ? 'POST' : 'GET',
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(references ? { 'Content-Type': 'application/json' } : {})
+          },
+          body: references ? JSON.stringify({ references }) : undefined
+        });
+      });
+      retryable =
+        response.status >= 500 || [408, 429].includes(response.status);
+      if (!response.ok) throw new Error('Не удалось загрузить стикеры');
+      return await response.json();
+    } catch {
+      signal?.throwIfAborted();
+      if (!retryable || attempt >= 2)
+        throw new Error('Не удалось загрузить стикеры');
+    } finally {
+      clearTimeout(timeout);
+      signal?.removeEventListener('abort', abort);
+    }
+    await new Promise<void>((resolve, reject) => {
+      const cancel = () => {
+        clearTimeout(timer);
+        reject(signal?.reason);
+      };
+      const timer = setTimeout(
+        () => {
+          signal?.removeEventListener('abort', cancel);
+          resolve();
+        },
+        300 * (attempt + 1)
+      );
+      signal?.addEventListener('abort', cancel, { once: true });
+      if (signal?.aborted) cancel();
+    });
+  }
 };
 export const loadStickerPacks = async (signal?: AbortSignal) => {
   const base = getStickerApiBaseUrl();
