@@ -99,6 +99,10 @@ let stopObservingVisibility: (() => void) | null = null;
 let avatarRequestVersion = 0;
 let isUnmounted = false;
 const AVATAR_LOAD_ROOT_MARGIN_PX = 1800;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+let retryCount = 0;
+let loadingAvatar = false;
+let loadVersion = 0;
 
 const canRenderAvatarSynchronously = (url: string): boolean =>
   hasVerifiedAvatarUrl(url) || !!directAvatarUrl(url);
@@ -225,10 +229,52 @@ const syncDeferredVisibility = async (): Promise<void> => {
   );
 };
 
+const retryFailedAvatar = () => {
+  const element = avatarRef.value?.$el;
+  if (
+    isUnmounted ||
+    loadingAvatar ||
+    document.hidden ||
+    !props.path ||
+    !shouldResolveAvatar.value ||
+    isResolvedAvatarReady.value ||
+    !(element instanceof HTMLElement)
+  )
+    return;
+  const rect = element.getBoundingClientRect();
+  if (rect.bottom < 0 || rect.top > window.innerHeight) return;
+  void loadAvatar();
+};
+const loadAvatar = async () => {
+  clearTimeout(retryTimer);
+  const version = ++loadVersion;
+  loadingAvatar = true;
+  try {
+    await resolveAvatar(props.path, shouldResolveAvatar.value);
+  } catch {
+    // Временная ошибка сети не должна оставлять инициалы до перезапуска чата.
+  } finally {
+    if (version === loadVersion) {
+      loadingAvatar = false;
+      if (
+        !isUnmounted &&
+        props.path &&
+        shouldResolveAvatar.value &&
+        !isResolvedAvatarReady.value &&
+        retryCount < 2
+      ) {
+        retryCount += 1;
+        retryTimer = setTimeout(retryFailedAvatar, retryCount * 1500);
+      }
+    }
+  }
+};
+
 watch(
   [() => props.path, shouldResolveAvatar],
-  ([path, shouldResolve]) => {
-    void resolveAvatar(path, shouldResolve);
+  () => {
+    retryCount = 0;
+    void loadAvatar();
   },
   { immediate: true }
 );
@@ -242,10 +288,17 @@ watch(
 
 onMounted(() => {
   void syncDeferredVisibility();
+  window.addEventListener('online', retryFailedAvatar);
+  window.addEventListener('focus', retryFailedAvatar);
+  document.addEventListener('visibilitychange', retryFailedAvatar);
 });
 
 onBeforeUnmount(() => {
   isUnmounted = true;
+  clearTimeout(retryTimer);
+  window.removeEventListener('online', retryFailedAvatar);
+  window.removeEventListener('focus', retryFailedAvatar);
+  document.removeEventListener('visibilitychange', retryFailedAvatar);
   avatarRequestVersion += 1;
   stopObservingVisibility?.();
   stopObservingVisibility = null;

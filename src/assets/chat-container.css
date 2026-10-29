@@ -103,8 +103,8 @@
   background-color: var(--surface-input-secondary);
 }
 
-.chat-container--wallpaper:has(.chat__message-wrapper),
-.chat-container--wallpaper:has(.chat__message-wrapper) .chat-container__wallpaper-image {
+.chat-container--wallpaper:has(.chat__message-wrapper, .chat--ai-route),
+.chat-container--wallpaper:has(.chat__message-wrapper, .chat--ai-route) .chat-container__wallpaper-image {
   background-color: var(--chat-wallpaper-background, var(--surface-main));
   background-image: linear-gradient(rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1))),
       rgb(244 248 255 / calc(1 - var(--chat-wallpaper-opacity, 1)))),
@@ -336,7 +336,7 @@ button.button-yui-kit.red-context-button {
     padding: 8px;
   }
 
-  .chat-container:not(:has(.chat__message-wrapper)) {
+  .chat-container:not(:has(.chat__message-wrapper, .chat--ai-route)) {
     background: var(--surface-input-primary);
     overflow: hidden;
   }

@@ -163,6 +163,7 @@
             v-if="activeTopic && shouldShowInlineCallTopicActions"
             class="call-topic-actions--message-inline"
             :topic="activeTopic"
+            :room-id="callTopicRoomId"
             :data-testid="`${props.dataTestid}-CallTopicActionsInline`"
           />
           <div
@@ -350,6 +351,7 @@
       shouldShowDockedCallTopicActions
     "
     :topic="activeTopic"
+    :room-id="callTopicRoomId"
     :data-testid="`${props.dataTestid}-CallTopicActions`"
   />
   <MessageListInput
@@ -515,7 +517,11 @@ import {
   filterFavoriteTopicSystemMessages,
   isFavoriteTopic
 } from '../utils/favorite-topic';
-import { isCallTopic, isCallTopicDefaultMessage } from '../utils/call-topic';
+import {
+  isCallTopic,
+  isCallTopicDefaultMessage,
+  parseCallTopicDefaultMessageEx
+} from '../utils/call-topic';
 import {
   consumeNotificationTopicRefreshRequest,
   notificationTopicRefreshRequest
@@ -767,6 +773,14 @@ const renderedUserReactionsSignature = computed(() => {
 const hasCallTopicDefaultMessage = computed(() =>
   renderedUserMessages.value.some(isCallTopicDefaultMessage)
 );
+const callTopicRoomId = computed(() => {
+  if (!isActiveCallTopic.value || !route.value.id) return null;
+  for (const message of getFullMessagesByTopicId(route.value.id)) {
+    const roomId = parseCallTopicDefaultMessageEx(message.ex)?.roomId;
+    if (roomId) return roomId;
+  }
+  return null;
+});
 const isDeletedAccountTopic = computed(() => {
   const topic = activeTopic.value;
 

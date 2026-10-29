@@ -6,7 +6,7 @@ import { showErrorNotification } from './useNotifications';
 
 export function useIosPwaFilePicker(
   host: Ref<HTMLElement | null>,
-  onFiles: (files: FileList, onlyMedia: boolean) => void,
+  onFiles: (files: FileList, onlyMedia: boolean) => void | Promise<void>,
   validateFiles?: (files: File[]) => void
 ) {
   watch(
@@ -26,6 +26,14 @@ export function useIosPwaFilePicker(
           // После камеры files может появиться позже focus и первого кадра.
           if (Date.now() < deadline && pendingInputs.size)
             resumeTimer = setTimeout(recover, 100);
+          else {
+            pendingInputs.forEach((_read, input) => {
+              if (!input.files?.length) {
+                pendingInputs.delete(input);
+                input.remove();
+              }
+            });
+          }
         };
         recover();
       };
@@ -86,7 +94,7 @@ export function useIosPwaFilePicker(
               selection.items.add(await snapshotFile(file));
               if (disposed) return;
             }
-            if (!disposed) onFiles(selection.files, onlyMedia);
+            if (!disposed) await onFiles(selection.files, onlyMedia);
           } catch {
             if (!disposed) {
               showErrorNotification(
@@ -98,11 +106,12 @@ export function useIosPwaFilePicker(
           }
         };
         pendingInputs.set(input, readSelection);
-        input.addEventListener('cancel', cleanupInput, { once: true });
+        // WebKit может прислать пустой change/cancel до готовности снимка камеры.
+        input.addEventListener('cancel', recoverSelection);
         input.addEventListener('input', readSelection);
         input.addEventListener('change', () => {
           if (input.files?.length) void readSelection();
-          else cleanupInput();
+          else recoverSelection();
         });
         // WebKit нужен input в документе и вызов прямо в пользовательском клике.
         element.append(input);
