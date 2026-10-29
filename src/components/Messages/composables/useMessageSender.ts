@@ -550,6 +550,10 @@ export function useMessageSender(
   };
 
   const isMessageRetryExpired = (message?: IMessage | null): boolean => {
+    // Сохранённый текст без подтверждения ждёт сеть, а не истекает по возрасту.
+    if (message?.status === MessageStatus.Wait && !message.media?.length) {
+      return false;
+    }
     const createdAtMs = getMessageCreatedAtMs(message);
 
     if (createdAtMs === null) {
@@ -953,6 +957,7 @@ export function useMessageSender(
   const scheduleAllPendingMessageAutoRetries = (options?: {
     immediate?: boolean;
     expedite?: boolean;
+    reset?: boolean;
   }): void => {
     getTopicIdsWithMessages().forEach(topicId => {
       schedulePendingMessageAutoRetriesForTopic(topicId, options);
@@ -968,6 +973,7 @@ export function useMessageSender(
 
       schedulePendingMessageAutoRetry(parsedKey.topicId, parsedKey.messageId, {
         immediate: options?.immediate,
+        reset: options?.reset,
         preserveExisting: !options?.expedite
       });
     });
@@ -1029,8 +1035,8 @@ export function useMessageSender(
     pendingMessageRetryStates.set(retryKey, retryState);
 
     if (
-      Date.now() - retryState.startedAt >=
-      getMessageAutoRetryWindowMs(message)
+      isSendAvailable() &&
+      Date.now() - retryState.startedAt >= getMessageAutoRetryWindowMs(message)
     ) {
       changeMessageStatusLocally(
         topicId,
@@ -1075,8 +1081,9 @@ export function useMessageSender(
       }
 
       if (
+        isSendAvailable() &&
         Date.now() - retryState.startedAt >=
-        getMessageAutoRetryWindowMs(currentMessage)
+          getMessageAutoRetryWindowMs(currentMessage)
       ) {
         changeMessageStatusLocally(
           topicId,
@@ -1131,15 +1138,19 @@ export function useMessageSender(
   };
 
   if (!arePendingMessageRetryListenersBound && typeof window !== 'undefined') {
-    const triggerRetry = () => {
+    const triggerRetry = (reset = false) => {
       if (isIosWeb() && !document.hidden) {
         backgroundInterruptedUploadMessages.clear();
       }
-      scheduleAllPendingMessageAutoRetries({ immediate: true, expedite: true });
+      scheduleAllPendingMessageAutoRetries({
+        immediate: true,
+        expedite: true,
+        reset
+      });
     };
 
-    window.addEventListener('online', triggerRetry);
-    window.addEventListener('focus', triggerRetry);
+    window.addEventListener('online', () => triggerRetry(true));
+    window.addEventListener('focus', () => triggerRetry());
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         lastDocumentHiddenAt = Date.now();
@@ -1147,7 +1158,7 @@ export function useMessageSender(
       }
 
       if (!document.hidden) {
-        triggerRetry();
+        triggerRetry(true);
       }
     });
 
@@ -1156,7 +1167,7 @@ export function useMessageSender(
 
   const schedulePendingMessageAutoRetriesForTopic = (
     topicId?: string,
-    options?: { immediate?: boolean; expedite?: boolean }
+    options?: { immediate?: boolean; expedite?: boolean; reset?: boolean }
   ): void => {
     if (!topicId) {
       return;
@@ -1169,6 +1180,7 @@ export function useMessageSender(
 
       schedulePendingMessageAutoRetry(topicId, message.id, {
         immediate: options?.immediate,
+        reset: options?.reset,
         preserveExisting: !options?.expedite
       });
     });
@@ -1252,7 +1264,11 @@ export function useMessageSender(
         return;
       }
 
-      scheduleAllPendingMessageAutoRetries({ immediate: true, expedite: true });
+      scheduleAllPendingMessageAutoRetries({
+        immediate: true,
+        expedite: true,
+        reset: true
+      });
     }
   );
 

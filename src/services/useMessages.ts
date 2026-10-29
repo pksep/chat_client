@@ -734,7 +734,7 @@ export const reconcileDeletedMessage = (
   return true;
 };
 
-const isPendingOutgoingMessage = (message: IMessage): boolean => {
+export const isPendingOutgoingMessage = (message: IMessage): boolean => {
   if (message.senderUserId !== authedUser.value?.id) {
     return false;
   }

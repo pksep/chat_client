@@ -179,16 +179,6 @@
         </template>
       </MessageListUserItems>
       <div
-        v-if="isAwaitingInitialHistory && initialHistoryRefreshFailed"
-        class="chat__message-empty-state chat__history-refresh-error"
-        role="status"
-      >
-        <span>Не удалось обновить сообщения</span>
-        <button type="button" @click="initialHistoryRefreshRevision++">
-          Повторить
-        </button>
-      </div>
-      <div
         v-if="shouldRenderEmptyUserMessageState"
         class="chat__message-empty-state"
         :data-testid="`${props.dataTestid}-MessageList-EmptyChat`"
@@ -451,6 +441,7 @@ import {
   getFullMessagesByTopicId,
   getMessagesByTopicId,
   hasKnownTopicMessagesState,
+  isPendingOutgoingMessage,
   hydrateMessageContextFromShadow,
   hydrateMessagesFromCache,
   hydratePendingMessagesFromCache,
@@ -718,7 +709,8 @@ const isAwaitingNotificationHistory = ref(false);
 const isAwaitingInitialHistory = ref(false);
 const isInitialHistoryPositioning = ref(false);
 const initialHistoryRefreshFailed = ref(false);
-const initialHistoryRefreshRevision = ref(0);
+const initialHistoryExcludedMessageIds = ref(new Set<string>());
+let cancelInitialHistoryRecovery: (() => void) | undefined;
 const initialNotificationPositionReady = ref(true);
 let initialNotificationPositionMessageId = '';
 const renderedUserMessages = computed(() => {
@@ -727,8 +719,7 @@ const renderedUserMessages = computed(() => {
   if (
     !topicId ||
     renderedTopicId.value !== topicId ||
-    isAwaitingNotificationHistory.value ||
-    isAwaitingInitialHistory.value
+    isAwaitingNotificationHistory.value
   ) {
     return [];
   }
@@ -737,7 +728,13 @@ const renderedUserMessages = computed(() => {
     message => !message.topicId || message.topicId === topicId
   );
 
-  return getRenderedTopicMessages(topicId, currentTopicMessages);
+  // Ошибка HTTP не должна скрывать новые WS-события и локальную отправку.
+  const visibleMessages = isAwaitingInitialHistory.value
+    ? currentTopicMessages.filter(
+        message => !initialHistoryExcludedMessageIds.value.has(message.id)
+      )
+    : currentTopicMessages;
+  return getRenderedTopicMessages(topicId, visibleMessages);
 });
 const renderedLastUserMessageSignature = computed(() => {
   const lastMessage =
@@ -2085,8 +2082,11 @@ const shouldRenderUserMessageSkeleton = computed(
   () =>
     props.deferContentRender ||
     (!isActiveCallTopic.value &&
-      ((isAwaitingInitialHistory.value && !initialHistoryRefreshFailed.value) ||
-        isInitialHistoryPositioning.value ||
+      ((isAwaitingInitialHistory.value &&
+        !hasVisibleUserMessages.value &&
+        !initialHistoryRefreshFailed.value) ||
+        (isInitialHistoryPositioning.value &&
+          !(isAwaitingInitialHistory.value && hasVisibleUserMessages.value)) ||
         shouldShowSearchNavigationSkeleton.value ||
         shouldProtectEmptyUserMessagesWithSkeleton.value ||
         (isUserMessagesRoute.value && shouldShowDelayedInitialSkeleton.value)))
@@ -3711,18 +3711,10 @@ watch(
 );
 
 watch(
-  () => getHasHistoryNetwork(),
-  () => {
-    if (isAwaitingInitialHistory.value) initialHistoryRefreshRevision.value++;
-  }
-);
-
-watch(
   [
     () => route.value?.id,
     () => route.value?.type,
-    () => notificationTopicRefreshRequest.value?.id || 0,
-    () => initialHistoryRefreshRevision.value
+    () => notificationTopicRefreshRequest.value?.id || 0
   ],
   async (
     [topicId, routeType, notificationRefreshRequestId],
@@ -3778,6 +3770,33 @@ watch(
       return;
     }
 
+    cancelInitialHistoryRecovery?.();
+    let cancelled = false;
+    let finishRetryWait: (() => void) | undefined;
+    cancelInitialHistoryRecovery = () => {
+      cancelled = true;
+      finishRetryWait?.();
+    };
+    const waitForHistoryRetry = (delay: number) =>
+      new Promise<void>(resolve => {
+        const finish = () => {
+          window.clearTimeout(timeout);
+          window.removeEventListener('online', resume);
+          window.removeEventListener('focus', resume);
+          document.removeEventListener('visibilitychange', resume);
+          finishRetryWait = undefined;
+          resolve();
+        };
+        const resume = () => {
+          if (getHasHistoryNetwork() && getIsAppActivelyVisible()) finish();
+        };
+        const timeout = window.setTimeout(finish, delay);
+        finishRetryWait = finish;
+        window.addEventListener('online', resume);
+        window.addEventListener('focus', resume);
+        document.addEventListener('visibilitychange', resume);
+      });
+
     pendingInitialNotificationMessageId.value = notificationMessageId || '';
     isAwaitingNotificationHistory.value = !!shouldScrollToBottomForNotification;
     initialNotificationPositionMessageId = '';
@@ -3807,6 +3826,11 @@ watch(
     const residentMessages = getFullMessagesByTopicId(topicId).length
       ? getFullMessagesByTopicId(topicId)
       : getMessagesByTopicId(topicId);
+    initialHistoryExcludedMessageIds.value = new Set(
+      residentMessages
+        .filter(message => !isPendingOutgoingMessage(message))
+        .map(message => message.id)
+    );
     const residentUnreadMessages = residentMessages.filter(
       message =>
         isUnreadTrackableMessage(message) &&
@@ -3833,6 +3857,7 @@ watch(
     topicSwitchStartedAtMs = performance.now();
     topicSwitchUserScrollIntentAtMs = 0;
     const isStaleTopicSwitch = () =>
+      cancelled ||
       topicSwitchToken !== activeTopicSwitchToken ||
       route.value?.id !== topicId;
     const hadRenderedDifferentTopicMessages =
@@ -4007,37 +4032,40 @@ watch(
       ? hydrateInitialMessages()
       : Promise.resolve([]);
     let initialMessagesFetch: Promise<IMessage[]> | null = null;
+    let readInitialMessages: (() => Promise<IMessage[]>) | undefined;
 
     // Уведомление может быть из середины серии: первый кадр ждёт последнюю страницу.
     if (!shouldBootstrapAroundMessage) {
-      initialMessagesFetch = shouldScrollToBottomForNotification
-        ? reconcileNotificationTopicMessages(
-            topicId,
-            expandedLimit,
-            notificationMessageId
-          ).then(result => {
-            notificationVisibleMessagesLimit = result.visibleLimit;
-            notificationHistoryIsFresh = result.isFresh;
-            return result.messages;
-          })
-        : !getHasHistoryNetwork()
-          ? hydrationPromise
-          : fetchMessagesForTopic(topicId, {
-              limit: initialNetworkMessagesLimit,
-              maxAgeMs: getHasBrowserNetwork()
-                ? undefined
-                : TOPIC_SWITCH_CACHE_MAX_AGE_MS,
-              forceRefresh: true,
-              forceNetwork: getHasBrowserNetwork(),
-              allowStaleFallback: !getHasBrowserNetwork(),
-              visibleLimit: fastInitialMessagesLimit,
-              updateVisible: false,
-              revealIfEmpty: true,
-              replaceInitialWindow: shouldRefreshHistoryBeforePaint,
-              onNetworkApplied: () => {
-                initialHistoryIsFresh = true;
-              }
-            });
+      readInitialMessages = () =>
+        shouldScrollToBottomForNotification
+          ? reconcileNotificationTopicMessages(
+              topicId,
+              expandedLimit,
+              notificationMessageId
+            ).then(result => {
+              notificationVisibleMessagesLimit = result.visibleLimit;
+              notificationHistoryIsFresh = result.isFresh;
+              return result.messages;
+            })
+          : !getHasHistoryNetwork()
+            ? hydrationPromise
+            : fetchMessagesForTopic(topicId, {
+                limit: initialNetworkMessagesLimit,
+                maxAgeMs: getHasBrowserNetwork()
+                  ? undefined
+                  : TOPIC_SWITCH_CACHE_MAX_AGE_MS,
+                forceRefresh: true,
+                forceNetwork: getHasBrowserNetwork(),
+                allowStaleFallback: !getHasBrowserNetwork(),
+                visibleLimit: fastInitialMessagesLimit,
+                updateVisible: false,
+                revealIfEmpty: true,
+                replaceInitialWindow: shouldRefreshHistoryBeforePaint,
+                onNetworkApplied: () => {
+                  initialHistoryIsFresh = true;
+                }
+              });
+      initialMessagesFetch = readInitialMessages();
     }
 
     if (canReuseResidentHistory) {
@@ -4153,7 +4181,7 @@ watch(
       );
     }
 
-    const initialMessages = (await initialMessagesFetch) || [];
+    let initialMessages = (await initialMessagesFetch) || [];
 
     if (isStaleTopicSwitch()) return;
     if (canReuseResidentHistory) {
@@ -4224,18 +4252,26 @@ watch(
       syncVisibleUnreadAfterAutoScroll();
       return;
     }
-    if (
+    let retryDelay = 1000;
+    while (
       isAwaitingInitialHistory.value &&
       !(shouldScrollToBottomForNotification
         ? notificationHistoryIsFresh
         : initialHistoryIsFresh) &&
-      getHasHistoryNetwork()
+      readInitialMessages
     ) {
       initialHistoryRefreshFailed.value = true;
+      isAwaitingNotificationHistory.value = false;
       isInitialHistoryPositioning.value = false;
       isLoadingInitialMessages.value = false;
       resetInitialMessagesSkeleton();
-      return;
+      // Повторяем только чтение: черновик, ответ и выбранные сообщения сохраняются.
+      await waitForHistoryRetry(retryDelay);
+      if (isStaleTopicSwitch()) return;
+      retryDelay = Math.min(retryDelay * 2, 30_000);
+      if (!getHasHistoryNetwork() || !getIsAppActivelyVisible()) continue;
+      initialMessages = await readInitialMessages();
+      if (isStaleTopicSwitch()) return;
     }
 
     if (
@@ -4731,6 +4767,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  cancelInitialHistoryRecovery?.();
   if (route.value?.id) {
     setSuspendIncomingMergeForTopic(route.value.id, false);
   }
