@@ -430,6 +430,9 @@ test('свежий ответ истории сохраняет локальну
     await openTopic(page, 0);
     await expect(
       page.locator('[data-testid$="-MessageList-Skeleton"]')
+    ).toHaveCount(0);
+    await expect(
+      page.locator('[data-message-id="pending-local-message"]')
     ).toBeVisible();
     release();
     await expect(message(page, 0)).toBeVisible({ timeout: 1800 });

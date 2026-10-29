@@ -4,6 +4,7 @@ import { ChatSDK } from './useChatSDK';
 import { createReconnectRefreshCoordinator } from './reconnect-refresh';
 import { createNetworkReachabilityCheck } from './network-reachability';
 import { createNativeNetworkChangeHandler } from './native-network-change';
+import { recordActiveUploadSnapshots } from './upload-request-telemetry';
 import { getIsTopicNearBottom } from './useTopicViewportState';
 import {
   configureCustomBackgroundSync,
@@ -1476,6 +1477,40 @@ const clearBrowserOfflineFallback = (): void => {
   browserOfflineFallbackTimeout = null;
 };
 
+const getChatConnectionDiagnosticState = (): Record<string, unknown> => ({
+  sendAvailable: getHasWebsocketConnection(),
+  socketConnected: chatSDK?.isConnected() ?? false,
+  browserOnline: browserOnline.value,
+  effectiveBrowserOnline: getEffectiveBrowserNetworkState(),
+  browserOfflineSignal: browserOfflineSignal.value,
+  networkReachable: networkReachable.value,
+  hasWebsocketConnection: hasWebsocketConnection.value,
+  isWebsocketConnecting: isWebsocketConnecting.value,
+  activeCall: hasActiveCallRuntime()
+});
+
+const setChatWebsocketReadiness = (ready: boolean, reason: string): void => {
+  const previousReady = hasWebsocketConnection.value;
+  hasWebsocketConnection.value = ready;
+  if (previousReady === ready) return;
+  try {
+    recordTelemetryEvent({
+      category: 'network',
+      name: 'network.websocket.readiness_changed',
+      entityType: 'websocket',
+      payload: {
+        reason,
+        previousReady,
+        ready,
+        ...getChatConnectionDiagnosticState()
+      }
+    });
+    recordActiveUploadSnapshots('chat-readiness-change');
+  } catch {
+    // Сбой диагностики не должен прерывать восстановление соединения.
+  }
+};
+
 const confirmBrowserNetworkAvailable = (): void => {
   networkReachabilityCheck.invalidate();
   networkReachable.value = true;
@@ -1488,7 +1523,7 @@ const confirmBrowserNetworkAvailable = (): void => {
 const markBrowserNetworkUnavailable = (): void => {
   networkReachabilityCheck.invalidate();
   browserOfflineSignal.value = true;
-  hasWebsocketConnection.value = false;
+  setChatWebsocketReadiness(false, 'browser-network-unavailable');
   isWebsocketConnecting.value = true;
 };
 
@@ -1813,7 +1848,7 @@ const waitForChatHttpHealth = async (
   }
 
   if (!hasLiveSocketConnection()) {
-    hasWebsocketConnection.value = false;
+    setChatWebsocketReadiness(false, `http-health-failed:${reason}`);
     isWebsocketConnecting.value = false;
   }
 
@@ -1978,6 +2013,9 @@ const hardReconnectChatAfterNetworkChange = (
       reason
     });
     reconnectChatOnResume();
+    void chatSDK.checkConnectionHealth({
+      canReconnect: () => !hasActiveCallRuntime()
+    });
     return;
   }
 
@@ -1997,7 +2035,7 @@ const hardReconnectChatAfterNetworkChange = (
     timestamp: new Date().toISOString()
   });
   isWebsocketConnecting.value = true;
-  hasWebsocketConnection.value = false;
+  setChatWebsocketReadiness(false, `hard-reconnect:${reason}`);
 
   chatSDK.reconnectImmediatelyAfterNetworkRestore();
 };
@@ -2110,14 +2148,14 @@ const syncBrowserNetworkState = (isOnline: boolean): void => {
   browserOnline.value = isOnline;
 
   if (!isOnline) {
-    hasWebsocketConnection.value = false;
+    setChatWebsocketReadiness(false, 'browser-network-offline');
     isWebsocketConnecting.value = false;
     return;
   }
 
   if (chatSDK) {
     const isConnected = chatSDK.isConnected();
-    hasWebsocketConnection.value = isConnected;
+    setChatWebsocketReadiness(isConnected, 'browser-network-sync');
     isWebsocketConnecting.value = !isConnected;
 
     if (!isConnected) {
@@ -2202,6 +2240,7 @@ const recordNativeNetworkStatus = (
   }
 
   lastNativeNetworkDiagnosticSignature = signature;
+  recordActiveUploadSnapshots(`native-network-${source}`);
   recordTelemetryEvent({
     category: 'network',
     name: 'network.native.status_changed',
@@ -2522,7 +2561,9 @@ export const initializeChat = async (options: {
     const wasConnected = hasWebsocketConnection.value;
     if (connected) confirmBrowserNetworkAvailable();
     isWebsocketConnecting.value = browserOnline.value && !connected;
-    hasWebsocketConnection.value = connected;
+    setChatWebsocketReadiness(connected, 'sdk-connection-state');
+
+    if (connected && wasConnected && hasCompletedInitialConnection) return;
 
     void saveShadowSyncMeta('ws_connection', {
       connected,
@@ -2699,7 +2740,7 @@ export const initializeChat = async (options: {
   browserOfflineSignal.value = !navigator.onLine;
   lastKnownNetworkFingerprint = getNetworkFingerprint(browserOnline.value);
   isWebsocketConnecting.value = browserOnline.value;
-  hasWebsocketConnection.value = false;
+  setChatWebsocketReadiness(false, 'initialize-chat');
   setupChatListeners();
   addMessageHistoryHandler();
   startChatConnectionInBackground(chatSDK);
@@ -3079,7 +3120,10 @@ export const uploadFile = async (
     previewMeta,
     onProgress,
     isMedia,
-    telemetry
+    {
+      ...telemetry,
+      getConnectionState: getChatConnectionDiagnosticState
+    }
   );
   return { file, path: objectName, thumbnailPath: thumbnailObjectName, ex };
 };

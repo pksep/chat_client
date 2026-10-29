@@ -15,13 +15,19 @@ export function useIosPwaFilePicker(
       if (!element || !isIosWeb()) return;
       const pendingInputs = new Map<HTMLInputElement, () => Promise<void>>();
       let disposed = false;
-      let resumeFrame = 0;
+      let resumeTimer: ReturnType<typeof setTimeout> | undefined;
       const recoverSelection = () => {
+        clearTimeout(resumeTimer);
         if (document.hidden || disposed || !pendingInputs.size) return;
-        const recover = () => pendingInputs.forEach(read => void read());
+        const deadline = Date.now() + 10_000;
+        const recover = () => {
+          if (document.hidden || disposed || !pendingInputs.size) return;
+          pendingInputs.forEach(read => void read());
+          // После камеры files может появиться позже focus и первого кадра.
+          if (Date.now() < deadline && pendingInputs.size)
+            resumeTimer = setTimeout(recover, 100);
+        };
         recover();
-        cancelAnimationFrame(resumeFrame);
-        resumeFrame = requestAnimationFrame(recover);
       };
       const handleClick = (event: MouseEvent) => {
         if (!(event.target instanceof Element)) return;
@@ -55,6 +61,7 @@ export function useIosPwaFilePicker(
         if (onlyMedia) input.accept = 'image/*,video/*';
         const cleanupInput = () => {
           pendingInputs.delete(input);
+          if (!pendingInputs.size) clearTimeout(resumeTimer);
           input.remove();
         };
         let processing = false;
@@ -112,7 +119,7 @@ export function useIosPwaFilePicker(
       document.addEventListener('visibilitychange', recoverSelection);
       onCleanup(() => {
         disposed = true;
-        cancelAnimationFrame(resumeFrame);
+        clearTimeout(resumeTimer);
         element.removeEventListener('click', handleClick, true);
         window.removeEventListener('focus', recoverSelection);
         window.removeEventListener('pageshow', recoverSelection);

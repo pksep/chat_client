@@ -99,22 +99,6 @@ p.chat__nothing-paragraph {
   pointer-events: none;
 }
 
-.chat__history-refresh-error {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  pointer-events: auto;
-}
-
-.chat__history-refresh-error button {
-  color: inherit;
-  background: transparent;
-  border: 0;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
 .chat__message-wrapper--bootstrap-scroll-locked {
   overflow: hidden;
 }
@@ -551,14 +535,6 @@ p.chat__nothing-paragraph {
 
   .chat__message-wrapper--favorite > .chat__message-bubble {
     height: 100%;
-  }
-
-  .chat__message-bubble__scroll-indicators {
-    margin-bottom: calc(var(--chat-input-height, 70px) + 10px);
-  }
-
-  .chat__mobile-route-view--call .chat__message-bubble__scroll-indicators {
-    margin-bottom: 10px;
   }
 
   .chat:has(.chat__input) {
@@ -1158,6 +1134,13 @@ p.chat__nothing-paragraph {
 }
 
 @media screen and (width <=480px) {
+  /* Только закреплённый поверх ленты редактор требует компенсации его высоты. */
+  :root:not(.chat-ios-pwa)
+    .chat__mobile-route-view--messages:not(.chat__mobile-route-view--call)
+    > .chat__message-bubble__scroll-indicators {
+    margin-bottom: calc(var(--chat-input-height, 70px) + 10px);
+  }
+
   .selected-messages {
     position: fixed;
     bottom: 0;

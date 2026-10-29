@@ -94,8 +94,7 @@ for (const source of ['IndexedDB', 'память']) {
       await openTopic(page, 0);
       await expect(
         page.locator('[data-testid$="-MessageList-Skeleton"]')
-      ).toBeVisible();
-      release();
+      ).toHaveCount(0);
       const image = page.locator('[data-message-media-id="saved-preview"] img');
       await expect(image).toBeVisible();
       await expect
@@ -109,6 +108,7 @@ for (const source of ['IndexedDB', 'память']) {
         )
         .toBe(true);
       expect(await image.getAttribute('src')).toMatch(/^blob:/);
+      release();
       if (source === 'память') expect(networkAttempts).toBe(0);
       expect(
         await page.evaluate(

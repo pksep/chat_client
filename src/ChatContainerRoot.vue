@@ -96,6 +96,7 @@ import { useShareSelection } from './composables/useShareSelection';
 import { isGroupCallInviteUrl } from './utils/groupCallInviteUrl';
 import { installNotoEmojiFontFaces } from './composables/useEmojiStyle';
 import { isIosWeb } from './utils/ios-pwa-viewport';
+import { initBrowserMediaDownloads } from './utils/browser-media-downloads';
 import {
   importAnyChatBackgroundSnapshot,
   loadNativeNotificationPreview
@@ -107,6 +108,7 @@ const emit = defineEmits<{
 }>();
 
 installNotoEmojiFontFaces();
+onUnmounted(initBrowserMediaDownloads());
 
 const { fetchAllTopics } = useTopics();
 const { state: isMobile } = useResizeState(MAX_W_MD);

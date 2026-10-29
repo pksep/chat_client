@@ -1,5 +1,6 @@
 import { createApp, h, nextTick, ref } from 'vue';
 import { SliderModal } from '@pksep/yui';
+import { initBrowserMediaDownloads } from '../../src/utils/browser-media-downloads';
 export { ref } from 'vue';
 
 export interface SliderDownloadFixtureItem {
@@ -17,6 +18,7 @@ export const mountSliderDownloadFixture = async (
   root.id = 'slider-download-fixture';
   document.body.appendChild(root);
   const open = ref(false);
+  const disposeBrowserMediaDownloads = initBrowserMediaDownloads();
 
   const app = createApp({
     render: () =>
@@ -24,7 +26,13 @@ export const mountSliderDownloadFixture = async (
         open: open.value,
         items,
         defaultIndex,
-        dataTestid: 'SliderDownloadRegression'
+        dataTestid: 'SliderDownloadRegression',
+        onClose: () => {
+          open.value = false;
+        },
+        onKeydown: (event: KeyboardEvent) => {
+          if (event.key === 'Escape') open.value = false;
+        }
       })
   });
 
@@ -36,6 +44,7 @@ export const mountSliderDownloadFixture = async (
   return {
     items,
     unmount: () => {
+      disposeBrowserMediaDownloads();
       app.unmount();
       root.remove();
     }

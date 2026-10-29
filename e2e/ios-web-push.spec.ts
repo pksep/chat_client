@@ -185,13 +185,68 @@ test('существующая Apple-подписка сохраняется и 
   await expect(page.getByTestId('IosPushNotificationPrompt')).toHaveCount(0);
 });
 
+for (const theme of ['light', 'dark']) {
+  test(`окно уведомлений соответствует макету и учитывает safe area: ${theme}`, async ({
+    page
+  }, testInfo) => {
+    await prepare(page);
+    await page.evaluate(theme => {
+      document.documentElement.classList.add('chat-ios-pwa');
+      document.documentElement.classList.remove('theme-light', 'theme-dark');
+      document.documentElement.classList.add(`theme-${theme}`);
+      document.documentElement.setAttribute('data-theme', theme);
+      document.documentElement.style.setProperty('--ios-safe-bottom', '34px');
+    }, theme);
+    await page.evaluate(() => document.fonts.ready);
+    const prompt = page.getByTestId('IosPushNotificationPrompt');
+    const modal = page.locator('dialog.ios-push-modal');
+    const heading = prompt.getByRole('heading', {
+      name: 'Включить уведомления чата',
+      exact: true
+    });
+    await expect(heading).toHaveCSS('font-size', '20px');
+    await expect(heading).toHaveCSS('font-weight', '700');
+    await expect(prompt).toHaveCSS('text-align', 'center');
+    await expect(prompt.locator('p')).toHaveText(
+      'Получайте уведомления о новых сообщениях, даже когда чат свёрнут или закрыт'
+    );
+    await expect(prompt.locator('p')).toHaveCSS('font-size', '14px');
+    await expect(prompt.locator('p')).toHaveCSS('font-weight', '700');
+    await expect
+      .poll(async () => {
+        const box = (await modal.boundingBox())!;
+        return Math.round(box.y + box.height);
+      })
+      .toBe(844);
+    const modalBox = (await modal.boundingBox())!;
+    expect(modalBox.x).toBe(0);
+    expect(modalBox.width).toBe(390);
+    for (const label of ['Включить', 'Настроить позже']) {
+      const button = prompt.getByRole('button', { name: label, exact: true });
+      await expect(button).toHaveCSS('font-size', '20px');
+      const box = (await button.boundingBox())!;
+      expect(box.height).toBe(50);
+      expect(box.x).toBe(15);
+      expect(box.width).toBe(360);
+      expect(box.y + box.height).toBeLessThanOrEqual(844 - 34);
+    }
+    await page.screenshot({
+      path: testInfo.outputPath(`ios-notifications-${theme}.png`),
+      animations: 'disabled'
+    });
+    await prompt.getByRole('button', { name: 'Настроить позже' }).click();
+    await expect(prompt).toHaveCount(0);
+    expect(
+      await page.evaluate(() => (window as any).webPushFixture.requests)
+    ).toBe(0);
+  });
+}
+
 test('подписка восстанавливается после ошибки сети, одновременные попытки объединяются', async ({
   page
 }) => {
   const fixture = await prepare(page, { permission: 'granted', fail: true });
-  await expect(page.getByTestId('IosPushNotificationPrompt')).toContainText(
-    'Не удалось'
-  );
+  await expect(page.getByTestId('IosPushNotificationPrompt')).toHaveCount(0);
   fixture.restore();
   await page.evaluate(async () => {
     window.dispatchEvent(new Event('online'));
@@ -207,6 +262,85 @@ test('подписка восстанавливается после ошибк�
     await page.evaluate(() => (window as any).webPushFixture.subscriptions)
   ).toBe(1);
   expect(fixture.state.errors).toEqual([]);
+});
+
+test('фоновая регистрация при возврате в PWA не открывает окно уведомлений', async ({
+  page
+}) => {
+  const fixture = await prepare(page, {
+    permission: 'granted',
+    existing: true
+  });
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  await page.route('**/performance-api/push/subscribe', async route => {
+    await pending;
+    await route.fulfill({ json: { success: true } });
+  });
+  await page.evaluate(() => {
+    const fixture = (window as any).webPushFixture;
+    fixture.promptAppearances = 0;
+    new MutationObserver(records => {
+      for (const record of records)
+        for (const node of record.addedNodes)
+          if (
+            node instanceof Element &&
+            (node.matches('.ios-push-modal') ||
+              node.querySelector('.ios-push-modal'))
+          )
+            fixture.promptAppearances++;
+    }).observe(document.body, { childList: true, subtree: true });
+    const now = Date.now();
+    Date.now = () => now + 6 * 60_000;
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  try {
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const { webPushStatus } = await import(
+            '/src/services/web-push-status.ts'
+          );
+          return webPushStatus.value;
+        })
+      )
+      .toBe('registering');
+    await expect(page.getByTestId('IosPushNotificationPrompt')).toHaveCount(0);
+  } finally {
+    release();
+  }
+  await page.evaluate(() => (window as any).pushModule.initPushNotifications());
+  expect(
+    await page.evaluate(() => {
+      const fixture = (window as any).webPushFixture;
+      return [
+        fixture.promptAppearances,
+        fixture.requests,
+        fixture.subscriptions,
+        fixture.unsubscribes
+      ];
+    })
+  ).toEqual([0, 0, 0, 0]);
+  expect(fixture.state.errors).toEqual([]);
+});
+
+test('ошибка после кнопки включения остаётся видимой и допускает повтор', async ({
+  page
+}) => {
+  const fixture = await prepare(page, { fail: true });
+  const prompt = page.getByTestId('IosPushNotificationPrompt');
+  await prompt.getByRole('button', { name: 'Включить', exact: true }).click();
+  await expect(prompt).toContainText('Не удалось');
+  fixture.restore();
+  await prompt.getByRole('button', { name: 'Включить', exact: true }).click();
+  await expect(prompt).toHaveCount(0);
+  expect(fixture.requests).toHaveLength(2);
+  expect(
+    await page.evaluate(() => (window as any).webPushFixture.requests)
+  ).toBe(1);
 });
 
 for (const permission of ['default', 'denied']) {

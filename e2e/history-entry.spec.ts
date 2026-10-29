@@ -38,13 +38,20 @@ test('свежая пустая история заменяет кеш и ста
 });
 
 for (const cacheSource of ['память', 'IndexedDB']) {
-  test(`онлайн: кеш скрыт до свежей истории, первый кадр у непрочитанных: ${cacheSource}`, async ({
+  test(`онлайн: устаревший кеш скрыт до свежей истории, первый кадр у непрочитанных: ${cacheSource}`, async ({
     page
   }) => {
     const state = await openFixture(page, { shell: true, unreadCount: 60 });
+    const rows = makeMessages('performance-0', 140).map((row, index) => ({
+      ...row,
+      isReadByMe: index < 80
+    }));
     await page.evaluate(
-      async ({ rows, cacheSource }) => {
+      async ({ rows, cacheSource, lastMessage }) => {
         const fixture = (window as any).topicPerformance;
+        fixture.setTopics([
+          { ...fixture.getSelectedTopic('performance-0'), lastMessage }
+        ]);
         if (cacheSource === 'память') fixture.seed('performance-0', rows);
         else
           await fixture.shadow.saveShadowTopicSnapshot(
@@ -55,12 +62,12 @@ for (const cacheSource of ['память', 'IndexedDB']) {
             { replace: true }
           );
       },
-      { rows: makeMessages('performance-0', 20), cacheSource }
+      {
+        rows: makeMessages('performance-0', 20),
+        cacheSource,
+        lastMessage: rows.at(-1)
+      }
     );
-    const rows = makeMessages('performance-0', 140).map((row, index) => ({
-      ...row,
-      isReadByMe: index < 80
-    }));
     let release!: () => void;
     const gate = new Promise<void>(resolve => (release = resolve));
     await page.route('**/messages/topic/performance-0?*', async route => {
@@ -134,28 +141,161 @@ for (const cacheSource of ['память', 'IndexedDB']) {
   });
 }
 
-test('ошибка онлайн не показывает старый кеш, повтор получает свежую историю', async ({
+test('ошибка истории не скрывает отправку и входящие, восстановление не требует смены чата', async ({
+  page
+}, testInfo) => {
+  const state = await openFixture(page, { shell: true });
+  await page.evaluate(
+    ({ rows, lastMessage }) => {
+      const fixture = (window as any).topicPerformance;
+      fixture.seed('performance-0', rows);
+      fixture.setTopics([
+        { ...fixture.getSelectedTopic('performance-0'), lastMessage }
+      ]);
+    },
+    {
+      rows: makeMessages('performance-0', 20),
+      lastMessage: makeMessages('performance-0', 21).at(-1)
+    }
+  );
+  await page.evaluate(async () => {
+    const path = '/e2e/fixtures/network-harness.ts';
+    (await import(/* @vite-ignore */ path)).controlConnection();
+    (window as any).sent = [];
+    (window as any).topicPerformance.sdk.sendWebSocketEvent = (
+      type: string,
+      payload: any
+    ) => {
+      if (type === 'sendMessage') (window as any).sent.push(payload);
+      return true;
+    };
+  });
+  let requests = 0;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  let fresh = makeMessages('performance-0', 21).slice(-1);
+  await page.route('**/messages/topic/performance-0?*', async route => {
+    if (++requests === 1)
+      return route.fulfill({ status: 503, json: { message: 'Недоступно' } });
+    await gate;
+    return route.fulfill({ json: fresh });
+  });
+  try {
+    await openTopic(page, 0);
+    await expect.poll(() => requests).toBeGreaterThan(0);
+    await expect(
+      page.getByText('Не удалось обновить сообщения', { exact: true })
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: 'Повторить', exact: true })
+    ).toHaveCount(0);
+    const editor = page.locator('.chat__input .ProseMirror');
+    await editor.fill('Сообщение после ошибки истории');
+    await page.locator('.chat__input .toolbar-button.right:visible').click();
+    await expect(page.locator('[data-is-me-sender="true"]')).toContainText(
+      'Сообщение после ошибки истории'
+    );
+    const live = await page.evaluate(() => {
+      const fixture = (window as any).topicPerformance;
+      const pending = fixture.messages
+        .getFullMessagesByTopicId('performance-0')
+        .find((row: any) =>
+          row.ex?.includes(JSON.parse((window as any).sent[0].ex).clientId)
+        );
+      const confirmed = {
+        ...pending,
+        id: 'confirmed-during-history-error',
+        status: 'DELIVERED'
+      };
+      const incoming = {
+        ...confirmed,
+        id: 'incoming-during-history-error',
+        ex: null,
+        senderUserId: 'peer-0',
+        text: 'Ответ во время восстановления',
+        senderUser: { id: 'peer-0', name: 'Собеседник' }
+      };
+      for (const row of [confirmed, incoming])
+        fixture.emitChatEvent({
+          type: 'changeMessage',
+          payload: { type: 'NEW', topicId: 'performance-0', data: row }
+        });
+      return [confirmed, incoming];
+    });
+    await expect(
+      page.locator('[data-message-id="confirmed-during-history-error"]')
+    ).toBeVisible();
+    await expect(
+      page.locator('[data-message-id="incoming-during-history-error"]')
+    ).toBeVisible();
+    await expect(message(page, 0, 19)).toHaveCount(0);
+    await editor.fill('Черновик во время восстановления');
+    await page.evaluate(async () => {
+      const path = '/src/services/useNotificationNavigation.ts';
+      (
+        await import(/* @vite-ignore */ path)
+      ).notificationTopicRefreshRequest.value = {
+        id: 100,
+        topicId: 'performance-1',
+        scrollToBottom: true
+      };
+    });
+    await expect.poll(() => requests).toBeGreaterThan(1);
+    fresh = [...fresh, ...live];
+    release();
+    await expect(message(page, 0, 20)).toBeVisible();
+    await expect(editor).toHaveText('Черновик во время восстановления');
+    await expect(page.locator('[data-message-id]')).toHaveCount(3);
+    await expect(message(page, 0, 19)).toHaveCount(0);
+    await page.screenshot({
+      path: testInfo.outputPath('history-recovered.png')
+    });
+  } finally {
+    release();
+  }
+  expect(state.errors).toEqual([]);
+});
+
+test('восстановление истории прекращается при уходе из чата', async ({
   page
 }) => {
   const state = await openFixture(page, { shell: true });
-  await page.evaluate(
-    rows => (window as any).topicPerformance.seed('performance-0', rows),
-    makeMessages('performance-0', 20)
-  );
-  let failed = true;
-  await page.route('**/messages/topic/performance-0?*', route =>
-    failed
-      ? route.fulfill({ status: 503, json: { message: 'Недоступно' } })
-      : route.fulfill({ json: makeMessages('performance-0', 21).slice(-1) })
-  );
+  let requests = 0;
+  await page.route('**/messages/topic/performance-0?*', route => {
+    requests++;
+    return route.fulfill({ status: 503, json: {} });
+  });
   await openTopic(page, 0);
-  await expect(
-    page.getByText('Не удалось обновить сообщения', { exact: true })
-  ).toBeVisible();
-  await expect(page.locator('[data-message-id]')).toHaveCount(0);
-  failed = false;
-  await page.getByRole('button', { name: 'Повторить', exact: true }).click();
-  await expect(message(page, 0, 20)).toBeInViewport();
-  await expect(message(page, 0, 19)).toHaveCount(0);
+  await expect.poll(() => requests).toBeGreaterThan(0);
+  await openTopic(page, 1);
+  await expect(message(page, 1)).toBeVisible();
+  const before = requests;
+  await page.waitForTimeout(2100);
+  expect(requests).toBe(before);
+  await expect(message(page, 0)).toHaveCount(0);
+  expect(state.errors).toEqual([]);
+});
+
+test('восстановление истории ждёт сеть и сохраняет черновик', async ({
+  page
+}) => {
+  const state = await openFixture(page, { shell: true });
+  let requests = 0;
+  await page.route('**/messages/topic/performance-0?*', route => {
+    requests++;
+    return requests === 1
+      ? route.fulfill({ status: 503, json: {} })
+      : route.fulfill({ json: makeMessages('performance-0', 20) });
+  });
+  await openTopic(page, 0);
+  await expect.poll(() => requests).toBe(1);
+  const editor = page.locator('.chat__input .ProseMirror');
+  await editor.fill('Черновик без сети');
+  await page.context().setOffline(true);
+  await page.waitForTimeout(2100);
+  expect(requests).toBe(1);
+  await page.context().setOffline(false);
+  await expect(message(page, 0)).toBeVisible();
+  await expect(editor).toHaveText('Черновик без сети');
   expect(state.errors).toEqual([]);
 });

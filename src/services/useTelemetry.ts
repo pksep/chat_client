@@ -77,6 +77,7 @@ const shouldPersistTelemetry = (
     Partial<Pick<TelemetryEvent, 'level'>>
 ): boolean =>
   event.category === 'network' ||
+  event.category === 'upload' ||
   (event.category === 'call' &&
     (event.name.startsWith('call.livekit.') ||
       event.level === 'warn' ||

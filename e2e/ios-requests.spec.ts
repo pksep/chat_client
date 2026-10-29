@@ -11,7 +11,9 @@ test('iPhone PWA: папки сохраняют панель навигации,
   await page.addLocatorHandler(
     page.locator('dialog.ios-push-modal[open]'),
     async dialog => {
-      await dialog.getByRole('button', { name: 'Позже', exact: true }).click();
+      await dialog
+        .getByRole('button', { name: 'Настроить позже', exact: true })
+        .click();
     }
   );
   await page.goto('/e2e/fixtures/ios-pwa.html?kind=menu');
