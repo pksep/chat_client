@@ -6,15 +6,16 @@ import {
   CapacitorBarcodeScannerTypeHint
 } from '@capacitor/barcode-scanner';
 import { showErrorNotification } from './useNotifications';
+import { parseQrAuthPayload, resolveQrAuthPayload } from '../utils/qr-auth';
+import type { IQrAuth, IQrAuthResult } from '../types/qr-auth';
 
-export interface IQrAuthResult {
-  token: string;
-  organization?: string;
-}
+export type { IQrAuthResult } from '../types/qr-auth';
 
-export const useQrAuth = () => {
+/** Подключает нативный или браузерный сканер к общему разбору QR авторизации. */
+export const useQrAuth = (): IQrAuth => {
   const isScanning = ref(false);
 
+  /** Считывает данные без журналирования токена или одноразового кода. */
   const scanQrCode = async (): Promise<IQrAuthResult | null> => {
     await nextTick();
 
@@ -41,27 +42,20 @@ export const useQrAuth = () => {
         return null;
       }
 
-      try {
-        const url = new URL(result.ScanResult);
-        const token = url.searchParams.get('token')?.split('?token')[0] || '';
+      const payload = parseQrAuthPayload(result.ScanResult);
 
-        if (!token) {
-          showErrorNotification('Не удалось получить токен');
-          return null;
-        }
+      if (!payload) {
+        showErrorNotification('Не удалось прочитать QR-код входа');
 
-        return {
-          token,
-          organization: url.searchParams.get('organization') || ''
-        };
-      } catch {
-        return {
-          token: result.ScanResult
-        };
+        return null;
       }
-    } catch (error) {
-      console.error('Ошибка сканирования:', error);
-      showErrorNotification('Не удалось открыть камеру');
+
+      return await resolveQrAuthPayload(payload);
+    } catch {
+      // Нативные исключения могут отражать содержимое QR: не журналируем их.
+      showErrorNotification(
+        'Не удалось войти по QR-коду. Отсканируйте новый QR.'
+      );
       return null;
     } finally {
       isScanning.value = false;
