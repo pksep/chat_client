@@ -350,7 +350,9 @@ watch(
     if (errorMessage) {
       showErrorNotification(errorMessage);
     }
-  }
+  },
+  // Ошибка раскрытия короткой ссылки может появиться до монтирования формы.
+  { immediate: true }
 );
 </script>
 

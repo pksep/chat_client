@@ -71,6 +71,7 @@ import {
 import { useThemeStore } from './stores/theme';
 import { withNetworkTimeout } from './utils/network-timeout';
 import { isBotUser } from './utils/bot';
+import { parseQrAuthPayload, resolveQrAuthPayload } from './utils/qr-auth';
 import {
   prepareMessageExperience,
   prepareMessageListAfterPaint
@@ -701,6 +702,28 @@ onMounted(async () => {
   localStorage.removeItem('chat_runtime_config_url');
 
   try {
+    const url = new URL(window.location.href);
+
+    if (new URLSearchParams(url.hash.slice(1)).has('qr')) {
+      const payload = parseQrAuthPayload(url.toString());
+
+      // До сетевого обмена убираем короткий секрет из адресной строки.
+      url.hash = '';
+      url.searchParams.delete('token');
+      window.history.replaceState(window.history.state, '', url);
+
+      try {
+        if (!payload?.code) throw new Error('Некорректный QR');
+
+        handleQrAuthSuccess(await resolveQrAuthPayload(payload));
+      } catch {
+        errorMessage.value =
+          'Не удалось войти по QR-коду. Код мог истечь или уже использован. Отсканируйте новый QR.';
+      }
+
+      return;
+    }
+
     const urlOrganization = getUrlOrganization();
 
     if (urlOrganization) {
