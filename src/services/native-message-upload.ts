@@ -7,6 +7,13 @@ import { createTelemetryTraceId, recordTelemetryEvent } from './useTelemetry';
 import { saveNativeChatBackgroundSyncSession } from './useChatBackgroundSync';
 
 type Attachment = { file: File; isMedia: boolean };
+const NATIVE_UPLOAD_CAPABILITY_CACHE_MS = 60_000;
+let capabilityCheck: {
+  apiUrl: string;
+  token: string | null;
+  expiresAt: number;
+  promise: Promise<boolean>;
+} | null = null;
 export const getNativeMessageUpload = async (id: string) => {
   if (!isAndroidNativePlatform()) return { status: 'missing' as const };
   try {
@@ -31,16 +38,46 @@ export const canUseNativeMessageUpload = async (): Promise<boolean> => {
   try {
     if ((await NativeFile.getMessageUploadCapabilities()).version !== 1)
       return false;
-    const response = await fetch(
-      `${getConfig().CHAT_API_DOMAIN}/messages/native-upload-capabilities`,
-      {
-        headers: {
-          Authorization: `Bearer ${getAuthToken() || getStoredChatAccessToken()}`
-        },
-        signal: AbortSignal.timeout(5000)
+    const apiUrl = getConfig().CHAT_API_DOMAIN.replace(/\/+$/, '');
+    const token = getAuthToken() || getStoredChatAccessToken();
+    if (
+      capabilityCheck?.apiUrl === apiUrl &&
+      capabilityCheck.token === token &&
+      capabilityCheck.expiresAt > Date.now()
+    ) {
+      return capabilityCheck.promise;
+    }
+
+    const check = {
+      apiUrl,
+      token,
+      expiresAt: Infinity,
+      promise: Promise.resolve(false)
+    };
+    capabilityCheck = check;
+    check.promise = (async () => {
+      try {
+        const response = await fetch(
+          `${apiUrl}/messages/native-upload-capabilities`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(5000)
+          }
+        );
+        const supported = response.ok && (await response.json()).version === 1;
+        // Кратко сохраняем только ответ о протоколе; сбой сети или авторизации не кешируем.
+        if (response.ok || [404, 405, 501].includes(response.status)) {
+          check.expiresAt = Date.now() + NATIVE_UPLOAD_CAPABILITY_CACHE_MS;
+        } else if (capabilityCheck === check) {
+          capabilityCheck = null;
+        }
+        return supported;
+      } catch {
+        if (capabilityCheck === check) capabilityCheck = null;
+        return false;
       }
-    );
-    return response.ok && (await response.json()).version === 1;
+    })();
+    return check.promise;
   } catch {
     return false;
   }

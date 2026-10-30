@@ -4,6 +4,7 @@ import { ChatSDK } from './useChatSDK';
 import { createReconnectRefreshCoordinator } from './reconnect-refresh';
 import { createNetworkReachabilityCheck } from './network-reachability';
 import { createNativeNetworkChangeHandler } from './native-network-change';
+import { recordActiveUploadSnapshots } from './upload-request-telemetry';
 import { getIsTopicNearBottom } from './useTopicViewportState';
 import {
   configureCustomBackgroundSync,
@@ -1476,6 +1477,40 @@ const clearBrowserOfflineFallback = (): void => {
   browserOfflineFallbackTimeout = null;
 };
 
+const getChatConnectionDiagnosticState = (): Record<string, unknown> => ({
+  sendAvailable: getHasWebsocketConnection(),
+  socketConnected: chatSDK?.isConnected() ?? false,
+  browserOnline: browserOnline.value,
+  effectiveBrowserOnline: getEffectiveBrowserNetworkState(),
+  browserOfflineSignal: browserOfflineSignal.value,
+  networkReachable: networkReachable.value,
+  hasWebsocketConnection: hasWebsocketConnection.value,
+  isWebsocketConnecting: isWebsocketConnecting.value,
+  activeCall: hasActiveCallRuntime()
+});
+
+const setChatWebsocketReadiness = (ready: boolean, reason: string): void => {
+  const previousReady = hasWebsocketConnection.value;
+  hasWebsocketConnection.value = ready;
+  if (previousReady === ready) return;
+  try {
+    recordTelemetryEvent({
+      category: 'network',
+      name: 'network.websocket.readiness_changed',
+      entityType: 'websocket',
+      payload: {
+        reason,
+        previousReady,
+        ready,
+        ...getChatConnectionDiagnosticState()
+      }
+    });
+    recordActiveUploadSnapshots('chat-readiness-change');
+  } catch {
+    // Сбой диагностики не должен прерывать восстановление соединения.
+  }
+};
+
 const confirmBrowserNetworkAvailable = (): void => {
   networkReachabilityCheck.invalidate();
   networkReachable.value = true;
@@ -1488,7 +1523,7 @@ const confirmBrowserNetworkAvailable = (): void => {
 const markBrowserNetworkUnavailable = (): void => {
   networkReachabilityCheck.invalidate();
   browserOfflineSignal.value = true;
-  hasWebsocketConnection.value = false;
+  setChatWebsocketReadiness(false, 'browser-network-unavailable');
   isWebsocketConnecting.value = true;
 };
 
@@ -1702,6 +1737,8 @@ const syncCurrentUserFromFreshUsers = (): void => {
 const refreshTopicMessagesAfterReconnect = async (
   topicId: string
 ): Promise<void> => {
+  const sdk = chatSDK;
+  const userId = currentUserId.value;
   const latestMessages = await fetchMessagesForTopic(topicId, {
     limit: 100,
     newMessages: true,
@@ -1710,6 +1747,8 @@ const refreshTopicMessagesAfterReconnect = async (
     allowStaleFallback: false,
     skipSave: true
   });
+
+  if (chatSDK !== sdk || currentUserId.value !== userId) return;
 
   if (
     latestMessages.length > 0 ||
@@ -1809,7 +1848,7 @@ const waitForChatHttpHealth = async (
   }
 
   if (!hasLiveSocketConnection()) {
-    hasWebsocketConnection.value = false;
+    setChatWebsocketReadiness(false, `http-health-failed:${reason}`);
     isWebsocketConnecting.value = false;
   }
 
@@ -1824,6 +1863,8 @@ const waitForChatHttpHealth = async (
 };
 
 const runActiveTopicRefreshAfterReconnect = async (): Promise<void> => {
+  const sdk = chatSDK;
+  const userId = currentUserId.value;
   const activeTopicId = route.value.id;
 
   if (!activeTopicId) {
@@ -1836,6 +1877,8 @@ const runActiveTopicRefreshAfterReconnect = async (): Promise<void> => {
   ]);
 
   if (
+    chatSDK === sdk &&
+    currentUserId.value === userId &&
     route.value.id === activeTopicId &&
     route.value.type === RouteTypes.GROUP
   ) {
@@ -1861,6 +1904,12 @@ const waitForNextReconnectRefreshStage = async (): Promise<void> => {
 const runStagedReconnectRefresh = async (
   reason: ReconnectRefreshReason
 ): Promise<void> => {
+  const sdk = chatSDK;
+  const userId = currentUserId.value;
+  const isCurrent = () =>
+    chatSDK === sdk &&
+    currentUserId.value === userId &&
+    shouldContinueReconnectRefresh();
   console.info('Chat fresh sync started after reconnect/resume', { reason });
   void saveShadowSyncMeta('fresh_sync:last_started', {
     reason,
@@ -1868,33 +1917,34 @@ const runStagedReconnectRefresh = async (
   });
   resetNetworkRuntimeStateForFreshSync();
   await syncPtsStateToServer();
+  if (!isCurrent()) return;
 
   const hasHttpConnection = await waitForChatHttpHealth(reason);
+  if (chatSDK !== sdk || currentUserId.value !== userId) return;
 
   if (!hasHttpConnection) {
     throw new Error('Chat HTTP health check failed');
   }
+  if (!isCurrent()) return;
 
-  await Promise.allSettled([fetchAllUsers()]);
-  syncCurrentUserFromFreshUsers();
-  await waitForNextReconnectRefreshStage();
-
-  if (!shouldContinueReconnectRefresh()) {
-    return;
+  // Открытый чат и звонок не ждут справочник; все задачи остаются в одном цикле.
+  const activeRefresh = Promise.allSettled([
+    runActiveTopicRefreshAfterReconnect(),
+    recoverActiveCallAfterReconnect(reason)
+  ]);
+  try {
+    await Promise.allSettled([fetchAllUsers()]);
+    if (!isCurrent()) return;
+    syncCurrentUserFromFreshUsers();
+    await waitForNextReconnectRefreshStage();
+    if (!isCurrent()) return;
+    await fetchAllTopics();
+  } finally {
+    await activeRefresh;
   }
-
-  await fetchAllTopics();
-  await Promise.allSettled([recoverActiveCallAfterReconnect(reason)]);
   await waitForNextReconnectRefreshStage();
 
-  if (!shouldContinueReconnectRefresh()) {
-    return;
-  }
-
-  await runActiveTopicRefreshAfterReconnect();
-  await waitForNextReconnectRefreshStage();
-
-  if (!shouldContinueReconnectRefresh()) {
+  if (!isCurrent()) {
     return;
   }
 
@@ -1963,6 +2013,9 @@ const hardReconnectChatAfterNetworkChange = (
       reason
     });
     reconnectChatOnResume();
+    void chatSDK.checkConnectionHealth({
+      canReconnect: () => !hasActiveCallRuntime()
+    });
     return;
   }
 
@@ -1982,7 +2035,7 @@ const hardReconnectChatAfterNetworkChange = (
     timestamp: new Date().toISOString()
   });
   isWebsocketConnecting.value = true;
-  hasWebsocketConnection.value = false;
+  setChatWebsocketReadiness(false, `hard-reconnect:${reason}`);
 
   chatSDK.reconnectImmediatelyAfterNetworkRestore();
 };
@@ -2095,14 +2148,14 @@ const syncBrowserNetworkState = (isOnline: boolean): void => {
   browserOnline.value = isOnline;
 
   if (!isOnline) {
-    hasWebsocketConnection.value = false;
+    setChatWebsocketReadiness(false, 'browser-network-offline');
     isWebsocketConnecting.value = false;
     return;
   }
 
   if (chatSDK) {
     const isConnected = chatSDK.isConnected();
-    hasWebsocketConnection.value = isConnected;
+    setChatWebsocketReadiness(isConnected, 'browser-network-sync');
     isWebsocketConnecting.value = !isConnected;
 
     if (!isConnected) {
@@ -2187,6 +2240,7 @@ const recordNativeNetworkStatus = (
   }
 
   lastNativeNetworkDiagnosticSignature = signature;
+  recordActiveUploadSnapshots(`native-network-${source}`);
   recordTelemetryEvent({
     category: 'network',
     name: 'network.native.status_changed',
@@ -2507,7 +2561,9 @@ export const initializeChat = async (options: {
     const wasConnected = hasWebsocketConnection.value;
     if (connected) confirmBrowserNetworkAvailable();
     isWebsocketConnecting.value = browserOnline.value && !connected;
-    hasWebsocketConnection.value = connected;
+    setChatWebsocketReadiness(connected, 'sdk-connection-state');
+
+    if (connected && wasConnected && hasCompletedInitialConnection) return;
 
     void saveShadowSyncMeta('ws_connection', {
       connected,
@@ -2684,7 +2740,7 @@ export const initializeChat = async (options: {
   browserOfflineSignal.value = !navigator.onLine;
   lastKnownNetworkFingerprint = getNetworkFingerprint(browserOnline.value);
   isWebsocketConnecting.value = browserOnline.value;
-  hasWebsocketConnection.value = false;
+  setChatWebsocketReadiness(false, 'initialize-chat');
   setupChatListeners();
   addMessageHistoryHandler();
   startChatConnectionInBackground(chatSDK);
@@ -3064,7 +3120,10 @@ export const uploadFile = async (
     previewMeta,
     onProgress,
     isMedia,
-    telemetry
+    {
+      ...telemetry,
+      getConnectionState: getChatConnectionDiagnosticState
+    }
   );
   return { file, path: objectName, thumbnailPath: thumbnailObjectName, ex };
 };

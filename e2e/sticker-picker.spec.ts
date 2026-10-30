@@ -14,6 +14,104 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
+test('стикеры загружаются после временного сбоя и возвращения сети', async ({
+  page
+}) => {
+  let failures = 0;
+  let unavailable = true;
+  await page.route(/\/stickers\?/, route => {
+    failures++;
+    return unavailable
+      ? route.fulfill({ status: 503, body: '' })
+      : route.fallback();
+  });
+  await page.goto('/e2e/fixtures/stickers.html?catalog=1');
+  await page.locator('.smile-button:visible').click();
+  await page.getByRole('button', { name: 'Стикеры', exact: true }).click();
+  await page.getByRole('button', { name: 'Коты', exact: true }).click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Не удалось загрузить стикеры' })
+  ).toBeVisible();
+  expect(failures).toBeGreaterThanOrEqual(3);
+  unavailable = false;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect(
+    page.locator('.chat-sticker-picker__item').first()
+  ).toBeVisible();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Не удалось загрузить стикеры' })
+  ).toHaveCount(0);
+});
+
+test('каталог стикеров обновляет истёкший токен и повторяет запрос', async ({
+  page
+}) => {
+  let refreshes = 0;
+  let staleRequests = 0;
+  let freshRequests = 0;
+  await page.route(/\/stickers\/packs$/, route => {
+    const token = route.request().headers().authorization || '';
+    if (token.endsWith('.old')) {
+      staleRequests++;
+      return route.fulfill({ status: 401, body: '' });
+    }
+    if (token.endsWith('.new')) freshRequests++;
+    return route.fallback();
+  });
+  let nextToken = '';
+  await page.route('**/__sticker-auth/auth/refresh', route => {
+    refreshes++;
+    return route.fulfill({
+      json: {
+        token: nextToken,
+        user: { id: 'sticker-auth-user', initials: 'Тест' }
+      }
+    });
+  });
+  await page.goto('/e2e/fixtures/stickers.html?catalog=1');
+  nextToken = await page.evaluate(async () => {
+    const configPath = '/src/services/useConfig.ts';
+    const authPath = '/src/composables/useAuth.ts';
+    const loginPath = '/src/composables/useLogin.ts';
+    (await import(/* @vite-ignore */ configPath)).setConfig({
+      CHAT_API_DOMAIN: '/__sticker-auth'
+    });
+    const { saveChatAuthSession } = await import(/* @vite-ignore */ authPath);
+    const { setAuthToken } = await import(/* @vite-ignore */ loginPath);
+    const makeToken = (suffix: string) =>
+      [
+        btoa(JSON.stringify({ alg: 'RS256', kid: 'fixture' })),
+        btoa(
+          JSON.stringify({
+            sub: 'sticker-auth-user',
+            iat: Math.floor(Date.now() / 1000),
+            exp: Math.floor(Date.now() / 1000) + 900
+          })
+        ),
+        suffix
+      ].join('.');
+    const oldToken = makeToken('old');
+    setAuthToken(oldToken, 900);
+    saveChatAuthSession({
+      token: oldToken,
+      user: { id: 'sticker-auth-user', initials: 'Тест' },
+      source: 'chat_credentials'
+    });
+    return makeToken('new');
+  });
+  const count = await page.evaluate(async () => {
+    const path = '/src/services/sticker-catalog.ts';
+    return (await (await import(/* @vite-ignore */ path)).loadStickerPacks())
+      .packs.length;
+  });
+  expect(count).toBeGreaterThan(0);
+  expect({ refreshes, staleRequests, freshRequests }).toEqual({
+    refreshes: 1,
+    staleRequests: 1,
+    freshRequests: 1
+  });
+});
+
 test('переключатель из макета меняет режим, работает с клавиатуры и открывается на эмодзи', async ({
   page
 }, testInfo) => {

@@ -4,6 +4,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { createAndroidPerformanceServer } from '../e2e/fixtures/android-performance-server.ts';
+import { mockStickerCatalog } from '../e2e/fixtures/sticker-catalog.ts';
 
 const output = resolve(
   process.env.STARTUP_BUNDLE_OUTPUT || '../artifacts/chat-294-startup-bundle'
@@ -210,6 +211,7 @@ try {
             ? route.continue()
             : route.abort()
         );
+        await mockStickerCatalog(page);
         await page.addInitScript(
           ({ origin, config, user, topics }) => {
             localStorage.setItem(
@@ -263,7 +265,8 @@ try {
         ).toHaveCount(0);
         const emojiRequests = () =>
           requests.filter(path => /_chat-ui-emoji-runtime-/.test(path));
-        expect(emojiRequests()).toEqual([]);
+        // Редактор заранее прогревает панель, чтобы первое открытие было быстрым.
+        expect(emojiRequests().length).toBeLessThanOrEqual(1);
         const emojiTrigger = page
           .locator('.editor-component .smile-button:visible')
           .first();
@@ -278,18 +281,24 @@ try {
         await picker
           .getByRole('button', { name: 'Стикеры', exact: true })
           .click();
-        const stickers = picker.locator('.sticker-picker__item');
+        const catalog = page.getByRole('region', { name: 'Каталог стикеров' });
+        await expect(catalog).toBeVisible();
+        await catalog.getByRole('button', { name: 'SEP', exact: true }).click();
+        const stickers = catalog.locator('.chat-sticker-picker__item');
         await expect(stickers).toHaveCount(15);
         const pickerSearch = picker.locator('.v3-search input');
-        for (const query of ['люблю', 'LOVE']) {
+        for (const query of ['SEP 15', 'sep 15']) {
           await pickerSearch.fill(query);
           await expect(stickers).toHaveCount(1);
           await expect(stickers).toHaveAttribute(
             'data-sticker-id',
-            'sep-robot-heart'
+            'sep-robots-14'
           );
         }
         await pickerSearch.fill('');
+        await picker
+          .getByRole('button', { name: 'Эмодзи', exact: true })
+          .click();
         await picker
           .getByRole('button', { name: 'Смайлы и люди', exact: true })
           .click();
@@ -320,7 +329,7 @@ try {
         results.push({ authenticated: true, mobile, requests, errors });
 
         // Новый документ, как при холодном входе по ссылке/уведомлению. История
-        // уже готова, а лёгкий input-bootstrap виден, пока загружается редактор.
+        // уже готова, а скелетон поля ввода виден, пока загружается редактор.
         let releaseEditor!: () => void;
         const editorGate = new Promise<void>(resolve => {
           releaseEditor = resolve;
@@ -345,8 +354,8 @@ try {
                     '.chat__input .ProseMirror[contenteditable="true"]'
                   )
                 ),
-                bootstrap: Boolean(
-                  document.querySelector('.chat__input-bootstrap')
+                skeleton: Boolean(
+                  document.querySelector('.chat__input-skeleton')
                 )
               };
             },
@@ -365,7 +374,7 @@ try {
           await expect(page.locator('.chat__input .ProseMirror')).toHaveCount(
             0
           );
-          await expect(page.locator('.chat__input-bootstrap')).toBeAttached();
+          await expect(page.locator('.chat__input-skeleton')).toBeAttached();
           expect(
             await page
               .locator('.chat__input')
@@ -377,7 +386,7 @@ try {
           releaseEditor();
         }
         await expect(page.locator('#startup-shell')).toHaveCount(0);
-        await expect(page.locator('.chat__input-bootstrap')).toHaveCount(0);
+        await expect(page.locator('.chat__input-skeleton')).toHaveCount(0);
         await expect(
           page.locator('.chat__input .ProseMirror[contenteditable="true"]')
         ).toBeVisible();
@@ -385,12 +394,12 @@ try {
           await page.evaluate(
             () => (window as any).__composerStateAtFirstContent
           )
-        ).toEqual({ editor: false, bootstrap: true });
+        ).toEqual({ editor: false, skeleton: true });
         expect(errors).toEqual([]);
         results.push({
           directTopic: true,
           mobile,
-          firstContentIncludesEditor: true
+          firstContentIncludesSkeleton: true
         });
       } finally {
         await context.close();

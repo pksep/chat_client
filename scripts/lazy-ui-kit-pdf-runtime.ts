@@ -22,7 +22,13 @@ export const lazyUiKitPdfRuntime = (): Plugin => {
       const pdfStartMatch = code.match(
         /,\s*([A-Za-z_$][\w$]*)\s*=\s*typeof process/
       );
-      const start = pdfStartMatch?.index ?? -1;
+      // Legacy PDF.js содержит полифиллы перед основным runtime. Переносим их
+      // вместе с ним, чтобы Safari получил совместимость при открытии PDF.
+      const legacyStartMatch = code.match(
+        /;\s*\nvar [A-Za-z_$][\w$]* = \{\s*\/\*\*\*\/\s*\d+\(/
+      );
+      const legacy = !!legacyStartMatch;
+      const start = (legacyStartMatch ?? pdfStartMatch)?.index ?? -1;
       const globalExport = code.indexOf('globalThis.pdfjsLib = {', start);
       const end = code.indexOf('\n};', globalExport) + 3;
       const exportBlock =
@@ -93,7 +99,7 @@ export const lazyUiKitPdfRuntime = (): Plugin => {
       const helperNames = helpers as string[];
       runtimeSource =
         `import { ${helperNames.map(name => `__chatPdf_${name} as ${name}`).join(', ')} } from ${JSON.stringify(id)};\n` +
-        `const ${code.slice(start + 2, end)}\nexport { ${getDocumentName} as getDocument, ${globalWorkerOptionsName} as GlobalWorkerOptions };`;
+        `${legacy ? '' : 'const '}${code.slice(start + 1, end).trimStart()}\nexport { ${getDocumentName} as getDocument, ${globalWorkerOptionsName} as GlobalWorkerOptions };`;
       const loader = `;
 const ${globalWorkerOptionsName} = { workerSrc: ${workerSourceName} };
 const ${getDocumentName} = (...args) => ({

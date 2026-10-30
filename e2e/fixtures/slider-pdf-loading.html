@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Проверка загрузки PDF</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import '../../src/assets/chat-container.css';
+      import { initIosPwaViewport } from '../../src/utils/ios-pwa-viewport';
+      import { mountSliderDownloadFixture } from './slider-download-harness';
+      initIosPwaViewport();
+      document.documentElement.classList.add('theme-dark');
+      window.sliderDownloadFixture = await mountSliderDownloadFixture([
+        {
+          path: '/__review.pdf',
+          name: 'Документ.pdf',
+          downloadPath: '/__review.pdf'
+        },
+        {
+          path: '/__review.svg',
+          name: 'Изображение.svg',
+          downloadPath: '/__review.svg'
+        }
+      ]);
+    </script>
+  </body>
+</html>

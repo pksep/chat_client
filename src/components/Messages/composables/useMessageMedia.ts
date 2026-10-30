@@ -106,6 +106,11 @@ export function useMessageMedia(): MessageMediaHelpers {
       return media.localPath;
     }
 
+    const cachedObjectUrl = getCachedMediaObjectUrl(preferredPath);
+    if (cachedObjectUrl) {
+      return cachedObjectUrl;
+    }
+
     const mediaPath = isThumb ? media.thumbnailPath || media.path : media.path;
 
     if (!mediaPath) {

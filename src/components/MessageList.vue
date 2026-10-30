@@ -163,6 +163,7 @@
             v-if="activeTopic && shouldShowInlineCallTopicActions"
             class="call-topic-actions--message-inline"
             :topic="activeTopic"
+            :room-id="callTopicRoomId"
             :data-testid="`${props.dataTestid}-CallTopicActionsInline`"
           />
           <div
@@ -350,6 +351,7 @@
       shouldShowDockedCallTopicActions
     "
     :topic="activeTopic"
+    :room-id="callTopicRoomId"
     :data-testid="`${props.dataTestid}-CallTopicActions`"
   />
   <MessageListInput
@@ -441,6 +443,7 @@ import {
   getFullMessagesByTopicId,
   getMessagesByTopicId,
   hasKnownTopicMessagesState,
+  isPendingOutgoingMessage,
   hydrateMessageContextFromShadow,
   hydrateMessagesFromCache,
   hydratePendingMessagesFromCache,
@@ -514,7 +517,11 @@ import {
   filterFavoriteTopicSystemMessages,
   isFavoriteTopic
 } from '../utils/favorite-topic';
-import { isCallTopic, isCallTopicDefaultMessage } from '../utils/call-topic';
+import {
+  isCallTopic,
+  isCallTopicDefaultMessage,
+  parseCallTopicDefaultMessageEx
+} from '../utils/call-topic';
 import {
   consumeNotificationTopicRefreshRequest,
   notificationTopicRefreshRequest
@@ -580,6 +587,8 @@ const { state: isCompactMessageInput } = useResizeState(481, {
 });
 const isNativeAndroid =
   Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+const getHasHistoryNetwork = (): boolean =>
+  getHasBrowserNetwork() && (Capacitor.isNativePlatform() || navigator.onLine);
 
 const { onTouchStart, onTouchEnd } = useMessageSwipe(route);
 
@@ -626,6 +635,7 @@ const chatMessageWrapperStyle = computed(() => ({
     : {})
 }));
 
+let messageInlineEndInsetRafId = 0;
 const syncMessageInlineEndInset = (): void => {
   const wrapper = chatWrapperRef.value;
   if (!wrapper) {
@@ -646,6 +656,14 @@ const syncMessageInlineEndInset = (): void => {
   if (messageInlineEndInset.value !== nextInset) {
     messageInlineEndInset.value = nextInset;
   }
+};
+const scheduleMessageInlineEndInsetSync = (): void => {
+  if (messageInlineEndInsetRafId) return;
+  // Монтаж и ResizeObserver запрашивают один замер после обновления DOM.
+  messageInlineEndInsetRafId = window.requestAnimationFrame(() => {
+    messageInlineEndInsetRafId = 0;
+    syncMessageInlineEndInset();
+  });
 };
 const authUser = computed(() => getAuthUser());
 const authUserId = computed(() =>
@@ -695,6 +713,10 @@ const getRenderedTopicMessages = (
 const pendingInitialNotificationMessageId = ref('');
 const isAwaitingNotificationHistory = ref(false);
 const isAwaitingInitialHistory = ref(false);
+const isInitialHistoryPositioning = ref(false);
+const initialHistoryRefreshFailed = ref(false);
+const initialHistoryExcludedMessageIds = ref(new Set<string>());
+let cancelInitialHistoryRecovery: (() => void) | undefined;
 const initialNotificationPositionReady = ref(true);
 let initialNotificationPositionMessageId = '';
 const renderedUserMessages = computed(() => {
@@ -703,8 +725,7 @@ const renderedUserMessages = computed(() => {
   if (
     !topicId ||
     renderedTopicId.value !== topicId ||
-    isAwaitingNotificationHistory.value ||
-    isAwaitingInitialHistory.value
+    isAwaitingNotificationHistory.value
   ) {
     return [];
   }
@@ -713,7 +734,13 @@ const renderedUserMessages = computed(() => {
     message => !message.topicId || message.topicId === topicId
   );
 
-  return getRenderedTopicMessages(topicId, currentTopicMessages);
+  // Ошибка HTTP не должна скрывать новые WS-события и локальную отправку.
+  const visibleMessages = isAwaitingInitialHistory.value
+    ? currentTopicMessages.filter(
+        message => !initialHistoryExcludedMessageIds.value.has(message.id)
+      )
+    : currentTopicMessages;
+  return getRenderedTopicMessages(topicId, visibleMessages);
 });
 const renderedLastUserMessageSignature = computed(() => {
   const lastMessage =
@@ -746,6 +773,14 @@ const renderedUserReactionsSignature = computed(() => {
 const hasCallTopicDefaultMessage = computed(() =>
   renderedUserMessages.value.some(isCallTopicDefaultMessage)
 );
+const callTopicRoomId = computed(() => {
+  if (!isActiveCallTopic.value || !route.value.id) return null;
+  for (const message of getFullMessagesByTopicId(route.value.id)) {
+    const roomId = parseCallTopicDefaultMessageEx(message.ex)?.roomId;
+    if (roomId) return roomId;
+  }
+  return null;
+});
 const isDeletedAccountTopic = computed(() => {
   const topic = activeTopic.value;
 
@@ -1237,6 +1272,26 @@ const getMessageVersionTimestamp = (
     ...[message.updatedAt, message.deletedAt, message.createdAt]
       .map(value => (value ? new Date(value as string | Date).getTime() : 0))
       .filter(value => Number.isFinite(value))
+  );
+};
+
+const isResidentHistoryCurrent = (
+  topicId: string,
+  messages: IMessage[]
+): boolean => {
+  const lastMessage = getSelectedTopic(topicId)?.lastMessage;
+  if (!lastMessage?.id) return true;
+
+  const residentLastMessage = messages.find(
+    message => message.id === lastMessage.id
+  );
+  return (
+    !!residentLastMessage &&
+    messages.at(-1)?.id === lastMessage.id &&
+    getMessageVersionTimestamp(residentLastMessage) >=
+      getMessageVersionTimestamp(lastMessage) &&
+    (typeof lastMessage.text !== 'string' ||
+      residentLastMessage.text === lastMessage.text)
   );
 };
 
@@ -2041,7 +2096,12 @@ const shouldRenderUserMessageSkeleton = computed(
   () =>
     props.deferContentRender ||
     (!isActiveCallTopic.value &&
-      (shouldShowSearchNavigationSkeleton.value ||
+      ((isAwaitingInitialHistory.value &&
+        !hasVisibleUserMessages.value &&
+        !initialHistoryRefreshFailed.value) ||
+        (isInitialHistoryPositioning.value &&
+          !(isAwaitingInitialHistory.value && hasVisibleUserMessages.value)) ||
+        shouldShowSearchNavigationSkeleton.value ||
         shouldProtectEmptyUserMessagesWithSkeleton.value ||
         (isUserMessagesRoute.value && shouldShowDelayedInitialSkeleton.value)))
 );
@@ -2974,12 +3034,25 @@ const refreshAroundMessageAfterOptimisticJump = async (
     forcePreserve: true,
     preferredMessageId: messageId
   });
+  const visibleMessages = getMessagesByTopicId(topicId);
+  const visibleIds = new Set(visibleMessages.map(message => message.id));
+  const firstVisibleTime = new Date(visibleMessages[0]?.createdAt).getTime();
+  const lastVisibleTime = new Date(visibleMessages.at(-1)?.createdAt).getTime();
+  const hasGapInVisibleContext = messages.some(message => {
+    const time = new Date(message.createdAt).getTime();
+    return (
+      time >= firstVisibleTime &&
+      time <= lastVisibleTime &&
+      !visibleIds.has(message.id)
+    );
+  });
   mergeMessagesForTopic(topicId, messages, 'replace', {
     syncLastMessage: false,
     windowMode: 'around-anchor',
     anchorMessageId: messageId,
     // Контекст уже показанной цитаты может не включать конец открытого чата.
-    visibleMessages: preserveVisibleWindow ? undefined : messages
+    visibleMessages:
+      preserveVisibleWindow && !hasGapInVisibleContext ? undefined : messages
   });
   await nextTick();
   if (!isCurrent()) return;
@@ -3295,6 +3368,7 @@ const bootstrapPendingSearchNavigation = async (): Promise<void> => {
 
 const handleArrowDownClick = async (): Promise<void> => {
   const revision = ++messageNavigationRevision;
+  if (route.value.id) dismissUnreadMarkerForTopic(route.value.id);
   await handleScrollToButton(() => revision === messageNavigationRevision);
 };
 
@@ -3377,7 +3451,13 @@ const getFirstUnreadMessageId = (): string | null => {
 };
 
 const resetUnreadIfViewingBottom = (): void => {
-  if (!route.value?.id || !chatWrapperRef.value) {
+  if (
+    !route.value?.id ||
+    !chatWrapperRef.value ||
+    isLoadingInitialMessages.value ||
+    isAwaitingInitialHistory.value ||
+    isInitialHistoryPositioning.value
+  ) {
     return;
   }
 
@@ -3392,6 +3472,10 @@ const resetUnreadIfViewingBottom = (): void => {
 
   if (!isViewingBottom.value) {
     return;
+  }
+
+  if (scrollAnchor.hasUserScrollIntentAfter(topicSwitchStartedAtMs)) {
+    dismissUnreadMarkerForTopic(route.value.id);
   }
 
   if (topicUnreadCount.value > 0) {
@@ -3504,7 +3588,7 @@ onMounted(async () => {
 
   if ('ResizeObserver' in window) {
     chatVisibilityObserver = new ResizeObserver(() => {
-      syncMessageInlineEndInset();
+      scheduleMessageInlineEndInsetSync();
       syncVisibleUnreadAfterAutoScroll();
       schedulePinnedViewportSnapshotSync();
     });
@@ -3512,13 +3596,14 @@ onMounted(async () => {
     nextTick(() => {
       if (chatWrapperRef.value) {
         chatVisibilityObserver?.observe(chatWrapperRef.value);
-        syncMessageInlineEndInset();
+        scheduleMessageInlineEndInsetSync();
       }
     });
   }
 });
 
 onUnmounted(() => {
+  window.cancelAnimationFrame(messageInlineEndInsetRafId);
   window.removeEventListener('resize', scheduleFloatingDateDividerSync);
   releaseBootstrapScrollLock();
   releaseSearchNavigationPositioning();
@@ -3582,7 +3667,7 @@ watch(
 
     chatVisibilityObserver.disconnect();
     chatVisibilityObserver.observe(wrapper);
-    syncMessageInlineEndInset();
+    scheduleMessageInlineEndInsetSync();
     syncVisibleUnreadAfterAutoScroll();
     scheduleFloatingDateDividerSync();
   }
@@ -3699,6 +3784,33 @@ watch(
       return;
     }
 
+    cancelInitialHistoryRecovery?.();
+    let cancelled = false;
+    let finishRetryWait: (() => void) | undefined;
+    cancelInitialHistoryRecovery = () => {
+      cancelled = true;
+      finishRetryWait?.();
+    };
+    const waitForHistoryRetry = (delay: number) =>
+      new Promise<void>(resolve => {
+        const finish = () => {
+          window.clearTimeout(timeout);
+          window.removeEventListener('online', resume);
+          window.removeEventListener('focus', resume);
+          document.removeEventListener('visibilitychange', resume);
+          finishRetryWait = undefined;
+          resolve();
+        };
+        const resume = () => {
+          if (getHasHistoryNetwork() && getIsAppActivelyVisible()) finish();
+        };
+        const timeout = window.setTimeout(finish, delay);
+        finishRetryWait = finish;
+        window.addEventListener('online', resume);
+        window.addEventListener('focus', resume);
+        document.addEventListener('visibilitychange', resume);
+      });
+
     pendingInitialNotificationMessageId.value = notificationMessageId || '';
     isAwaitingNotificationHistory.value = !!shouldScrollToBottomForNotification;
     initialNotificationPositionMessageId = '';
@@ -3709,6 +3821,8 @@ watch(
     hideFloatingDateDivider();
     if (!topicId) {
       isAwaitingInitialHistory.value = false;
+      isInitialHistoryPositioning.value = false;
+      initialHistoryRefreshFailed.value = false;
       renderedTopicId.value = '';
       paintedUserMessageTopicId.value = '';
       isAwaitingUserMessagesPaint.value = false;
@@ -3719,14 +3833,45 @@ watch(
       return;
     }
     const topicSwitchToken = ++activeTopicSwitchToken;
-    // На мобильном не показываем старую историю перед актуальным окном.
+    const topicUnreadCount = getTopicUnreadBadgeCount(
+      getSelectedTopic(topicId),
+      authUser.value?.id
+    );
+    const residentMessages = getFullMessagesByTopicId(topicId).length
+      ? getFullMessagesByTopicId(topicId)
+      : getMessagesByTopicId(topicId);
+    initialHistoryExcludedMessageIds.value = new Set(
+      residentMessages
+        .filter(message => !isPendingOutgoingMessage(message))
+        .map(message => message.id)
+    );
+    const residentUnreadMessages = residentMessages.filter(
+      message =>
+        isUnreadTrackableMessage(message) &&
+        message.senderUserId !== authUser.value?.id &&
+        message.isReadByMe !== true
+    );
+    const canReuseResidentHistory =
+      routeType !== RouteTypes.AI &&
+      !shouldScrollToBottomForNotification &&
+      getPendingSearchNavigation()?.topicId !== topicId &&
+      (residentMessages.length > 0 || isTopicMessagesKnownEmpty(topicId)) &&
+      isResidentHistoryCurrent(topicId, residentMessages) &&
+      residentUnreadMessages.length >= topicUnreadCount;
+    // Готовый чат обновляется в фоне. Заведомо старое окно ждёт свежую историю.
     isAwaitingInitialHistory.value =
-      isMobile.value && routeType !== RouteTypes.AI && getHasBrowserNetwork();
+      routeType !== RouteTypes.AI &&
+      getHasHistoryNetwork() &&
+      !canReuseResidentHistory;
+    isInitialHistoryPositioning.value =
+      routeType !== RouteTypes.AI && !canReuseResidentHistory;
+    initialHistoryRefreshFailed.value = false;
     paintedUserMessageTopicId.value = '';
     lastFloatingDateDividerScrollTop = null;
     topicSwitchStartedAtMs = performance.now();
     topicSwitchUserScrollIntentAtMs = 0;
     const isStaleTopicSwitch = () =>
+      cancelled ||
       topicSwitchToken !== activeTopicSwitchToken ||
       route.value?.id !== topicId;
     const hadRenderedDifferentTopicMessages =
@@ -3777,10 +3922,6 @@ watch(
     suspendHistoryFetch(TOPIC_SWITCH_HISTORY_FETCH_GRACE_MS);
     applyUnreadMarkerStateForTopic(topicId);
 
-    const topicUnreadCount = getTopicUnreadBadgeCount(
-      getSelectedTopic(topicId),
-      authUser.value?.id
-    );
     const { initialLimit: initialMessagesLimit, expandedLimit } =
       getTopicSwitchFetchLimits(topicUnreadCount);
     const fastInitialMessagesLimit = getFastInitialMessagesLimit(
@@ -3833,6 +3974,21 @@ watch(
       });
     }
 
+    const residentUnreadMessage =
+      canReuseResidentHistory && topicUnreadCount > 0
+        ? residentUnreadMessages[0]
+        : undefined;
+    if (residentUnreadMessage) {
+      unreadMarkerMessageIdsByTopic[topicId] = residentUnreadMessage.id;
+      applyUnreadMarkerStateForTopic(topicId);
+      mergeMessagesForTopic(topicId, residentMessages, 'replace', {
+        syncLastMessage: false,
+        windowMode: 'around-anchor',
+        anchorMessageId: residentUnreadMessage.id,
+        visibleLimit: Math.max(fastInitialMessagesLimit, 48)
+      });
+    }
+
     if (!shouldScrollToBottomForNotification) {
       void fetchPinnedMessagesForTopic(topicId, {
         maxAgeMs: TOPIC_SWITCH_CACHE_MAX_AGE_MS
@@ -3840,15 +3996,18 @@ watch(
     }
 
     const shouldHydrateBeforeInitialPaint = routeType !== RouteTypes.AI;
-    const shouldRefreshMobileHistoryBeforePaint =
-      isMobile.value && !shouldBootstrapAroundMessage && getHasBrowserNetwork();
+    const shouldRefreshHistoryBeforePaint =
+      routeType !== RouteTypes.AI &&
+      !shouldBootstrapAroundMessage &&
+      getHasHistoryNetwork();
+    if (shouldBootstrapAroundMessage) isAwaitingInitialHistory.value = false;
     const hydrateInitialMessages = async (): Promise<IMessage[]> => {
       const hydrateFullHistory = () =>
         hydrateMessagesFromCache(topicId, undefined, {
           visibleLimit: fastInitialMessagesLimit,
           allowVisibleShrink: true
         });
-      if (shouldRefreshMobileHistoryBeforePaint) {
+      if (shouldRefreshHistoryBeforePaint || canReuseResidentHistory) {
         return hydratePendingMessagesFromCache(
           topicId,
           undefined,
@@ -3887,36 +4046,74 @@ watch(
       ? hydrateInitialMessages()
       : Promise.resolve([]);
     let initialMessagesFetch: Promise<IMessage[]> | null = null;
+    let readInitialMessages: (() => Promise<IMessage[]>) | undefined;
 
     // Уведомление может быть из середины серии: первый кадр ждёт последнюю страницу.
     if (!shouldBootstrapAroundMessage) {
-      initialMessagesFetch = shouldScrollToBottomForNotification
-        ? reconcileNotificationTopicMessages(
-            topicId,
-            expandedLimit,
-            notificationMessageId
-          ).then(result => {
-            notificationVisibleMessagesLimit = result.visibleLimit;
-            notificationHistoryIsFresh = result.isFresh;
-            return result.messages;
-          })
-        : fetchMessagesForTopic(topicId, {
-            limit: initialNetworkMessagesLimit,
-            maxAgeMs: TOPIC_SWITCH_CACHE_MAX_AGE_MS,
-            forceRefresh: true,
-            forceNetwork: getHasBrowserNetwork(),
-            allowStaleFallback: !getHasBrowserNetwork(),
-            visibleLimit: fastInitialMessagesLimit,
-            updateVisible: false,
-            revealIfEmpty: true,
-            replaceInitialWindow: shouldRefreshMobileHistoryBeforePaint,
-            onNetworkApplied: () => {
-              initialHistoryIsFresh = true;
-            }
-          });
+      readInitialMessages = () =>
+        shouldScrollToBottomForNotification
+          ? reconcileNotificationTopicMessages(
+              topicId,
+              expandedLimit,
+              notificationMessageId
+            ).then(result => {
+              notificationVisibleMessagesLimit = result.visibleLimit;
+              notificationHistoryIsFresh = result.isFresh;
+              return result.messages;
+            })
+          : !getHasHistoryNetwork()
+            ? hydrationPromise
+            : fetchMessagesForTopic(topicId, {
+                limit: initialNetworkMessagesLimit,
+                maxAgeMs: getHasBrowserNetwork()
+                  ? undefined
+                  : TOPIC_SWITCH_CACHE_MAX_AGE_MS,
+                forceRefresh: true,
+                forceNetwork: getHasBrowserNetwork(),
+                allowStaleFallback: !getHasBrowserNetwork(),
+                visibleLimit: fastInitialMessagesLimit,
+                updateVisible: false,
+                revealIfEmpty: true,
+                replaceInitialWindow: shouldRefreshHistoryBeforePaint,
+                onNetworkApplied: () => {
+                  initialHistoryIsFresh = true;
+                }
+              });
+      initialMessagesFetch = readInitialMessages();
     }
 
-    const hydratedMessages = await hydrationPromise;
+    if (canReuseResidentHistory) {
+      await nextTick();
+      if (isStaleTopicSwitch()) return;
+      await scrollToBottom({
+        preferUnreadMarker: !!residentUnreadMessage,
+        smooth: false,
+        isCurrent: () => !isStaleTopicSwitch()
+      });
+      if (isStaleTopicSwitch()) return;
+      scrollAnchor.initialize();
+      isLoadingInitialMessages.value = false;
+      completedTopicSwitchToken = topicSwitchToken;
+      lastFloatingDateDividerScrollTop =
+        chatWrapperRef.value?.scrollTop ?? null;
+      setReadReceiptsEnabled(true);
+      setupIntersectionObserver();
+      syncVisibleUnreadAfterAutoScroll();
+      scheduleVisibleTopicMediaWarm(topicId, isStaleTopicSwitch);
+      if (!residentUnreadMessage) {
+        scheduleVisibleMessagesExpansion(
+          topicId,
+          expandedLimit,
+          topicSwitchToken
+        );
+      }
+    }
+
+    // Готовый HTTP, в том числе для уведомления, не ждёт локальных вложений.
+    const hydratedMessages = await (shouldRefreshHistoryBeforePaint &&
+    initialMessagesFetch
+      ? Promise.race([hydrationPromise, initialMessagesFetch])
+      : hydrationPromise);
 
     if (isStaleTopicSwitch()) {
       return;
@@ -3940,9 +4137,11 @@ watch(
     }
 
     if (
-      getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
-      getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId)).length >
-        0
+      !canReuseResidentHistory &&
+      !isAwaitingInitialHistory.value &&
+      (getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
+        getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId))
+          .length > 0)
     ) {
       setTopicMessagesKnownEmpty(topicId, false);
       resetInitialMessagesSkeleton();
@@ -3996,10 +4195,101 @@ watch(
       );
     }
 
-    const initialMessages = (await initialMessagesFetch) || [];
+    let initialMessages = (await initialMessagesFetch) || [];
+
+    if (isStaleTopicSwitch()) return;
+    if (canReuseResidentHistory) {
+      if (
+        !initialHistoryIsFresh ||
+        initialNavigationRevision !== messageNavigationRevision
+      )
+        return;
+
+      // Ответ сети обновляет уже открытое окно, не повторяя вход и unread-скролл.
+      const anchor = scrollAnchor.captureViewportAnchor();
+      const keepBottom = shouldKeepCurrentTopicBottomPosition();
+      const visibleLimit = Math.max(
+        fastInitialMessagesLimit,
+        getMessagesByTopicId(topicId).length
+      );
+      // Полная последняя страница не отменяет уже открытую историю старше неё.
+      const oldestFreshTimestamp =
+        initialMessages.length >= initialNetworkMessagesLimit
+          ? Math.min(
+              ...initialMessages.map(message =>
+                new Date(message.createdAt).getTime()
+              )
+            )
+          : 0;
+      const olderVisibleMessages = getMessagesByTopicId(topicId).filter(
+        message =>
+          !keepBottom &&
+          new Date(message.createdAt).getTime() < oldestFreshTimestamp
+      );
+      const freshMessages = [
+        ...olderVisibleMessages,
+        ...getFullMessagesByTopicId(topicId)
+      ];
+      mergeMessagesForTopic(topicId, freshMessages, 'replace', {
+        syncLastMessage: false,
+        windowMode: keepBottom ? 'latest' : 'around-anchor',
+        anchorMessageId: anchor?.messageId,
+        visibleMessages: freshMessages,
+        visibleLimit
+      });
+      setTopicMessagesKnownEmpty(
+        topicId,
+        getRenderedTopicMessages(topicId, freshMessages).length === 0
+      );
+      if (
+        state.unreadMarkerMessageId &&
+        !freshMessages.some(
+          message => message.id === state.unreadMarkerMessageId
+        )
+      ) {
+        unreadMarkerMessageIdsByTopic[topicId] = null;
+        refreshUnreadMarkerState(true);
+      }
+      await nextTick();
+      if (isStaleTopicSwitch()) return;
+      if (keepBottom) {
+        await scrollToBottom({ preferUnreadMarker: false, smooth: false });
+      } else if (anchor) {
+        const mutation = scrollAnchor.beginViewportMutation('replace', {
+          forcePreserve: true
+        });
+        scrollAnchor.commitViewportMutation(mutation.revision, {
+          forceAnchor: anchor
+        });
+      }
+      setupIntersectionObserver();
+      syncVisibleUnreadAfterAutoScroll();
+      return;
+    }
+    let retryDelay = 1000;
+    while (
+      isAwaitingInitialHistory.value &&
+      !(shouldScrollToBottomForNotification
+        ? notificationHistoryIsFresh
+        : initialHistoryIsFresh) &&
+      readInitialMessages
+    ) {
+      initialHistoryRefreshFailed.value = true;
+      isAwaitingNotificationHistory.value = false;
+      isInitialHistoryPositioning.value = false;
+      isLoadingInitialMessages.value = false;
+      resetInitialMessagesSkeleton();
+      // Повторяем только чтение: черновик, ответ и выбранные сообщения сохраняются.
+      await waitForHistoryRetry(retryDelay);
+      if (isStaleTopicSwitch()) return;
+      retryDelay = Math.min(retryDelay * 2, 30_000);
+      if (!getHasHistoryNetwork() || !getIsAppActivelyVisible()) continue;
+      initialMessages = await readInitialMessages();
+      if (isStaleTopicSwitch()) return;
+    }
 
     if (
-      shouldRefreshMobileHistoryBeforePaint &&
+      shouldRefreshHistoryBeforePaint &&
       !(shouldScrollToBottomForNotification
         ? notificationHistoryIsFresh
         : initialHistoryIsFresh || initialMessages.length > 0) &&
@@ -4025,7 +4315,7 @@ watch(
     cancelInitialMessagesSkeletonDelay();
     const shouldApplyInitialNetworkWindow =
       !shouldBootstrapAroundMessage &&
-      (shouldRefreshMobileHistoryBeforePaint ||
+      (shouldRefreshHistoryBeforePaint ||
         shouldScrollToBottomForNotification ||
         getMessagesByTopicId(topicId).length === 0 ||
         shouldKeepTopicSwitchBottomPosition(topicSwitchToken));
@@ -4047,7 +4337,7 @@ watch(
           : fastInitialMessagesLimit,
         {
           allowShrink:
-            shouldRefreshMobileHistoryBeforePaint ||
+            shouldRefreshHistoryBeforePaint ||
             !!shouldScrollToBottomForNotification
         }
       );
@@ -4114,7 +4404,9 @@ watch(
       setTopicMessagesKnownEmpty(
         topicId,
         getRenderedTopicMessages(topicId, initialMessages).length === 0 &&
-          !topicHasKnownLastMessage
+          (initialHistoryIsFresh ||
+            notificationHistoryIsFresh ||
+            !topicHasKnownLastMessage)
       );
       isAwaitingUserMessagesPaint.value = false;
       resetInitialMessagesSkeleton();
@@ -4212,6 +4504,7 @@ watch(
     }
 
     scrollAnchor.initialize();
+    isInitialHistoryPositioning.value = false;
     isLoadingInitialMessages.value = false;
     resetInitialMessagesSkeleton();
     completedTopicSwitchToken = topicSwitchToken;
@@ -4488,6 +4781,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  cancelInitialHistoryRecovery?.();
   if (route.value?.id) {
     setSuspendIncomingMergeForTopic(route.value.id, false);
   }

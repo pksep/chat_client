@@ -7,9 +7,18 @@
 }
 
 body {
-  font-family: 'Inter Variable', 'Noto Emoji COLRv1 Web',
-    'Noto Emoji Compat Web', 'Noto Emoji Windows Web', 'Noto Color Emoji Web',
-    'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
+  font-family: 'Inter Variable',
+    var(
+      --chat-emoji-font-family,
+      'Noto Emoji COLRv1 Web',
+      'Noto Emoji Compat Web',
+      'Noto Emoji Windows Web',
+      'Noto Color Emoji Web',
+      'Noto Color Emoji',
+      'Apple Color Emoji',
+      'Segoe UI Emoji'
+    ),
+    sans-serif;
   overflow-x: hidden;
   color: var(--text-primary);
   transition: color 0.2s ease;
@@ -81,9 +90,18 @@ select,
 .chat__input .v3-emoji-picker,
 .chat__input .v3-emoji-picker *,
 .chat__input [contenteditable='true'] {
-  font-family: 'Inter Variable', 'Noto Emoji COLRv1 Web',
-    'Noto Emoji Compat Web', 'Noto Emoji Windows Web', 'Noto Color Emoji Web',
-    'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif !important;
+  font-family: 'Inter Variable',
+    var(
+      --chat-emoji-font-family,
+      'Noto Emoji COLRv1 Web',
+      'Noto Emoji Compat Web',
+      'Noto Emoji Windows Web',
+      'Noto Color Emoji Web',
+      'Noto Color Emoji',
+      'Apple Color Emoji',
+      'Segoe UI Emoji'
+    ),
+    sans-serif !important;
 }
 
 [data-emoji-pending='true'] {

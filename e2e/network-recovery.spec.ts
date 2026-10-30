@@ -19,7 +19,9 @@ async function localChat(
     capability: true,
     attempts: 0,
     healthChecks: 0,
-    httpChecks: 0
+    httpChecks: 0,
+    folderChecks: 0,
+    sentMessages: [] as Array<{ topicId: string; text: string; ex: string }>
   };
   const namespace = server.of('/chat');
   namespace.use((_socket, next) => {
@@ -39,7 +41,28 @@ async function localChat(
       state.healthChecks++;
       if (state.reply) ack({ success: true });
     });
-    socket.on('getChatFolders', (_payload, ack) => ack([]));
+    socket.on('getChatFolders', (_payload, ack) => {
+      state.folderChecks++;
+      ack([]);
+    });
+    socket.on('sendMessage', raw => {
+      const message = JSON.parse(raw);
+      state.sentMessages.push(message);
+      socket.emit('changeMessage', {
+        type: 'NEW',
+        topicId: message.topicId,
+        data: {
+          ...message,
+          id: `confirmed-${state.sentMessages.length}`,
+          senderUserId: 'network-user',
+          createdAt: new Date().toISOString(),
+          status: 'DELIVERED',
+          media: [],
+          reactions: [],
+          messageRead: []
+        }
+      });
+    });
     socket.on('authenticate', (_payload, ack) => ack({ success: true }));
   });
   await new Promise<void>(resolve =>
@@ -67,6 +90,15 @@ async function localChat(
     }
     if (url.pathname.endsWith('/sync/token') && options.stallSync)
       await syncGate;
+    if (
+      ['/performance-api/users', '/performance-api/topics'].includes(
+        url.pathname
+      )
+    ) {
+      return route.fulfill({
+        json: { data: [], meta: { totalPages: 1, currentPage: 1 } }
+      });
+    }
     if (url.pathname.startsWith('/performance-api/')) {
       return route.fulfill({ json: [] }).catch(() => {});
     }
@@ -240,6 +272,171 @@ test('звонок, начавшийся во время проверки, за�
         return (await import(/* @vite-ignore */ path)).open.value;
       })
     ).toBe(true);
+  } finally {
+    await fixture.close();
+  }
+});
+
+for (const endCall of [false, true]) {
+  test(`готовность и очередь восстанавливаются по ACK ${endCall ? 'после выхода из звонка' : 'во время звонка'} без перезагрузки`, async ({
+    page
+  }) => {
+    const fixture = await localChat(page);
+    const replies: Array<() => void> = [];
+    fixture.state.reply = false;
+    fixture.namespace.on('connection', socket => {
+      socket.on('checkConnection', ack => {
+        replies.push(() => ack({ success: true }));
+      });
+    });
+    try {
+      await fixture.initialize();
+      await expect.poll(connected.bind(null, page)).toBe(true);
+      await page.evaluate(async () => {
+        const call = await import('/src/services/useCallState.ts');
+        const topics = await import('/src/composables/useTopics.ts');
+        const messages = await import('/src/services/useMessages.ts');
+        const { mountConnectionProfile } = await import(
+          '/e2e/fixtures/network-harness.ts'
+        );
+        const { mountMessageSender } = await import(
+          '/e2e/fixtures/message-send-harness.ts'
+        );
+        const auth = await import('/src/composables/useAuth.ts');
+        auth.authedUser.value = {
+          id: 'network-user',
+          initials: 'Проверка сети'
+        };
+        const fixture = (window as any).networkRecovery;
+        call.open.value = true;
+        topics.setTopics([
+          { id: 'network-topic', type: 'DM', name: 'Проверка очереди' }
+        ]);
+        // HTTP/resume может сбросить готовность UI без разрыва сокета.
+        fixture.sdk.emitConnectionState(false);
+        mountConnectionProfile();
+        fixture.messages = messages;
+        fixture.sender = mountMessageSender('network-topic');
+        fixture.sender.setAuthUser(auth.authedUser.value);
+        await fixture.sender.handleSend({
+          content: 'Проверка очереди после звонка'
+        });
+      });
+      expect(await connected(page)).toBe(true);
+      expect(fixture.state.sentMessages).toHaveLength(0);
+      expect(
+        await page.evaluate(
+          () =>
+            (window as any).networkRecovery.messages.getFullMessagesByTopicId(
+              'network-topic'
+            ).length
+        )
+      ).toBe(1);
+      await expect
+        .poll(() => replies.length, { timeout: 12000 })
+        .toBeGreaterThan(0);
+      expect(
+        await page.evaluate(() =>
+          (window as any).networkRecovery.chat.getHasWebsocketConnection()
+        )
+      ).toBe(false);
+      if (endCall) {
+        await page.evaluate(async () => {
+          const call = await import('/src/services/useCallState.ts');
+          call.open.value = false;
+        });
+      }
+      fixture.state.reply = true;
+      replies.splice(0).forEach(reply => reply());
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() =>
+              (window as any).networkRecovery.chat.getHasWebsocketConnection()
+            ),
+          { timeout: 1500 }
+        )
+        .toBe(true);
+      await expect(page.locator('.connection-status')).toHaveCount(0);
+      await expect.poll(() => fixture.state.sentMessages.length).toBe(1);
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            (window as any).networkRecovery.messages
+              .getFullMessagesByTopicId('network-topic')
+              .map((message: any) => message.status)
+          )
+        )
+        .toEqual(['DELIVERED']);
+      expect(fixture.state.attempts).toBe(1);
+      const folderChecks = fixture.state.folderChecks;
+      const healthChecks = fixture.state.healthChecks;
+      await page.clock.install();
+      await page.clock.runFor(12000);
+      await expect
+        .poll(() => fixture.state.healthChecks)
+        .toBeGreaterThan(healthChecks);
+      expect(fixture.state.folderChecks).toBe(folderChecks);
+      expect(fixture.state.sentMessages).toHaveLength(1);
+      expect(fixture.state.attempts).toBe(1);
+      expect(
+        await page.evaluate(async () => {
+          const call = await import('/src/services/useCallState.ts');
+          return call.open.value;
+        })
+      ).toBe(!endCall);
+    } finally {
+      await page.evaluate(() =>
+        (window as any).networkRecovery?.sender?.stop()
+      );
+      await fixture.close();
+    }
+  });
+}
+
+test('готовность сокета журналирует источник сброса и восстановления без дублирования ACK', async ({
+  page
+}) => {
+  const fixture = await localChat(page);
+  try {
+    await fixture.initialize();
+    await expect.poll(connected.bind(null, page)).toBe(true);
+    await page.evaluate(async () => {
+      const fixture = (window as any).networkRecovery;
+      fixture.sdk.emitConnectionState(false);
+      await fixture.sdk.checkConnectionHealth();
+      fixture.sdk.emitConnectionState(true);
+    });
+    const events = await page.evaluate(() =>
+      JSON.parse(
+        localStorage.getItem('chat.telemetry.network.pending.v1') || '[]'
+      ).filter(
+        (event: any) => event.name === 'network.websocket.readiness_changed'
+      )
+    );
+    expect(events.slice(-2)).toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          reason: 'sdk-connection-state',
+          previousReady: true,
+          ready: false,
+          socketConnected: true,
+          sendAvailable: false
+        })
+      }),
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          reason: 'sdk-connection-state',
+          previousReady: false,
+          ready: true,
+          socketConnected: true,
+          sendAvailable: true
+        })
+      })
+    ]);
+    expect(
+      events.filter((event: any) => event.payload.ready === true)
+    ).toHaveLength(2);
   } finally {
     await fixture.close();
   }

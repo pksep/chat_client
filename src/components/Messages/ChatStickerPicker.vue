@@ -176,6 +176,7 @@ import {
   computed,
   nextTick,
   onBeforeUnmount,
+  onMounted,
   ref,
   shallowRef,
   watch
@@ -972,7 +973,19 @@ watch(getStickerApiBaseUrl, () => {
   items.value = [];
   if (prepared.value) void loadFirstPage();
 });
+const recoverCatalog = () => {
+  if (active.value && error.value && !loading.value && !document.hidden)
+    void loadFirstPage();
+};
+onMounted(() => {
+  window.addEventListener('online', recoverCatalog);
+  window.addEventListener('focus', recoverCatalog);
+  document.addEventListener('visibilitychange', recoverCatalog);
+});
 onBeforeUnmount(() => {
+  window.removeEventListener('online', recoverCatalog);
+  window.removeEventListener('focus', recoverCatalog);
+  document.removeEventListener('visibilitychange', recoverCatalog);
   pendingPack = '';
   deactivate();
   detachWrapper();

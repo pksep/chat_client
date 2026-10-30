@@ -1,19 +1,26 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type { IMessage } from '../src/components/interfaces/interfaces';
 
 let android = true;
+let apiUrl = 'https://chat.example/api';
+let accessToken = 'current-token';
+let sessionSequence = 0;
 const getMessageUploadCapabilities = mock(
   async (): Promise<{ version: number }> => ({ version: 1 })
 );
-const prepareMessageUpload = mock(async (_options: any) => ({
-  status: 'staging'
-}));
-const stageMessageUploadChunk = mock(async (_options: any) => {});
-const enqueueMessageUpload = mock(async (_options: any) => {});
-const getMessageUpload = mock(
-  async (_options: any): Promise<any> => ({ status: 'missing' })
+const prepareMessageUpload = mock<
+  (options: any) => Promise<{ status: string }>
+>(async () => ({ status: 'staging' }));
+const stageMessageUploadChunk = mock<(options: any) => Promise<void>>(
+  async () => {}
 );
-const saveSession = mock(async (_options: any) => {});
+const enqueueMessageUpload = mock<(options: any) => Promise<void>>(
+  async () => {}
+);
+const getMessageUpload = mock<(options: any) => Promise<any>>(async () => ({
+  status: 'missing'
+}));
+const saveSession = mock<(options: any) => Promise<void>>(async () => {});
 mock.module('../src/services/native-file-bridge', () => ({
   isAndroidNativePlatform: () => android,
   NativeFile: {
@@ -25,13 +32,13 @@ mock.module('../src/services/native-file-bridge', () => ({
   }
 }));
 mock.module('../src/services/useConfig', () => ({
-  getConfig: () => ({ CHAT_API_DOMAIN: 'https://chat.example/api' })
+  getConfig: () => ({ CHAT_API_DOMAIN: apiUrl })
 }));
 mock.module('../src/composables/useAuth', () => ({
   getStoredChatAccessToken: () => 'stored-token'
 }));
 mock.module('../src/composables/useLogin', () => ({
-  getAuthToken: () => 'current-token'
+  getAuthToken: () => accessToken
 }));
 mock.module('../src/services/useTelemetry', () => ({
   createTelemetryTraceId: () => 'test-trace',
@@ -76,6 +83,8 @@ globalThis.FileReader = class {
 describe('native message upload handoff', () => {
   beforeEach(() => {
     android = true;
+    apiUrl = 'https://chat.example/api';
+    accessToken = `test-session-${++sessionSequence}`;
     getMessageUploadCapabilities.mockReset().mockResolvedValue({ version: 1 });
     prepareMessageUpload.mockReset().mockResolvedValue({ status: 'staging' });
     stageMessageUploadChunk.mockClear();
@@ -153,4 +162,76 @@ describe('native message upload handoff', () => {
     });
     expect(await canUseNativeMessageUpload()).toBe(false);
   });
+
+  test('concurrent videos share a capability request and confirmed support expires', async () => {
+    const originalFetch = globalThis.fetch;
+    const clock = spyOn(Date, 'now').mockReturnValue(1000);
+    let release!: (response: Response) => void;
+    const response = new Promise<Response>(resolve => (release = resolve));
+    const request = mock(async () => response);
+    globalThis.fetch = request as any;
+    try {
+      const first = canUseNativeMessageUpload();
+      const second = canUseNativeMessageUpload();
+      await Promise.resolve();
+      expect(request).toHaveBeenCalledTimes(1);
+      release(Response.json({ version: 1 }));
+      expect(await Promise.all([first, second])).toEqual([true, true]);
+      expect(await canUseNativeMessageUpload()).toBe(true);
+      expect(request).toHaveBeenCalledTimes(1);
+      clock.mockReturnValue(61_001);
+      request.mockImplementation(async () => Response.json({ version: 1 }));
+      expect(await canUseNativeMessageUpload()).toBe(true);
+      expect(request).toHaveBeenCalledTimes(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+      clock.mockRestore();
+    }
+  });
+
+  test('confirmed absence is reused but another account or server is checked again', async () => {
+    const originalFetch = globalThis.fetch;
+    const request = mock(async () => new Response('', { status: 404 }));
+    globalThis.fetch = request as any;
+    try {
+      expect(await canUseNativeMessageUpload()).toBe(false);
+      expect(await canUseNativeMessageUpload()).toBe(false);
+      expect(request).toHaveBeenCalledTimes(1);
+      accessToken = 'another-test-session';
+      expect(await canUseNativeMessageUpload()).toBe(false);
+      expect(request).toHaveBeenCalledTimes(2);
+      apiUrl = 'https://another-chat.example/api';
+      expect(await canUseNativeMessageUpload()).toBe(false);
+      expect(request).toHaveBeenCalledTimes(3);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  for (const failure of [
+    'offline',
+    'unauthorized',
+    'unavailable',
+    'invalid-json'
+  ]) {
+    test(`capability ${failure} is retried and cannot disable native upload for a minute`, async () => {
+      const originalFetch = globalThis.fetch;
+      const request = mock(async () => Response.json({ version: 1 }));
+      request.mockImplementationOnce(async () => {
+        if (failure === 'offline') throw new TypeError('Failed to fetch');
+        if (failure === 'invalid-json') return new Response('invalid');
+        return new Response('', {
+          status: failure === 'unauthorized' ? 401 : 503
+        });
+      });
+      globalThis.fetch = request as any;
+      try {
+        expect(await canUseNativeMessageUpload()).toBe(false);
+        expect(await canUseNativeMessageUpload()).toBe(true);
+        expect(request).toHaveBeenCalledTimes(2);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+  }
 });

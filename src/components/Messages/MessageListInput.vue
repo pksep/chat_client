@@ -221,6 +221,7 @@ import EditIcon from '../UI/EditIcon.vue';
 import ForwardIcon from '../UI/ForwardIcon.vue';
 import SkeletonBlock from '../UI/SkeletonBlock.vue';
 import { stripHtml } from '../../utils/stripHtml';
+import { prepareEditorMentionHtml } from '../../utils/editor-mention-html';
 import ChatStickerPicker from './ChatStickerPicker.vue';
 import { bindKeyboardMedia } from '../../services/useKeyboardMedia';
 import { bindChatClipboardPaste } from '../../services/useChatClipboard';
@@ -317,7 +318,7 @@ const emit = defineEmits([
 ]);
 
 const internalInputText = computed({
-  get: () => props.modelValue,
+  get: () => prepareEditorMentionHtml(props.modelValue),
   set: val => emit('update:modelValue', val)
 });
 
@@ -515,7 +516,7 @@ const contentEditorRef =
 const inputContainerRef = useTemplateRef<HTMLElement>('inputContainerRef');
 const composerKeyboard = useComposerKeyboard(inputContainerRef);
 useIosPwaFilePicker(inputContainerRef, (files, onlyMedia) => {
-  void contentEditorRef.value?.emitAttachFiles(files, onlyMedia);
+  return contentEditorRef.value?.emitAttachFiles(files, onlyMedia);
 });
 const isTauriFileDragging = ref(false);
 const isEditorReady = ref(false);
@@ -523,6 +524,20 @@ let shouldFocusEditorWhenReady = false;
 
 const handleEditorMounted = async (): Promise<void> => {
   await nextTick();
+  const editor = contentEditorRef.value?.editor;
+  if (editor) {
+    const editorProps = editor.options.editorProps;
+    const transformHtml = editorProps.transformPastedHTML;
+    editor.setOptions({
+      editorProps: {
+        ...editorProps,
+        transformPastedHTML: (html, view) =>
+          prepareEditorMentionHtml(
+            transformHtml ? transformHtml(html, view) : html
+          )
+      }
+    });
+  }
   (
     contentEditorRef.value as { preloadEmojiPicker?: () => void } | null
   )?.preloadEmojiPicker?.();
@@ -754,7 +769,9 @@ defineExpose({
   pasteCopiedContent: () =>
     chatClipboard?.pasteFromClipboard() ?? Promise.resolve(false),
   insertText: (text: string) =>
-    contentEditorRef.value?.editor?.commands?.insertContent?.(text),
+    contentEditorRef.value?.editor?.commands?.insertContent?.(
+      prepareEditorMentionHtml(text)
+    ),
   insertPlainText: (text: string) =>
     contentEditorRef.value?.editor?.commands?.insertContent?.({
       type: 'text',

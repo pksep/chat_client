@@ -120,6 +120,9 @@ test('серверные дубли сохраняют сердечко при �
 }) => {
   const { errors } = await openFixture(page, { count: 2 });
   await openTopic(page, 0);
+  await expect(
+    page.locator('[data-message-id="performance-0-message-1"]')
+  ).toBeVisible();
   const base = {
     ...makeMessages(topicId, 1)[0],
     text: 'ладно не надо)',

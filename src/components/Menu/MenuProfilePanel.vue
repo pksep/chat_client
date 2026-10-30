@@ -38,12 +38,13 @@
     </div>
 
     <MenuSectionHeading
+      network-status
       v-if="!props.isCollapse"
       as="h4"
       class="menu-profile__title"
       :data-testid="`${props.dataTestid}-MenuProfilePanel-Title`"
     >
-      Профиль
+      <span class="menu-section-heading__label">Профиль</span>
     </MenuSectionHeading>
     <div v-if="authUser && !props.isCollapse" class="menu-profile__body">
       <header class="menu-profile__header">

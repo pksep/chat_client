@@ -1,6 +1,5 @@
 package sep.pksep.app;
 
-import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
@@ -44,8 +43,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.List;
 
 import sep.pksep.app.plugins.AudioOutputPlugin;
 import sep.pksep.app.plugins.AndroidScreenSharePlugin;
@@ -84,10 +81,6 @@ public class MainActivity extends BridgeActivity {
     private android.animation.ValueAnimator themeColorAnimator;
     private ChatKeyboardViewport keyboardViewport;
     private static final long STARTUP_OVERLAY_FALLBACK_TIMEOUT_MS = 30000L;
-    private static final int STARTUP_RUNTIME_PERMISSIONS_REQUEST_CODE = 4101;
-    private boolean startupRuntimePermissionsPending = false;
-    private boolean startupLocationPermissionChecked = false;
-    private final List<Runnable> startupRuntimePermissionsReadyCallbacks = new ArrayList<>();
     private boolean customPluginsRegistered = false;
     private static volatile boolean appInForeground = false;
     private static volatile boolean activityCreated = false;
@@ -181,7 +174,6 @@ public class MainActivity extends BridgeActivity {
                 () -> LaunchAppearance.applySystemBars(this, systemBarsWebView)
             );
         }
-        requestMissingStartupRuntimePermissions();
         if (BuildConfig.CHAT_STARTUP_BENCHMARK) {
             WebView.setWebContentsDebuggingEnabled(true);
         }
@@ -1201,89 +1193,6 @@ public class MainActivity extends BridgeActivity {
         handleCallIntent(intent);
         handleNotificationLaunchIntent(intent);
         handleShareIntent(intent);
-        requestMissingStartupRuntimePermissions();
-    }
-
-    /**
-     * Checks all runtime permissions required by the app every time its main
-     * activity is started. Android only shows dialogs for permissions which
-     * are still missing, so already granted permissions are never requested
-     * again. Media picker access is intentionally excluded: Android grants
-     * its selected URI directly, without a broad storage permission.
-     */
-    private void requestMissingStartupRuntimePermissions() {
-        if (startupRuntimePermissionsPending) return;
-        List<String> missingPermissions = new ArrayList<>();
-
-        addMissingRuntimePermission(missingPermissions, Manifest.permission.CAMERA);
-        addMissingRuntimePermission(missingPermissions, Manifest.permission.RECORD_AUDIO);
-
-        // Приблизительного доступа достаточно; точный повторно не запрашиваем.
-        if (!startupLocationPermissionChecked) {
-            startupLocationPermissionChecked = true;
-            if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) !=
-                PackageManager.PERMISSION_GRANTED) {
-                addMissingRuntimePermission(missingPermissions, Manifest.permission.ACCESS_COARSE_LOCATION);
-                addMissingRuntimePermission(missingPermissions, Manifest.permission.ACCESS_FINE_LOCATION);
-            }
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            addMissingRuntimePermission(
-                missingPermissions,
-                Manifest.permission.BLUETOOTH_CONNECT
-            );
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            addMissingRuntimePermission(
-                missingPermissions,
-                Manifest.permission.POST_NOTIFICATIONS
-            );
-        }
-
-        if (!missingPermissions.isEmpty()) {
-            startupRuntimePermissionsPending = true;
-            requestPermissions(
-                missingPermissions.toArray(new String[0]),
-                STARTUP_RUNTIME_PERMISSIONS_REQUEST_CODE
-            );
-        }
-    }
-
-    public void whenStartupRuntimePermissionsReady(Runnable callback) {
-        runOnUiThread(() -> {
-            if (startupRuntimePermissionsPending) {
-                startupRuntimePermissionsReadyCallbacks.add(callback);
-            } else {
-                callback.run();
-            }
-        });
-    }
-
-    @Override
-    public void onRequestPermissionsResult(
-        int requestCode,
-        String[] permissions,
-        int[] grantResults
-    ) {
-        if (requestCode != STARTUP_RUNTIME_PERMISSIONS_REQUEST_CODE) {
-            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-            return;
-        }
-        startupRuntimePermissionsPending = false;
-        List<Runnable> callbacks = new ArrayList<>(startupRuntimePermissionsReadyCallbacks);
-        startupRuntimePermissionsReadyCallbacks.clear();
-        for (Runnable callback : callbacks) callback.run();
-    }
-
-    private void addMissingRuntimePermission(
-        List<String> missingPermissions,
-        String permission
-    ) {
-        if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
-            missingPermissions.add(permission);
-        }
     }
 
     private boolean isChatMessageNotificationIntent(Intent intent) {

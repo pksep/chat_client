@@ -933,6 +933,9 @@ dialog.menu-profile__wallpaper-modal > .modal-yui-kit__modal-content {
 }
 
 .menu-profile__wallpaper-preview-surface {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
   border-radius: 15px;
   padding: 28px 20px 18px;
   min-height: 270px;
@@ -1141,7 +1144,8 @@ dialog.menu-profile__wallpaper-modal > .modal-yui-kit__modal-content {
   }
 
   .menu-profile__wallpaper-preview-chat {
-    min-height: 100%;
+    min-height: 0;
+    grid-template-rows: auto auto;
     gap: 12px;
   }
 

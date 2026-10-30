@@ -1,10 +1,11 @@
 import { ref } from 'vue';
 import type { IMessage, ITopic } from '../components/interfaces/interfaces';
-import { getChatSDK } from '../services/useChat';
+import { getChatSDK, getHasBrowserNetwork } from '../services/useChat';
 import {
   getFullMessagesByTopicId,
   getMessagesByTopicId,
-  getTopicIdsWithMessages
+  getTopicIdsWithMessages,
+  isDeletedMessageForTopic
 } from '../services/useMessages';
 import { useTopics } from './useTopics';
 import {
@@ -21,6 +22,7 @@ import {
 } from '../utils/favorite-topic';
 import { isBotTopic, isBotUser } from '../utils/bot';
 import { compactPersonName } from '../utils/personName';
+import { mergeMessageSnapshots } from '../utils/merge-message-snapshots';
 
 export interface IMessageSearchResult {
   id: string;
@@ -29,6 +31,11 @@ export interface IMessageSearchResult {
   topic?: ITopic | null;
   previewText: string;
   createdAt?: string | Date;
+}
+
+export interface IMessageSearchResponse {
+  results: IMessageSearchResult[];
+  total: number;
 }
 
 const pendingSearchNavigation = ref<IMessageSearchResult | null>(null);
@@ -115,7 +122,12 @@ const buildSearchResult = (
 ): IMessageSearchResult | null => {
   const topicId = message.topicId || message.topic?.id;
 
-  if (!topicId || !message.id) {
+  if (
+    !topicId ||
+    !message.id ||
+    message.deletedAt ||
+    isDeletedMessageForTopic(topicId, message)
+  ) {
     return null;
   }
 
@@ -215,23 +227,40 @@ const searchRemoteMessages = async (
 
 export const searchMessages = async (
   query: string,
-  opts?: { topicId?: string; limit?: number }
-): Promise<{ results: IMessageSearchResult[]; total: number }> => {
+  opts?: {
+    topicId?: string;
+    limit?: number;
+    onLocalResults?: (response: IMessageSearchResponse) => void;
+  }
+): Promise<IMessageSearchResponse> => {
   const normalizedQuery = normalizeSearchText(query);
 
   if (!normalizedQuery) {
     return { results: [], total: 0 };
   }
 
+  const sdk = getChatSDK();
+  const userId = getAuthUser()?.id;
   const localResults = searchLocalMessages(normalizedQuery, opts);
+  const localResponse = { results: localResults, total: localResults.length };
+  if (localResults.length) opts?.onLocalResults?.(localResponse);
+  if (!getHasBrowserNetwork()) return localResponse;
+
   const remote = await searchRemoteMessages(normalizedQuery, opts);
-  const results = dedupeResults([...remote.results, ...localResults]).sort(
-    compareByCreatedAt
-  );
+  if (getChatSDK() !== sdk || getAuthUser()?.id !== userId)
+    return { results: [], total: 0 };
+  const results = mergeMessageSnapshots(
+    [...searchLocalMessages(normalizedQuery, opts), ...remote.results].map(
+      result => result.message
+    )
+  )
+    .map(buildSearchResult)
+    .filter((result): result is IMessageSearchResult => !!result)
+    .sort(compareByCreatedAt);
 
   return {
     results,
-    total: remote.total ?? results.length
+    total: Math.max(remote.total ?? 0, results.length)
   };
 };
 

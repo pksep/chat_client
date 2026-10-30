@@ -1,6 +1,5 @@
 <template>
   <section
-    v-if="callTopicMeta"
     class="call-topic-actions"
     :data-testid="`${props.dataTestid}-Container`"
   >
@@ -74,6 +73,7 @@ import { parseCallTopicDescription } from '../../utils/call-topic';
 const props = withDefaults(
   defineProps<{
     topic: ITopic;
+    roomId?: string | null;
     dataTestid?: string;
   }>(),
   {
@@ -93,6 +93,9 @@ interface SummaryActionContext {
 const callTopicMeta = computed(() =>
   parseCallTopicDescription(props.topic.group?.description)
 );
+const summaryRoomId = computed(
+  () => callTopicMeta.value?.roomId || props.roomId || null
+);
 
 const canUseTranscriptActions = computed(() =>
   Boolean(summary.value?.transcript || summary.value?.hasTranscript)
@@ -100,11 +103,11 @@ const canUseTranscriptActions = computed(() =>
 
 const hydrateSummary = async (): Promise<void> => {
   const token = ++summaryLoadToken;
-  const roomId = callTopicMeta.value?.roomId || null;
+  const roomId = summaryRoomId.value;
   const topicId = props.topic.id;
   summary.value = null;
 
-  if (!topicId || !roomId) {
+  if (!topicId) {
     return;
   }
 
@@ -116,7 +119,7 @@ const hydrateSummary = async (): Promise<void> => {
 
 const getSummaryActionContext = (): SummaryActionContext => ({
   topicId: props.topic.id,
-  roomId: callTopicMeta.value?.roomId || null
+  roomId: summaryRoomId.value
 });
 
 const isSummaryForContext = (
@@ -248,7 +251,7 @@ const handleSendActionList = (): void => {
 };
 
 watch(
-  () => [props.topic.id, props.topic.group?.description],
+  () => [props.topic.id, summaryRoomId.value],
   () => {
     void hydrateSummary();
   },

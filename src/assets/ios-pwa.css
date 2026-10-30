@@ -1,3 +1,9 @@
+/* Веб-шрифты Noto в iOS могут рисовать квадраты даже в редактируемом черновике. */
+html.chat-ios-web {
+  --chat-emoji-font-family: 'Apple Color Emoji', 'Noto Color Emoji',
+    'Segoe UI Emoji';
+}
+
 /* В установленном WebKit клавиатура меняет visualViewport, а не 100dvh. */
 html.chat-ios-pwa {
   --ios-safe-top: env(safe-area-inset-top, 0px);
@@ -196,6 +202,19 @@ html.chat-ios-keyboard-open {
   padding-bottom: var(--ios-safe-bottom);
 }
 
+.chat-ios-pwa dialog.modal-yui-kit.slider-modal {
+  top: var(--ios-viewport-top, 0px);
+  bottom: auto;
+  height: var(--ios-viewport-height, 100dvh);
+  max-height: var(--ios-viewport-height, 100dvh);
+  border: 0;
+}
+
+.chat-ios-pwa .slider-modal__content {
+  padding-top: calc(5px + var(--ios-safe-top));
+  padding-bottom: var(--ios-safe-bottom);
+}
+
 .chat-ios-pwa .call-modal {
   top: var(--ios-viewport-top, 0px);
   bottom: auto;
@@ -266,9 +285,8 @@ html.chat-ios-keyboard-open {
   );
 }
 
-/* Запасной веб-шрифт Noto в WebKit может отображать эмодзи квадратами. */
 .chat-ios-web .v3-emoji-picker .v3-emojis button span {
-  font-family: 'Apple Color Emoji', 'Noto Color Emoji', sans-serif !important;
+  font-family: var(--chat-emoji-font-family), sans-serif !important;
 }
 
 /* Прокрутка внутри сдвинутого слоя WebKit рассинхронизирует отрисовку и hit testing. */
@@ -351,7 +369,9 @@ html.chat-ios-keyboard-open {
   backdrop-filter: none;
 }
 
-.chat-ios-web .message {
+.chat-ios-web .message,
+.chat-ios-web .contact-list__item,
+.chat-ios-web .contact-list__item * {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;

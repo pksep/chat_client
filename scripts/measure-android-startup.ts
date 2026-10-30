@@ -100,6 +100,10 @@ try {
     const deviceLaunchStartedAt = Number(nativeLaunch.trim().split(/\r?\n/)[0]);
     if (!Number.isFinite(deviceLaunchStartedAt))
       throw new Error('Не удалось прочитать часы устройства перед запуском');
+    if (/Activity:.*permissioncontroller/.test(nativeLaunch))
+      throw new Error(
+        'Системный запрос разрешения перекрыл запуск; замер видимости отклонён'
+      );
     const deadline = Date.now() + 30_000;
     let devtoolsReady = false;
     try {
@@ -179,11 +183,27 @@ try {
         undefined,
         { timeout: 30_000 }
       );
+      const nativeStateAtReady = await adb(
+        'shell',
+        'dumpsys',
+        'activity',
+        'activities'
+      );
+      const resumedActivityAtReady =
+        nativeStateAtReady.match(/topResumedActivity[^\r\n]*/)?.[0] || '';
+      if (
+        !resumedActivityAtReady.includes(packageId) ||
+        resumedActivityAtReady.includes('permissioncontroller')
+      )
+        throw new Error(
+          'Готовность WebView зафиксирована без видимой Activity приложения'
+        );
       const processStartToObservedReadyMs = performance.now() - started;
       await sleep(5000);
       const sample = {
         iteration,
         nativeLaunch,
+        nativeForegroundVerifiedAtObservedReady: true,
         processStartToObservedReadyMs,
         ...(await page.evaluate(
           expectedText => ({

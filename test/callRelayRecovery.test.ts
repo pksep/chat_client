@@ -4,7 +4,7 @@ import {
   extractRelayRecoverySamples
 } from '../src/services/call-relay-recovery';
 
-test('requests relay after three signal reconnects inside the window', () => {
+test('keeps healthy media after the incident sequence of signal reconnects', () => {
   let now = 1_000;
   const policy = createCallRelayRecoveryPolicy({}, () => now);
 
@@ -13,11 +13,15 @@ test('requests relay after three signal reconnects inside the window', () => {
   expect(policy.recordSignalReconnect()).toBeNull();
   now += 30_000;
 
-  expect(policy.recordSignalReconnect()).toMatchObject({
-    reason: 'repeated-signal-reconnect',
-    signalReconnectCount: 3
-  });
+  expect(
+    policy.recordStats([{ connectionPath: 'direct', roundTripTimeMs: 29 }])
+  ).toBeNull();
   expect(policy.recordSignalReconnect()).toBeNull();
+  expect(policy.recordSignalReconnect()).toBeNull();
+  expect(policy.snapshot()).toMatchObject({
+    relayRequested: false,
+    signalReconnectCount: 4
+  });
 });
 
 test('does not react to reconnects outside the rolling window', () => {
@@ -65,15 +69,16 @@ test('does not use RTT from an existing TURN relay as a trigger', () => {
 test('enforces cooldown after a failed relay attempt', () => {
   let now = 1_000;
   const policy = createCallRelayRecoveryPolicy(
-    { signalReconnectThreshold: 1, retryCooldownMs: 60_000 },
+    { highRttSampleThreshold: 1, retryCooldownMs: 60_000 },
     () => now
   );
 
-  expect(policy.recordSignalReconnect()).not.toBeNull();
+  const samples = [{ connectionPath: 'direct' as const, roundTripTimeMs: 950 }];
+  expect(policy.recordStats(samples)).not.toBeNull();
   policy.markRelayFailed();
-  expect(policy.recordSignalReconnect()).toBeNull();
+  expect(policy.recordStats(samples)).toBeNull();
   now += 60_000;
-  expect(policy.recordSignalReconnect()).not.toBeNull();
+  expect(policy.recordStats(samples)).not.toBeNull();
 });
 
 test('extracts only usable candidate-pair RTT samples', () => {

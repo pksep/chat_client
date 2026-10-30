@@ -27,7 +27,7 @@ interface PendingUploadPayload {
 interface PendingUploadChunk {
   cacheKey: string;
   chunkIndex: number;
-  data: Blob;
+  data: Blob | ArrayBuffer;
 }
 
 type PendingUploadWorkerRequest =
@@ -188,12 +188,13 @@ const savePendingUpload = async (
   ]);
 
   const directory = await getPendingUploadsOpfsDirectory(true);
+  const opfsFileName = getPendingUploadOpfsFileName(payload.cacheKey);
+  const handle = directory
+    ? await directory.getFileHandle(opfsFileName, { create: true })
+    : null;
 
-  if (directory) {
-    const opfsFileName = getPendingUploadOpfsFileName(payload.cacheKey);
-    const handle = await directory.getFileHandle(opfsFileName, {
-      create: true
-    });
+  // В старых WebKit OPFS доступен без createWritable: сохраняем частями в IDB.
+  if (handle && typeof handle.createWritable === 'function') {
     const writable = await handle.createWritable();
 
     try {
@@ -242,6 +243,8 @@ const savePendingUpload = async (
     return;
   }
 
+  if (handle) await deletePendingUploadFileFromOpfs(payload.cacheKey);
+
   const chunkCount = Math.ceil(file.size / PENDING_UPLOAD_CHUNK_SIZE);
 
   for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
@@ -249,10 +252,10 @@ const savePendingUpload = async (
     const chunk: PendingUploadChunk = {
       cacheKey: payload.cacheKey,
       chunkIndex,
-      data: file.slice(
-        start,
-        Math.min(file.size, start + PENDING_UPLOAD_CHUNK_SIZE)
-      )
+      // WebKit может прервать IDB-транзакцию с Blob временного файла камеры.
+      data: await file
+        .slice(start, Math.min(file.size, start + PENDING_UPLOAD_CHUNK_SIZE))
+        .arrayBuffer()
     };
     const db = await openWorkerDb();
     const tx = db.transaction(PENDING_UPLOAD_CHUNKS_STORE_NAME, 'readwrite');

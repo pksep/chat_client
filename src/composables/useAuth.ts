@@ -16,6 +16,11 @@ import { buildGroupCallInviteAuthorizationUrl } from '../utils/groupCallInviteUr
 import { withNetworkTimeout } from '../utils/network-timeout';
 import { fetchAuthWithCookies } from '../utils/auth-http';
 import { getAccessTokenFromResponse } from '../utils/auth-response-token';
+import {
+  recordTelemetryEvent,
+  flushTelemetryEvents,
+  createTelemetryTraceId
+} from '../services/useTelemetry';
 export {
   CHAT_AUTH_SESSION_KEY,
   getChatAuthSession
@@ -24,6 +29,13 @@ export {
 type AuthUser = IUser;
 
 export const authedUser: Ref<AuthUser | null> = ref(null);
+const preserveAuthAvatar = (
+  user: AuthUser,
+  previousUser: AuthUser | null | undefined = authedUser.value
+): AuthUser =>
+  user.id === previousUser?.id && user.avatarUrl === undefined
+    ? { ...user, avatarUrl: previousUser.avatarUrl }
+    : user;
 export const ERP_BOOTSTRAP_TOKEN_KEY = 'erp_bootstrap_token';
 const SKIP_STARTUP_SHELL_ON_AUTH_REDIRECT_KEY =
   'chat_skip_startup_shell_on_auth_redirect';
@@ -371,10 +383,28 @@ const redirectToAuthorizationInternal = (broadcast: boolean): void => {
 
 const endChatSession = (
   logoutOnServer: boolean,
-  broadcast: boolean
+  broadcast: boolean,
+  clientIntent:
+    | 'manual_user'
+    | 'auth_inactive'
+    | 'remote_logout'
+    | 'authorization_redirect'
 ): Promise<void> => {
   if (sessionEndingPromise) return sessionEndingPromise;
 
+  const clientAttemptId = createTelemetryTraceId('logout');
+  // Фиксируем намерение до отключения сокета и очистки авторизации.
+  try {
+    recordTelemetryEvent({
+      category: 'lifecycle',
+      name: 'auth.session.end_requested',
+      traceId: clientAttemptId,
+      payload: { clientIntent, clientAttemptId, logoutOnServer }
+    });
+    void flushTelemetryEvents();
+  } catch {
+    // Диагностика не должна мешать выходу.
+  }
   isEndingSession = true;
   authSessionRevision++;
   if (proactiveRefreshTimer) {
@@ -402,7 +432,7 @@ const endChatSession = (
     await pendingRefresh?.catch(() => undefined);
     if (logoutOnServer) {
       try {
-        const response = await requestChatLogout();
+        const response = await requestChatLogout(clientIntent, clientAttemptId);
         if (!response.ok) {
           console.warn(
             'Не удалось завершить серверную сессию чата:',
@@ -421,7 +451,7 @@ const endChatSession = (
 };
 
 export const redirectToAuthorization = (): Promise<void> => {
-  return endChatSession(false, true);
+  return endChatSession(false, true, 'authorization_redirect');
 };
 
 const readAuthErrorBody = async (
@@ -578,15 +608,19 @@ export const tryRefreshErpSession = (): Promise<AuthResponse | null> => {
 };
 
 export const logoutChatSession = async (): Promise<void> => {
-  await endChatSession(true, true);
+  await endChatSession(true, true, 'manual_user');
 };
 
-const requestChatLogout = (): Promise<Response> => {
+const requestChatLogout = (
+  clientIntent: string,
+  clientAttemptId: string
+): Promise<Response> => {
   const config = getConfig();
 
   return fetchAuthWithCookies(
     `${config.CHAT_API_DOMAIN.replace(/\/+$/, '')}/auth/logout`,
-    'POST'
+    'POST',
+    { clientIntent, clientAttemptId }
   );
 };
 
@@ -781,8 +815,11 @@ const applyRefreshedSession = (
 
   const storedSession = getChatAuthSession();
   const source = authResponse.source || inferSessionSource(storedSession);
-  const user =
+  const sourceUser =
     authResponse.user || storedSession?.user || authedUser.value || undefined;
+  const user = sourceUser
+    ? preserveAuthAvatar(sourceUser, authedUser.value || storedSession?.user)
+    : undefined;
   const expireTimeSeconds =
     authResponse.expireTimeSeconds ||
     getTokenExpiresInSeconds(authResponse.token);
@@ -889,7 +926,7 @@ const handleAuthRefreshBroadcast = async (
       return;
     }
 
-    await endChatSession(false, false);
+    await endChatSession(false, false, 'remote_logout');
     return;
   }
 
@@ -962,7 +999,7 @@ const scheduleSharedTokenRefresh = (token: string): void => {
 };
 
 export const handleConfirmedInactiveSession = async (): Promise<void> => {
-  await endChatSession(true, true);
+  await endChatSession(true, true, 'auth_inactive');
 };
 
 export const withAuthResponseRefresh = async (
@@ -1013,7 +1050,7 @@ export const setAuthUser = (user: AuthUser | null) => {
   if (!user || (authedUser.value?.id && authedUser.value.id !== user.id)) {
     configureCustomBackgroundSync(null);
   }
-  authedUser.value = user;
+  authedUser.value = user ? preserveAuthAvatar(user) : null;
 };
 
 export const getAuthUser = () => authedUser.value;
@@ -1058,10 +1095,10 @@ export const mergeAuthUser = (
     return;
   }
 
-  const nextUser = {
+  const nextUser = preserveAuthAvatar({
     ...authedUser.value,
     ...patch
-  } as AuthUser;
+  } as AuthUser);
 
   authedUser.value = nextUser;
   updateStoredChatSessionUser(nextUser);

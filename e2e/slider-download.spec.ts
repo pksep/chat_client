@@ -67,13 +67,6 @@ const PDF_BODY = createPdfBody();
 test.setTimeout(60_000);
 
 const openFixture = async (page: Page) => {
-  await page.route('**/__slider-download', route =>
-    route.fulfill({
-      contentType: 'text/html',
-      body: '<!doctype html><html><body></body></html>'
-    })
-  );
-
   const serveVideo = async (route: Route) => {
     const range = route.request().headers().range;
     const downloadName = new URL(route.request().url()).searchParams.get(
@@ -108,7 +101,7 @@ const openFixture = async (page: Page) => {
       body: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9"><rect width="16" height="9" fill="black"/></svg>'
     })
   );
-  await page.goto('/__slider-download');
+  await page.goto('/e2e/fixtures/slider-download.html');
   if (!VIDEO_BODY.length) VIDEO_BODY = await createPlayableVideo(page);
 
   await page.evaluate(() => {
@@ -273,7 +266,7 @@ test('SliderModal coalesces concurrent PDF loading without application blobs', a
   await page.route('**/__slider-pdf', route =>
     route.fulfill({
       contentType: 'text/html',
-      body: '<!doctype html><html><body></body></html>'
+      body: '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body></body></html>'
     })
   );
   await page.route('**/__slider-document.pdf*', async route => {
@@ -303,7 +296,26 @@ test('SliderModal coalesces concurrent PDF loading without application blobs', a
       ]);
   });
 
-  await expect(page.locator('.slider-modal__pdf').first()).toBeVisible();
+  const canvas = page
+    .locator('.slider-modal__item canvas.slider-modal__pdf')
+    .first();
+  await expect(canvas).toBeVisible();
+  await expect
+    .poll(() =>
+      canvas.evaluate((element: HTMLCanvasElement) =>
+        Array.from(
+          element
+            .getContext('2d')!
+            .getImageData(
+              Math.floor(element.width / 2),
+              Math.floor(element.height / 2),
+              1,
+              1
+            ).data
+        )
+      )
+    )
+    .toEqual([255, 255, 255, 255]);
   await expect.poll(() => pdfRequests).toBe(1);
 });
 
@@ -387,7 +399,7 @@ for (const headersOnly of [false, true]) {
           await fixture.mountSliderDownloadFixture([
             {
               path: `${location.origin}/__slider-thumbnail-0.svg`,
-              downloadPath: `http://127.0.0.1:${port}/large-video.mp4`,
+              downloadPath: `http://127.0.0.1:${port}/api/media/object/large-video.mp4?downloadName=large-video.mp4`,
               name: 'large-video.mp4'
             }
           ]);
@@ -448,7 +460,7 @@ test('скачивание начинается с первого клика, п
         await fixture.mountSliderDownloadFixture([
           {
             path: `${location.origin}/__pending-video.mp4`,
-            downloadPath: `http://127.0.0.1:${port}/preview-pending.mp4`,
+            downloadPath: `http://127.0.0.1:${port}/api/media/object/preview-pending.mp4?downloadName=preview-pending.mp4`,
             name: 'preview-pending.mp4'
           }
         ]);

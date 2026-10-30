@@ -1,6 +1,4 @@
-export type RelayRecoveryReason =
-  | 'repeated-signal-reconnect'
-  | 'sustained-high-rtt';
+export type RelayRecoveryReason = 'sustained-high-rtt';
 
 export type RelayRecoverySample = {
   connectionPath: 'direct' | 'turn-relay' | 'unknown';
@@ -15,7 +13,6 @@ export type RelayRecoveryDecision = {
 };
 
 type RelayRecoveryPolicyOptions = {
-  signalReconnectThreshold: number;
   signalReconnectWindowMs: number;
   highRttThresholdMs: number;
   highRttSampleThreshold: number;
@@ -23,7 +20,6 @@ type RelayRecoveryPolicyOptions = {
 };
 
 const DEFAULT_OPTIONS: RelayRecoveryPolicyOptions = {
-  signalReconnectThreshold: 3,
   signalReconnectWindowMs: 2 * 60 * 1000,
   highRttThresholdMs: 800,
   highRttSampleThreshold: 3,
@@ -110,11 +106,9 @@ export const createCallRelayRecoveryPolicy = (
       pruneSignalReconnects(timestamp);
       signalReconnects.push(timestamp);
 
-      if (signalReconnects.length < options.signalReconnectThreshold) {
-        return null;
-      }
-
-      return buildDecision('repeated-signal-reconnect');
+      // Сигнальный WebSocket может переподключаться при здоровом медиаканале.
+      // Переход на TURN требует подтверждённой деградации WebRTC.
+      return null;
     },
 
     recordStats(samples: RelayRecoverySample[]): RelayRecoveryDecision | null {

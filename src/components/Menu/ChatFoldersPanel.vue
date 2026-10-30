@@ -10,7 +10,7 @@
     data-testid="ChatFolders-Panel"
     @click="closeFolderMenu"
   >
-    <MenuSectionHeading class="chat-folders-panel__header">
+    <MenuSectionHeading class="chat-folders-panel__header" network-status>
       <h4>Папки</h4>
       <Button
         :type="ButtonTypeEnum.secondary"

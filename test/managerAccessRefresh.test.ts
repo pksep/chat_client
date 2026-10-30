@@ -33,7 +33,7 @@ const compiled = ts.transpileModule(
   }
 ).outputText;
 
-function fixture(): {
+function fixture(clientAccess = true): {
   module: ManagerModule;
   state: ManagerState;
   user: vue.Ref<{ id: string }>;
@@ -43,7 +43,7 @@ function fixture(): {
   setToken(value: string): void;
 } {
   const user = vue.ref({ id: 'synthetic-operator' });
-  const access = vue.ref({ client: true, ai: false });
+  const access = vue.ref({ client: clientAccess, ai: false });
   const notices: string[] = [];
   let clears = 0;
   let token = 'synthetic-session';
@@ -189,13 +189,23 @@ describe('отказ на действие не закрывает доступ�
   });
 
   test('первый отказ проверки не выдаёт права на клиентов', async (): Promise<void> => {
-    const probe = fixture();
+    const probe = fixture(false);
     probe.setRequest(
       async (): Promise<Response> => new Response('', { status: 503 })
     );
     await probe.module.refreshManagerInquiries();
 
     expect(probe.state.allowed.value).toBe(false);
+    expect(probe.state.resolved.value).toBe(false);
+  });
+
+  test('сбой отдельной проверки сохраняет доступ из общего меню', async (): Promise<void> => {
+    const probe = fixture();
+    probe.setRequest(
+      async (): Promise<Response> => new Response('', { status: 503 })
+    );
+    await probe.module.refreshManagerInquiries();
+    expect(probe.state.allowed.value).toBe(true);
     expect(probe.state.resolved.value).toBe(false);
   });
 

@@ -760,9 +760,13 @@ const draft = ref('');
 const assistantRoot = ref<HTMLElement | null>(null);
 const contentEditorRef = ref<InstanceType<typeof ContentEditor> | null>(null);
 const iosPwaEditorHost = ref<HTMLElement | null>(null);
-useIosPwaFilePicker(iosPwaEditorHost, (files, onlyMedia) => {
-  void contentEditorRef.value?.queueAttachFiles(files, onlyMedia);
-});
+useIosPwaFilePicker(
+  iosPwaEditorHost,
+  (files, onlyMedia) => {
+    void contentEditorRef.value?.queueAttachFiles(files, onlyMedia);
+  },
+  validateAiAttachments
+);
 const scrollRef = ref<HTMLElement | null>(null);
 const isShowScrollToBottomButton = ref(false);
 const highlightedMessageId = ref<string | null>(null);

@@ -55,7 +55,8 @@ const topics = ['Сайт', 'Авито', 'ВК', 'Поддержка'].map((nam
 })) as ITopic[];
 setTopics(topics);
 const state = useChatFolders(clients ? 'clients' : 'chats');
-await state.loadFolders();
+if (params.has('background')) void state.loadFolders();
+else await state.loadFolders();
 if (clients) {
   await refreshChatAccess();
   await refreshManagerInquiries();

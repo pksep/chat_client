@@ -1,7 +1,7 @@
 <template>
   <MobileModal
     v-if="isMobile"
-    class="confirm__modal__mobile"
+    class="mobile-modal confirm__modal__mobile"
     headerClass="hidden"
     :show-divider="false"
     :open="props.open"

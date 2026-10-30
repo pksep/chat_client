@@ -326,7 +326,7 @@ test('отставшая последняя страница восстанав�
   expect(errors).toEqual([]);
 });
 
-test('ошибка сети оставляет кеш доступным, но не подтверждает актуальность первого кадра', async ({
+test('ошибка истории из уведомления скрывает старый кеш и восстанавливается без повторного открытия', async ({
   page
 }) => {
   const { errors } = await openFixture(page, { count: 130 });
@@ -334,31 +334,68 @@ test('ошибка сети оставляет кеш доступным, но �
     rows => (window as any).topicPerformance.seed('performance-1', rows),
     makeMessages('performance-1', 115)
   );
-  await page.route('**/performance-api/messages/topic/*?*', route =>
-    route.fulfill({ status: 503, json: { message: 'Тестовая недоступность' } })
-  );
-  await page.evaluate(() =>
-    (window as any).topicPerformance.notify(1, 'performance-1-message-114')
-  );
-  await expect(message(page, 1, 114)).toBeVisible();
-  await expect
-    .poll(() =>
-      page.evaluate(
+  let requests = 0;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  await page.route('**/performance-api/messages/topic/*?*', async route => {
+    if (++requests === 1)
+      return route.fulfill({
+        status: 503,
+        json: { message: 'Тестовая недоступность' }
+      });
+    await gate;
+    return route.fallback();
+  });
+  try {
+    await page.evaluate(() =>
+      (window as any).topicPerformance.notify(1, 'performance-1-message-114')
+    );
+    await expect.poll(() => requests).toBeGreaterThan(1);
+    await expect(message(page, 1, 114)).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: 'Повторить', exact: true })
+    ).toHaveCount(0);
+    expect(
+      await page.evaluate(
         () =>
-          (
-            performance
-              .getEntriesByName('chat-notification:history-resolved')
-              .at(-1) as PerformanceMark | undefined
-          )?.detail?.isFresh
+          performance.getEntriesByName('chat-notification:message-painted')
+            .length
       )
-    )
-    .toBe(false);
-  expect(
-    await page.evaluate(
-      () =>
-        performance.getEntriesByName('chat-notification:message-painted').length
-    )
-  ).toBe(0);
+    ).toBe(0);
+    const editor = page.locator('.chat__input .ProseMirror');
+    await editor.fill('Черновик после уведомления');
+    await page.evaluate(() =>
+      (window as any).topicPerformance.notify(1, 'performance-1-message-114')
+    );
+    await expect.poll(() => requests).toBeGreaterThan(2);
+    release();
+    await expect(message(page, 1, 129)).toBeVisible();
+    await expect(message(page, 1, 114)).toHaveCount(1);
+    await expect(editor).toHaveText('Черновик после уведомления');
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (
+              performance
+                .getEntriesByName('chat-notification:history-resolved')
+                .at(-1) as PerformanceMark | undefined
+            )?.detail?.isFresh
+        )
+      )
+      .toBe(true);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            performance.getEntriesByName('chat-notification:message-painted')
+              .length
+        )
+      )
+      .toBe(1);
+  } finally {
+    release();
+  }
   expect(errors).toEqual([]);
 });
 

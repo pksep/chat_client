@@ -1,7 +1,7 @@
 <template>
   <MobileModal
     v-if="isMobile"
-    class="vpn-confirm-modal vpn-confirm-modal--mobile"
+    class="mobile-modal vpn-confirm-modal vpn-confirm-modal--mobile"
     headerClass="hidden"
     :show-divider="false"
     :open="props.open"

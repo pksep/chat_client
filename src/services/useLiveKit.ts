@@ -59,6 +59,11 @@ import { mergeRemoteParticipantsDuringReconnect } from './call-reconnect-partici
 import { createCallConnectionDiagnostics } from './call-connection-diagnostics';
 import { createCallWebRtcDiagnostics } from './call-webrtc-diagnostics';
 import {
+  createScreenShareOperation,
+  disconnectForRoomReplacement,
+  isScreenCapturePermissionDenied
+} from './call-screen-share-lifecycle';
+import {
   createCallRelayRecoveryPolicy,
   extractRelayRecoverySamples,
   type RelayRecoveryDecision
@@ -1004,6 +1009,15 @@ const disconnectCallRoom = (
     activeRoom
   );
 
+  if (source === 'replace-room' && shouldRecoverLocalScreenShare) {
+    rememberLocalScreenShareTrack(
+      getLocalScreenSharePublication(activeRoom)?.track
+    );
+    return disconnectForRoomReplacement(
+      activeRoom,
+      getRecoverableLocalScreenShareTrack()
+    );
+  }
   return activeRoom.disconnect();
 };
 
@@ -2878,8 +2892,10 @@ const syncLocalTrackState = () => {
     localTrackStreamCache.clear();
     localVideoStream.value = null;
     localScreenShareStream.value = null;
-    state.isScreenSharingActive = false;
-    if (isAndroidScreenSharePlatform()) {
+    state.isScreenSharingActive = Boolean(
+      shouldRecoverLocalScreenShare && getRecoverableLocalScreenShareTrack()
+    );
+    if (!state.isScreenSharingActive && isAndroidScreenSharePlatform()) {
       void stopAndroidScreenShare();
     }
     return;
@@ -4311,7 +4327,19 @@ const setupRoomListeners = (activeRoom: Room) => {
       showGroupCallPresenceNotification(participant, 'left', activeRoom);
     })
     .on(RoomEvent.LocalTrackPublished, publication => {
+      if (activeRoom !== room || isExplicitHangupInProgress) {
+        if (
+          !shouldRecoverLocalScreenShare ||
+          publication.track !== localScreenShareTrackForRecovery
+        )
+          publication.track?.stop();
+        return;
+      }
       if (publication.source === Track.Source.ScreenShare) {
+        if (!shouldRecoverLocalScreenShare || isStoppingScreenShare) {
+          publication.track?.stop();
+          return;
+        }
         shouldRecoverLocalScreenShare = true;
         rememberLocalScreenShareTrack(publication.track);
       }
@@ -4765,6 +4793,14 @@ const connectToRoom = async (options: {
       elapsedMs: Date.now() - tokenStartedAt
     });
 
+    if (
+      currentAttemptId !== connectAttemptId ||
+      isExplicitHangupInProgress ||
+      roomId.value !== activeRoomId ||
+      topicId.value !== activeTopicId
+    )
+      return;
+
     const previousRoom = room;
     if (previousRoom) {
       isRoomReconnectInProgress = false;
@@ -4983,17 +5019,8 @@ const connectToRoom = async (options: {
         );
       }
     }
-    if (state.isScreenSharingActive) {
-      if (isAndroidScreenSharePlatform()) {
-        await publishAndroidScreenShare(nextRoom);
-      } else {
-        await nextRoom.localParticipant.setScreenShareEnabled(
-          true,
-          SCREEN_SHARE_CAPTURE_DEFAULTS,
-          SCREEN_SHARE_PUBLISH_DEFAULTS
-        );
-        await ensureLocalMicrophoneState(nextRoom);
-      }
+    if (shouldRecoverLocalScreenShare) {
+      await recoverLocalScreenSharePublication(nextRoom, 'room-replacement');
     }
 
     syncLocalTrackState();
@@ -5071,15 +5098,42 @@ async function performCallRelayRecovery(
         throw new Error('TURN relay recovery did not establish the call');
       }
 
-      preferredCallIceTransportPolicy = 'relay';
+      const relayRoom = room;
+      await callWebRtcDiagnostics.capture(
+        relayRoom,
+        'relay-verification',
+        'info'
+      );
+      if (
+        room !== relayRoom ||
+        room?.state !== ConnectionState.Connected ||
+        roomId.value !== expectedRoomId ||
+        topicId.value !== expectedTopicId ||
+        isExplicitHangupInProgress
+      )
+        return;
+      const relaySamples = extractRelayRecoverySamples(
+        callWebRtcDiagnostics.snapshot(room) ?? {}
+      );
+      const relayVerified =
+        relaySamples.length > 0 &&
+        relaySamples.every(sample => sample.connectionPath === 'turn-relay');
+      preferredCallIceTransportPolicy = relayVerified ? 'relay' : null;
+      if (!relayVerified) callRelayRecoveryPolicy.markRelayFailed();
       recordCallTelemetryEvent(
-        'call.turn_relay_recovery.completed',
+        relayVerified
+          ? 'call.turn_relay_recovery.completed'
+          : 'call.turn_relay_recovery.unverified',
         {
           ...decision,
           iceTransportPolicy: 'relay',
+          relayVerified,
+          observedConnectionPaths: relaySamples.map(
+            sample => sample.connectionPath
+          ),
           ...buildCallHealthTelemetryPayload(room)
         },
-        'info',
+        relayVerified ? 'info' : 'warn',
         room
       );
       if (callStatusNoticeKind.value === 'reconnecting') {
@@ -7004,6 +7058,7 @@ const clearLocalScreenShareRecoveryState = () => {
   screenShareRecoveryAttemptId += 1;
   clearScreenShareRecoveryTimer();
   shouldRecoverLocalScreenShare = false;
+  localScreenShareTrackForRecovery?.stop();
   localScreenShareTrackForRecovery = null;
   screenShareRecoveryAttemptCount = 0;
 };
@@ -7106,6 +7161,11 @@ const recoverLocalScreenSharePublication = (
     }
 
     if (activeRoom.state !== ConnectionState.Connected) {
+      scheduleLocalScreenShareRecovery(reason);
+      return false;
+    }
+
+    if (connectPromise && reason !== 'room-replacement') {
       scheduleLocalScreenShareRecovery(reason);
       return false;
     }
@@ -7250,13 +7310,40 @@ const unpublishAndroidScreenShare = async (activeRoom = room) => {
   androidScreenShareTrack = null;
 };
 
-export const toggleScreenShare = async (
+const runScreenShareOperation = createScreenShareOperation();
+
+export const toggleScreenShare = (
+  reason: 'user-toggle' | 'browser-track-ended' = 'user-toggle'
+) => runScreenShareOperation(() => toggleScreenShareInternal(reason));
+
+const toggleScreenShareInternal = async (
   reason: 'user-toggle' | 'browser-track-ended' = 'user-toggle'
 ) => {
-  if (!room) return;
-
   const isScreenShareRequested =
     state.isScreenSharingActive || shouldRecoverLocalScreenShare;
+
+  if (!room) {
+    if (isScreenShareRequested) {
+      clearLocalScreenShareRecoveryState();
+      syncLocalTrackState();
+    }
+    return;
+  }
+
+  if (
+    !isScreenShareRequested &&
+    (room.state !== ConnectionState.Connected ||
+      connectPromise ||
+      screenShareRecoveryPromise)
+  ) {
+    recordCallTelemetryEvent('call.screen_share.toggle_deferred', {
+      reason,
+      liveKitState: room.state
+    });
+    return;
+  }
+
+  if (isExplicitHangupInProgress) return;
 
   if (!isScreenShareRequested) {
     const remoteScreenShareParticipant = remoteParticipants.value.find(
@@ -7279,6 +7366,7 @@ export const toggleScreenShare = async (
 
   const nextScreenShareState = !isScreenShareRequested;
   const activeRoom = room;
+  const operationAttemptId = screenShareRecoveryAttemptId;
 
   if (nextScreenShareState) {
     shouldRecoverLocalScreenShare = true;
@@ -7298,6 +7386,10 @@ export const toggleScreenShare = async (
   });
 
   try {
+    if (!nextScreenShareState && screenShareRecoveryPromise) {
+      await screenShareRecoveryPromise;
+      if (activeRoom !== room) return;
+    }
     if (isAndroidScreenSharePlatform()) {
       if (nextScreenShareState) {
         await publishAndroidScreenShare(activeRoom);
@@ -7306,13 +7398,34 @@ export const toggleScreenShare = async (
         await unpublishAndroidScreenShare(activeRoom);
       }
     } else {
-      await activeRoom.localParticipant.setScreenShareEnabled(
-        nextScreenShareState,
-        SCREEN_SHARE_CAPTURE_DEFAULTS,
-        SCREEN_SHARE_PUBLISH_DEFAULTS
-      );
+      if (nextScreenShareState) {
+        const tracks = await activeRoom.localParticipant.createScreenTracks(
+          SCREEN_SHARE_CAPTURE_DEFAULTS
+        );
+        if (
+          activeRoom !== room ||
+          operationAttemptId !== screenShareRecoveryAttemptId ||
+          isExplicitHangupInProgress
+        ) {
+          tracks.forEach(track => track.stop());
+          return;
+        }
+        const track = tracks.find(
+          track => track.source === Track.Source.ScreenShare
+        );
+        rememberLocalScreenShareTrack(track);
+        if (!track) throw new Error('Не получен захват экрана');
+        await activeRoom.localParticipant.publishTrack(track, {
+          ...SCREEN_SHARE_PUBLISH_DEFAULTS,
+          source: Track.Source.ScreenShare
+        });
+      } else {
+        await activeRoom.localParticipant.setScreenShareEnabled(false);
+      }
       await ensureLocalMicrophoneState(activeRoom);
     }
+
+    if (activeRoom !== room || isExplicitHangupInProgress) return;
 
     recordCallTelemetryEvent('call.screen_share.toggle_completed', {
       reason,
@@ -7335,9 +7448,8 @@ export const toggleScreenShare = async (
     const isAndroidNativeScreenShare =
       Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
     const isCanceledByUser =
-      errorMessage.includes('cancel') ||
-      errorMessage.includes('denied') ||
-      errorMessage.includes('permission');
+      isScreenCapturePermissionDenied(error) ||
+      (isAndroidNativeScreenShare && errorMessage.includes('cancel'));
     const isUnsupportedDevice =
       !isAndroidNativeScreenShare &&
       (errorMessage.includes('getdisplaymedia not supported') ||
@@ -7367,18 +7479,24 @@ export const toggleScreenShare = async (
       isCanceledByUser ? 'info' : 'error'
     );
 
-    if (nextScreenShareState) {
+    if (activeRoom !== room || isExplicitHangupInProgress) return;
+
+    if (nextScreenShareState && !getRecoverableLocalScreenShareTrack()) {
       clearLocalScreenShareRecoveryState();
+    } else if (nextScreenShareState) {
+      scheduleLocalScreenShareRecovery('screen-share-publish-failed');
     }
 
     console.warn('[LiveKit] Failed to toggle screen share:', error);
   } finally {
     isStoppingScreenShare = false;
     isStoppingAndroidScreenShare = false;
-    syncLocalTrackState();
-    syncRemoteParticipantState();
-    if (!state.isScreenSharingActive && isAndroidScreenSharePlatform()) {
-      void stopAndroidScreenShare();
+    if (activeRoom === room) {
+      syncLocalTrackState();
+      syncRemoteParticipantState();
+      if (!state.isScreenSharingActive && isAndroidScreenSharePlatform()) {
+        void stopAndroidScreenShare();
+      }
     }
   }
 };

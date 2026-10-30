@@ -244,6 +244,11 @@
       </div>
     </div>
 
+    <ConnectionStatus
+      v-if="isMobile && route.id && isWaitingConnection"
+      class="chat__header-network"
+    />
+
     <div
       v-if="state.isSearchInputEnable && !isMobile && isChatSearchAvailable"
       class="chat__header-desktop-search-row"
@@ -259,7 +264,7 @@
         @update:model-value="handleTopicSearchInput"
       />
       <LoadingIcon
-        v-if="isTopicSearchLoading"
+        v-if="isTopicSearchLoading && !hasTopicSearchResults"
         class="chat__header-search-loader"
         :is-loaded="false"
         :data-testid="`${props.dataTestid}-Header-SearchLoader`"
@@ -347,7 +352,7 @@
   >
     <div class="chat__header-mobile-search-controls-content">
       <LoadingIcon
-        v-if="isTopicSearchLoading"
+        v-if="isTopicSearchLoading && !hasTopicSearchResults"
         class="chat__header-search-loader"
         :is-loaded="false"
         :data-testid="`${props.dataTestid}-Header-MobileSearchLoader`"
@@ -485,6 +490,12 @@ import {
   watch
 } from 'vue';
 import { useResizeState } from '../../composables/useResizeState';
+import ConnectionStatus from '../UI/ConnectionStatus.vue';
+import { useDelayedConnectionStatus } from '../../composables/useDelayedConnectionStatus';
+import {
+  getHasBrowserNetwork,
+  getHasWebsocketConnection
+} from '../../services/useChat';
 import { MAX_W_MD } from '../../utils/constants';
 import UserProfile from '../UserProfile/UserProfile.vue';
 import GroupProfile from '../GroupProfile/GroupProfile.vue';
@@ -674,6 +685,13 @@ watch(
       aiAssistantTitleResizeObserver.observe(element);
     }
 
+    if (element) {
+      void document.fonts?.ready.then(() => {
+        if (aiAssistantTitleRef.value === element)
+          updateAiAssistantTitleOverflow();
+      });
+    }
+
     void nextTick(updateAiAssistantTitleOverflow);
   },
   { flush: 'post' }
@@ -834,6 +852,9 @@ const activeCallTopic = computed(() =>
 );
 const { handleUpdateInformation } = useMenuInfo();
 const { state: isMobile } = useResizeState(MAX_W_MD);
+const isWaitingConnection = useDelayedConnectionStatus(
+  () => !getHasBrowserNetwork() || !getHasWebsocketConnection()
+);
 const currentPendingCall = computed(
   () => pendingGroupCallInfo.value?.[route.value.id || ''] || null
 );
@@ -942,7 +963,7 @@ const canNavigateTopicSearchNext = computed(
   () => hasMultipleTopicSearchResults.value
 );
 const topicSearchResultLabel = computed(() => {
-  if (isTopicSearchLoading.value) {
+  if (isTopicSearchLoading.value && !hasTopicSearchResults.value) {
     return 'Поиск...';
   }
 
@@ -1111,6 +1132,7 @@ function normalizeTopicSearchQuery(value: string): string {
 }
 
 const resetTopicSearch = (): void => {
+  topicSearchRequestToken++;
   topicSearchQuery.value = '';
   topicSearchResults.value = [];
   aiSearchMessageIds.value = [];
@@ -1209,25 +1231,43 @@ const runTopicSearch = async (): Promise<void> => {
 
   const { results, total } = await searchMessages(query, {
     topicId,
-    limit: 200
+    limit: 200,
+    onLocalResults: ({ results: localResults, total: localTotal }) => {
+      if (requestToken !== topicSearchRequestToken) return;
+      topicSearchResults.value = localResults;
+      topicSearchTotal.value = localTotal;
+      topicSearchActiveIndex.value = 0;
+      navigateTopicSearchResult(0);
+    }
   });
 
   if (requestToken !== topicSearchRequestToken) {
     return;
   }
 
+  const selectedResultId =
+    topicSearchResults.value[topicSearchActiveIndex.value]?.id;
+  const selectedIndex = results.findIndex(
+    result => result.id === selectedResultId
+  );
   topicSearchResults.value = results;
   topicSearchTotal.value = total;
-  topicSearchActiveIndex.value = 0;
+  topicSearchActiveIndex.value = Math.max(0, selectedIndex);
   isTopicSearchLoading.value = false;
 
-  if (results.length) {
+  if (results.length && selectedIndex < 0) {
     navigateTopicSearchResult(0);
   }
 };
 
 const handleTopicSearchInput = (value: string): void => {
+  topicSearchRequestToken++;
   topicSearchQuery.value = value;
+  topicSearchResults.value = [];
+  aiSearchMessageIds.value = [];
+  topicSearchTotal.value = 0;
+  topicSearchActiveIndex.value = 0;
+  isTopicSearchLoading.value = false;
 
   if (topicSearchDebounceTimer) {
     clearTimeout(topicSearchDebounceTimer);
@@ -1266,7 +1306,7 @@ const handleTopicSearchKeydown = (event: KeyboardEvent): void => {
     return;
   }
 
-  if (!hasTopicSearchResults.value || isTopicSearchLoading.value) {
+  if (!hasTopicSearchResults.value) {
     return;
   }
 
@@ -1671,11 +1711,10 @@ onMounted(() => {
   headerCallTimerInterval = setInterval(() => {
     currentTime.value = Date.now();
   }, 1000);
-
-  void document.fonts?.ready.then(updateAiAssistantTitleOverflow);
 });
 
 onUnmounted(() => {
+  topicSearchRequestToken++;
   setMobileTopicSearchActive(false);
   aiAssistantTitleResizeObserver?.disconnect();
   aiAssistantTitleResizeObserver = null;

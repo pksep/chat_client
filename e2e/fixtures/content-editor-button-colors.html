@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Цвета кнопок редактора</title>
+    <style>
+      body {
+        margin: 24px;
+        background: var(--surface-main);
+        color: var(--text-primary);
+      }
+      #app {
+        max-width: 760px;
+        margin: 80px auto;
+      }
+      .editor-component button.fixture-brand-control {
+        color: var(--text-brand);
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app"></main>
+    <script type="module">
+      import { createApp, h, ref } from 'vue';
+      import {
+        Button,
+        ButtonTypeEnum,
+        ContentEditor,
+        SizesEnum
+      } from '@pksep/yui';
+      import '@pksep/yui/styles';
+      import '/src/assets/ai-assistant.css';
+
+      const params = new URLSearchParams(location.search);
+      document.documentElement.dataset.theme = params.get('theme') || 'light';
+      const ai = params.get('kind') === 'ai';
+      const mobile = window.innerWidth <= 480;
+      const brandControl = () =>
+        h('div', [
+          h(
+            Button,
+            {
+              type: ButtonTypeEnum.ghost,
+              size: SizesEnum.small,
+              class: ai
+                ? `toolbar-button ai-assistant__permission-trigger ai-assistant__permission-trigger--${mobile ? 'mobile' : 'desktop'} ${mobile ? 'mobile-buttons' : ''}`
+                : 'toolbar-button fixture-brand-control',
+              'aria-label': 'Режим ИИ'
+            },
+            () => 'ИИ'
+          )
+        ]);
+
+      createApp({
+        setup() {
+          const draft = ref('Сообщение для проверки');
+          return () => [
+            h('div', { class: ai ? 'ai-assistant__editor' : undefined }, [
+              h(
+                ContentEditor,
+                {
+                  activeAttachFile: true,
+                  activeSelectUser: true,
+                  activeSelectSlash: true,
+                  modelValue: draft.value,
+                  'onUpdate:modelValue': value => (draft.value = value)
+                },
+                {
+                  'desktop-right-action': brandControl,
+                  'mobile-right-action': brandControl
+                }
+              )
+            ]),
+            h(
+              Button,
+              { type: ButtonTypeEnum.ghost, id: 'outside-editor' },
+              () => 'Кнопка вне редактора'
+            )
+          ];
+        }
+      }).mount('#app');
+    </script>
+  </body>
+</html>

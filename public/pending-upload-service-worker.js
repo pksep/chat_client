@@ -182,15 +182,16 @@ const persistFileInIndexedDbChunks = async (payload, file, state) => {
     }
 
     const start = chunkIndex * PENDING_UPLOAD_CHUNK_SIZE;
+    // Читаем байты до открытия IDB-транзакции: Blob камеры ненадёжен в WebKit.
+    const data = await file
+      .slice(start, Math.min(file.size, start + PENDING_UPLOAD_CHUNK_SIZE))
+      .arrayBuffer();
     const db = await openDb();
     const tx = db.transaction(PENDING_UPLOAD_CHUNKS_STORE_NAME, 'readwrite');
     tx.objectStore(PENDING_UPLOAD_CHUNKS_STORE_NAME).put({
       cacheKey: payload.cacheKey,
       chunkIndex,
-      data: file.slice(
-        start,
-        Math.min(file.size, start + PENDING_UPLOAD_CHUNK_SIZE)
-      )
+      data
     });
     await waitForTransaction(tx);
 
@@ -228,6 +229,11 @@ const persistFileInOpfs = async (payload, file, state) => {
 
   const opfsFileName = getPendingUploadOpfsFileName(payload.cacheKey);
   const handle = await directory.getFileHandle(opfsFileName, { create: true });
+  // В старых WebKit OPFS доступен без createWritable: используем IDB.
+  if (typeof handle.createWritable !== 'function') {
+    await deleteOpfsFile(payload.cacheKey);
+    return null;
+  }
   const writable = await handle.createWritable();
 
   try {

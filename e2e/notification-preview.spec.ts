@@ -144,7 +144,9 @@ test('уведомление ждёт сеть, но не полное чтен�
   const networkGate = new Promise<void>(resolve => {
     releaseNetwork = resolve;
   });
+  let networkStarted = false;
   await page.route('**/performance-api/messages/topic/*?*', async route => {
+    networkStarted = true;
     await networkGate;
     await route.fallback();
   });
@@ -152,11 +154,14 @@ test('уведомление ждёт сеть, но не полное чтен�
     await page.evaluate(() =>
       (window as any).topicPerformance.notify(1, 'performance-1-message-4999')
     );
+    await expect.poll(() => networkStarted).toBe(true);
+    await expect(message(page, 1, 4999)).not.toBeVisible();
+    releaseNetwork();
+    // Полный снимок читается при фоновом сохранении ответа, после HTTP.
+    // Ожидание чтения до releaseNetwork приводило к таймауту самого запроса.
     await expect
       .poll(() => page.evaluate(() => (window as any).__fullHistoryReadStarted))
       .toBe(true);
-    await expect(message(page, 1, 4999)).not.toBeVisible();
-    releaseNetwork();
     await expect(message(page, 1, 4999)).toBeVisible();
     await expect(
       page.locator('[data-testid$="-MessageList-Skeleton"]')
@@ -183,5 +188,78 @@ test('уведомление ждёт сеть, но не полное чтен�
     )
     .toBe(5000);
   await expect(message(page, 1, 4999)).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('готовое уведомление не ждёт outbox, поздняя локальная отправка сохраняется', async ({
+  page,
+  isMobile
+}) => {
+  test.skip(!isMobile, 'На мобильном первый кадр использует свежую страницу');
+  const { errors } = await openFixture(page, { shell: true });
+  await page.evaluate(async row => {
+    const cache = await import('/src/services/useTopicMessagesCache.ts');
+    const pending = {
+      ...row,
+      id: 'notification-pending-local',
+      clientId: 'notification-pending-local',
+      senderUserId: 'performance-user',
+      status: 'WAIT',
+      createdAt: '2026-09-02T00:00:00.000Z'
+    };
+    await cache.savePendingUploadMeta({
+      topicId: pending.topicId,
+      messageId: pending.id,
+      forwardMessageIds: [],
+      message: pending,
+      userId: 'performance-user'
+    });
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const original = IDBObjectStore.prototype.getAll;
+    (window as any).__notificationOutboxBlocked = false;
+    IDBObjectStore.prototype.getAll = function (...args) {
+      const request = original.apply(this, args);
+      if (this.name === 'pendingUploadMeta') {
+        request.addEventListener(
+          'success',
+          event => {
+            event.stopImmediatePropagation();
+            const callback = request.onsuccess;
+            (window as any).__notificationOutboxBlocked = true;
+            void gate.then(() => callback?.call(request, event));
+          },
+          { once: true }
+        );
+      }
+      return request;
+    };
+    (window as any).__releaseNotificationOutbox = () => {
+      IDBObjectStore.prototype.getAll = original;
+      release();
+    };
+  }, makeMessages('performance-1', 1)[0]);
+  try {
+    await page.evaluate(() =>
+      (window as any).topicPerformance.notify(1, 'performance-1-message-19')
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(() => (window as any).__notificationOutboxBlocked)
+      )
+      .toBe(true);
+    await expect(message(page, 1)).toBeVisible({ timeout: 1800 });
+    await expect(
+      page.locator('[data-testid$="-MessageList-Skeleton"]')
+    ).toHaveCount(0);
+  } finally {
+    await page.evaluate(() => (window as any).__releaseNotificationOutbox());
+  }
+  await expect(
+    page.locator('[data-message-id="notification-pending-local"]')
+  ).toBeVisible();
+  await expect(message(page, 1)).toBeVisible();
   expect(errors).toEqual([]);
 });

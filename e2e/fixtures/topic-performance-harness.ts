@@ -9,7 +9,8 @@ import {
   setTopics,
   topics as topicState,
   getSelectedTopic,
-  updateLocalLastMessageTopic
+  updateLocalLastMessageTopic,
+  hydrateTopicsFromCache
 } from '../../src/composables/useTopics';
 import {
   navigateToDialogs,
@@ -142,6 +143,7 @@ export async function initializeTopicPerformanceFixture(
     getSelectedTopic,
     setTopics,
     updateLocalLastMessageTopic,
+    hydrateTopicsFromCache,
     sdk: getChatSDK(),
     initializeChat,
     metrics,

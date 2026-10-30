@@ -7,6 +7,57 @@ const png = Buffer.from(
   'base64'
 );
 
+test('аватар восстанавливается после временного сбоя без изменения адреса', async ({
+  page
+}) => {
+  let unavailable = true;
+  await page.route('https://sun9-1.userapi.com/**', route =>
+    unavailable
+      ? route.abort('failed')
+      : route.fulfill({ contentType: 'image/png', body: png })
+  );
+  await page.goto(
+    '/e2e/fixtures/external-avatar.html?avatar=' + encodeURIComponent(avatarUrl)
+  );
+  await expect(
+    page.locator('[data-testid="ExternalAvatar"] .avatar-yui-kit__text')
+  ).toBeVisible();
+  unavailable = false;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect(page.locator('[data-testid="ExternalAvatar"] img')).toHaveClass(
+    /is-visible/
+  );
+});
+
+test('обновление сессии сохраняет аватар, явное удаление и смена пользователя сбрасывают его', async ({
+  page
+}) => {
+  await page.goto('/e2e/fixtures/external-avatar.html');
+  const avatars = await page.evaluate(async () => {
+    const path = '/src/composables/useAuth.ts';
+    const { setAuthUser, getAuthUser, mergeAuthUser } = await import(
+      /* @vite-ignore */ path
+    );
+    setAuthUser({
+      id: 'avatar-owner',
+      initials: 'Фото',
+      avatarUrl: 'photo.png'
+    });
+    setAuthUser({ id: 'avatar-owner', initials: 'Фото' });
+    mergeAuthUser({ avatarUrl: undefined });
+    const preserved = getAuthUser().avatarUrl;
+    setAuthUser({ id: 'avatar-owner', initials: 'Фото', avatarUrl: null });
+    const removed = getAuthUser().avatarUrl;
+    setAuthUser({ id: 'another-owner', initials: 'Другой' });
+    return { preserved, removed, changed: getAuthUser().avatarUrl ?? null };
+  });
+  expect(avatars).toEqual({
+    preserved: 'photo.png',
+    removed: null,
+    changed: null
+  });
+});
+
 test('аватар ВК показывается, даже когда CDN запрещает загрузку через fetch', async ({
   page
 }): Promise<void> => {

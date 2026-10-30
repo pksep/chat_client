@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { getCurrentScope, onScopeDispose, ref } from 'vue';
 
 export const useContextMenu = () => {
   const isOpen = ref<Record<string, boolean>>({});
@@ -53,8 +53,18 @@ export const useContextMenu = () => {
     isOpen.value[id] = true;
   };
 
-  const startTouchLongPress = (id: string, event: PointerEvent) => {
+  const startTouchLongPress = (
+    id: string,
+    event: PointerEvent,
+    options?: { isTargetPresent?: () => boolean; cancelOnScroll?: boolean }
+  ) => {
     cancelLongPress();
+    const isTargetPresent =
+      options?.isTargetPresent ||
+      (() =>
+        !!document.querySelector(
+          `.message[data-message-id="${CSS.escape(id)}"]`
+        ));
     const finish = () => cancelLongPress();
     const move = (next: PointerEvent) => {
       if (
@@ -70,10 +80,7 @@ export const useContextMenu = () => {
     const timer = setTimeout(() => {
       finish();
       // Чтение может перегруппировать сообщение, пока палец остаётся на экране.
-      if (
-        document.querySelector(`.message[data-message-id="${CSS.escape(id)}"]`)
-      )
-        openActivePopover(id, event, true);
+      if (isTargetPresent()) openActivePopover(id, event, true);
     }, 450);
     cancelLongPress = () => {
       clearTimeout(timer);
@@ -81,11 +88,18 @@ export const useContextMenu = () => {
       window.removeEventListener('pointerup', finish, true);
       window.removeEventListener('pointercancel', finish, true);
       window.removeEventListener('pointerdown', nextPointer, true);
+      window.removeEventListener('scroll', finish, true);
+      window.removeEventListener('blur', finish);
+      document.removeEventListener('visibilitychange', finish);
     };
     window.addEventListener('pointermove', move, true);
     window.addEventListener('pointerup', finish, true);
     window.addEventListener('pointercancel', finish, true);
     window.addEventListener('pointerdown', nextPointer, true);
+    if (options?.cancelOnScroll)
+      window.addEventListener('scroll', finish, true);
+    window.addEventListener('blur', finish);
+    document.addEventListener('visibilitychange', finish);
   };
 
   const closeActivePopover = (id?: string): void => {
@@ -103,6 +117,8 @@ export const useContextMenu = () => {
       y: 0
     };
   };
+
+  if (getCurrentScope()) onScopeDispose(() => closeActivePopover());
 
   return {
     isOpen,

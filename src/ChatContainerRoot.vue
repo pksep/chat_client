@@ -96,6 +96,7 @@ import { useShareSelection } from './composables/useShareSelection';
 import { isGroupCallInviteUrl } from './utils/groupCallInviteUrl';
 import { installNotoEmojiFontFaces } from './composables/useEmojiStyle';
 import { isIosWeb } from './utils/ios-pwa-viewport';
+import { initBrowserMediaDownloads } from './utils/browser-media-downloads';
 import {
   importAnyChatBackgroundSnapshot,
   loadNativeNotificationPreview
@@ -107,6 +108,7 @@ const emit = defineEmits<{
 }>();
 
 installNotoEmojiFontFaces();
+onUnmounted(initBrowserMediaDownloads());
 
 const { fetchAllTopics } = useTopics();
 const { state: isMobile } = useResizeState(MAX_W_MD);
@@ -404,6 +406,16 @@ const hydrateFreshChatContent = async (
       deferMaintenanceUntil: waitForStartupPaint(),
       onNetworkApplied: () => {
         topicsRefreshed = true;
+        if (
+          isMobile.value &&
+          !getActiveChatTopicId() &&
+          getAuthUser()?.id === userId &&
+          !isChatSessionEnding()
+        ) {
+          isInitialListReady.value = true;
+          performance.mark('chat-startup:fresh-list-ready');
+          scheduleStartupReady();
+        }
       }
     });
     performance.mark('chat-startup:topics-resolved', {
@@ -453,13 +465,13 @@ const hasPriorityMessageTopicRoute = (): boolean =>
   );
 
 const isInitialDataResolved = ref(false);
-const isCachedListReady = ref(false);
-// Недавний кеш показываем сразу; после долгого перерыва ждём свежий список.
+const isInitialListReady = ref(false);
+// Готовый список не ждёт загрузки всего справочника сотрудников.
 const shouldMountChat = computed(
   () =>
     !isMobile.value ||
     hasPriorityMessageTopicRoute() ||
-    isCachedListReady.value ||
+    isInitialListReady.value ||
     isInitialDataResolved.value
 );
 
@@ -493,7 +505,7 @@ const scheduleStartupReady = (): void => {
   if (
     isStartupReadyScheduled ||
     (!isAppInitializationComplete &&
-      !(isCachedListReady.value && !activeTopicId) &&
+      !(isInitialListReady.value && !activeTopicId) &&
       !(!isMobile.value && activeTopicId && isActiveTopicRenderReady)) ||
     (activeTopicId && !isActiveTopicRenderReady && !allowPendingStartupTopic)
   ) {
@@ -683,6 +695,21 @@ const runAppInitialization = async () => {
     initialCacheHydration = hydrateCriticalCache(initialUserId);
   }
 
+  const revealCachedList = (userId: string): void => {
+    if (
+      !isInitialListReady.value &&
+      isMobile.value &&
+      !getActiveChatTopicId() &&
+      getAuthUser()?.id === userId &&
+      !isChatSessionEnding() &&
+      getTopicList().length > 0
+    ) {
+      isInitialListReady.value = true;
+      performance.mark('chat-startup:cached-list-ready');
+      scheduleStartupReady();
+    }
+  };
+
   try {
     const storedAuthData = hasStoredChatSession
       ? {
@@ -717,6 +744,26 @@ const runAppInitialization = async () => {
       isChatAccessTokenExpired(authData.token) &&
       hasStartupNetwork()
     ) {
+      const refreshingToken = authData.token;
+      let refreshPending = true;
+      if (
+        !shouldUseBootstrapToken &&
+        directAuthSession?.token === refreshingToken &&
+        directAuthSession.user?.id === initialUserId &&
+        hasRecentTopicPreview(config.CHAT_API_DOMAIN, initialUserId)
+      ) {
+        // Проверка сессии продолжается; SDK получит только её итоговый токен.
+        void initialCacheHydration
+          .then(() => {
+            if (
+              refreshPending &&
+              getChatAuthSession()?.token === refreshingToken &&
+              getConfig().CHAT_API_DOMAIN === config.CHAT_API_DOMAIN
+            )
+              revealCachedList(initialUserId);
+          })
+          .catch(() => undefined);
+      }
       try {
         const refreshed = await tryRefreshErpSession();
         if (!refreshed) {
@@ -729,6 +776,8 @@ const runAppInitialization = async () => {
           'Не удалось обновить сессию при запуске, открываем сохранённый чат:',
           error
         );
+      } finally {
+        refreshPending = false;
       }
     }
     if (isChatSessionEnding()) return;
@@ -789,18 +838,7 @@ const runAppInitialization = async () => {
         authUserId || undefined,
         'post-auth-after-cache-hydration'
       );
-      if (
-        isMobile.value &&
-        !getActiveChatTopicId() &&
-        canPreviewCachedList &&
-        getAuthUser()?.id === authUserId &&
-        !isChatSessionEnding() &&
-        getTopicList().length > 0
-      ) {
-        isCachedListReady.value = true;
-        performance.mark('chat-startup:cached-list-ready');
-        scheduleStartupReady();
-      }
+      if (canPreviewCachedList) revealCachedList(authUserId);
     })();
 
     const chatInitialization = initializeChat({
