@@ -81,4 +81,20 @@ describe('automatic manager reply route', () => {
     expect(managerMessageChannel('{"managerChannel":"vk"}')).toBe('vk');
     expect(managerMessageChannel({ managerChannel: 'unknown' })).toBe('');
   });
+
+  test('распознаёт WhatsApp и сохраняет адресата последнего сообщения клиента', (): void => {
+    const message = {
+      senderUserId: 'customer',
+      ex: {
+        managerChannel: 'whatsapp',
+        managerReplyRouteId: 'whatsapp-route'
+      }
+    };
+
+    expect(managerMessageChannel(message.ex)).toBe('whatsapp');
+    expect(latestManagerReplyContext([message], 'customer')).toEqual({
+      channel: 'whatsapp',
+      routeId: 'whatsapp-route'
+    });
+  });
 });
