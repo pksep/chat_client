@@ -1,4 +1,5 @@
 import { requireAiAccess, useChatAccess } from './useChatAccess';
+import type { VoiceReplyOptions } from '../services/voiceReply';
 import {
   computed,
   reactive,
@@ -101,13 +102,15 @@ interface MastraRuntime {
     attachments?: AiAttachmentReference[],
     replyTo?: AIMessageReference,
     modelInput?: string,
-    onAccepted?: () => void
+    onAccepted?: () => void,
+    voice?: VoiceReplyOptions
   ) => Promise<AiSubmissionResult>;
   resolveToolApproval: (
     decision: 'approve' | 'decline',
     onFinish?: () => void,
     abortSignal?: AbortSignal,
-    onAccepted?: () => void
+    onAccepted?: () => void,
+    voice?: VoiceReplyOptions
   ) => Promise<AiSubmissionResult>;
   clearMessages: () => Promise<void>;
   deleteConversation: () => Promise<void>;
@@ -701,7 +704,8 @@ const sendMessage = async (
   attachments: AiAttachmentReference[] = [],
   replyTo?: AIMessageReference,
   modelInput?: string,
-  onAccepted?: () => void
+  onAccepted?: () => void,
+  voice?: VoiceReplyOptions
 ): Promise<string | null> => {
   const visibleInput = buildVisibleInput(rawInput, attachments);
   if (!visibleInput) return null;
@@ -715,7 +719,9 @@ const sendMessage = async (
       activeView.value !== submittedView
     )
       return null;
-    const approvalDecision = approvalDecisionFromMessage(visibleInput);
+    const approvalDecision = voice
+      ? null
+      : approvalDecisionFromMessage(visibleInput);
     if (approvalDecision && runtime.pendingApproval.value) {
       if (isThinking.value) return null;
 
@@ -758,7 +764,8 @@ const sendMessage = async (
       attachments,
       replyTo,
       modelInput,
-      onAccepted
+      onAccepted,
+      voice
     );
     syncSession(session.id, runtime);
     return result.responseText;
@@ -778,20 +785,27 @@ const sendSuggestedPrompt = async (
 
 const updateApproval = async (
   messageId: string,
-  state: 'approved' | 'rejected'
-): Promise<void> => {
+  state: 'approved' | 'rejected',
+  voice?: VoiceReplyOptions
+): Promise<string | null> => {
   const sessionId = activeSessionId.value;
-  if (!sessionId) return;
+  if (!sessionId) return null;
 
   const runtime = await ensureRuntime(sessionId);
-  if (!runtime.pendingApproval.value) return;
+  if (!runtime.pendingApproval.value) return null;
 
   approvalStates[messageId] = state;
   syncSession(sessionId, runtime);
-  await runtime.resolveToolApproval(
-    state === 'approved' ? 'approve' : 'decline'
+  const result = await runtime.resolveToolApproval(
+    state === 'approved' ? 'approve' : 'decline',
+    undefined,
+    undefined,
+    undefined,
+    voice
   );
   await refreshAutomations();
+
+  return result.responseText;
 };
 
 /** Закрепляет или открепляет отдельное сообщение в активном AI-чате. */

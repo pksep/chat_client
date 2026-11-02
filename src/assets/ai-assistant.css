@@ -1034,6 +1034,18 @@
   z-index: 2;
 }
 
+.ai-assistant__voice-notice {
+  position: absolute;
+  right: 24px;
+  bottom: 88px;
+  left: 24px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+}
+
 .ai-assistant__voice-visual {
   position: relative;
   display: grid;
