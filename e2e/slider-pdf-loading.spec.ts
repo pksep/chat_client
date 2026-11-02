@@ -2,6 +2,57 @@ import { expect, test, type Page } from '@playwright/test';
 
 const pageErrors = new WeakMap<Page, string[]>();
 
+for (const theme of ['light', 'dark']) {
+  for (const single of [true, false]) {
+    test(`нижняя панель без пустой полосы: ${theme}, ${single ? 'один PDF' : 'альбом'}`, async ({
+      page
+    }, testInfo) => {
+      test.skip(testInfo.project.name === 'chromium-desktop');
+      await page.route('**/__review.pdf', route =>
+        route.fulfill({ contentType: 'application/pdf', body: pdf })
+      );
+      await page.goto(
+        `/e2e/fixtures/slider-pdf-loading.html?theme=${theme}${single ? '&single' : ''}`
+      );
+      await expect(
+        page.locator('.slider-modal__item canvas').first()
+      ).toBeVisible({ timeout: 30_000 });
+      await expect(
+        page.getByRole('status', { name: 'Загрузка PDF' })
+      ).toHaveCount(0, { timeout: 30_000 });
+      await expect(page.locator('html')).toHaveClass(
+        new RegExp(`\\btheme-${theme}\\b`)
+      );
+      await page.evaluate(() => {
+        document.documentElement.style.setProperty('--ios-safe-bottom', '34px');
+      });
+      const footer = page.locator('.slider-modal__bottom');
+      await expect
+        .poll(() =>
+          footer.evaluate(element => {
+            const box = element.getBoundingClientRect();
+            const button = Array.from(
+              element.querySelectorAll(
+                '.slider-modal__nav-block:nth-child(3) button'
+              )
+            )
+              .find(el => el.getBoundingClientRect().height > 0)!
+              .getBoundingClientRect();
+            return {
+              height: Math.round(box.height),
+              gap: Math.round(box.bottom - button.bottom)
+            };
+          })
+        )
+        .toEqual({ height: 48, gap: 4 });
+      await page.screenshot({
+        path: testInfo.outputPath('compact-footer.png'),
+        animations: 'disabled'
+      });
+    });
+  }
+}
+
 const drawing = '0 0 1 rg 0 0 100 100 re f\n';
 const objects = [
   '<< /Type /Catalog /Pages 2 0 R >>',

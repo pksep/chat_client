@@ -6,6 +6,182 @@ import {
   openTopic
 } from './fixtures/topic-performance-page';
 
+test.beforeEach(async ({ page }) => {
+  await page.addLocatorHandler(
+    page.locator('dialog.ios-push-modal[open]'),
+    dialog =>
+      dialog
+        .getByRole('button', { name: 'Настроить позже', exact: true })
+        .click()
+  );
+});
+
+test('IndexedDB дополняет два новых сообщения из памяти до ответа HTTP', async ({
+  page
+}) => {
+  const state = await openFixture(page, { shell: true, unreadCount: 2 });
+  const rows = makeMessages('performance-0', 82).map((row, index) => ({
+    ...row,
+    isReadByMe: index < 80
+  }));
+  await page.evaluate(async rows => {
+    const fixture = (window as any).topicPerformance;
+    await fixture.shadow.saveShadowTopicSnapshot(
+      'performance-0',
+      rows.slice(0, 80),
+      'local',
+      'performance-user',
+      { replace: true }
+    );
+    fixture.seed('performance-0', rows.slice(-2));
+    fixture.setTopics([
+      { ...fixture.getSelectedTopic('performance-0'), lastMessage: rows.at(-1) }
+    ]);
+  }, rows);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  let completed = false;
+  await page.route('**/messages/topic/performance-0?*', async route => {
+    await gate;
+    await route.fulfill({ json: rows });
+    completed = true;
+  });
+  try {
+    await openTopic(page, 0);
+    await expect(message(page, 0, 81)).toBeInViewport();
+    await expect(message(page, 0, 79)).toBeInViewport();
+    expect(completed).toBe(false);
+    release();
+    await expect(
+      page.locator('.chat__message-unread_messages_start')
+    ).toBeInViewport();
+    await expect(message(page, 0, 79)).toBeInViewport();
+  } finally {
+    release();
+  }
+  expect(state.errors).toEqual([]);
+});
+
+for (const cachedCount of [2, 20]) {
+  test(`неполный кеш непрочитанных восстанавливает контекст после ошибки HTTP: ${cachedCount}`, async ({
+    page
+  }) => {
+    const state = await openFixture(page, { shell: true, unreadCount: 2 });
+    const rows = makeMessages('performance-0', 82).map((row, index) => ({
+      ...row,
+      isReadByMe: index < 80
+    }));
+    await page.evaluate(
+      ({ rows, cachedCount }) => {
+        const fixture = (window as any).topicPerformance;
+        fixture.seed('performance-0', rows.slice(-cachedCount));
+        fixture.setTopics([
+          {
+            ...fixture.getSelectedTopic('performance-0'),
+            lastMessage: rows.at(-1)
+          }
+        ]);
+      },
+      { rows, cachedCount }
+    );
+    let requests = 0;
+    await page.route('**/messages/topic/performance-0?*', route => {
+      if (++requests === 1)
+        return route.fulfill({ status: 503, json: { message: 'Недоступно' } });
+      const limit = Number(
+        new URL(route.request().url()).searchParams.get('limit')
+      );
+      return route.fulfill({
+        json: rows
+          .slice(-limit)
+          .map(row => ({ ...row, text: `${row.text} обновлено` }))
+      });
+    });
+    await openTopic(page, 0);
+    await expect(message(page, 0, 81)).toBeVisible();
+    await expect(message(page, 0, 79)).toBeInViewport();
+    await expect(message(page, 0, 79)).toContainText('обновлено');
+    await expect(message(page, 0, 80)).toBeInViewport();
+    await expect(
+      page.locator('.chat__message-unread_messages_start')
+    ).toBeInViewport();
+    expect(requests).toBeGreaterThan(1);
+    expect(state.errors).toEqual([]);
+  });
+}
+
+for (const cacheSource of ['без кеша', 'память', 'IndexedDB']) {
+  test(`контекст перед двумя непрочитанными виден после входа: ${cacheSource}`, async ({
+    page
+  }) => {
+    const state = await openFixture(page, { shell: true, unreadCount: 2 });
+    const rows = makeMessages('performance-0', 82).map((row, index) => ({
+      ...row,
+      isReadByMe: index < 80
+    }));
+    await page.evaluate(
+      async ({ rows, cacheSource }) => {
+        const fixture = (window as any).topicPerformance;
+        fixture.setTopics([
+          {
+            ...fixture.getSelectedTopic('performance-0'),
+            lastMessage: rows.at(-1)
+          }
+        ]);
+        if (cacheSource === 'память')
+          fixture.seed('performance-0', rows.slice(-2));
+        if (cacheSource === 'IndexedDB')
+          await fixture.shadow.saveShadowTopicSnapshot(
+            'performance-0',
+            rows.slice(-2),
+            'local',
+            'performance-user',
+            { replace: true }
+          );
+      },
+      { rows, cacheSource }
+    );
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => (release = resolve));
+    await page.route('**/messages/topic/performance-0?*', async route => {
+      await gate;
+      const params = new URL(route.request().url()).searchParams;
+      const before = params.get('lastMessageId');
+      const after = params.get('afterMessageId');
+      const limit = Number(params.get('limit') || 80);
+      await route.fulfill({
+        json: before
+          ? rows
+              .slice(
+                0,
+                rows.findIndex(row => row.id === before)
+              )
+              .slice(-limit)
+          : after
+            ? rows.slice(
+                rows.findIndex(row => row.id === after) + 1,
+                rows.findIndex(row => row.id === after) + 1 + limit
+              )
+            : rows.slice(-limit)
+      });
+    });
+    try {
+      await openTopic(page, 0);
+      if (cacheSource !== 'без кеша')
+        await expect(message(page, 0, 81)).toBeVisible();
+      release();
+      await expect(message(page, 0, 80)).toBeInViewport();
+      await expect(message(page, 0, 79)).toBeInViewport();
+      await expect(
+        page.locator('.chat__message-unread_messages_start')
+      ).toBeInViewport();
+      expect(state.errors).toEqual([]);
+    } finally {
+      release();
+    }
+  });
+}
+
 test('свежая пустая история заменяет кеш и старое последнее сообщение', async ({
   page
 }) => {
@@ -38,7 +214,7 @@ test('свежая пустая история заменяет кеш и ста
 });
 
 for (const cacheSource of ['память', 'IndexedDB']) {
-  test(`онлайн: устаревший кеш скрыт до свежей истории, первый кадр у непрочитанных: ${cacheSource}`, async ({
+  test(`онлайн: сохранённый кеш виден до HTTP, свежая история открывается у непрочитанных: ${cacheSource}`, async ({
     page
   }) => {
     const state = await openFixture(page, { shell: true, unreadCount: 60 });
@@ -82,14 +258,16 @@ for (const cacheSource of ['память', 'IndexedDB']) {
     });
     try {
       await openTopic(page, 0);
+      await expect(message(page, 0, 19)).toBeVisible();
       await expect(
         page.locator('[data-testid$="-MessageList-Skeleton"]')
-      ).toBeVisible();
-      await expect(page.locator('[data-message-id]')).toHaveCount(0);
+      ).toHaveCount(0);
       await page.evaluate(() => {
         (window as any).historyEntryFrames = [];
         const capture = () => {
-          const first = document.querySelector('[data-message-id]');
+          const first = document.querySelector(
+            '[data-message-id="performance-0-message-80"]'
+          );
           if (first && getComputedStyle(first).visibility !== 'hidden') {
             const divider = document.querySelector(
               '.chat__message-unread_messages_start'
@@ -146,9 +324,15 @@ test('ошибка истории не скрывает отправку и вх
 }, testInfo) => {
   const state = await openFixture(page, { shell: true });
   await page.evaluate(
-    ({ rows, lastMessage }) => {
+    async ({ rows, lastMessage }) => {
       const fixture = (window as any).topicPerformance;
-      fixture.seed('performance-0', rows);
+      await fixture.shadow.saveShadowTopicSnapshot(
+        'performance-0',
+        rows,
+        'local',
+        'performance-user',
+        { replace: true }
+      );
       fixture.setTopics([
         { ...fixture.getSelectedTopic('performance-0'), lastMessage }
       ]);
@@ -183,9 +367,10 @@ test('ошибка истории не скрывает отправку и вх
   try {
     await openTopic(page, 0);
     await expect.poll(() => requests).toBeGreaterThan(0);
-    await expect(
-      page.getByText('Не удалось обновить сообщения', { exact: true })
-    ).toHaveCount(0);
+    await expect(message(page, 0, 19)).toBeVisible();
+    await expect(page.getByText(/^Не удалось обновить сообщения/)).toHaveCount(
+      0
+    );
     await expect(
       page.getByRole('button', { name: 'Повторить', exact: true })
     ).toHaveCount(0);
@@ -228,7 +413,7 @@ test('ошибка истории не скрывает отправку и вх
     await expect(
       page.locator('[data-message-id="incoming-during-history-error"]')
     ).toBeVisible();
-    await expect(message(page, 0, 19)).toHaveCount(0);
+    await expect(message(page, 0, 19)).toBeAttached();
     await editor.fill('Черновик во время восстановления');
     await page.evaluate(async () => {
       const path = '/src/services/useNotificationNavigation.ts';

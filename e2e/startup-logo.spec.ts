@@ -56,7 +56,7 @@ for (const theme of ['light', 'dark']) {
             .map(link => (link as HTMLLinkElement).getAttribute('href'))
         );
       expect(startupImages).toEqual([
-        `/images/ios-splash/${theme}-1170x2532.png`
+        `/images/ios-splash/${theme}-1170x2532.png?v=20261102`
       ]);
       const response = await page.request.get(startupImages[0]!);
       expect(response.ok()).toBe(true);

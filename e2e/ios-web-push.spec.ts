@@ -11,11 +11,17 @@ const prepare = async (
     unsupported?: boolean;
     delayedWorker?: boolean;
     ios?: boolean;
+    previouslyRegistered?: boolean;
+    missingOnServer?: boolean;
+    failUnsubscribe?: boolean;
+    reuseEndpoint?: boolean;
+    failAfterRefresh?: boolean;
   } = {}
 ) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const requests: any[] = [];
   let failing = options.fail || false;
+  let failingAfterRefresh = options.failAfterRefresh || false;
   await page.addInitScript(options => {
     Object.defineProperty(navigator, 'userAgent', {
       value:
@@ -53,8 +59,8 @@ const prepare = async (
       configurable: true
     });
     if (options.unsupported) Reflect.deleteProperty(window, 'Notification');
-    const subscription = {
-      endpoint: 'https://web.push.apple.com/isolated-test',
+    const createSubscription = (id: number) => ({
+      endpoint: `https://${options.ios === false ? 'fcm.googleapis.com' : 'web.push.apple.com'}/isolated-test-${options.reuseEndpoint ? 0 : id}`,
       options: {},
       toJSON() {
         return {
@@ -64,10 +70,16 @@ const prepare = async (
       },
       async unsubscribe() {
         fixture.unsubscribes++;
+        if (options.failUnsubscribe) return false;
+        existing = null;
         return true;
       }
-    };
-    let existing = options.existing ? subscription : null;
+    });
+    let existing = options.existing ? createSubscription(0) : null;
+    if (options.previouslyRegistered && existing) {
+      localStorage.setItem('chat_web_push_endpoint', existing.endpoint);
+      localStorage.setItem('chat_web_push_subscription_migration', 'v1');
+    }
     const worker = Object.assign(new EventTarget(), {
       scriptURL: `${location.origin}/service-worker.js`,
       state: options.delayedWorker ? 'activating' : 'activated',
@@ -90,8 +102,8 @@ const prepare = async (
           if (!registration.active)
             throw new Error('Нет активного service worker');
           fixture.subscriptions++;
-          existing = subscription;
-          return subscription;
+          existing = createSubscription(fixture.subscriptions);
+          return existing;
         }
       },
       getNotifications: async () => []
@@ -119,10 +131,13 @@ const prepare = async (
     if (path.endsWith('public-key'))
       return route.fulfill({ json: { publicKey: 'AQIDBA' } });
     if (path.endsWith('/subscribe')) {
-      requests.push(route.request().postDataJSON());
+      const body = route.request().postDataJSON();
+      requests.push(body);
+      const resubscribe = options.missingOnServer && body.previouslyRegistered;
+      const failed = failing || (failingAfterRefresh && !resubscribe);
       return route.fulfill({
-        status: failing ? 503 : 200,
-        json: { success: !failing }
+        status: failed ? 503 : 200,
+        json: { success: !failed && !resubscribe, resubscribe }
       });
     }
     return route.fulfill({ json: { success: true } });
@@ -137,6 +152,7 @@ const prepare = async (
     requests,
     restore: () => {
       failing = false;
+      failingAfterRefresh = false;
     }
   };
 };
@@ -426,3 +442,132 @@ test('после выхода восстановление сети не рег�
     await page.evaluate(() => (window as any).webPushFixture.unsubscribes)
   ).toBe(1);
 });
+
+test('Chrome пересоздаёт удалённую сервером подписку и сохраняет только подтверждённый адрес', async ({
+  page
+}) => {
+  const fixture = await prepare(page, {
+    ios: false,
+    permission: 'granted',
+    existing: true,
+    previouslyRegistered: true,
+    missingOnServer: true
+  });
+  expect(fixture.requests).toHaveLength(2);
+  expect(fixture.requests.map(body => body.previouslyRegistered)).toEqual([
+    true,
+    false
+  ]);
+  expect(fixture.requests[1].subscription.endpoint).not.toBe(
+    fixture.requests[0].subscription.endpoint
+  );
+  expect(
+    await page.evaluate(async () => {
+      const { webPushStatus } = await import(
+        '/src/services/web-push-status.ts'
+      );
+      const fixture = (window as any).webPushFixture;
+      return {
+        status: webPushStatus.value,
+        requests: fixture.requests,
+        subscriptions: fixture.subscriptions,
+        unsubscribes: fixture.unsubscribes,
+        endpoint: localStorage.getItem('chat_web_push_endpoint')
+      };
+    })
+  ).toEqual({
+    status: 'subscribed',
+    requests: 0,
+    subscriptions: 1,
+    unsubscribes: 1,
+    endpoint: fixture.requests[1].subscription.endpoint
+  });
+  expect(fixture.state.errors).toEqual([]);
+});
+
+test('Chrome сохраняет рабочую зарегистрированную подписку без пересоздания', async ({
+  page
+}) => {
+  const fixture = await prepare(page, {
+    ios: false,
+    permission: 'granted',
+    existing: true,
+    previouslyRegistered: true
+  });
+  expect(fixture.requests).toHaveLength(1);
+  expect(fixture.requests[0].previouslyRegistered).toBe(true);
+  expect(
+    await page.evaluate(() => {
+      const fixture = (window as any).webPushFixture;
+      return [fixture.subscriptions, fixture.unsubscribes];
+    })
+  ).toEqual([0, 0]);
+});
+
+test('ошибка регистрации нового адреса допускает повтор без новой отписки', async ({
+  page
+}) => {
+  const fixture = await prepare(page, {
+    ios: false,
+    permission: 'granted',
+    existing: true,
+    previouslyRegistered: true,
+    missingOnServer: true,
+    failAfterRefresh: true
+  });
+  expect(fixture.requests).toHaveLength(2);
+  expect(
+    await page.evaluate(async () => {
+      const { webPushStatus } = await import(
+        '/src/services/web-push-status.ts'
+      );
+      return [
+        webPushStatus.value,
+        localStorage.getItem('chat_web_push_endpoint')
+      ];
+    })
+  ).toEqual(['error', fixture.requests[0].subscription.endpoint]);
+  fixture.restore();
+  await page.evaluate(() => (window as any).pushModule.initPushNotifications());
+  expect(fixture.requests).toHaveLength(3);
+  expect(fixture.requests[2]).toEqual(fixture.requests[1]);
+  expect(
+    await page.evaluate(async () => {
+      const { webPushStatus } = await import(
+        '/src/services/web-push-status.ts'
+      );
+      return [
+        webPushStatus.value,
+        localStorage.getItem('chat_web_push_endpoint'),
+        (window as any).webPushFixture.unsubscribes
+      ];
+    })
+  ).toEqual(['subscribed', fixture.requests[2].subscription.endpoint, 1]);
+});
+
+for (const failure of ['failUnsubscribe', 'reuseEndpoint'] as const) {
+  test(`Chrome не считает восстановление успешным, если браузер сохранил недействующий адрес: ${failure}`, async ({
+    page
+  }) => {
+    const fixture = await prepare(page, {
+      ios: false,
+      permission: 'granted',
+      existing: true,
+      previouslyRegistered: true,
+      missingOnServer: true,
+      [failure]: true
+    });
+    expect(fixture.requests).toHaveLength(1);
+    expect(
+      await page.evaluate(async () => {
+        const { webPushStatus } = await import(
+          '/src/services/web-push-status.ts'
+        );
+        return webPushStatus.value;
+      })
+    ).toBe('error');
+    expect(
+      await page.evaluate(() => localStorage.getItem('chat_web_push_endpoint'))
+    ).toBe(fixture.requests[0].subscription.endpoint);
+  });
+}

@@ -2770,7 +2770,7 @@ export const hydrateMessagesFromCache = async (
     hydratedResidentTopicUsers.get(topicId) === resolvedUserId &&
     canonicalTopicStateIds.has(topicId)
   ) {
-    if (opts?.visibleLimit) {
+    if (opts?.visibleLimit && !recentTopicFetches.has(topicId)) {
       return setVisibleMessagesLimitForTopic(topicId, opts.visibleLimit, {
         allowShrink: opts.allowVisibleShrink
       });
@@ -2789,7 +2789,7 @@ export const hydrateMessagesFromCache = async (
     messageHydrationsInFlight.set(hydrationKey, hydration);
   }
   const result = await hydration;
-  if (opts?.visibleLimit) {
+  if (opts?.visibleLimit && !recentTopicFetches.has(topicId)) {
     setVisibleMessagesLimitForTopic(topicId, opts.visibleLimit, {
       allowShrink: opts.allowVisibleShrink
     });
@@ -2886,6 +2886,42 @@ const loadMessagesFromCache = async (
   }
 
   const resolvedUserId = userId || authedUser.value?.id;
+  const networkReadAtStart = recentTopicFetches.get(topicId);
+  const saveRestoredMessages = (messages: IMessage[]): void => {
+    // Позднее чтение кеша восстанавливает отправку, сохраняя историю и окно HTTP.
+    const preserveNetworkHistory =
+      recentTopicFetches.has(topicId) ||
+      recentTopicFetches.get(topicId) !== networkReadAtStart;
+    const visibleMessages = preserveNetworkHistory
+      ? mergeWithPendingOutgoingMessages(
+          getMessagesByTopicId(topicId),
+          messages
+        )
+      : undefined;
+    saveMessagesToLocal(
+      topicId,
+      preserveNetworkHistory
+        ? mergeWithPendingOutgoingMessages(
+            getFullMessagesByTopicId(topicId),
+            messages
+          )
+        : messages,
+      {
+        syncLastMessage: false,
+        windowMode: 'latest',
+        visibleMessages,
+        visibleLimit: getNonShrinkingVisibleLimit(
+          topicId,
+          visibleMessages
+            ? Math.max(opts?.visibleLimit || 0, visibleMessages.length)
+            : opts?.visibleLimit,
+          false,
+          !preserveNetworkHistory && opts?.allowVisibleShrink
+        ),
+        skipPersist: true
+      }
+    );
+  };
   const existingFullMessages = getFullMessagesByTopicId(topicId);
   const hasCanonicalMessages =
     existingFullMessages.length > 0 && canonicalTopicStateIds.has(topicId);
@@ -2922,17 +2958,7 @@ const loadMessagesFromCache = async (
       ])
     );
 
-    saveMessagesToLocal(topicId, earlyShadowMessages, {
-      syncLastMessage: false,
-      windowMode: 'latest',
-      visibleLimit: getNonShrinkingVisibleLimit(
-        topicId,
-        opts?.visibleLimit,
-        false,
-        opts?.allowVisibleShrink
-      ),
-      skipPersist: true
-    });
+    saveRestoredMessages(earlyShadowMessages);
     markTopicStateCanonical(topicId);
   }
 
@@ -2952,17 +2978,7 @@ const loadMessagesFromCache = async (
       )
     );
 
-    saveMessagesToLocal(topicId, normalizedExistingMessages, {
-      syncLastMessage: false,
-      windowMode: 'latest',
-      visibleLimit: getNonShrinkingVisibleLimit(
-        topicId,
-        opts?.visibleLimit,
-        false,
-        opts?.allowVisibleShrink
-      ),
-      skipPersist: true
-    });
+    saveRestoredMessages(normalizedExistingMessages);
 
     return getMessagesByTopicId(topicId);
   }
@@ -2989,20 +3005,10 @@ const loadMessagesFromCache = async (
         )
       );
 
-      saveMessagesToLocal(topicId, normalizedShadowMessages, {
-        syncLastMessage: false,
-        windowMode: 'latest',
-        visibleLimit: getNonShrinkingVisibleLimit(
-          topicId,
-          opts?.visibleLimit,
-          false,
-          opts?.allowVisibleShrink
-        ),
-        skipPersist: true
-      });
+      saveRestoredMessages(normalizedShadowMessages);
       markTopicStateCanonical(topicId);
 
-      return normalizedShadowMessages;
+      return getFullMessagesByTopicId(topicId);
     }
   }
 
@@ -3019,24 +3025,14 @@ const loadMessagesFromCache = async (
       )
     );
 
-    saveMessagesToLocal(topicId, normalizedCachedMessages, {
-      syncLastMessage: false,
-      windowMode: 'latest',
-      visibleLimit: getNonShrinkingVisibleLimit(
-        topicId,
-        opts?.visibleLimit,
-        false,
-        opts?.allowVisibleShrink
-      ),
-      skipPersist: true
-    });
+    saveRestoredMessages(normalizedCachedMessages);
     markTopicStateCanonical(topicId);
     schedulePersistMessages(topicId, 150, {
       userId: resolvedUserId,
       migrateLegacyCache: true
     });
 
-    return normalizedCachedMessages;
+    return getFullMessagesByTopicId(topicId);
   }
 
   if (existingFullMessages.length > 0) {
@@ -3047,17 +3043,7 @@ const loadMessagesFromCache = async (
       )
     );
 
-    saveMessagesToLocal(topicId, normalizedExistingMessages, {
-      syncLastMessage: false,
-      windowMode: 'latest',
-      visibleLimit: getNonShrinkingVisibleLimit(
-        topicId,
-        opts?.visibleLimit,
-        false,
-        opts?.allowVisibleShrink
-      ),
-      skipPersist: true
-    });
+    saveRestoredMessages(normalizedExistingMessages);
 
     return getMessagesByTopicId(topicId);
   }
@@ -3069,20 +3055,10 @@ const loadMessagesFromCache = async (
         prepareMessagesForPersistence(pendingUploadMessages)
       );
 
-    saveMessagesToLocal(topicId, normalizedPendingUploadMessages, {
-      syncLastMessage: false,
-      windowMode: 'latest',
-      visibleLimit: getNonShrinkingVisibleLimit(
-        topicId,
-        opts?.visibleLimit,
-        false,
-        opts?.allowVisibleShrink
-      ),
-      skipPersist: true
-    });
+    saveRestoredMessages(normalizedPendingUploadMessages);
     markTopicStateCanonical(topicId);
 
-    return normalizedPendingUploadMessages;
+    return getFullMessagesByTopicId(topicId);
   }
 
   return [];

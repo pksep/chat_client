@@ -1012,7 +1012,7 @@ for (const scenario of [
               'Не удалось обновить сообщения. Показана сохранённая переписка.',
               { exact: true }
             )
-          ).toBeVisible();
+          ).toHaveCount(0);
         }
       } else {
         await expect(

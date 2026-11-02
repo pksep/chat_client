@@ -516,7 +516,9 @@ for (const [name, mimeType, mediaType, buffer] of [
     'events',
     'resume',
     'delayed-resume',
-    'empty-return'
+    'empty-return',
+    'unreadable-return',
+    'zero-size-return'
   ]) {
     test(`камера PWA: ${name}, ${completion}, копируется до загрузки и отправляется один раз`, async ({
       page
@@ -550,6 +552,7 @@ for (const [name, mimeType, mediaType, buffer] of [
           copiedBytes: 0,
           sent: [] as any[],
           input: null as any,
+          readyAt: 0,
           uploadReads: [] as Promise<number[]>[]
         };
         (window as any).cameraRegression = state;
@@ -574,6 +577,14 @@ for (const [name, mimeType, mediaType, buffer] of [
           const part = slice.apply(this, args);
           const read = part.arrayBuffer.bind(part);
           part.arrayBuffer = async () => {
+            if (
+              completion === 'unreadable-return' &&
+              Date.now() < state.readyAt
+            )
+              throw new DOMException(
+                'Камера сохраняет снимок',
+                'NotReadableError'
+              );
             const bytes = await read();
             if (state.input?.isConnected) state.copiedBytes += bytes.byteLength;
             return bytes;
@@ -583,11 +594,27 @@ for (const [name, mimeType, mediaType, buffer] of [
         const captureSelection = (event: Event) => {
           const input = event.target as HTMLInputElement;
           if (input.type !== 'file') return;
-          if (completion !== 'events' && completion !== 'empty-return')
+          if (
+            ![
+              'events',
+              'empty-return',
+              'unreadable-return',
+              'zero-size-return'
+            ].includes(completion)
+          )
             event.stopImmediatePropagation();
           if (state.input === input) return;
           state.input = input;
+          state.readyAt = Date.now() + 500;
           const selected = input.files;
+          if (completion === 'zero-size-return') {
+            for (const file of Array.from(selected || [])) {
+              const size = file.size;
+              Object.defineProperty(file, 'size', {
+                get: () => (Date.now() < state.readyAt ? 0 : size)
+              });
+            }
+          }
           if (
             completion === 'delayed-resume' ||
             completion === 'empty-return'
@@ -848,6 +875,7 @@ for (const standalone of [true, false]) {
   test(`${standalone ? 'PWA' : 'Safari'}: эмодзи в черновике используют системный шрифт и сохраняются при отправке`, async ({
     page
   }, testInfo) => {
+    test.setTimeout(90_000);
     await page.addLocatorHandler(
       page.getByRole('button', { name: 'Остаться в браузере', exact: true }),
       button => button.tap()

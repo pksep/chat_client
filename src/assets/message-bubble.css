@@ -1933,6 +1933,17 @@ div.message-content__file {
   .slider-modal .slider-modal__content {
     gap: 0;
   }
+
+  .slider-modal .slider-modal__bottom {
+    box-sizing: border-box;
+    height: 48px;
+    min-height: 48px;
+    align-items: center;
+  }
+
+  .slider-modal .slider-modal__nav-block {
+    min-width: 0;
+  }
 }
 
 .message-content__media-loading__icon {

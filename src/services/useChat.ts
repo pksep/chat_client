@@ -71,6 +71,7 @@ import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
 import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { Capacitor } from '@capacitor/core';
 import { isTauriRuntime } from './useTauriNotifications';
+import { showWebSocketMessageNotification } from './web-socket-notifications';
 import { App as CapacitorApp } from '@capacitor/app';
 import {
   clearMessageNotification,
@@ -578,6 +579,13 @@ const setupChatListeners = (): void => {
           sender: message.senderUser || getUserById(message.senderUserId),
           topic
         });
+        if (topic && isTrackableUnreadIncomingMessage) {
+          void showWebSocketMessageNotification({
+            message,
+            sender: message.senderUser || getUserById(message.senderUserId),
+            topic
+          });
+        }
       }
     }
 
