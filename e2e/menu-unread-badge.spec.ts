@@ -103,7 +103,7 @@ for (const theme of ['light', 'dark'] as const) {
 
     for (const count of [1, 9, 10, 99, 100, 999, 1000]) {
       await setUnreadCount(page, count);
-      await expect(badge).toHaveText(String(count));
+      await expect(badge).toHaveText(count > 9 ? '9+' : String(count));
       await expect(clients).toHaveAttribute(
         'aria-label',
         `Клиенты. Непрочитанных: ${count}`
