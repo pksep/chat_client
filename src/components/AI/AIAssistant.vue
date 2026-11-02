@@ -949,7 +949,9 @@ const startVoiceConversation = async (): Promise<void> => {
       return sendMessage(text, [], undefined, undefined, undefined, options);
     },
     isBusy: (): boolean => isThinking.value,
-    notice: (text): void => { voiceQueueNotice.value = text; },
+    notice: (text): void => {
+      voiceQueueNotice.value = text;
+    },
     state: setVoicePresentation,
     error: (error): void => showErrorNotification(getVoiceErrorMessage(error)),
     ended: (): void => {

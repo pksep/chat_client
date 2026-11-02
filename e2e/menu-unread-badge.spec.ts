@@ -27,7 +27,12 @@ async function setUnreadCount(
           },
           unreadMessageCount: count,
           info: { isMute: muted },
-          lastMessage: { senderUserId: 'synthetic-guest', text: 'Тест' }
+          lastMessage: {
+            id: 'synthetic-guest-message',
+            senderUserId: 'synthetic-guest',
+            text: 'Тест',
+            isSystem: false
+          }
         }
       ]);
     },
