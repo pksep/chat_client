@@ -275,8 +275,8 @@ const openTopic = (topic: ITopic) => {
 }
 .clients-panel :deep(.chats-toolbar__filter-button svg),
 .clients-panel :deep(.chats-toolbar__filter-button .client-platform-icon) {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
 }
 .clients-panel__filter-rows {

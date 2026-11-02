@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { Plugin } from 'vite';
 
-// Тема нужна до первого кадра; отдельный запрос задерживает парсер Android WebView.
+// Тема и логотип нужны в первом кадре без ожидания отдельных запросов.
 export const inlineStartupTheme = (): Plugin => {
   let publicDir = '';
   return {
@@ -41,10 +41,20 @@ export const inlineStartupTheme = (): Plugin => {
           throw new Error(
             'Не найдена CSP-директива script-src для скрипта темы'
           );
-        return result.replace(
+        let startupHtml = result.replace(
           themeTag,
           () => `<script data-startup-theme>${source}</script>`
         );
+        for (const theme of ['light', 'dark']) {
+          const logo = await readFile(
+            resolve(publicDir, `images/logo-${theme}.svg`)
+          );
+          startupHtml = startupHtml.replace(
+            `src="/images/logo-${theme}.svg"`,
+            `src="data:image/svg+xml;base64,${logo.toString('base64')}"`
+          );
+        }
+        return startupHtml;
       }
     }
   };

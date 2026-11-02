@@ -112,6 +112,16 @@ for (const clients of [false, true]) {
         await expect(
           page.locator('[data-testid^="Clients-SystemFolder-"]')
         ).toHaveCount(0);
+        if (clients) {
+          const icons = page.locator(
+            '.clients-panel__filter-rows svg, .clients-panel__filter-rows img'
+          );
+          for (const icon of await icons.all())
+            expect(await icon.boundingBox()).toMatchObject({
+              width: 16,
+              height: 16
+            });
+        }
         return;
       }
       await expect(page.locator('.chats-toolbar__filters')).toHaveCount(0);
@@ -140,6 +150,14 @@ for (const clients of [false, true]) {
           'Новые заявки',
           'Поддержка'
         ]);
+      const icons = page.locator(
+        '.chat-folder-rail--mobile .chat-folder-rail__avatar > svg, .chat-folder-rail--mobile .chat-folder-rail__avatar > img, .chat-folder-rail--mobile .chat-folder-rail__manage-icon'
+      );
+      for (const icon of await icons.all())
+        expect(await icon.boundingBox()).toMatchObject({
+          width: 16,
+          height: 16
+        });
       for (const width of [320, 360, 393, 412, 768]) {
         await page.setViewportSize({ width, height: 851 });
         const search = (await page.locator('.search-yui-kit').boundingBox())!;

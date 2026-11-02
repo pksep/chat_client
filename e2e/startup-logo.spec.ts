@@ -98,10 +98,20 @@ for (const theme of ['light', 'dark']) {
         );
       expect(pixels.center).not.toEqual(background);
       await expect(page.locator('.startup-shell__content')).toBeHidden();
-      await page.screenshot({
-        path: testInfo.outputPath(`startup-logo-${theme}.png`),
-        animations: 'disabled'
-      });
+      // В первом кадре только изображение: шрифты задержанного приложения
+      // не должны блокировать снимок в WebKit.
+      const fontWait = process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY;
+      process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY = '1';
+      try {
+        await page.screenshot({
+          path: testInfo.outputPath(`startup-logo-${theme}.png`),
+          animations: 'disabled'
+        });
+      } finally {
+        if (fontWait === undefined)
+          delete process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY;
+        else process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY = fontWait;
+      }
     } finally {
       release();
     }

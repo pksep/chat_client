@@ -21,8 +21,10 @@ expect(scriptPolicy).toContain(
 );
 expect(scriptPolicy).not.toContain("'unsafe-inline'");
 const stylesheets = [
-  ...html.matchAll(/<link[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)
+  ...html.matchAll(/<link[^>]*rel="preload"[^>]*as="style"[^>]*href="([^"]+)"/g)
 ].map(match => match[1]);
+expect(stylesheets.length).toBeGreaterThan(0);
+expect(html).not.toMatch(/<link[^>]*rel="stylesheet"/);
 const fontFaces = (
   await Promise.all(
     stylesheets.map(async file => {
@@ -130,8 +132,8 @@ try {
       try {
         // Пока стартовый скрипт ещё не выполнялся, все обязательные JS уже грузятся.
         await expect
-          .poll(() => preloads.every(path => requests.includes(path)))
-          .toBe(true);
+          .poll(() => preloads.filter(path => !requests.includes(path)))
+          .toEqual([]);
         expect(
           await page.evaluate(
             () =>

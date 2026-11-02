@@ -354,16 +354,17 @@
   .chat-folder-rail__item:hover
   .chat-folder-rail__avatar {
   display: flex;
-  flex: 0 0 14px;
-  width: 14px;
-  height: 14px;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
   background: transparent;
   color: var(--action-primary-bg);
 }
 
-.chat-folder-rail--mobile .chat-folder-rail__avatar svg {
-  width: 14px;
-  height: 14px;
+.chat-folder-rail--mobile .chat-folder-rail__avatar svg,
+.chat-folder-rail--mobile .chat-folder-rail__avatar img {
+  width: 16px;
+  height: 16px;
 }
 
 .chat-folder-rail--mobile .chat-folder-rail__item--manage {
@@ -398,8 +399,8 @@
 .chat-folder-rail--mobile
   .chat-folder-rail__item--manage
   .chat-folder-rail__manage-icon {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
 }
 
 .chats-toolbar--with-folders {

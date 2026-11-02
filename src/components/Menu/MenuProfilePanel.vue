@@ -599,7 +599,7 @@
 
   <MobileModal
     v-if="isMobile"
-    class="menu-profile__wallpaper-preview-mobile"
+    class="menu-profile__wallpaper-preview-mobile menu-profile__wallpaper-preview-mobile--wallpaper"
     headerClass="hidden"
     :show-divider="false"
     :open="isWallpaperPreviewOpen"

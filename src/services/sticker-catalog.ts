@@ -45,6 +45,17 @@ const preparedPages = new Map<
 >();
 const catalogRevisions = new Map<string, string>();
 const preparationTtl = 60000;
+const firstPageKey = (
+  base: string,
+  pack: string,
+  excludedPacks: string[] = []
+) => `${base}:${JSON.stringify([pack, [...new Set(excludedPacks)].sort()])}`;
+
+export class StickerPageExpiredError extends Error {
+  constructor() {
+    super('Не удалось загрузить стикеры');
+  }
+}
 
 const request = async <T>(
   path: string,
@@ -75,12 +86,21 @@ const request = async <T>(
       });
       retryable =
         response.status >= 500 || [408, 429].includes(response.status);
-      if (!response.ok) throw new Error('Не удалось загрузить стикеры');
-      return await response.json();
-    } catch {
-      signal?.throwIfAborted();
-      if (!retryable || attempt >= 2)
+      if (!response.ok) {
+        if (response.status === 400) {
+          const body = await response.json().catch(() => undefined);
+          if (body?.message === 'Страница каталога устарела')
+            throw new StickerPageExpiredError();
+        }
         throw new Error('Не удалось загрузить стикеры');
+      }
+      return await response.json();
+    } catch (reason) {
+      signal?.throwIfAborted();
+      if (!retryable || attempt >= 2) {
+        if (reason instanceof StickerPageExpiredError) throw reason;
+        throw new Error('Не удалось загрузить стикеры');
+      }
     } finally {
       clearTimeout(timeout);
       signal?.removeEventListener('abort', abort);
@@ -117,7 +137,7 @@ export const loadStickerPacks = async (signal?: AbortSignal) => {
 export const prepareStickerPicker = (pack?: string) => {
   if (!pack || pack === 'keyboard' || document.hidden) return;
   const base = getStickerApiBaseUrl();
-  const key = `${base}:${pack}`;
+  const key = firstPageKey(base, pack);
   const previous = preparedPages.get(key);
   if (previous && Date.now() - previous.time < preparationTtl) return;
   const entry = {
@@ -171,7 +191,7 @@ export const loadStickerPage = async (
   if (cursor) params.set('cursor', cursor);
   if (excludedPacks.length) params.set('excludePacks', excludedPacks.join(','));
   const base = getStickerApiBaseUrl();
-  const key = `${base}:${pack}`;
+  const key = firstPageKey(base, pack, excludedPacks);
   const prepared =
     !query && !cursor && pack && !excludedPacks.includes(pack)
       ? preparedPages.get(key)
@@ -183,7 +203,18 @@ export const loadStickerPage = async (
     if (revision && page?.revision !== revision) page = undefined;
     signal?.throwIfAborted();
   }
-  page ||= await request<StickerPage>(`?${params}`, signal, undefined, base);
+  try {
+    page ||= await request<StickerPage>(`?${params}`, signal, undefined, base);
+  } catch (reason) {
+    if (reason instanceof StickerPageExpiredError) {
+      // Курсоры всех наборов зависят от общей версии каталога.
+      for (const preparedKey of preparedPages.keys())
+        if (preparedKey.startsWith(`${base}:`))
+          preparedPages.delete(preparedKey);
+      catalogRevisions.delete(base);
+    }
+    throw reason;
+  }
   if (!query && !cursor && pack && !excludedPacks.includes(pack)) {
     preparedPages.set(key, {
       time: Date.now(),

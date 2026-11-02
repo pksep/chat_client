@@ -162,6 +162,27 @@ test('слайдер заполняет изменившийся viewport iPhone
   await page.goto('/e2e/fixtures/slider-pdf-loading.html');
   await expect(page.locator('dialog.slider-modal')).toBeVisible();
   await page.evaluate(() => {
+    document.documentElement.style.setProperty('--ios-safe-bottom', '34px');
+    const viewport = window.visualViewport!;
+    Object.defineProperties(viewport, {
+      height: { configurable: true, get: () => window.innerHeight - 34 },
+      offsetTop: { configurable: true, get: () => 0 }
+    });
+    viewport.dispatchEvent(new Event('resize'));
+  });
+  await expect
+    .poll(async () => {
+      const box = (await page.locator('dialog.slider-modal').boundingBox())!;
+      return box.y + box.height;
+    })
+    .toBe(page.viewportSize()!.height);
+  const content = (await page.locator('.slider-modal__content').boundingBox())!;
+  expect(content.y + content.height).toBe(page.viewportSize()!.height);
+  await page.screenshot({
+    path: testInfo.outputPath('ios-slider-safe-bottom.png'),
+    animations: 'disabled'
+  });
+  await page.evaluate(() => {
     document.documentElement.style.setProperty('--ios-safe-top', '47px');
     document.documentElement.style.setProperty('--ios-safe-bottom', '34px');
     const viewport = window.visualViewport!;
