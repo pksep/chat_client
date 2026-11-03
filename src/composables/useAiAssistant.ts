@@ -554,6 +554,17 @@ const preparationStatus = computed(() =>
     ? 'Загружаю историю'
     : activeRuntime.value?.preparationStatus.value || 'Подготавливаю ответ'
 );
+const conversationError = computed((): string | null => {
+  const runtime = activeRuntime.value;
+  const error = runtime?.lastError.value;
+  if (!error) return null;
+
+  const lastMessage = runtime?.messages.value.at(-1);
+
+  return lastMessage?.role === 'assistant' && lastMessage.content === error
+    ? null
+    : error;
+});
 const taskBusy = computed(() => activeRuntime.value?.taskBusy.value || false);
 /** Подтверждает точный сохранённый план без нового запроса к модели. */
 const resolveActionTask = async (id: string, decision: AiActionDecision) => {
@@ -1062,6 +1073,7 @@ export const useAiAssistant = () => {
     activeTitle,
     isThinking,
     preparationStatus,
+    conversationError,
     taskBusy,
     resolveActionTask,
     backgroundActivities,

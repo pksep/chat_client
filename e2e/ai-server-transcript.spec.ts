@@ -80,6 +80,59 @@ const answer = (page: Page, text: string) =>
     )
     .filter({ hasText: text });
 
+test('неполный серверный ответ сохраняет запрос и показывает ошибку в разговоре', async ({
+  page
+}): Promise<void> => {
+  const id = `qa-incomplete-request-${Date.now()}`;
+  const input = 'Создай деталь, изделие и сборку. Мой комментарий.';
+  let requestId: string | undefined;
+
+  await seed(page, id);
+  await page.route('**/conversations/**', route =>
+    route.fulfill({
+      json: new URL(route.request().url()).pathname.endsWith('/messages')
+        ? {
+            ...snapshot([]),
+            incompleteMessages: requestId
+              ? [{ id: 'incomplete-answer', requestId }]
+              : []
+          }
+        : { generation: 0, deleted: false, protocol: 1 }
+    })
+  );
+  await page.route('**/api/agents/generalAgent/stream*', route => {
+    requestId = route.request().postDataJSON().requestContext.requestId;
+
+    return route.fulfill({
+      status: 500,
+      json: { error: 'QA provider failure' }
+    });
+  });
+  await page.goto(`/ai/${id}`);
+  await expect(page.locator('#startup-shell')).toHaveCount(0, {
+    timeout: 30_000
+  });
+  const editor = page.locator('.ai-assistant__editor');
+  await editor.locator('[contenteditable="true"]').fill(input);
+  await editor.locator('.toolbar-button.right:visible').click();
+
+  const bubbles = page.locator('.ai-assistant__message');
+  await expect(bubbles.nth(0)).toContainText(input);
+  await expect(bubbles.nth(1)).toContainText(
+    'Не удалось получить итоговый ответ'
+  );
+  await expect(page.locator('.ai-assistant [role="alert"]')).toContainText(
+    'При обработке запроса произошла ошибка'
+  );
+
+  await page.reload();
+  await expect(bubbles).toHaveCount(2);
+  await expect(bubbles.nth(0)).toContainText(input);
+  await expect(bubbles.nth(1)).toContainText(
+    'Не удалось получить итоговый ответ'
+  );
+});
+
 test('ошибки трёх запросов остаются после своих вопросов при обновлении истории и перезагрузке', async ({
   page
 }) => {

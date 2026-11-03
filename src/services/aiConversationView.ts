@@ -20,6 +20,11 @@ export function createAiConversationView(
 ): AIMessage[] {
   const result: AIMessage[] = [];
   const requests = new Set(snapshot.messages.map(message => message.requestId));
+  const recordedUsers = new Set(
+    snapshot.messages
+      .filter(message => message.role === 'user')
+      .map(message => message.requestId)
+  );
   snapshot.incompleteMessages.forEach(message =>
     requests.add(message.requestId)
   );
@@ -161,8 +166,9 @@ export function createAiConversationView(
     const requestId = aiMessageRequestId(message);
     if (
       requestId &&
-      requests.has(requestId) &&
-      (message.role === 'user' || answered.has(requestId))
+      (message.role === 'user'
+        ? recordedUsers.has(requestId)
+        : answered.has(requestId))
     )
       continue;
     if (message.id && result.some(item => item.id === message.id)) continue;
@@ -170,7 +176,13 @@ export function createAiConversationView(
     const display = { ...message, loading: false };
     delete display.pendingToolApproval;
     delete display.actionTask;
-    if (requestId && requests.has(requestId)) insertForRequest(display);
+    // Карточка или неполный ответ не подтверждают сохранение текста запроса.
+    const firstForRequest =
+      message.role === 'user' && requestId
+        ? result.findIndex(item => aiMessageRequestId(item) === requestId)
+        : -1;
+    if (firstForRequest >= 0) result.splice(firstForRequest, 0, display);
+    else if (requestId && requests.has(requestId)) insertForRequest(display);
     else result.push(display);
   }
   return result;

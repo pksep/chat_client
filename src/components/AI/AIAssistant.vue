@@ -232,6 +232,13 @@
             </Teleport>
           </div>
         </template>
+        <div
+          v-if="conversationError"
+          class="ai-assistant__thinking"
+          role="alert"
+        >
+          {{ conversationError }}
+        </div>
         <div v-if="isThinking" class="ai-assistant__thinking">
           {{ preparationStatus }} <span>•••</span>
         </div>
@@ -711,6 +718,7 @@ const {
   activeSession,
   isThinking,
   preparationStatus,
+  conversationError,
   taskBusy,
   resolveActionTask,
   isVoiceModeOpen,
