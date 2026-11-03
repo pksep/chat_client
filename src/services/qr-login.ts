@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core';
+import { isTauri } from '@tauri-apps/api/core';
 import {
   getStoredChatAccessToken,
   isChatAccessTokenExpired,
@@ -6,6 +8,7 @@ import {
 import { getAuthToken } from '../composables/useLogin';
 import { fetchAuthWithCookies } from '../utils/auth-http';
 import { getConfig } from './useConfig';
+import { SHORT_QR_LOGIN_ENABLED } from './qr-login-settings';
 
 export const QR_LOGIN_REFRESH_LEAD_MS = 10_000;
 const QR_LOGIN_MIN_TOKEN_VALIDITY_MS = 100_000;
@@ -33,6 +36,24 @@ export const createQrLogin = async (): Promise<{
     await refreshToken();
   if (!token || isChatAccessTokenExpired(token, QR_LOGIN_MIN_TOKEN_VALIDITY_MS))
     throw new Error('Сессия истекла. Войдите в чат заново.');
+
+  if (!SHORT_QR_LOGIN_ENABLED) {
+    const currentUrl = new URL(window.location.href);
+    const organization =
+      localStorage.getItem('chat_runtime_last_organization') ||
+      currentUrl.searchParams.get('organization') ||
+      apiUrl.replace(/\/api$/, '');
+    const url = new URL(
+      '/',
+      Capacitor.isNativePlatform() || isTauri()
+        ? 'https://chat.pksep.ru/'
+        : currentUrl.origin
+    );
+    url.searchParams.set('token', token);
+    url.searchParams.set('organization', organization);
+    // Периодически пересобираем открытую ссылку с актуальным токеном.
+    return { url: url.toString(), expiresAt: Date.now() + 90_000 };
+  }
 
   const request = () =>
     fetchAuthWithCookies(`${apiUrl}/v2/auth/qr`, 'POST', undefined, {

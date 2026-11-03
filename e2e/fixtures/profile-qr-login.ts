@@ -1,5 +1,6 @@
 import { createApp, h, ref } from 'vue';
 import { createPinia } from 'pinia';
+import { useThemeStore } from '../../src/stores/theme';
 import MenuProfilePanel from '../../src/components/Menu/MenuProfilePanel.vue';
 import {
   saveChatAuthSession,
@@ -13,6 +14,8 @@ import '../../src/assets/chat-container.css';
 
 const theme = new URLSearchParams(location.search).get('theme') || 'light';
 document.documentElement.dataset.theme = theme;
+const pinia = createPinia();
+useThemeStore(pinia).setTheme(theme === 'dark');
 setConfig({
   CHAT_API_DOMAIN: `${location.origin}/api`,
   CHAT_ERP_URL: `${location.origin}/erp`
@@ -61,5 +64,5 @@ createApp({
       ]
     )
 })
-  .use(createPinia())
+  .use(pinia)
   .mount('#app');

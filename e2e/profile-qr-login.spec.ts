@@ -1,5 +1,6 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { createAndroidPerformanceServer } from './fixtures/android-performance-server';
+import { SHORT_QR_LOGIN_ENABLED } from '../src/services/qr-login-settings';
 
 const trigger = (page: Page) =>
   page.getByRole('button', { name: 'Вход по QR-коду' });
@@ -55,13 +56,30 @@ const expectLoginUrl = (raw: string, apiOrigin: string, code = qrCode()) => {
   expect(url.search).toBe('');
   expect(url.hash).toBe(`#qr=${code}`);
 };
+const expectProfileLoginUrl = (
+  raw: string,
+  page: Page,
+  token: string,
+  code = qrCode()
+) => {
+  if (SHORT_QR_LOGIN_ENABLED)
+    return expectLoginUrl(raw, new URL(page.url()).origin, code);
+  const url = new URL(raw);
+  expect(url.origin).toBe(new URL(page.url()).origin);
+  expect(url.pathname).toBe('/');
+  expect(url.searchParams.get('token')).toBe(token);
+  expect(url.searchParams.get('organization')).toBe(
+    'https://corporate.pksep.test'
+  );
+  expect(url.hash).toBe('');
+};
 
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/**', route => route.fulfill({ json: [] }));
   await page.route('**/api/v2/auth/qr', route => fulfillQr(page, route));
 });
 
-test('QR содержит короткую ссылку сервера; окно в центре; повтор берёт текущий токен', async ({
+test('QR использует текущую сессию; окно в центре; повтор берёт текущий токен', async ({
   page
 }, testInfo) => {
   const tokens: string[] = [];
@@ -75,7 +93,7 @@ test('QR содержит короткую ссылку сервера; окно
   await expect(trigger(page)).toBeVisible();
   await trigger(page).click();
   await expect(image(page)).toBeVisible();
-  expectLoginUrl(await decode(page), new URL(page.url()).origin);
+  expectProfileLoginUrl(await decode(page), page, 'profile-qr-test-token');
   expect((await image(page).boundingBox())!.width).toBe(232);
   const box = (await popover(page).boundingBox())!;
   expect(box.x).toBeGreaterThanOrEqual(0);
@@ -97,11 +115,17 @@ test('QR содержит короткую ссылку сервера; окно
   });
   await trigger(page).click();
   await expect(image(page)).toBeVisible();
-  expectLoginUrl(await decode(page), new URL(page.url()).origin, qrCode(1));
-  expect(tokens).toEqual([
-    'Bearer profile-qr-test-token',
-    'Bearer updated-profile-token'
-  ]);
+  expectProfileLoginUrl(
+    await decode(page),
+    page,
+    'updated-profile-token',
+    qrCode(1)
+  );
+  expect(tokens).toEqual(
+    SHORT_QR_LOGIN_ENABLED
+      ? ['Bearer profile-qr-test-token', 'Bearer updated-profile-token']
+      : []
+  );
   await page.mouse.click(
     page.viewportSize()!.width - 1,
     page.viewportSize()!.height - 1
@@ -109,7 +133,7 @@ test('QR содержит короткую ссылку сервера; окно
   await expect(popover(page)).toHaveCount(0);
 });
 
-test('общий JWT передаётся только в Bearer при создании QR без refresh-cookie', async ({
+test('действующий общий JWT создаёт QR без refresh-cookie', async ({
   page
 }) => {
   const requests: string[] = [];
@@ -132,9 +156,9 @@ test('общий JWT передаётся только в Bearer при созд
   await trigger(page).click();
   await expect(image(page)).toBeVisible();
   const raw = await decode(page);
-  expectLoginUrl(raw, new URL(page.url()).origin);
-  expect(raw).not.toContain(token);
-  expect(requests).toEqual(['/api/v2/auth/qr']);
+  expectProfileLoginUrl(raw, page, token);
+  if (SHORT_QR_LOGIN_ENABLED) expect(raw).not.toContain(token);
+  expect(requests).toEqual(SHORT_QR_LOGIN_ENABLED ? ['/api/v2/auth/qr'] : []);
   await page.evaluate(() => (window as any).profileQrFixture.leave());
   await expect(popover(page)).toHaveCount(0);
 });
@@ -150,7 +174,7 @@ test('просроченная сессия не попадает в QR; пов�
   await setToken(page, 'restored-token');
   await page.getByRole('button', { name: 'Попробовать снова' }).click();
   await expect(image(page)).toBeVisible();
-  expectLoginUrl(await decode(page), new URL(page.url()).origin);
+  expectProfileLoginUrl(await decode(page), page, 'restored-token');
 });
 
 for (const scenario of [
@@ -161,6 +185,7 @@ for (const scenario of [
   test(`QR использует обновлённую ERP-сессию: ${scenario}`, async ({
     page
   }) => {
+    test.skip(!SHORT_QR_LOGIN_ENABLED, 'Короткий QR временно отключён');
     await page.clock.install();
     const initialTime = Date.now();
     const wakeTime =
@@ -224,6 +249,7 @@ for (const scenario of [
 test('ошибки создания не обновляют и не сбрасывают сессию; повтор восстанавливает QR', async ({
   page
 }) => {
+  test.skip(!SHORT_QR_LOGIN_ENABLED, 'Короткий QR временно отключён');
   const authRequests: string[] = [];
   page.on('request', request => {
     if (new URL(request.url()).pathname.includes('/auth/'))
@@ -256,6 +282,7 @@ test('ошибки создания не обновляют и не сбрасы
 test('просроченная сессия входа в чат обновляется через чат; отказ refresh сохраняет профиль', async ({
   page
 }) => {
+  test.skip(!SHORT_QR_LOGIN_ENABLED, 'Короткий QR временно отключён');
   await page.clock.install();
   const now = Date.now();
   const validToken = jwt('chat-renewed', false, now);
@@ -303,6 +330,7 @@ test('просроченная сессия входа в чат обновля�
 test('неверный код и истёкший ответ сервера не показываются', async ({
   page
 }) => {
+  test.skip(!SHORT_QR_LOGIN_ENABLED, 'Короткий QR временно отключён');
   const responses = [
     {
       code: 'bad-code',
@@ -327,6 +355,7 @@ test('неверный код и истёкший ответ сервера не
 test('QR обновляется перед истечением, ошибка убирает старый код, закрытие останавливает таймер', async ({
   page
 }) => {
+  test.skip(!SHORT_QR_LOGIN_ENABLED, 'Короткий QR временно отключён');
   await page.clock.install();
   let requests = 0;
   await page.route('**/api/v2/auth/qr', route => {
@@ -365,6 +394,7 @@ test('QR обновляется перед истечением, ошибка у
 });
 
 test('ответ после закрытия не заменяет новый QR', async ({ page }) => {
+  test.skip(!SHORT_QR_LOGIN_ENABLED, 'Короткий QR временно отключён');
   let releaseFirst!: () => void;
   const firstPending = new Promise<void>(resolve => (releaseFirst = resolve));
   let completeFirst!: () => void;
@@ -409,6 +439,7 @@ test('корпоративная сессия → короткий QR профи
   page,
   browser
 }, testInfo) => {
+  test.skip(!SHORT_QR_LOGIN_ENABLED, 'Короткий QR временно отключён');
   const webOrigin = new URL(testInfo.project.use.baseURL!).origin;
   const fixture = await createAndroidPerformanceServer({
     port: 5480 + testInfo.parallelIndex,
