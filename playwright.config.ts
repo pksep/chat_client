@@ -60,6 +60,8 @@ export default defineConfig({
         'incoming-call-dismissal.spec.ts',
         'menu-update.spec.ts',
         'profile-qr-login.spec.ts',
+        'qr-login.spec.ts',
+        'qr-session.spec.ts',
         'pts-snapshot-recovery.spec.ts',
         'unread-and-pinned-history.spec.ts',
         'message-deletion-animation.spec.ts',

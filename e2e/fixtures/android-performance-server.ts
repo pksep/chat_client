@@ -114,7 +114,11 @@ export async function createAndroidPerformanceServer({
       'Access-Control-Allow-Origin',
       request.headers.origin || '*'
     );
-    response.setHeader('Access-Control-Allow-Headers', '*');
+    response.setHeader(
+      'Access-Control-Allow-Headers',
+      request.headers['access-control-request-headers'] ||
+        'Authorization, Content-Type'
+    );
     response.setHeader(
       'Access-Control-Allow-Methods',
       'GET,POST,PUT,PATCH,DELETE,OPTIONS'

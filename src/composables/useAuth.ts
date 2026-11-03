@@ -37,6 +37,7 @@ const preserveAuthAvatar = (
     ? { ...user, avatarUrl: previousUser.avatarUrl }
     : user;
 export const ERP_BOOTSTRAP_TOKEN_KEY = 'erp_bootstrap_token';
+const QR_BOOTSTRAP_SOURCE_KEY = 'chat_qr_bootstrap_source';
 const SKIP_STARTUP_SHELL_ON_AUTH_REDIRECT_KEY =
   'chat_skip_startup_shell_on_auth_redirect';
 const AUTH_REFRESH_LOCK_NAME = 'chat_auth_refresh';
@@ -90,6 +91,7 @@ interface DirectAuthCredentials {
 
 interface StoredBootstrapErpSession {
   accessToken: string;
+  source?: 'qr';
 }
 
 const decodeJwtPart = <T>(token: string, index: number): T | null => {
@@ -231,6 +233,49 @@ export const useAuth = async (erpToken: string): Promise<AuthResponse> => {
   });
 };
 
+/** Получает собственную сессию устройства; refresh компьютера остаётся на компьютере. */
+export const loginWithQrToken = async (
+  token: string
+): Promise<AuthResponse> => {
+  if (!isSharedAccessToken(token)) return useAuth(token);
+
+  const apiUrl = getConfig().CHAT_API_DOMAIN?.trim().replace(/\/+$/, '');
+  if (!apiUrl) throw new Error('Не настроен адрес сервера чата');
+
+  const response = await fetchAuthWithCookies(
+    `${apiUrl}/auth/qr-login`,
+    'POST',
+    {},
+    { Authorization: `Bearer ${token}` }
+  );
+  const data = await readAuthErrorBody(response);
+  if (!response.ok) {
+    throw createAuthHttpError(
+      response.status,
+      getAuthErrorMessage(data, 'Не удалось создать сессию QR-входа'),
+      data.code
+    );
+  }
+
+  const session = normalizeAuthResponse(
+    { ...(data as Record<string, unknown>), source: 'chat_qr' },
+    false
+  );
+  if (
+    !session.token ||
+    !isSharedAccessToken(session.token) ||
+    isChatAccessTokenExpired(session.token) ||
+    !session.user?.id
+  ) {
+    throw createAuthHttpError(
+      503,
+      'Сервер вернул некорректную сессию QR-входа',
+      'AUTH_UNAVAILABLE'
+    );
+  }
+  return { ...session, erpToken: undefined };
+};
+
 export const loginWithCredentials = async (
   credentials: DirectAuthCredentials
 ): Promise<AuthResponse> => {
@@ -322,7 +367,17 @@ export const saveBootstrapErpSession = (
   const secondaryStorage = persist ? sessionStorage : localStorage;
 
   secondaryStorage.removeItem(ERP_BOOTSTRAP_TOKEN_KEY);
+  secondaryStorage.removeItem(QR_BOOTSTRAP_SOURCE_KEY);
   storage.setItem(ERP_BOOTSTRAP_TOKEN_KEY, session.accessToken);
+  if (session.source === 'qr') storage.setItem(QR_BOOTSTRAP_SOURCE_KEY, '1');
+  else storage.removeItem(QR_BOOTSTRAP_SOURCE_KEY);
+};
+
+export const isStoredBootstrapFromQr = (): boolean => {
+  const storage = localStorage.getItem(ERP_BOOTSTRAP_TOKEN_KEY)
+    ? localStorage
+    : sessionStorage;
+  return storage.getItem(QR_BOOTSTRAP_SOURCE_KEY) === '1';
 };
 
 export const getStoredBootstrapErpAccessToken = (): string | null => {
@@ -335,12 +390,13 @@ export const getStoredBootstrapErpAccessToken = (): string | null => {
 export const clearBootstrapErpSession = (): void => {
   localStorage.removeItem(ERP_BOOTSTRAP_TOKEN_KEY);
   sessionStorage.removeItem(ERP_BOOTSTRAP_TOKEN_KEY);
+  localStorage.removeItem(QR_BOOTSTRAP_SOURCE_KEY);
+  sessionStorage.removeItem(QR_BOOTSTRAP_SOURCE_KEY);
 };
 
 export const clearErpAuthSession = (): void => {
   clearChatAuthSession();
-  localStorage.removeItem(ERP_BOOTSTRAP_TOKEN_KEY);
-  sessionStorage.removeItem(ERP_BOOTSTRAP_TOKEN_KEY);
+  clearBootstrapErpSession();
 };
 
 const skipStartupShellOnNextAuthScreen = (): void => {
@@ -375,8 +431,7 @@ const redirectToAuthorizationInternal = (broadcast: boolean): void => {
     clearErpAuthSession();
   } else {
     clearLocalChatAuthSession(false);
-    localStorage.removeItem(ERP_BOOTSTRAP_TOKEN_KEY);
-    sessionStorage.removeItem(ERP_BOOTSTRAP_TOKEN_KEY);
+    clearBootstrapErpSession();
   }
   useLogout();
   authedUser.value = null;

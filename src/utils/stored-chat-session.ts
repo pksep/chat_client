@@ -3,6 +3,7 @@ import type { IUser } from '../components/interfaces/interfaces';
 export const CHAT_AUTH_SESSION_KEY = 'chat_auth_session';
 export type ChatAuthSessionSource =
   | 'chat_credentials'
+  | 'chat_qr'
   | 'erp_bootstrap'
   | 'legacy'
   | 'unknown_shared';
