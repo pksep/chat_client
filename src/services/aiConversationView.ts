@@ -162,6 +162,8 @@ export function createAiConversationView(
   }
   // Неотправленный локальный ввод не исчезает из-за обновления сервера. Его
   // старые карточки не дают прав на действие и не подменяют подтверждения выше.
+  const localOnly: AIMessage[] = [];
+  const seenIds = new Set(result.map(message => message.id));
   for (const message of local) {
     const requestId = aiMessageRequestId(message);
     if (
@@ -171,11 +173,12 @@ export function createAiConversationView(
         : answered.has(requestId))
     )
       continue;
-    if (message.id && result.some(item => item.id === message.id)) continue;
+    if (message.id && seenIds.has(message.id)) continue;
     if (!message.content.trim() && !message.outputAttachments?.length) continue;
     const display = { ...message, loading: false };
     delete display.pendingToolApproval;
     delete display.actionTask;
+    if (display.id) seenIds.add(display.id);
     // Карточка или неполный ответ не подтверждают сохранение текста запроса.
     const firstForRequest =
       message.role === 'user' && requestId
@@ -183,7 +186,25 @@ export function createAiConversationView(
         : -1;
     if (firstForRequest >= 0) result.splice(firstForRequest, 0, display);
     else if (requestId && requests.has(requestId)) insertForRequest(display);
-    else result.push(display);
+    else localOnly.push(display);
   }
-  return result;
+
+  // Серверный порядок, в том числе положение карточек, остаётся авторитетным.
+  // Старый локальный кэш без времени предшествует серверной истории.
+  const merged: AIMessage[] = [];
+  let localIndex = 0;
+  let serverTime = Number.NEGATIVE_INFINITY;
+  for (const message of result) {
+    serverTime = message.timestamp ?? serverTime;
+    while (
+      localIndex < localOnly.length &&
+      (localOnly[localIndex].timestamp ?? Number.NEGATIVE_INFINITY) <=
+        serverTime
+    ) {
+      merged.push(localOnly[localIndex++]);
+    }
+    merged.push(message);
+  }
+
+  return [...merged, ...localOnly.slice(localIndex)];
 }

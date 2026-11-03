@@ -594,10 +594,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
         state.generation < conversationGeneration)
     )
       return false;
+    const generationChanged =
+      state.deleted || state.generation !== (conversationGeneration ?? 0);
     const changed =
-      state.deleted ||
-      state.generation !== (conversationGeneration ?? 0) ||
-      (state.protocol === 1 && conversationProtocol !== 1);
+      generationChanged || (state.protocol === 1 && conversationProtocol !== 1);
     if (
       !state.deleted &&
       state.protocol !== 1 &&
@@ -611,7 +611,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
     // Проекцию проверяем до смены версии и очистки экрана. Ошибка не должна
     // превратить прежний кэш в пустую переписку с уже новой версией.
     const next = snapshot
-      ? createAiConversationView(snapshot, changed ? [] : messages.value)
+      ? createAiConversationView(
+          snapshot,
+          generationChanged ? [] : messages.value
+        )
       : changed
         ? []
         : messages.value;

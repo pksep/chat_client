@@ -80,6 +80,89 @@ const answer = (page: Page, text: string) =>
     )
     .filter({ hasText: text });
 
+test('смешанная история сохраняет порядок после генерации и перезагрузки', async ({
+  page
+}): Promise<void> => {
+  const id = `qa-mixed-history-${Date.now()}`;
+  let generation = 0;
+  let stored: ReturnType<typeof message>[] = [];
+
+  await seed(page, id);
+  await page.route('**/conversations/**', route =>
+    route.fulfill({
+      json: new URL(route.request().url()).pathname.endsWith('/messages')
+        ? { ...snapshot(stored), generation }
+        : { generation, deleted: false, protocol: 1 }
+    })
+  );
+  await page.route('**/api/agents/generalAgent/stream*', route => {
+    const body = route.request().postDataJSON();
+    const requestId = body.requestContext.requestId;
+    stored = [
+      { ...message('canonical-user', 'user', 'Новый вопрос'), requestId },
+      {
+        ...message('canonical-answer', 'assistant', 'Ответ из истории сервера'),
+        requestId
+      }
+    ];
+
+    return route.fulfill({
+      contentType: 'text/event-stream',
+      body: 'data: {"type":"text-delta","payload":{"text":"Ответ в потоке"}}\n\ndata: {"type":"finish"}\n\n'
+    });
+  });
+  await page.goto(`/ai/${id}`);
+  await expect(page.locator('.ai-assistant__editor')).toBeVisible({
+    timeout: 30_000
+  });
+  await expect(page.locator('.ai-assistant__thinking')).toHaveCount(0);
+  await page.evaluate(async sessionId => {
+    const path = '/src/services/useChatDb.ts';
+    const { saveMessages } = await import(path);
+    await saveMessages(
+      sessionId,
+      [
+        { id: 'legacy-user', role: 'user', content: 'Старый вопрос' },
+        {
+          id: 'legacy-answer',
+          role: 'assistant',
+          content: 'Старый ответ',
+          timestamp: 1
+        }
+      ],
+      0,
+      0
+    );
+  }, id);
+  await page.reload();
+  await expect(answer(page, 'Старый ответ')).toBeVisible({ timeout: 30_000 });
+  const editor = page.locator('.ai-assistant__editor');
+  await editor.locator('[contenteditable="true"]').fill('Новый вопрос');
+  await editor.locator('.toolbar-button.right:visible').click();
+  const texts = page.locator(
+    '[data-testid^="AI-Assistant-Message-"][data-testid$="-MessageText"]'
+  );
+  const ordered = [
+    'Старый вопрос',
+    'Старый ответ',
+    'Новый вопрос',
+    'Ответ из истории сервера'
+  ];
+  await expect(texts).toHaveText(ordered, { timeout: 30_000 });
+  await expect(texts.last()).toBeInViewport();
+
+  await page.reload();
+  await expect(texts).toHaveText(ordered, { timeout: 30_000 });
+  await expect(texts.last()).toBeInViewport();
+
+  generation = 1;
+  stored = [message('new-generation', 'assistant', 'История нового поколения')];
+  await page.reload();
+  await expect(texts).toHaveText(['История нового поколения'], {
+    timeout: 30_000
+  });
+});
+
 test('неполный серверный ответ сохраняет запрос и показывает ошибку в разговоре', async ({
   page
 }): Promise<void> => {
