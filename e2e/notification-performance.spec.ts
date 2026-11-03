@@ -326,7 +326,7 @@ test('отставшая последняя страница восстанав�
   expect(errors).toEqual([]);
 });
 
-test('ошибка истории из уведомления скрывает старый кеш и восстанавливается без повторного открытия', async ({
+test('ошибка истории из уведомления сохраняет кеш и восстанавливается без повторного открытия', async ({
   page
 }) => {
   const { errors } = await openFixture(page, { count: 130 });
@@ -351,7 +351,7 @@ test('ошибка истории из уведомления скрывает �
       (window as any).topicPerformance.notify(1, 'performance-1-message-114')
     );
     await expect.poll(() => requests).toBeGreaterThan(1);
-    await expect(message(page, 1, 114)).toHaveCount(0);
+    await expect(message(page, 1, 114)).toBeAttached();
     await expect(
       page.getByRole('button', { name: 'Повторить', exact: true })
     ).toHaveCount(0);

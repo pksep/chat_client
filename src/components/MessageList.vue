@@ -443,7 +443,6 @@ import {
   getFullMessagesByTopicId,
   getMessagesByTopicId,
   hasKnownTopicMessagesState,
-  isPendingOutgoingMessage,
   hydrateMessageContextFromShadow,
   hydrateMessagesFromCache,
   hydratePendingMessagesFromCache,
@@ -715,7 +714,6 @@ const isAwaitingNotificationHistory = ref(false);
 const isAwaitingInitialHistory = ref(false);
 const isInitialHistoryPositioning = ref(false);
 const initialHistoryRefreshFailed = ref(false);
-const initialHistoryExcludedMessageIds = ref(new Set<string>());
 let cancelInitialHistoryRecovery: (() => void) | undefined;
 const initialNotificationPositionReady = ref(true);
 let initialNotificationPositionMessageId = '';
@@ -734,13 +732,8 @@ const renderedUserMessages = computed(() => {
     message => !message.topicId || message.topicId === topicId
   );
 
-  // Ошибка HTTP не должна скрывать новые WS-события и локальную отправку.
-  const visibleMessages = isAwaitingInitialHistory.value
-    ? currentTopicMessages.filter(
-        message => !initialHistoryExcludedMessageIds.value.has(message.id)
-      )
-    : currentTopicMessages;
-  return getRenderedTopicMessages(topicId, visibleMessages);
+  // Сохранённая переписка остаётся доступной во время фонового обновления.
+  return getRenderedTopicMessages(topicId, currentTopicMessages);
 });
 const renderedLastUserMessageSignature = computed(() => {
   const lastMessage =
@@ -1613,9 +1606,6 @@ const refreshActiveTopicFromNotification = async (
     renderedTopicId.value = topicId;
 
     if (forceScrollToBottom) {
-      state.errorMessage = isFresh
-        ? ''
-        : 'Не удалось обновить сообщения. Показана сохранённая переписка.';
       resolveNotificationHistoryPaint(
         topicId,
         notificationMessageId || '',
@@ -3840,25 +3830,27 @@ watch(
     const residentMessages = getFullMessagesByTopicId(topicId).length
       ? getFullMessagesByTopicId(topicId)
       : getMessagesByTopicId(topicId);
-    initialHistoryExcludedMessageIds.value = new Set(
-      residentMessages
-        .filter(message => !isPendingOutgoingMessage(message))
-        .map(message => message.id)
-    );
     const residentUnreadMessages = residentMessages.filter(
       message =>
         isUnreadTrackableMessage(message) &&
         message.senderUserId !== authUser.value?.id &&
         message.isReadByMe !== true
     );
+    // Входящие из WS ещё не подтверждают, что история перед ними загружена.
+    const hasResidentUnreadContext =
+      topicUnreadCount === 0 ||
+      getRenderedTopicMessages(topicId, residentMessages).findIndex(
+        message => message.id === residentUnreadMessages[0]?.id
+      ) > 0;
     const canReuseResidentHistory =
       routeType !== RouteTypes.AI &&
       !shouldScrollToBottomForNotification &&
       getPendingSearchNavigation()?.topicId !== topicId &&
       (residentMessages.length > 0 || isTopicMessagesKnownEmpty(topicId)) &&
       isResidentHistoryCurrent(topicId, residentMessages) &&
+      hasResidentUnreadContext &&
       residentUnreadMessages.length >= topicUnreadCount;
-    // Готовый чат обновляется в фоне. Заведомо старое окно ждёт свежую историю.
+    // Свежая история уточняет позицию непрочитанных, не скрывая сохранённые сообщения.
     isAwaitingInitialHistory.value =
       routeType !== RouteTypes.AI &&
       getHasHistoryNetwork() &&
@@ -4007,7 +3999,7 @@ watch(
           visibleLimit: fastInitialMessagesLimit,
           allowVisibleShrink: true
         });
-      if (shouldRefreshHistoryBeforePaint || canReuseResidentHistory) {
+      if (canReuseResidentHistory) {
         return hydratePendingMessagesFromCache(
           topicId,
           undefined,
@@ -4051,7 +4043,8 @@ watch(
     // Уведомление может быть из середины серии: первый кадр ждёт последнюю страницу.
     if (!shouldBootstrapAroundMessage) {
       readInitialMessages = () =>
-        shouldScrollToBottomForNotification
+        shouldScrollToBottomForNotification &&
+        isNotificationRefreshRequestForTopic
           ? reconcileNotificationTopicMessages(
               topicId,
               expandedLimit,
@@ -4077,6 +4070,8 @@ watch(
                 replaceInitialWindow: shouldRefreshHistoryBeforePaint,
                 onNetworkApplied: () => {
                   initialHistoryIsFresh = true;
+                  if (shouldScrollToBottomForNotification)
+                    notificationHistoryIsFresh = true;
                 }
               });
       initialMessagesFetch = readInitialMessages();
@@ -4138,7 +4133,6 @@ watch(
 
     if (
       !canReuseResidentHistory &&
-      !isAwaitingInitialHistory.value &&
       (getRenderedTopicMessages(topicId, hydratedMessages).length > 0 ||
         getRenderedTopicMessages(topicId, getMessagesByTopicId(topicId))
           .length > 0)
@@ -4198,6 +4192,27 @@ watch(
     let initialMessages = (await initialMessagesFetch) || [];
 
     if (isStaleTopicSwitch()) return;
+    let retryDelay = 1000;
+    while (
+      (isAwaitingInitialHistory.value || shouldRefreshHistoryBeforePaint) &&
+      !(shouldScrollToBottomForNotification
+        ? notificationHistoryIsFresh
+        : initialHistoryIsFresh) &&
+      readInitialMessages
+    ) {
+      initialHistoryRefreshFailed.value = true;
+      isAwaitingNotificationHistory.value = false;
+      isInitialHistoryPositioning.value = false;
+      isLoadingInitialMessages.value = false;
+      resetInitialMessagesSkeleton();
+      // Повторяем и фоновое чтение: кеш может содержать только новые сообщения.
+      await waitForHistoryRetry(retryDelay);
+      if (isStaleTopicSwitch()) return;
+      retryDelay = Math.min(retryDelay * 2, 30_000);
+      if (!getHasHistoryNetwork() || !getIsAppActivelyVisible()) continue;
+      initialMessages = await readInitialMessages();
+      if (isStaleTopicSwitch()) return;
+    }
     if (canReuseResidentHistory) {
       if (
         !initialHistoryIsFresh ||
@@ -4266,28 +4281,6 @@ watch(
       syncVisibleUnreadAfterAutoScroll();
       return;
     }
-    let retryDelay = 1000;
-    while (
-      isAwaitingInitialHistory.value &&
-      !(shouldScrollToBottomForNotification
-        ? notificationHistoryIsFresh
-        : initialHistoryIsFresh) &&
-      readInitialMessages
-    ) {
-      initialHistoryRefreshFailed.value = true;
-      isAwaitingNotificationHistory.value = false;
-      isInitialHistoryPositioning.value = false;
-      isLoadingInitialMessages.value = false;
-      resetInitialMessagesSkeleton();
-      // Повторяем только чтение: черновик, ответ и выбранные сообщения сохраняются.
-      await waitForHistoryRetry(retryDelay);
-      if (isStaleTopicSwitch()) return;
-      retryDelay = Math.min(retryDelay * 2, 30_000);
-      if (!getHasHistoryNetwork() || !getIsAppActivelyVisible()) continue;
-      initialMessages = await readInitialMessages();
-      if (isStaleTopicSwitch()) return;
-    }
-
     if (
       shouldRefreshHistoryBeforePaint &&
       !(shouldScrollToBottomForNotification
@@ -4384,9 +4377,6 @@ watch(
       getMessagesByTopicId(topicId)
     );
     if (shouldScrollToBottomForNotification) {
-      state.errorMessage = notificationHistoryIsFresh
-        ? ''
-        : 'Не удалось обновить сообщения. Показана сохранённая переписка.';
       initialNotificationPositionMessageId =
         renderedResidentMessages.at(-1)?.id || '';
       initialNotificationPositionReady.value =

@@ -151,18 +151,28 @@ const markTopicNotificationsCleared = (topicId, stateAt) =>
     result: true
   }));
 
-const shouldShowTopicNotification = (topicId, stateAt) => {
-  if (!topicId || stateAt === null) {
+const shouldShowTopicNotification = (topicId, stateAt, messageId = null) => {
+  if (!topicId || (stateAt === null && !messageId)) {
     return Promise.resolve(true);
   }
 
   return updateTopicNotificationState(topicId, current => {
     const clearedAt = Number(current.clearedAt) || 0;
     const latestAt = Number(current.latestAt) || 0;
-    const shouldShow = stateAt > clearedAt && stateAt > latestAt;
+    const recentMessages = current.recentMessages || [];
+    const shouldShow =
+      (stateAt === null || (stateAt > clearedAt && stateAt > latestAt)) &&
+      (!messageId || !recentMessages.includes(String(messageId)));
 
     return {
-      state: shouldShow ? { latestAt: stateAt } : {},
+      state: shouldShow
+        ? {
+            latestAt: stateAt === null ? latestAt : stateAt,
+            recentMessages: messageId
+              ? [...recentMessages, String(messageId)].slice(-64)
+              : recentMessages
+          }
+        : {},
       result: shouldShow
     };
   });
@@ -421,7 +431,90 @@ const runChatBackgroundSyncFromPayload = async (payload, source) => {
   return result;
 };
 
+const showPayloadNotification = async payload => {
+  const topicId = payload.topicId || payload.tag || null;
+  if (!requiresVisiblePush && (await isTopicVisibleInClient(topicId))) {
+    const stateAt = Date.now();
+    await markTopicNotificationsCleared(topicId, stateAt);
+    await closeNotificationsForTopic(topicId, stateAt);
+    return 'active_topic';
+  }
+
+  const title = payload.title || 'New message';
+  const url = getNotificationUrl(payload);
+  const isIncomingCall = isFreshIncomingCallPayload(payload);
+  if (payload.type === 'incoming_call' && !isIncomingCall) {
+    await closeIncomingCallNotification(payload.roomId);
+    return 'stale';
+  }
+  const notificationStateAt =
+    parsePushTimestamp(payload.stateAt) || parsePushTimestamp(payload.sentAt);
+  if (
+    payload.type !== 'incoming_call' &&
+    !(await shouldShowTopicNotification(
+      topicId,
+      notificationStateAt,
+      requiresVisiblePush ? null : getNotificationMessageId({ data: payload })
+    ))
+  ) {
+    return 'stale_or_duplicate';
+  }
+  const tag = payload.tag || payload.roomId || topicId || 'chat-message';
+
+  await self.registration.showNotification(title, {
+    body: payload.body || '',
+    icon: payload.icon || '/images/favicon.ico?v=20260909-dark',
+    badge: payload.icon || '/images/favicon.ico?v=20260909-dark',
+    tag,
+    renotify: true,
+    silent: !isIncomingCall,
+    requireInteraction: isIncomingCall,
+    actions: isIncomingCall
+      ? [
+          {
+            action: 'decline',
+            title: 'Decline'
+          },
+          {
+            action: 'accept',
+            title: 'Answer'
+          }
+        ]
+      : [],
+    data: {
+      ...payload,
+      topicId,
+      url
+    }
+  });
+  return 'shown';
+};
+
 self.addEventListener('message', event => {
+  if (event.data?.type === 'SOCKET_MESSAGE_NOTIFICATION' && event.source?.id) {
+    // Apple требует видимый показ каждого push; сохраняем его штатный путь.
+    if (requiresVisiblePush) return;
+    const payload = normalizePayload(event.data.payload);
+    if (
+      !payload.topicId ||
+      !payload.messageId ||
+      payload.type !== 'new_message'
+    )
+      return;
+    event.waitUntil(
+      showPayloadNotification(payload)
+        .catch(() => 'failed')
+        .then(result =>
+          event.source.postMessage({
+            type: 'SOCKET_NOTIFICATION_RESULT',
+            topicId: payload.topicId,
+            messageId: payload.messageId,
+            result
+          })
+        )
+    );
+  }
+
   if (event.data?.type === 'APP_CONTEXT') {
     if (event.source?.id) {
       appContexts.set(event.source.id, {
@@ -510,57 +603,7 @@ self.addEventListener('push', event => {
         }
       }
 
-      if (!requiresVisiblePush && (await isTopicVisibleInClient(topicId))) {
-        const stateAt = Date.now();
-        await markTopicNotificationsCleared(topicId, stateAt);
-        await closeNotificationsForTopic(topicId, stateAt);
-        return;
-      }
-
-      const title = payload.title || 'New message';
-      const url = getNotificationUrl(payload);
-      const isIncomingCall = isFreshIncomingCallPayload(payload);
-      if (payload.type === 'incoming_call' && !isIncomingCall) {
-        await closeIncomingCallNotification(payload.roomId);
-        return;
-      }
-      const notificationStateAt =
-        parsePushTimestamp(payload.stateAt) ||
-        parsePushTimestamp(payload.sentAt);
-      if (
-        payload.type !== 'incoming_call' &&
-        !(await shouldShowTopicNotification(topicId, notificationStateAt))
-      ) {
-        return;
-      }
-      const tag = payload.tag || payload.roomId || topicId || 'chat-message';
-
-      await self.registration.showNotification(title, {
-        body: payload.body || '',
-        icon: payload.icon || '/images/favicon.ico?v=20260909-dark',
-        badge: payload.icon || '/images/favicon.ico?v=20260909-dark',
-        tag,
-        renotify: true,
-        silent: !isIncomingCall,
-        requireInteraction: isIncomingCall,
-        actions: isIncomingCall
-          ? [
-              {
-                action: 'decline',
-                title: 'Decline'
-              },
-              {
-                action: 'accept',
-                title: 'Answer'
-              }
-            ]
-          : [],
-        data: {
-          ...payload,
-          topicId,
-          url
-        }
-      });
+      await showPayloadNotification(payload);
     })()
   );
 });

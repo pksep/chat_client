@@ -241,7 +241,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         display: 'standalone',
         description: 'Chatting application',
         theme_color: '#ffffff',
-        background_color: '#ffffff',
+        background_color: '#f8f9fd',
         icons: [
           {
             src: 'images/pwa-64x64.png?v=20260909-dark',

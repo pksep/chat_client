@@ -147,7 +147,7 @@ test('замечания 29 октября: обои ИИ остаются ви�
   await page.screenshot({ path: testInfo.outputPath('ai-wallpaper.png') });
 });
 
-test('замечания 29 октября: Спасибо полностью помещается в предпросмотр обоев', async ({
+test('предпросмотр обоев: сообщения помещаются, под кнопками нет лишнего отступа', async ({
   page
 }, testInfo) => {
   await page.goto('/e2e/fixtures/ios-pwa.html?kind=profile');
@@ -157,8 +157,23 @@ test('замечания 29 октября: Спасибо полностью п
     '.menu-profile__wallpaper-preview-mobile .menu-profile__wallpaper-preview-surface'
   );
   await expect(surface).toBeVisible();
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--ios-safe-top', '47px');
+    document.documentElement.style.setProperty('--ios-safe-bottom', '34px');
+  });
   for (const height of [844, 667]) {
     await page.setViewportSize({ width: 390, height });
+    await page.evaluate(
+      height => (window as any).setIosViewport(height, 0),
+      height
+    );
+    const apply = page.locator('.menu-profile__wallpaper-preview-apply');
+    await expect
+      .poll(async () => {
+        const button = (await apply.boundingBox())!;
+        return Math.round(height - button.y - button.height);
+      })
+      .toBe(34 + 12);
     const bounds = (await surface.boundingBox())!;
     const message = surface.locator('.message').last();
     const bubble = (await message.boundingBox())!;
@@ -501,7 +516,9 @@ for (const [name, mimeType, mediaType, buffer] of [
     'events',
     'resume',
     'delayed-resume',
-    'empty-return'
+    'empty-return',
+    'unreadable-return',
+    'zero-size-return'
   ]) {
     test(`камера PWA: ${name}, ${completion}, копируется до загрузки и отправляется один раз`, async ({
       page
@@ -535,6 +552,7 @@ for (const [name, mimeType, mediaType, buffer] of [
           copiedBytes: 0,
           sent: [] as any[],
           input: null as any,
+          readyAt: 0,
           uploadReads: [] as Promise<number[]>[]
         };
         (window as any).cameraRegression = state;
@@ -559,6 +577,14 @@ for (const [name, mimeType, mediaType, buffer] of [
           const part = slice.apply(this, args);
           const read = part.arrayBuffer.bind(part);
           part.arrayBuffer = async () => {
+            if (
+              completion === 'unreadable-return' &&
+              Date.now() < state.readyAt
+            )
+              throw new DOMException(
+                'Камера сохраняет снимок',
+                'NotReadableError'
+              );
             const bytes = await read();
             if (state.input?.isConnected) state.copiedBytes += bytes.byteLength;
             return bytes;
@@ -568,11 +594,27 @@ for (const [name, mimeType, mediaType, buffer] of [
         const captureSelection = (event: Event) => {
           const input = event.target as HTMLInputElement;
           if (input.type !== 'file') return;
-          if (completion !== 'events' && completion !== 'empty-return')
+          if (
+            ![
+              'events',
+              'empty-return',
+              'unreadable-return',
+              'zero-size-return'
+            ].includes(completion)
+          )
             event.stopImmediatePropagation();
           if (state.input === input) return;
           state.input = input;
+          state.readyAt = Date.now() + 500;
           const selected = input.files;
+          if (completion === 'zero-size-return') {
+            for (const file of Array.from(selected || [])) {
+              const size = file.size;
+              Object.defineProperty(file, 'size', {
+                get: () => (Date.now() < state.readyAt ? 0 : size)
+              });
+            }
+          }
           if (
             completion === 'delayed-resume' ||
             completion === 'empty-return'
@@ -833,6 +875,7 @@ for (const standalone of [true, false]) {
   test(`${standalone ? 'PWA' : 'Safari'}: эмодзи в черновике используют системный шрифт и сохраняются при отправке`, async ({
     page
   }, testInfo) => {
+    test.setTimeout(90_000);
     await page.addLocatorHandler(
       page.getByRole('button', { name: 'Остаться в браузере', exact: true }),
       button => button.tap()
@@ -1301,3 +1344,244 @@ for (const standalone of [true, false]) {
     }
   });
 }
+
+test('обложка видео сохраняется после отправки и обновления истории при отказе повторного декодирования', async ({
+  page
+}, testInfo) => {
+  test.setTimeout(90_000);
+  let uploadedCover: Buffer | null = null;
+  let completed: any;
+  let resolveCover!: (cover: Buffer) => void;
+  const coverReady = new Promise<Buffer>(resolve => {
+    resolveCover = resolve;
+  });
+  await page.route('**/stored-cover.jpg*', async route =>
+    route.fulfill({ contentType: 'image/jpeg', body: await coverReady })
+  );
+  await page.route('**/e2e/ios-api/media/upload-target', route => {
+    const isCover = route.request().postDataJSON().contentType === 'image/jpeg';
+    const objectName = isCover ? 'source-cover.jpg' : 'source-video.mp4';
+    return route.fulfill({
+      json: {
+        objectName,
+        uploadUrl: `http://localhost:5173/e2e/ios-api/storage/${objectName}`
+      }
+    });
+  });
+  await page.route('**/e2e/ios-api/storage/*', route => {
+    if (route.request().url().endsWith('source-cover.jpg'))
+      uploadedCover = route.request().postDataBuffer();
+    return route.fulfill({ status: 200, body: '' });
+  });
+  await page.route('**/e2e/ios-api/media/upload', route => {
+    completed = route.request().postDataJSON();
+    return route.fulfill({
+      json: {
+        objectName: 'source-video.mp4',
+        thumbnailObjectName: completed.thumbnailObjectName
+          ? 'stored-cover.jpg'
+          : null,
+        ex: { width: 640, height: 360 }
+      }
+    });
+  });
+
+  await page.goto('/e2e/fixtures/ios-pwa.html?kind=group&no-pinned&shell');
+  await expect(page.locator('.chat__input .ProseMirror')).toBeVisible({
+    timeout: 60_000
+  });
+  await page.evaluate(async syntheticDecoder => {
+    const { controlConnection } = await import(
+      '/e2e/fixtures/network-harness.ts'
+    );
+    const { mountMessageSender } = await import(
+      '/e2e/fixtures/message-send-harness.ts'
+    );
+    const { setConfig } = await import('/src/services/useConfig.ts');
+    controlConnection();
+    setConfig({
+      CHAT_PATH_TO_FILE_CDN: `${location.origin}/e2e/ios-api/media/object/`
+    });
+    const state = {
+      cover: '',
+      repeatedDecodes: 0,
+      coverUpload: [] as number[],
+      coverUploadReady: Promise.resolve(),
+      sent: null as any,
+      done: false
+    };
+    (window as any).videoCoverRegression = state;
+    // В Windows WebKit не декодирует этот MP4: воспроизводим события готового кадра.
+    if (syntheticDecoder) {
+      const decodedVideos = new WeakSet<HTMLVideoElement>();
+      const createElement = document.createElement.bind(document);
+      document.createElement = ((
+        tag: string,
+        options?: ElementCreationOptions
+      ) => {
+        const element = createElement(tag, options);
+        if (tag !== 'video') return element;
+        const video = element as HTMLVideoElement;
+        decodedVideos.add(video);
+        let source = '';
+        let time = 0;
+        Object.defineProperties(video, {
+          videoWidth: { value: 160 },
+          videoHeight: { value: 90 },
+          duration: { value: 1 },
+          readyState: { value: 2 },
+          requestVideoFrameCallback: { value: undefined },
+          src: {
+            get: () => source,
+            set: value => {
+              source = value;
+              const failed = Boolean(state.cover);
+              if (failed) state.repeatedDecodes++;
+              queueMicrotask(() =>
+                video.dispatchEvent(
+                  new Event(failed ? 'error' : 'loadedmetadata')
+                )
+              );
+            }
+          },
+          currentTime: {
+            get: () => time,
+            set: value => {
+              time = value;
+              queueMicrotask(() => video.dispatchEvent(new Event('seeked')));
+            }
+          }
+        });
+        video.load = () => {};
+        return video;
+      }) as typeof document.createElement;
+      const drawImage = CanvasRenderingContext2D.prototype.drawImage;
+      CanvasRenderingContext2D.prototype.drawImage = function (...args: any[]) {
+        if (decodedVideos.has(args[0])) {
+          this.fillStyle = '#e7b53b';
+          this.fillRect(0, 0, 160, 90);
+          return;
+        }
+        (drawImage as any).apply(this, args);
+      };
+    }
+    const send = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function (body) {
+      if (body instanceof Blob && body.type === 'image/jpeg') {
+        state.coverUploadReady = body.arrayBuffer().then(bytes => {
+          state.coverUpload = [...new Uint8Array(bytes)];
+        });
+      }
+      send.call(this, body);
+    };
+    const toDataURL = HTMLCanvasElement.prototype.toDataURL;
+    HTMLCanvasElement.prototype.toDataURL = function (...args) {
+      const result = toDataURL.apply(this, args);
+      if (args[0] === 'image/jpeg') state.cover = result;
+      return result;
+    };
+    const load = HTMLMediaElement.prototype.load;
+    HTMLMediaElement.prototype.load = function () {
+      if (state.cover && this.hasAttribute('src')) {
+        state.repeatedDecodes++;
+        queueMicrotask(() => this.dispatchEvent(new Event('error')));
+        return;
+      }
+      load.call(this);
+    };
+    (window as any).iosPwaFixture.sdk.sendWebSocketEvent = (
+      _type: string,
+      payload: any
+    ) => {
+      if (payload.medias) state.sent = payload;
+      return true;
+    };
+    const response = await fetch('/e2e/fixtures/video-cover.mp4');
+    const file = new File([await response.blob()], 'source-video.mp4', {
+      type: 'video/mp4'
+    });
+    const sender = mountMessageSender('mobile-search-fixture');
+    void sender.handleAttachSharedFiles([file]).then(() => {
+      state.done = true;
+    });
+  }, testInfo.project.name === 'webkit-iphone-pwa');
+  await expect
+    .poll(
+      () => page.evaluate(() => (window as any).videoCoverRegression.done),
+      { timeout: 45_000 }
+    )
+    .toBe(true);
+  const state = await page.evaluate(async () => {
+    const state = (window as any).videoCoverRegression;
+    await state.coverUploadReady;
+    return {
+      cover: state.cover,
+      sent: state.sent,
+      coverUpload: state.coverUpload
+    };
+  });
+  expect(state.cover).toMatch(/^data:image\/jpeg;base64,/);
+  expect(completed.thumbnailObjectName).toBe('source-cover.jpg');
+  expect(Buffer.from(state.coverUpload)).toEqual(
+    Buffer.from(state.cover.split(',')[1], 'base64')
+  );
+  if (testInfo.project.name === 'chromium-mobile')
+    expect(uploadedCover).toEqual(Buffer.from(state.coverUpload));
+
+  expect(state.sent.medias[0].thumbnailPath).toBe('stored-cover.jpg');
+  const coverBytes = Buffer.from(state.cover.split(',')[1], 'base64');
+  resolveCover(coverBytes);
+  const confirmed = await page.evaluate(async () => {
+    const messages = await import('/src/services/useMessages.ts');
+    const sent = (window as any).videoCoverRegression.sent;
+    const confirmed = {
+      id: 'confirmed-video-cover',
+      topicId: 'mobile-search-fixture',
+      senderUserId: 'mobile-search-user',
+      senderUser: { id: 'mobile-search-user', initials: 'Тест' },
+      text: sent.text || null,
+      createdAt: new Date().toISOString(),
+      ex: sent.ex,
+      status: 'DELIVERED',
+      media: sent.medias.map((media: any) => ({
+        ...media,
+        id: 'server-video',
+        localPath: undefined,
+        localThumbnailPath: undefined
+      }))
+    };
+    messages.addMessageToLocal('mobile-search-fixture', confirmed);
+    return confirmed;
+  });
+  const historyPage = await page.context().newPage();
+  historyPage.on('pageerror', error =>
+    pageErrors.get(page)!.push(error.message)
+  );
+  await historyPage.route('**/stored-cover.jpg*', route =>
+    route.fulfill({ contentType: 'image/jpeg', body: coverBytes })
+  );
+  await historyPage.route('**/__video-cover-history', route =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: '<!doctype html><div id="app"></div>'
+    })
+  );
+  await historyPage.goto('/__video-cover-history');
+  await historyPage.evaluate(async confirmed => {
+    const { mountVideoHistoryMessage } = await import(
+      '/e2e/fixtures/video-cover-history.ts'
+    );
+    mountVideoHistoryMessage(confirmed);
+  }, confirmed);
+  const cover = historyPage.locator(
+    '[data-message-id="confirmed-video-cover"] .message-content__media img'
+  );
+  await expect(cover).toBeVisible();
+  await expect
+    .poll(() => cover.evaluate((image: HTMLImageElement) => image.naturalWidth))
+    .toBeGreaterThan(1);
+  await expect(cover).not.toHaveAttribute('src', /^data:/);
+  await historyPage.screenshot({
+    path: testInfo.outputPath('video-cover-after-history.png')
+  });
+});

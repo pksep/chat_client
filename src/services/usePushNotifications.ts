@@ -153,6 +153,23 @@ const storeWebPushEndpoint = (endpoint: string): void => {
 const getStoredWebPushEndpoint = (): string =>
   localStorage.getItem(WEB_PUSH_ENDPOINT_STORAGE_KEY) || '';
 
+const getWebPushEndpointMetadata = async (endpoint: string) => {
+  const provider = new URL(endpoint).hostname;
+  try {
+    const digest = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(endpoint)
+    );
+    const subscriptionId = Array.from(new Uint8Array(digest))
+      .map(byte => byte.toString(16).padStart(2, '0'))
+      .join('')
+      .slice(0, 12);
+    return { provider, subscriptionId };
+  } catch {
+    return { provider };
+  }
+};
+
 const clearStoredPushRegistration = (): void => {
   localStorage.removeItem(FIREBASE_PUSH_TOKEN_STORAGE_KEY);
   localStorage.removeItem(RUSTORE_PUSH_TOKEN_STORAGE_KEY);
@@ -536,8 +553,29 @@ const bindWebServiceWorkerMessageListener = () => {
           topicId?: string | null;
           notification?: NativeNotificationData;
           source?: string;
+          messageId?: string;
+          result?: string;
         }
       | undefined;
+
+    if (
+      payload?.type === 'SOCKET_NOTIFICATION_RESULT' &&
+      !isChatSessionEnding() &&
+      getCurrentUserId() &&
+      ['shown', 'active_topic', 'stale_or_duplicate', 'failed'].includes(
+        payload.result || ''
+      )
+    ) {
+      recordTelemetryEvent({
+        category: 'notification',
+        name: 'notification.web.socket_result',
+        level: payload.result === 'failed' ? 'warn' : 'info',
+        entityType: 'message',
+        entityId: payload.messageId,
+        payload: { topicId: payload.topicId, result: payload.result }
+      });
+      return;
+    }
 
     if (
       payload?.type === 'CALL_ACTION' &&
@@ -1018,10 +1056,6 @@ const initializePushNotifications = async () => {
     });
   }
 
-  if (subscription?.endpoint) {
-    storeWebPushEndpoint(subscription.endpoint);
-  }
-
   if (!isCurrentSession()) {
     await subscription?.unsubscribe();
     return;
@@ -1031,21 +1065,68 @@ const initializePushNotifications = async () => {
   if (!userId) return console.warn('No user ID, skipping subscribe');
 
   const browser = getWebPushBrowser();
-  const subscriptionPayload = {
-    ...subscription.toJSON(),
-    browser
-  };
-
-  await withNetworkTimeout(
-    signal =>
-      api.post(
+  const registerSubscription = (
+    candidate: PushSubscription,
+    previouslyRegistered: boolean
+  ) =>
+    withNetworkTimeout(async signal => {
+      const response = await api.post<{
+        success: boolean;
+        resubscribe?: boolean;
+      }>(
         '/push/subscribe',
-        { subscription: subscriptionPayload, browser },
+        {
+          subscription: { ...candidate.toJSON(), browser },
+          browser,
+          previouslyRegistered
+        },
         { requset: { signal } }
-      ),
-    10_000
+      );
+      return response.json();
+    }, 10_000);
+
+  let result = await registerSubscription(
+    subscription,
+    getStoredWebPushEndpoint() === subscription.endpoint
   );
   if (!isCurrentSession()) return;
+
+  if (result.resubscribe === true) {
+    // После 404/410 сервер удаляет адрес. Повторная запись того же адреса
+    // не восстанавливает доставку у push-провайдера.
+    const previousEndpoint = subscription.endpoint;
+    if (!(await subscription.unsubscribe())) {
+      throw new Error('Браузер не удалил недействующую Web Push подписку');
+    }
+    if (!isCurrentSession()) return;
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey
+    });
+    if (!isCurrentSession()) {
+      await subscription.unsubscribe();
+      return;
+    }
+    if (subscription.endpoint === previousEndpoint) {
+      throw new Error('Браузер вернул прежний недействующий Web Push адрес');
+    }
+    result = await registerSubscription(subscription, false);
+    if (!isCurrentSession()) return;
+    recordTelemetryEvent({
+      category: 'notification',
+      name: 'notification.web.subscription_recreated',
+      entityType: 'notification',
+      payload: { reason: 'server_subscription_missing' }
+    });
+  }
+  if (result.success !== true || result.resubscribe === true) {
+    throw new Error('Сервер не подтвердил регистрацию Web Push подписки');
+  }
+  const endpointMetadata = await getWebPushEndpointMetadata(
+    subscription.endpoint
+  );
+  if (!isCurrentSession()) return;
+  storeWebPushEndpoint(subscription.endpoint);
   webPushStatus.value = 'subscribed';
   lastWebPushRegistrationAt = Date.now();
   localStorage.setItem(
@@ -1058,7 +1139,8 @@ const initializePushNotifications = async () => {
     entityType: 'notification',
     payload: {
       browser,
-      endpointLength: subscription.endpoint.length
+      endpointLength: subscription.endpoint.length,
+      ...endpointMetadata
     }
   });
 };

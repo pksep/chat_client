@@ -44,7 +44,10 @@ export const preloadStartupModules = (): Plugin => {
           tags.push({
             tag: 'link',
             attrs: {
-              rel: styles.has(fileName) ? 'stylesheet' : 'modulepreload',
+              // Стили начнут загружаться сразу; Vite применит их перед main.
+              // stylesheet здесь блокировал первый кадр с логотипом PWA.
+              rel: styles.has(fileName) ? 'preload' : 'modulepreload',
+              ...(styles.has(fileName) ? { as: 'style' } : {}),
               crossorigin: true,
               href
             },

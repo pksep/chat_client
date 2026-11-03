@@ -1119,6 +1119,27 @@ dialog.menu-profile__wallpaper-modal > .modal-yui-kit__modal-content {
     gap: 12px;
   }
 
+  .chat-ios-pwa
+    dialog.mobile__modal.menu-profile__wallpaper-preview-mobile.menu-profile__wallpaper-preview-mobile--wallpaper {
+    --mobile-modal-rows: minmax(0, 1fr);
+  }
+
+  .chat-ios-pwa
+    .menu-profile__wallpaper-preview-mobile--wallpaper
+    .menu-profile__wallpaper-preview-modal {
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .chat-ios-pwa
+    .menu-profile__wallpaper-preview-mobile--wallpaper
+    .menu-profile__wallpaper-preview-surface {
+    height: 100%;
+    max-height: none;
+    aspect-ratio: auto;
+  }
+
   .menu-profile__call-background-preview-modal {
     gap: 12px;
   }

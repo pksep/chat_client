@@ -113,12 +113,8 @@
           />
         </button>
       </div>
-      <p v-if="error" class="chat-sticker-picker__state" role="alert">
-        {{ error }}
-        <button type="button" @click.stop="loadFirstPage">Повторить</button>
-      </p>
       <div
-        v-else
+        v-if="items.length || !error"
         class="chat-sticker-picker__grid"
         :style="{
           height: `${gridHeight}px`
@@ -146,6 +142,10 @@
           <StickerPickerImage :sticker="sticker" :animate="animate" preload />
         </button>
       </div>
+      <p v-if="error" class="chat-sticker-picker__state" role="alert">
+        {{ error }}
+        <button type="button" @click.stop="retryLoad">Повторить</button>
+      </p>
       <p
         v-if="loading && !items.length"
         class="chat-sticker-picker__state"
@@ -187,6 +187,7 @@ import {
   loadStickerPage,
   loadRecentStickers,
   rememberSticker,
+  StickerPageExpiredError,
   type StickerPack
 } from '../../services/sticker-catalog';
 import StickerPickerImage from './StickerPickerImage.vue';
@@ -239,6 +240,7 @@ const query = ref('');
 const items = shallowRef<CatalogSticker[]>([]);
 const loading = ref(false);
 const error = ref('');
+const failedPage = ref<'first' | 'next'>('first');
 const nextCursor = ref<string | null>(null);
 const scrollTop = ref(0);
 const viewportHeight = ref(300);
@@ -299,6 +301,7 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let refreshPacks = true;
 let loadedPageKey = '';
 let loadedPageTotal = 0;
+let loadedPageRevision: string | undefined;
 let pendingPack = '';
 let pickerWasOpen = false;
 const previewSticker = shallowRef<CatalogSticker | null>(null);
@@ -478,6 +481,7 @@ const loadFirstPage = async () => {
   abort = new AbortController();
   const signal = abort.signal;
   error.value = '';
+  failedPage.value = 'first';
   const pageKey = () =>
     JSON.stringify([
       getStickerApiBaseUrl(),
@@ -562,6 +566,7 @@ const loadFirstPage = async () => {
     }
     const unchanged =
       loadedPageKey === key &&
+      loadedPageRevision === page.revision &&
       loadedPageTotal === page.total &&
       page.items.every((sticker, index) => {
         const previous = items.value[index];
@@ -581,6 +586,7 @@ const loadFirstPage = async () => {
     }
     loadedPageKey = key;
     loadedPageTotal = page.total;
+    loadedPageRevision = page.revision;
     void refresh?.then(catalog => {
       if (id !== requestId || signal.aborted || !catalog) return;
       if (
@@ -620,14 +626,24 @@ const loadNextPage = async () => {
     items.value = [...items.value, ...page.items];
     nextCursor.value = page.nextCursor;
   } catch (reason) {
-    if (id === requestId && !signal?.aborted)
+    if (id === requestId && !signal?.aborted) {
+      if (reason instanceof StickerPageExpiredError) {
+        await loadFirstPage();
+        return;
+      }
+      failedPage.value = 'next';
       error.value =
         reason instanceof Error
           ? reason.message
           : 'Не удалось загрузить стикеры';
+    }
   } finally {
     if (id === requestId) loading.value = false;
   }
+};
+const retryLoad = () => {
+  error.value = '';
+  void (failedPage.value === 'next' ? loadNextPage() : loadFirstPage());
 };
 const handleScroll = () => {
   if (!previewSticker.value) closeStickerPreview();
@@ -975,7 +991,7 @@ watch(getStickerApiBaseUrl, () => {
 });
 const recoverCatalog = () => {
   if (active.value && error.value && !loading.value && !document.hidden)
-    void loadFirstPage();
+    retryLoad();
 };
 onMounted(() => {
   window.addEventListener('online', recoverCatalog);

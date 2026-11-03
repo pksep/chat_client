@@ -44,7 +44,8 @@ for (const portraitSize of sizes) {
           fit: 'contain',
           background: theme === 'dark' ? '#212531' : '#f8f9fd'
         },
-        outputOptions: { compressionLevel: 9, palette: true, colours: 128 }
+        // Индексированная палитра с dithering размывала градиенты логотипа.
+        outputOptions: { compressionLevel: 9 }
       });
       const result = await image.toFile(resolve(outputDirectory, filename));
       totalBytes += result.size;
@@ -54,7 +55,7 @@ for (const portraitSize of sizes) {
         addMediaScreen: true,
         xhtml: true,
         basePath: '/images/ios-splash/',
-        name: () => filename,
+        name: () => `${filename}?v=20261102`,
         dark: theme === 'dark'
       });
       links.push(

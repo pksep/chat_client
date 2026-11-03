@@ -92,6 +92,7 @@
                 decoding="async"
                 draggable="true"
                 @load="captureImagePreviewMetrics(media, $event)"
+                @error="recoverImagePreview(media, $event)"
                 @dragstart="handleMediaImageDragStart"
                 @click.stop="handleMediaClick(i)"
                 @contextmenu.prevent
@@ -192,7 +193,15 @@
 
 <script setup lang="ts">
 import { ChatMessageSurface } from '@pksep/yui';
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  ref,
+  shallowReactive,
+  watch
+} from 'vue';
 import { MediaType } from '@pksep/zod-shared-chat';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import LoadingIcon from '../UI/LoadingIcon.vue';
@@ -223,13 +232,47 @@ import {
 } from '../../utils/mediaPreview';
 import { sanitizeMessageHtml } from '../../utils/sanitizeMessageHtml';
 import { copyMessageSelection } from '../../utils/copyMessageSelection';
-import { inquiryMediaRevision } from '../../services/useMediaBlobCache';
+import {
+  discardFailedMediaObjectUrl,
+  inquiryMediaRevision,
+  isInquiryFile
+} from '../../services/useMediaBlobCache';
+import { getConfig } from '../../services/useConfig';
+import { buildMediaObjectUrl } from '../../utils/media-url';
+import { buildBrowserCompatibleImageUrl } from '../../utils/media-format';
 
 const props = defineProps<IMessageBubbleProps>();
 const safeMessageHtml = computed(() => sanitizeMessageHtml(props.message));
 const emit = defineEmits(['navigate-message', 'set-slider']);
 
 const { getFullMediaPath, primeMediaCache } = useMessageMedia();
+const recoveredPreviews = shallowReactive(new Map<IMedia, string>());
+const failedPreviewUrls = new Set<string>();
+
+const recoverImagePreview = (media: IMedia, event: Event): void => {
+  if (
+    media.isLoading ||
+    media.type !== MediaType.Image ||
+    isInquiryFile(media.path)
+  )
+    return;
+  const image = event.currentTarget as HTMLImageElement;
+  const failedUrl = image.currentSrc || image.src;
+  const preferredPath = media.thumbnailPath || media.path;
+  failedPreviewUrls.add(failedUrl);
+  discardFailedMediaObjectUrl(preferredPath, failedUrl);
+  // Сбой локального Blob или миниатюры не должен скрывать доступный оригинал.
+  for (const path of [preferredPath, media.path]) {
+    if (!path || /^(blob:|data:|file:)/i.test(path)) continue;
+    const url = buildBrowserCompatibleImageUrl(
+      buildMediaObjectUrl(getConfig().CHAT_PATH_TO_FILE_CDN, path)
+    );
+    if (!failedPreviewUrls.has(url)) {
+      recoveredPreviews.set(media, url);
+      return;
+    }
+  }
+};
 
 const messageHtmlRef = ref<HTMLElement | null>(null);
 const { handleMentionUserClick, syncMentionUserInteractivity } =
@@ -491,6 +534,8 @@ const getPreviewContainerStyle = (
 };
 
 const getFeedMediaPath = (media: IMedia): string => {
+  const recovered = recoveredPreviews.get(media);
+  if (recovered) return recovered;
   if (media.type !== MediaType.Video) {
     return getFullMediaPath(media);
   }

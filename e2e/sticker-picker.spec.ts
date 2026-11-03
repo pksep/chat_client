@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { mockStickerCatalog } from './fixtures/sticker-catalog';
+import { fixtureSticker, mockStickerCatalog } from './fixtures/sticker-catalog';
 
 test.beforeEach(async ({ page }) => {
   const catalog = await mockStickerCatalog(page);
@@ -110,6 +110,155 @@ test('каталог стикеров обновляет истёкший ток
     staleRequests: 1,
     freshRequests: 1
   });
+});
+
+test('Коты: сбой следующей страницы сохраняет список, повтор загружает ту же страницу', async ({
+  page
+}) => {
+  let unavailable = true;
+  const cursors: string[] = [];
+  await page.route(/\/stickers\?/, route => {
+    const cursor = new URL(route.request().url()).searchParams.get('cursor');
+    if (cursor) {
+      cursors.push(cursor);
+      if (unavailable) return route.fulfill({ status: 503, body: '' });
+    }
+    return route.fallback();
+  });
+  await page.goto('/e2e/fixtures/stickers.html?catalog=1');
+  await page.locator('.smile-button:visible').click();
+  await page.getByRole('button', { name: 'Стикеры', exact: true }).click();
+  const picker = page.getByRole('region', { name: 'Каталог стикеров' });
+  await picker.getByRole('button', { name: 'Коты', exact: true }).click();
+  const grid = picker.locator('.chat-sticker-picker__grid');
+  await expect(grid).toHaveCSS('height', '690px');
+  await picker.evaluate(element => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(picker.getByRole('alert')).toBeVisible();
+  await expect(grid).toBeVisible();
+  await expect(
+    picker.locator('.chat-sticker-picker__item').first()
+  ).toBeVisible();
+  unavailable = false;
+  await picker.getByRole('button', { name: 'Повторить', exact: true }).click();
+  await expect(picker.getByRole('alert')).toHaveCount(0);
+  await expect(grid).toHaveCSS('height', '1390px');
+  expect(cursors).toEqual(['48', '48', '48', '48']);
+});
+
+test('Коты: устаревший курсор обновляет кэш и восстанавливает страницы каталога', async ({
+  page
+}) => {
+  let revision = 'old';
+  let firstPages = 0;
+  let staleCursors = 0;
+  const pack = 'ccccccccccaaaaaaaaaatss';
+  const items = Array.from({ length: 100 }, (_, index) =>
+    fixtureSticker(`${pack}-${index}`, pack, `Коты ${index + 1}`, index, 'tgs')
+  );
+  await page.route(/\/stickers\?/, async route => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('pack') !== pack) return route.fallback();
+    const cursor = url.searchParams.get('cursor');
+    if (cursor && !cursor.startsWith(`${revision}:`)) {
+      staleCursors++;
+      return route.fulfill({
+        status: 400,
+        json: { message: 'Страница каталога устарела', statusCode: 400 }
+      });
+    }
+    if (!cursor) firstPages++;
+    const offset = cursor ? Number(cursor.split(':')[1]) : 0;
+    return route.fulfill({
+      json: {
+        items: items.slice(offset, offset + 48),
+        nextCursor:
+          offset + 48 < items.length ? `${revision}:${offset + 48}` : null,
+        total: items.length,
+        revision
+      }
+    });
+  });
+  await page.goto('/e2e/fixtures/stickers.html?catalog=1');
+  await page.locator('.smile-button:visible').click();
+  await page.getByRole('button', { name: 'Стикеры', exact: true }).click();
+  const picker = page.getByRole('region', { name: 'Каталог стикеров' });
+  await picker.getByRole('button', { name: 'Коты', exact: true }).click();
+  const grid = picker.locator('.chat-sticker-picker__grid');
+  await expect(grid).toHaveCSS('height', '690px');
+  await picker.evaluate(element => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(grid).toHaveCSS('height', '1390px');
+  revision = 'new';
+  await picker.evaluate(element => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect.poll(() => firstPages).toBe(2);
+  await expect(grid).toHaveCSS('height', '690px');
+  await expect(picker.getByRole('alert')).toHaveCount(0);
+  await picker.evaluate(element => {
+    element.scrollTop = 0;
+  });
+  await picker.evaluate(element => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(grid).toHaveCSS('height', '1390px');
+  expect(staleCursors).toBe(1);
+});
+
+test('Коты: кэш первой страницы учитывает скрытые наборы в курсоре', async ({
+  page
+}) => {
+  const pack = 'ccccccccccaaaaaaaaaatss';
+  const items = Array.from({ length: 100 }, (_, index) =>
+    fixtureSticker(`${pack}-${index}`, pack, `Коты ${index + 1}`, index, 'tgs')
+  );
+  const firstPages: string[][] = [];
+  await page.route(/\/stickers\?/, route => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('pack') !== pack) return route.fallback();
+    const excluded = (url.searchParams.get('excludePacks') || '')
+      .split(',')
+      .filter(Boolean)
+      .sort();
+    const scope = JSON.stringify(excluded);
+    const cursor = url.searchParams.get('cursor');
+    if (cursor && !cursor.endsWith(`:${scope}`))
+      return route.fulfill({
+        status: 400,
+        json: { message: 'Страница каталога устарела' }
+      });
+    if (!cursor) firstPages.push(excluded);
+    const offset = cursor ? Number(cursor.split(':')[0]) : 0;
+    return route.fulfill({
+      json: {
+        items: items.slice(offset, offset + 48),
+        nextCursor:
+          offset + 48 < items.length ? `${offset + 48}:${scope}` : null,
+        total: items.length,
+        revision: 'test'
+      }
+    });
+  });
+  await page.goto('/e2e/fixtures/stickers.html?catalog=1');
+  await page.locator('.smile-button:visible').click();
+  await page.getByRole('button', { name: 'Стикеры', exact: true }).click();
+  const picker = page.getByRole('region', { name: 'Каталог стикеров' });
+  await picker.getByRole('button', { name: 'Коты', exact: true }).click();
+  const grid = picker.locator('.chat-sticker-picker__grid');
+  await expect(grid).toHaveCSS('height', '690px');
+  await page.evaluate(() =>
+    (window as any).stickerFixture.hidePacks(['hamster'])
+  );
+  await expect.poll(() => firstPages).toEqual([[], ['hamster']]);
+  await picker.evaluate(element => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(grid).toHaveCSS('height', '1390px');
+  await expect(picker.getByRole('alert')).toHaveCount(0);
+  expect(firstPages).toEqual([[], ['hamster']]);
 });
 
 test('переключатель из макета меняет режим, работает с клавиатуры и открывается на эмодзи', async ({
