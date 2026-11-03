@@ -265,12 +265,19 @@ const useMastra = (options?: UseMastraOptions | false) => {
     messages.value = next;
     if (chatId && persist) await saveMessages(chatId, next);
   };
+  let taskRefreshError: string | null = null;
+
   const refreshActionTasks = async () => {
     if (disposed || !chatId || taskRefreshPending) return;
     const version = historyVersion;
     taskRefreshPending = true;
     try {
       const tasks = await fetchAiActionTasks(baseUrl, chatId);
+      if (disposed || version !== historyVersion) return;
+      if (tasks && taskRefreshError) {
+        if (lastError.value === taskRefreshError) lastError.value = null;
+        taskRefreshError = null;
+      }
       if (tasks)
         for (const task of [...tasks].reverse()) {
           if (disposed || version !== historyVersion) return;
@@ -278,8 +285,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
         }
     } catch (error) {
       if (disposed || version !== historyVersion) return;
-      if (messages.value.some(message => message.actionTask))
-        lastError.value = getAiErrorMessage(error);
+      if (messages.value.some(message => message.actionTask)) {
+        taskRefreshError = getAiErrorMessage(error);
+        lastError.value = taskRefreshError;
+      }
     } finally {
       taskRefreshPending = false;
     }
@@ -573,6 +582,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
     return historySnapshotPromise;
   };
 
+  let confirmedAnswerRequests = new Set<string>();
+
   const applyConversationState = async (
     state: AiConversationState,
     snapshot?: Awaited<ReturnType<typeof fetchAiConversationTranscript>>
@@ -627,6 +638,20 @@ const useMastra = (options?: UseMastraOptions | false) => {
       messages.value = [];
     }
     if (snapshot) {
+      const incomplete = new Set(
+        snapshot.incompleteMessages.map(message => message.requestId)
+      );
+      confirmedAnswerRequests = new Set(
+        snapshot.messages
+          .filter(
+            message =>
+              message.role === 'assistant' &&
+              !incomplete.has(message.requestId) &&
+              message.pendingToolApprovals.length === 0 &&
+              (message.content.trim() || message.outputAttachments.length > 0)
+          )
+          .map(message => message.requestId)
+      );
       messages.value = next;
       activeAttachments = nextAttachments!;
       pendingApproval.value = findPendingToolApproval(messages.value);
@@ -1809,6 +1834,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
   };
 
   return {
+    hasConfirmedAnswer: (requestId: string): boolean =>
+      confirmedAnswerRequests.has(requestId),
     messages,
     sendMessage,
     resolveToolApproval,

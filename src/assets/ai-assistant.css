@@ -177,6 +177,7 @@
 }
 
 .ai-menu-panel__collapsed-avatar {
+  position: relative;
   display: grid;
   place-items: center;
   width: 38px;
@@ -184,6 +185,12 @@
   flex: 0 0 38px;
   border-radius: 50%;
   background: var(--action-secondary-pressed-bg);
+}
+
+.ai-menu-panel__collapsed-avatar .ai-menu-panel__activity-status {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
 }
 
 .ai-menu-panel__collapsed-icon,

@@ -1,4 +1,5 @@
 import { requireAiAccess, useChatAccess } from './useChatAccess';
+import { getChatAuthSession } from '../utils/stored-chat-session';
 import type { VoiceReplyOptions } from '../services/voiceReply';
 import {
   computed,
@@ -80,6 +81,7 @@ export interface AiAssistantActivity {
   status: AiAssistantActivityStatus;
   updatedAt: number;
   isBackground: boolean;
+  requestId?: string;
 }
 
 interface PersistedAiState {
@@ -87,9 +89,12 @@ interface PersistedAiState {
   tasks: AiAutomationTask[];
   permissionMode: AiPermissionMode;
   responseMode: AiResponseMode;
+  activities?: AiAssistantActivity[];
+  activitiesOwnerId?: string;
 }
 
 interface MastraRuntime {
+  hasConfirmedAnswer: (requestId: string) => boolean;
   resolveActionTask: (id: string, decision: AiActionDecision) => Promise<void>;
   taskBusy: Ref<boolean>;
   historyBusy: Ref<boolean>;
@@ -160,7 +165,23 @@ const loadState = (): PersistedAiState => {
         : initialTasks(),
       permissionMode:
         parsed.permissionMode === 'automatic' ? 'automatic' : 'ask',
-      responseMode: parsed.responseMode === 'advanced' ? 'advanced' : 'quick'
+      responseMode: parsed.responseMode === 'advanced' ? 'advanced' : 'quick',
+      activitiesOwnerId: parsed.activitiesOwnerId,
+      activities:
+        parsed.activitiesOwnerId &&
+        parsed.activitiesOwnerId === getChatAuthSession()?.user?.id &&
+        Array.isArray(parsed.activities)
+          ? parsed.activities.filter(
+              activity =>
+                activity &&
+                parsed.sessions.some(
+                  session => session.id === activity.sessionId
+                ) &&
+                ['running', 'attention', 'success'].includes(activity.status) &&
+                typeof activity.description === 'string' &&
+                Number.isFinite(activity.updatedAt)
+            )
+          : []
     };
   } catch {
     return fallback;
@@ -188,7 +209,16 @@ const approvalStates = reactive<
 >({});
 let automationRefreshPromise: Promise<void> | null = null;
 let automationPollingStarted = false;
-const sessionActivities = reactive<Record<string, AiAssistantActivity>>({});
+const sessionActivities = reactive<Record<string, AiAssistantActivity>>(
+  Object.fromEntries(
+    (initialState.activities ?? []).map(activity => [
+      activity.sessionId,
+      { ...activity, isBackground: true }
+    ])
+  )
+);
+const restoringActivityIds = new Set(Object.keys(sessionActivities));
+const activitiesOwnerId = ref(initialState.activitiesOwnerId);
 const inactiveSessionIds = new Set<string>();
 
 const persist = (): void => {
@@ -204,7 +234,9 @@ const persist = (): void => {
         })),
         tasks: persisted.tasks,
         permissionMode: permissionMode.value,
-        responseMode: responseMode.value
+        responseMode: responseMode.value,
+        activities: Object.values(sessionActivities),
+        activitiesOwnerId: activitiesOwnerId.value
       })
     );
   } catch {
@@ -260,6 +292,7 @@ watch(
   () => [
     persisted.sessions,
     persisted.tasks,
+    sessionActivities,
     permissionMode.value,
     responseMode.value
   ],
@@ -332,18 +365,41 @@ const syncSessionActivity = (
   sessionId: string,
   runtime: MastraRuntime
 ): void => {
-  const activity = sessionActivities[sessionId];
+  const session = getSession(sessionId);
+  let activity = sessionActivities[sessionId];
+  if (!activity && session && !runtime.isInitializing.value) {
+    const savedPlan = runtime.messages.value.findLast(
+      message => message.actionTask
+    )?.actionTask;
+    if (
+      runtime.pendingApproval.value ||
+      (savedPlan &&
+        ['running', 'waiting_approval', 'needs_review'].includes(
+          savedPlan.status
+        ))
+    ) {
+      beginSessionActivity(session);
+      activity = sessionActivities[sessionId];
+      activity.isBackground = true;
+    }
+  }
   if (!activity) return;
 
-  const session = getSession(sessionId);
   if (session) activity.title = session.title;
 
+  const restoring = restoringActivityIds.has(sessionId);
+  if (restoring && runtime.isInitializing.value) return;
+  const response = runtime.messages.value.findLast(message => message.loading);
+  if (response?.requestId) activity.requestId = response.requestId;
+
   if (runtime.pendingApproval.value) {
+    restoringActivityIds.delete(sessionId);
     setActivityStatus(activity, 'attention', 'Требуется подтверждение');
     return;
   }
 
   if (runtime.lastError.value) {
+    restoringActivityIds.delete(sessionId);
     setActivityStatus(activity, 'attention', runtime.lastError.value);
     return;
   }
@@ -353,8 +409,13 @@ const syncSessionActivity = (
   }
 
   const plan = runtime.messages.value.findLast(
-    message => message.actionTask
+    message =>
+      message.actionTask &&
+      (!activity.requestId ||
+        message.actionTask.requestId === activity.requestId)
   )?.actionTask;
+  if (plan) activity.requestId = plan.requestId;
+  if (plan) restoringActivityIds.delete(sessionId);
   if (plan?.status === 'waiting_approval') {
     setActivityStatus(activity, 'attention', 'План ожидает подтверждения');
     return;
@@ -380,7 +441,22 @@ const syncSessionActivity = (
     return;
   }
 
-  if (activity.status === 'running') {
+  if (restoring && !plan) {
+    restoringActivityIds.delete(sessionId);
+    if (activity.status === 'running') {
+      if (activity.requestId && runtime.hasConfirmedAnswer(activity.requestId))
+        setActivityStatus(activity, 'success', 'Ответ готов');
+      else
+        setActivityStatus(
+          activity,
+          'attention',
+          'Не удалось подтвердить завершение запроса. Проверьте переписку.'
+        );
+    }
+    return;
+  }
+
+  if (plan?.status === 'completed' || activity.status === 'running') {
     setActivityStatus(activity, 'success', 'Задача успешно выполнена');
   }
 };
@@ -574,7 +650,11 @@ const resolveActionTask = async (id: string, decision: AiActionDecision) => {
 };
 
 const backgroundActivities = computed(() =>
-  Object.values(sessionActivities)
+  (useChatAccess().access.value.ai &&
+  activitiesOwnerId.value === getChatAuthSession()?.user?.id
+    ? Object.values(sessionActivities)
+    : []
+  )
     .filter(activity => activity.isBackground)
     .sort((left, right) => right.updatedAt - left.updatedAt)
 );
@@ -595,11 +675,19 @@ const markSessionInactive = (sessionId: string | null): void => {
 
 const markSessionActivityViewed = (sessionId: string): void => {
   inactiveSessionIds.delete(sessionId);
-  // Просмотр закрывает уведомление о текущем запуске; новый запуск создаст своё.
-  delete sessionActivities[sessionId];
+  if (sessionActivities[sessionId]?.status === 'success')
+    delete sessionActivities[sessionId];
 };
 
 const beginSessionActivity = (session: AiAssistantSession): void => {
+  const ownerId = getChatAuthSession()?.user?.id;
+  if (activitiesOwnerId.value !== ownerId) {
+    for (const id of Object.keys(sessionActivities))
+      delete sessionActivities[id];
+    restoringActivityIds.clear();
+    activitiesOwnerId.value = ownerId;
+  }
+  restoringActivityIds.delete(session.id);
   sessionActivities[session.id] = {
     sessionId: session.id,
     title: session.title,
@@ -617,7 +705,7 @@ const startNewSession = (): void => {
   activeSessionId.value = null;
 };
 
-const selectSession = (sessionId: string): void => {
+const selectSession = (sessionId: string, markViewed = true): void => {
   const session = getSession(sessionId);
   if (!session) return;
 
@@ -628,7 +716,7 @@ const selectSession = (sessionId: string): void => {
   activeTab.value = isTaskSession(session) ? 'tasks' : 'chats';
   activeView.value = 'chat';
   activeSessionId.value = sessionId;
-  markSessionActivityViewed(sessionId);
+  if (markViewed) markSessionActivityViewed(sessionId);
   void ensureRuntime(sessionId).catch(error => {
     console.error('Failed to load AI runtime:', error);
   });
@@ -1058,6 +1146,22 @@ const clearAll = async (): Promise<void> => {
 
   await clearSession(sessionId);
 };
+
+watch(
+  () => useChatAccess().access.value.ai,
+  allowed => {
+    if (!allowed || activitiesOwnerId.value !== getChatAuthSession()?.user?.id)
+      return;
+    for (const sessionId of restoringActivityIds) {
+      void ensureRuntime(sessionId).catch(error => {
+        const activity = sessionActivities[sessionId];
+        if (activity && useChatAccess().access.value.ai)
+          setActivityStatus(activity, 'attention', getAiErrorMessage(error));
+      });
+    }
+  },
+  { immediate: true }
+);
 
 export const useAiAssistant = () => {
   startAutomationPolling();

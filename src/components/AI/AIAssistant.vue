@@ -712,7 +712,6 @@ const getMessageHtml = (text: string): string =>
 
 const {
   sessions,
-  tasks,
   activeView,
   activeSessionId,
   activeSession,
@@ -730,8 +729,6 @@ const {
   stopVoiceCall,
   startNewSession,
   selectSession,
-  selectTaskSession,
-  selectTask,
   sendMessage,
   sendSuggestedPrompt,
   startNewTask,
@@ -1826,14 +1823,7 @@ watch(
 
     const session = sessions.value.find(item => item.id === sessionId);
     if (session) {
-      const task = tasks.value.find(item => item.sessionId === sessionId);
-      if (task) {
-        selectTask(task.id);
-      } else if (session.kind === 'task') {
-        selectTaskSession(sessionId);
-      } else {
-        selectSession(sessionId);
-      }
+      selectSession(sessionId, false);
       void scrollOpenedChatToBottom();
       return;
     }
