@@ -113,9 +113,12 @@ const getTokenTiming = (token: string): JwtTiming => {
   return decodeJwtPart<JwtTiming>(token, 1) || {};
 };
 
-export const isChatAccessTokenExpired = (token: string): boolean => {
+export const isChatAccessTokenExpired = (
+  token: string,
+  minValidityMs = 0
+): boolean => {
   const { exp } = getTokenTiming(token);
-  return typeof exp === 'number' && exp * 1000 <= Date.now();
+  return typeof exp === 'number' && exp * 1000 <= Date.now() + minValidityMs;
 };
 
 export const isChatSessionEnding = (): boolean => isEndingSession;

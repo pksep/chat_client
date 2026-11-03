@@ -172,6 +172,7 @@
         >
           <MenuProfilePanel
             v-if="mountedSections.has('profile')"
+            :is-active="activeSection === 'profile'"
             :data-testid="`${props.dataTestid}-MobileList-ProfilePanel`"
           />
         </section>
