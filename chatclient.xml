@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<fb version="0.19.6" size="393972">
+<fb version="0.19.6" size="403810">
   <f>
     <added t="I">8</added>
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <inserted t="I">8</inserted>
-    <seconds t="F">348.923417562</seconds>
+    <seconds t="F">373.080936982</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-11-05T15:54:25Z</when>
+    <when t="T">2026-11-05T22:22:27Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -26655,19 +26655,6 @@
     <when t="T">2026-11-03T10:02:25Z</when>
   </f>
   <f>
-    <_id t="I">1388</_id>
-    <_job t="I">104222</_job>
-    <_time t="T">2026-11-03T10:07:36Z</_time>
-    <_version t="S">0.19.16/0.61.1/0.17.11!0.17.23</_version>
-    <analyzers t="I">18</analyzers>
-    <text t="S">The average number of builds per week (86.1) is decreasing (R=-0.65).
-The average number of commits per week (34.9) is increasing (R=0.42).
-The average number of releases per month (5.9) is decreasing (R=-0.63).
-The average monthly turnover (1.0 developers) is decreasing (R=0.43).</text>
-    <what t="S">assessment</what>
-    <when t="T">2026-11-03T10:07:36Z</when>
-  </f>
-  <f>
     <_id t="I">1390</_id>
     <_job t="I">41821582880</_job>
     <_time t="T">2026-11-04T11:33:00Z</_time>
@@ -26760,19 +26747,6 @@ The average monthly turnover (1.0 developers) is increasing (R=0.57).</text>
     <when t="T">2026-11-05T07:30:48Z</when>
     <where t="S">github</where>
     <who t="I">41898282</who>
-  </f>
-  <f>
-    <_id t="I">1396</_id>
-    <_job t="I">42058483526</_job>
-    <_time t="T">2026-11-05T15:49:05Z</_time>
-    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
-    <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">23922255736</events_were_scanned>
-    <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">484</min_pull_was_found>
-    <repository t="I">1053332035</repository>
-    <what t="S">iterate</what>
-    <where t="S">github</where>
   </f>
   <f>
     <_id t="I">1397</_id>
@@ -27044,6 +27018,654 @@ The average monthly turnover (1.0 developers) is increasing (R=0.57).</text>
     <repository t="I">1053332035</repository>
     <what t="S">pull-was-opened</what>
     <when t="T">2026-10-22T13:07:19Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1415</_id>
+    <_job t="I">104642</_job>
+    <_time t="T">2026-11-05T15:54:48Z</_time>
+    <_version t="S">0.19.16/0.61.1/0.17.11!0.17.23</_version>
+    <analyzers t="I">18</analyzers>
+    <text t="S">The average number of builds per week (86.1) is decreasing (R=-0.65).
+The average number of commits per week (34.9) is increasing (R=0.42).
+The average number of releases per month (5.9) is decreasing (R=-0.63).
+The average monthly turnover (1.0 developers) is increasing (R=0.85).</text>
+    <what t="S">assessment</what>
+    <when t="T">2026-11-05T15:54:48Z</when>
+  </f>
+  <f>
+    <_id t="I">1416</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:16:29Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <earliest_issue_was_found t="I">1</earliest_issue_was_found>
+    <events_were_scanned t="I">19231910817</events_were_scanned>
+    <latest_issue_was_found t="I">72</latest_issue_was_found>
+    <min_pull_was_found t="I">484</min_pull_was_found>
+    <repository t="I">1053332035</repository>
+    <what t="S">iterate</what>
+    <where t="S">github</where>
+  </f>
+  <f>
+    <_id t="I">1417</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:16:30Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-530</branch>
+    <comments t="I">2</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">2</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#455 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">26</files>
+    <hoc t="I">2343</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">455</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-10-16T12:52:21Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1418</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:16:37Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-531</branch>
+    <comments t="I">1</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">1</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#456 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">49</files>
+    <hoc t="I">667</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">456</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-10-19T08:44:27Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1419</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:16:40Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">canary</branch>
+    <comments t="I">1</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">1</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#457 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">240</files>
+    <hoc t="I">18677</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">457</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-10-19T10:23:51Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1420</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:16:43Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">client-media-preview</branch>
+    <comments t="I">2</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">2</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#458 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">46</files>
+    <hoc t="I">2121</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">458</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-10-20T05:13:30Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
+  </f>
+  <f>
+    <_id t="I">1421</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:16:46Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-521</branch>
+    <comments t="I">2</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">2</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#459 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">22</files>
+    <hoc t="I">1992</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">459</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-10-19T12:44:43Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1422</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:16:49Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">client-inquiry-access-cleanup</branch>
+    <comments t="I">2</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">1</comments_by_author>
+    <comments_by_reviewers t="I">1</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#460 has been "pull-was-closed".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">15</files>
+    <hoc t="I">374</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">460</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-closed</what>
+    <when t="T">2026-10-19T13:25:07Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
+  </f>
+  <f>
+    <_id t="I">1423</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:16:53Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">client-inquiry-delete</branch>
+    <comments t="I">2</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">1</comments_by_author>
+    <comments_by_reviewers t="I">1</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#461 has been "pull-was-closed".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">6</files>
+    <hoc t="I">357</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">461</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-closed</what>
+    <when t="T">2026-10-19T13:26:44Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
+  </f>
+  <f>
+    <_id t="I">1424</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:16:56Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">widget-css-vk</branch>
+    <comments t="I">2</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">1</comments_by_author>
+    <comments_by_reviewers t="I">1</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#462 has been "pull-was-closed".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">9</files>
+    <hoc t="I">241</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">462</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-closed</what>
+    <when t="T">2026-10-19T13:26:51Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
+  </f>
+  <f>
+    <_id t="I">1425</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:16:59Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">ai-message-order</branch>
+    <comments t="I">2</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">1</comments_by_author>
+    <comments_by_reviewers t="I">1</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#463 has been "pull-was-closed".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">4</files>
+    <hoc t="I">214</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">463</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-closed</what>
+    <when t="T">2026-10-19T13:26:59Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
+  </f>
+  <f>
+    <_id t="I">1426</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:02Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">erp-contact-sync</branch>
+    <comments t="I">2</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">1</comments_by_author>
+    <comments_by_reviewers t="I">1</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#464 has been "pull-was-closed".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">2</files>
+    <hoc t="I">268</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">464</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-closed</what>
+    <when t="T">2026-10-19T13:27:06Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
+  </f>
+  <f>
+    <_id t="I">1427</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:05Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-533</branch>
+    <comments t="I">2</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">2</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#465 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">88</files>
+    <hoc t="I">5511</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">465</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-10-20T11:03:07Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1428</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:08Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-532</branch>
+    <comments t="I">2</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">2</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#466 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">18</files>
+    <hoc t="I">225</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">466</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-10-20T13:57:55Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1429</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:11Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">client-media-preview</branch>
+    <comments t="I">2</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">2</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#467 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">4</files>
+    <hoc t="I">114</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">467</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-10-21T11:23:40Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
+  </f>
+  <f>
+    <_id t="I">1430</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:14Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-534</branch>
+    <comments t="I">2</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">2</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#468 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">69</files>
+    <hoc t="I">5350</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">468</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-10-21T13:07:35Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1431</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:17Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">feat/livekit-call-diagnostics</branch>
+    <comments t="I">2</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">2</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#469 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">5</files>
+    <hoc t="I">673</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">469</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-10-22T08:23:09Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1432</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:20Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-538</branch>
+    <comments t="I">2</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">2</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#470 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">43</files>
+    <hoc t="I">2187</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">470</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-10-22T08:01:59Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1433</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:23Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">erp-725</branch>
+    <comments t="I">2</comments>
+    <comments_appreciated t="I">0</comments_appreciated>
+    <comments_by_author t="I">0</comments_by_author>
+    <comments_by_reviewers t="I">2</comments_by_reviewers>
+    <comments_resolved t="I">0</comments_resolved>
+    <comments_to_code t="I">0</comments_to_code>
+    <details t="S">Apparently, pksep/chat_client#471 has been "pull-was-merged".</details>
+    <failed_builds t="I">0</failed_builds>
+    <files t="I">5</files>
+    <hoc t="I">311</hoc>
+    <is_human t="I">1</is_human>
+    <issue t="I">471</issue>
+    <repository t="I">1053332035</repository>
+    <succeeded_builds t="I">0</succeeded_builds>
+    <suggestions t="I">0</suggestions>
+    <what t="S">pull-was-merged</what>
+    <when t="T">2026-10-22T13:07:32Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1434</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:29Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">fix/call-disconnect-source-telemetry</branch>
+    <details t="S">The missing pull pksep/chat_client#472 has been opened by @denis112345.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">472</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-10-23T06:23:38Z</when>
+    <where t="S">github</where>
+    <who t="I">40199504</who>
+  </f>
+  <f>
+    <_id t="I">1435</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:30Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">fix/livekit-turn-relay-recovery</branch>
+    <details t="S">The missing pull pksep/chat_client#473 has been opened by @denis112345.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">473</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-10-23T12:14:22Z</when>
+    <where t="S">github</where>
+    <who t="I">40199504</who>
+  </f>
+  <f>
+    <_id t="I">1436</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:31Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-537</branch>
+    <details t="S">The missing pull pksep/chat_client#474 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">474</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-10-23T13:01:13Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1437</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:32Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-542</branch>
+    <details t="S">The missing pull pksep/chat_client#475 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">475</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-10-26T09:22:16Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1438</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:32Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-540</branch>
+    <details t="S">The missing pull pksep/chat_client#476 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">476</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-10-26T14:25:28Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1439</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:33Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-549</branch>
+    <details t="S">The missing pull pksep/chat_client#477 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">477</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-10-28T10:55:31Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1440</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:34Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-546</branch>
+    <details t="S">The missing pull pksep/chat_client#478 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">478</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-10-28T13:06:07Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1441</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:35Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-546-web-version-90</branch>
+    <details t="S">The missing pull pksep/chat_client#479 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">479</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-10-29T09:03:30Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1442</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:36Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">ERP-828</branch>
+    <details t="S">The missing pull pksep/chat_client#480 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">480</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-10-30T10:36:44Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1443</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:36Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">ai-task-creation-recovery</branch>
+    <details t="S">The missing pull pksep/chat_client#481 has been opened by @sertimberrners-lee.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">481</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-11-02T12:31:46Z</when>
+    <where t="S">github</where>
+    <who t="I">49451722</who>
+  </f>
+  <f>
+    <_id t="I">1444</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:37Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-546</branch>
+    <details t="S">The missing pull pksep/chat_client#482 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">482</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-11-02T13:30:04Z</when>
+    <where t="S">github</where>
+    <who t="I">93074025</who>
+  </f>
+  <f>
+    <_id t="I">1445</_id>
+    <_job t="I">42119831675</_job>
+    <_time t="T">2026-11-05T22:17:38Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <branch t="S">chat-550</branch>
+    <details t="S">The missing pull pksep/chat_client#483 has been opened by @ekn1000.</details>
+    <is_human t="I">1</is_human>
+    <issue t="I">483</issue>
+    <repository t="I">1053332035</repository>
+    <what t="S">pull-was-opened</what>
+    <when t="T">2026-11-05T07:08:13Z</when>
     <where t="S">github</where>
     <who t="I">93074025</who>
   </f>
