@@ -1,3 +1,16 @@
+# [1.45.0](https://github.com/pksep/chat_client/compare/v1.44.0...v1.45.0) (2026-11-05)
+
+
+### Bug Fixes
+
+* **chat-540:** keep QR device sessions renewable after access expiry ([0bb30d1](https://github.com/pksep/chat_client/commit/0bb30d1d94d91e970a058b80f8882ca61dd46242))
+* **chat-550:** temporarily disable short QR login ([860f3a7](https://github.com/pksep/chat_client/commit/860f3a75122ca0fdd751eb2e97f9f1e5de5736ac))
+
+
+### Features
+
+* add QR for autorization ([db32dab](https://github.com/pksep/chat_client/commit/db32dab69a41987ded14fe53a53a1a5e9c6c29df))
+
 # [1.44.0](https://github.com/pksep/chat_client/compare/v1.43.0...v1.44.0) (2026-11-03)
 
 
