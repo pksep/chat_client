@@ -24,16 +24,16 @@
       </Button>
     </MenuSectionHeading>
 
+    <div v-if="props.mobile && $slots.folders" class="chat-folders-panel__rail">
+      <slot name="folders" />
+    </div>
+
     <MenuSearch
       v-model="folderSearch"
       class="chat-folders-panel__search"
       placeholder="Поиск"
       data-testid="ChatFolders-Search"
     />
-
-    <div v-if="props.mobile && $slots.folders" class="chat-folders-panel__rail">
-      <slot name="folders" />
-    </div>
 
     <ul
       v-if="props.loading && !props.folders.length"

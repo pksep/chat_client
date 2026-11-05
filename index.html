@@ -1103,11 +1103,12 @@
 
         .startup-shell__folders {
           position: static;
-          grid-row: 4;
+          grid-row: 2;
           width: 100%;
-          height: auto;
-          min-height: 33px;
-          padding: 0 16px 10px;
+          height: 72px;
+          min-height: 72px;
+          margin-top: 10px;
+          padding: 0;
           flex-direction: row;
         }
 
@@ -1119,63 +1120,42 @@
 
         .startup-shell__folder-items {
           width: 100%;
-          height: auto;
-          padding: 0;
+          height: 72px;
+          padding: 0 10px 0 16px;
           flex-direction: row;
-          flex-wrap: wrap;
-          gap: 5px;
+          gap: 20px;
         }
 
         .startup-shell__folder-item {
-          display: flex;
-          width: auto;
-          height: 33px;
-          min-height: 33px;
-          padding: 0 10px;
-          align-items: center;
-          flex: 0 0 auto;
-          gap: 3px;
-          border: 1px solid var(--border-table);
-          border-radius: 15px;
+          height: 72px;
+          min-height: 72px;
+          padding: 10px 5px;
+          align-content: center;
+          flex: 0 0 70px;
         }
 
         .startup-shell__folder-item:first-child {
-          min-height: 33px;
-          padding-block: 0;
-        }
-
-        .startup-shell__folder-avatar {
-          width: 14px;
-          height: 14px;
-        }
-
-        .startup-shell__folder-item:first-child .startup-shell__folder-name {
-          width: 59px;
+          min-height: 72px;
+          padding-block: 10px;
         }
 
         .startup-shell__folder-item:first-child + .startup-shell__folder-item {
           margin-top: 0;
         }
 
-        .startup-shell__folder-item:nth-child(4) {
-          display: none;
-        }
-
         .startup-shell__folder-item::after {
-          content: none;
+          content: '';
+          position: absolute;
+          top: 1px;
+          right: -10px;
+          width: 0.5px;
+          height: 70px;
+          transform: translateX(50%);
+          background: var(--border-table);
         }
 
         .startup-shell__folder-item--manage {
           display: grid;
-          order: -1;
-          width: 33px;
-          padding: 0;
-          place-items: center;
-          border-radius: 50%;
-        }
-
-        .startup-shell__folder-item--manage .startup-shell__folder-name {
-          display: none;
         }
 
         .startup-shell__toolbar {
@@ -1389,7 +1369,8 @@
         }
 
         .startup-shell__filters {
-          display: none;
+          grid-row: 4;
+          padding-inline: 16px;
         }
 
         .startup-shell__list {

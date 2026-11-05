@@ -30,11 +30,11 @@ for (const theme of ['light', 'dark']) {
     const rowAvatarBox = await rowSkeleton
       .locator('.chat-folders-panel__folder-icon')
       .boundingBox();
-    expect(railBox?.width).toBe(isMobile ? 84 : 70);
-    expect(railBox?.height).toBe(isMobile ? 33 : 72);
+    expect(railBox?.width).toBe(70);
+    expect(railBox?.height).toBe(72);
     expect(rowBox?.height).toBe(isMobile ? 80 : 58);
-    expect(railAvatarBox?.width).toBe(isMobile ? 14 : 38);
-    expect(railAvatarBox?.height).toBe(isMobile ? 14 : 38);
+    expect(railAvatarBox?.width).toBe(38);
+    expect(railAvatarBox?.height).toBe(38);
     expect(rowAvatarBox?.width).toBe(isMobile ? 60 : 38);
     expect(rowAvatarBox?.height).toBe(isMobile ? 60 : 38);
 

@@ -23,6 +23,8 @@ import { getChatSDK, initializeChat } from '../../src/services/useChat';
 import { ChatSDK } from '../../src/services/useChatSDK';
 import { installFolderFixtureSocket } from './folder-fixture-socket';
 import { emojiDirective } from '../../src/directives/emoji';
+import { useChatsToolbarState } from '../../src/composables/useChatsToolbarState';
+import { getTopicsByChatsToolbarFilter } from '../../src/utils/chats-toolbar-filter';
 import type { ITopic, IUser } from '../../src/components/interfaces/interfaces';
 
 // Настоящие компоненты, фильтры и сохранение порядка через изолированный транспорт.
@@ -65,6 +67,7 @@ if (clients) {
 createApp({
   setup() {
     const search = ref('');
+    const { state: toolbar, setFilter } = useChatsToolbarState();
     return () =>
       h(
         'main',
@@ -107,6 +110,8 @@ createApp({
                         ChatsToolbar,
                         {
                           modelValue: search.value,
+                          filter: toolbar.filter,
+                          'onUpdate:filter': setFilter,
                           'onUpdate:modelValue': (value: string) =>
                             (search.value = value),
                           class: mobile ? 'mobile-list-container__toolbar' : '',
@@ -137,7 +142,11 @@ createApp({
                   ...(!state.isManagingFolders.value
                     ? [
                         h(TopicList, {
-                          topics: topics.filter(
+                          topics: getTopicsByChatsToolbarFilter(
+                            topics,
+                            toolbar.filter,
+                            user.id
+                          ).filter(
                             topic =>
                               (!state.activeFolder.value ||
                                 state.activeFolder.value.topicIds.includes(
