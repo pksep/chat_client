@@ -19,6 +19,7 @@ import { lazyUiKitPdfRuntime } from './scripts/lazy-ui-kit-pdf-runtime';
 import { lazyUiKitEmojiRuntime } from './scripts/lazy-ui-kit-emoji-runtime';
 import { lazyUiKitEditorRuntime } from './scripts/lazy-ui-kit-editor-runtime';
 import { lazyUiKitSliderRuntime } from './scripts/lazy-ui-kit-slider-runtime';
+import { uiKitEditorCamera } from './scripts/ui-kit-editor-camera';
 
 const BUILD_OUT_DIR = 'build';
 const PUBLIC_BUILD_ENTRIES = new Set([
@@ -280,6 +281,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
   ];
 
   const plugins: PluginOption[] = [
+    uiKitEditorCamera(),
     externalizeUiKitPdfWorker(),
     lazyUiKitPdfRuntime(),
     lazyUiKitEmojiRuntime(),

@@ -39,6 +39,7 @@ import {
   getStoredBootstrapErpAccessToken,
   getStoredChatAccessToken,
   isStoredChatSessionPersistent,
+  isStoredBootstrapFromQr,
   isAuthError,
   handleConfirmedInactiveSession,
   isChatAccessTokenExpired,
@@ -47,6 +48,7 @@ import {
   saveChatAuthSession,
   setAuthUser,
   tryRefreshErpSession,
+  loginWithQrToken,
   useAuth
 } from './composables/useAuth';
 import { setAuthToken } from './composables/useLogin';
@@ -104,6 +106,7 @@ import {
 
 const props = defineProps<IChatContainerProps>();
 const emit = defineEmits<{
+  (e: 'qr-auth-error'): void;
   (e: 'ready'): void;
 }>();
 
@@ -657,13 +660,14 @@ const runAppInitialization = async () => {
 
   const storedChatToken = getStoredChatAccessToken();
   const bootstrapErpToken = tokenUrl || getStoredBootstrapErpAccessToken();
+  const bootstrapFromQr = !!tokenUrl || isStoredBootstrapFromQr();
   const directAuthSession = getChatAuthSession();
   const config = getConfig();
   const persistSession = !!tokenUrl || isStoredChatSessionPersistent();
   const hasStoredChatSession = !!(directAuthSession?.token || storedChatToken);
   const shouldUseBootstrapToken =
     !!bootstrapErpToken && (hasStartupNetwork() || !hasStoredChatSession);
-  const initialUserId = tokenUrl
+  const initialUserId = bootstrapFromQr
     ? ''
     : directAuthSession?.user?.id || getStoredSessionUserId() || '';
   let deferredStartupBackgroundSnapshotUserId: string | undefined;
@@ -710,6 +714,7 @@ const runAppInitialization = async () => {
     }
   };
 
+  let bootstrapTokenAccepted = false;
   try {
     const storedAuthData = hasStoredChatSession
       ? {
@@ -720,13 +725,14 @@ const runAppInitialization = async () => {
       : null;
     let usedBootstrapToken = false;
     let authData = shouldUseBootstrapToken
-      ? await useAuth(bootstrapErpToken)
+      ? await (bootstrapFromQr ? loginWithQrToken : useAuth)(bootstrapErpToken)
           .then(data => {
             usedBootstrapToken = true;
+            bootstrapTokenAccepted = true;
             return data;
           })
           .catch(error => {
-            if (!tokenUrl && storedAuthData && !isAuthError(error)) {
+            if (!bootstrapFromQr && storedAuthData && !isAuthError(error)) {
               console.warn(
                 'Сервер авторизации недоступен, открываем сохранённую сессию:',
                 error
@@ -863,6 +869,11 @@ const runAppInitialization = async () => {
     runDeferredOnlineStartup(authUserId || undefined, freshContentState);
   } catch (error) {
     await initialCacheHydration;
+    if (bootstrapFromQr && !bootstrapTokenAccepted) {
+      clearBootstrapErpSession();
+      emit('qr-auth-error');
+      return;
+    }
     console.error('Failed to initialize chat:', error);
 
     if (isAuthError(error)) {

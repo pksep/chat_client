@@ -3,6 +3,7 @@
     v-if="config && !isCredentialsStep"
     :config="config"
     @ready="handleChatContentReady"
+    @qr-auth-error="handleQrAuthFailure"
   />
 
   <AuthorizationScreen
@@ -54,6 +55,7 @@ import { useIosInstallPrompt } from './composables/useIosInstallPrompt';
 import { areChatConfigsEqual, setConfig } from './services/useConfig';
 import {
   clearErpAuthSession,
+  clearBootstrapErpSession,
   consumeAuthRedirectStartupShellSkip,
   getChatAuthSession,
   getStoredBootstrapErpAccessToken,
@@ -507,6 +509,14 @@ const returnToOrganizationStep = () => {
   passwordValue.value = '';
 };
 
+const handleQrAuthFailure = () => {
+  clearBootstrapErpSession();
+  config.value = null;
+  isCredentialsStep.value = false;
+  errorMessage.value =
+    'Не удалось войти по QR-коду. Код мог истечь или уже использован. Отсканируйте новый QR.';
+};
+
 const handleQrAuthSuccess = (payload: {
   token: string;
   organization?: string;
@@ -515,7 +525,7 @@ const handleQrAuthSuccess = (payload: {
     return;
   }
 
-  saveBootstrapErpSession({ accessToken: payload.token }, true);
+  saveBootstrapErpSession({ accessToken: payload.token, source: 'qr' }, true);
   errorMessage.value = '';
   isCredentialsStep.value = false;
 
@@ -717,8 +727,7 @@ onMounted(async () => {
 
         handleQrAuthSuccess(await resolveQrAuthPayload(payload));
       } catch {
-        errorMessage.value =
-          'Не удалось войти по QR-коду. Код мог истечь или уже использован. Отсканируйте новый QR.';
+        handleQrAuthFailure();
       }
 
       return;

@@ -45,6 +45,11 @@
       :data-testid="`${props.dataTestid}-MenuProfilePanel-Title`"
     >
       <span class="menu-section-heading__label">Профиль</span>
+      <ProfileQrLogin
+        v-if="authUser && props.isActive"
+        :key="authUser.id"
+        :data-testid="`${props.dataTestid}-MenuProfilePanel-QrLogin`"
+      />
     </MenuSectionHeading>
     <div v-if="authUser && !props.isCollapse" class="menu-profile__body">
       <header class="menu-profile__header">
@@ -932,6 +937,7 @@ import {
 } from './status-presets-design-preview';
 import ChatsToolbar from './ChatsToolbar.vue';
 import StickerPackSelect from './StickerPackSelect.vue';
+import ProfileQrLogin from './ProfileQrLogin.vue';
 
 const CallBackgroundPreviewModal = defineAsyncComponent(
   () => import('../CallModal/CallBackgroundPreviewModal.vue')
@@ -941,10 +947,12 @@ const props = withDefaults(
   defineProps<{
     dataTestid?: string;
     isCollapse?: boolean;
+    isActive?: boolean;
   }>(),
   {
     dataTestid: 'MenuProfilePanel',
-    isCollapse: false
+    isCollapse: false,
+    isActive: true
   }
 );
 

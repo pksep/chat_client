@@ -7,11 +7,13 @@ import {
 export const fetchAuthWithCookies = async (
   url: string,
   method: 'GET' | 'POST',
-  data?: Record<string, unknown>
+  data?: Record<string, unknown>,
+  requestHeaders?: Record<string, string>
 ): Promise<Response> => {
   const headers = {
     Accept: 'application/json',
-    ...(data ? { 'Content-Type': 'application/json' } : {})
+    ...(data ? { 'Content-Type': 'application/json' } : {}),
+    ...requestHeaders
   };
 
   return withNetworkTimeout(async signal => {

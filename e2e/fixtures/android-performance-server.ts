@@ -9,7 +9,8 @@ export async function createAndroidPerformanceServer({
   port = 5188,
   topicCount = 12,
   messagesPerTopic = 5000,
-  userCount = 4000
+  userCount = 4000,
+  qrRedirectUrl = ''
 } = {}) {
   const origin = `http://127.0.0.1:${port}`;
   const user = {
@@ -113,7 +114,11 @@ export async function createAndroidPerformanceServer({
       'Access-Control-Allow-Origin',
       request.headers.origin || '*'
     );
-    response.setHeader('Access-Control-Allow-Headers', '*');
+    response.setHeader(
+      'Access-Control-Allow-Headers',
+      request.headers['access-control-request-headers'] ||
+        'Authorization, Content-Type'
+    );
     response.setHeader(
       'Access-Control-Allow-Methods',
       'GET,POST,PUT,PATCH,DELETE,OPTIONS'
@@ -159,6 +164,12 @@ export async function createAndroidPerformanceServer({
       return;
     }
     const pathname = url.pathname.replace(/^\/api/, '');
+    if (pathname === '/v2/q' && qrRedirectUrl) {
+      const redirect = new URL(qrRedirectUrl);
+      redirect.searchParams.set('organization', origin);
+      response.writeHead(302, { Location: redirect.toString() }).end();
+      return;
+    }
     if (pathname === '/users' || pathname === '/users/login-options') {
       await delay('users');
       json({ data: users, total: users.length, page: 1, limit: users.length });
