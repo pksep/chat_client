@@ -1,3 +1,15 @@
+# [1.48.0](https://github.com/pksep/chat_client/compare/v1.47.0...v1.48.0) (2026-11-06)
+
+
+### Bug Fixes
+
+* различать пропущенные звонки и исходящие без ответа ([33c191b](https://github.com/pksep/chat_client/commit/33c191be127390fb20e9259d863dc34063184f4b))
+
+
+### Features
+
+* обновлять веб-чат автоматически при смене дня ([dae0021](https://github.com/pksep/chat_client/commit/dae002184710bffb9db64cc7c24912860e2c095f))
+
 # [1.47.0](https://github.com/pksep/chat_client/compare/v1.46.0...v1.47.0) (2026-11-06)
 
 
