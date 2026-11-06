@@ -3,10 +3,10 @@
   cycles: 1
   deleted: 8
   inserted: 8
-  seconds: 278.902249613
+  seconds: 250.872443479
   version: 0.60.0
   what: judges-summary
-  when: 2026-11-06 02:53:43.442439391 Z
+  when: 2026-11-06 11:32:36.699964769 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -25432,17 +25432,6 @@
   when: 2026-11-05 07:30:45.000000000 Z
   where: github
   who: 41898282
-- _id: 1447
-  _job: 42152555076
-  _time: 2026-11-06 02:49:18.483088678 Z
-  _version: 0.19.6/0.60.0/0.17.11
-  earliest_issue_was_found: 1
-  events_were_scanned: 23927086793
-  latest_issue_was_found: 72
-  min_pull_was_found: 484
-  repository: 1053332035
-  what: iterate
-  where: github
 - _id: 1448
   _job: 42152555076
   _time: 2026-11-06 02:49:23.325190543 Z
@@ -25461,6 +25450,7 @@
   is_human: 1
   issue: 472
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -25485,6 +25475,7 @@
   is_human: 1
   issue: 473
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -25509,6 +25500,7 @@
   is_human: 1
   issue: 474
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -25533,6 +25525,7 @@
   is_human: 1
   issue: 475
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -25557,6 +25550,7 @@
   is_human: 1
   issue: 476
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -25581,6 +25575,7 @@
   is_human: 1
   issue: 477
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -25605,6 +25600,7 @@
   is_human: 1
   issue: 478
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -25629,6 +25625,7 @@
   is_human: 1
   issue: 479
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -25653,6 +25650,7 @@
   is_human: 1
   issue: 480
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -25677,6 +25675,7 @@
   is_human: 1
   issue: 482
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
@@ -25701,9 +25700,65 @@
   is_human: 1
   issue: 483
   repository: 1053332035
+  review_comments: 0
   succeeded_builds: 0
   suggestions: 0
   what: pull-was-merged
   when: 2026-11-05 07:28:11.000000000 Z
+  where: github
+  who: 93074025
+- _id: 1459
+  _job: 42210331792
+  _time: 2026-11-06 11:28:30.542030779 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  commit: bc10b2b9524c9976664fb80e4a87a2409047cf68
+  default_branch: main
+  details: 'A new Git push #49213023036 has arrived to pksep/chat_client, made by
+    @github-actions[bot] (default branch is "main"), not associated with any pull
+    request.'
+  event_id: 26321833809
+  event_type: PushEvent
+  is_human: 0
+  push_id: 49213023036
+  ref: refs/heads/main
+  repository: 1053332035
+  to_master: 1
+  what: git-was-pushed
+  when: 2026-11-06 07:02:35.000000000 Z
+  where: github
+  who: 41898282
+- _id: 1460
+  _job: 42210331792
+  _time: 2026-11-06 11:28:40.210382322 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  earliest_issue_was_found: 1
+  events_were_scanned: 24122033098
+  latest_issue_was_found: 72
+  min_pull_was_found: 484
+  repository: 1053332035
+  what: iterate
+  where: github
+- _id: 1461
+  _job: 42210331792
+  _time: 2026-11-06 11:28:45.862244398 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: chat-551
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#484 has been "pull-was-merged".
+  failed_builds: 0
+  files: 15
+  hoc: 786
+  is_human: 1
+  issue: 484
+  repository: 1053332035
+  succeeded_builds: 0
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-11-06 06:59:55.000000000 Z
   where: github
   who: 93074025
