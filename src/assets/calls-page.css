@@ -195,7 +195,8 @@
   line-height: 15px;
 }
 
-.calls-page__time--missed {
+.calls-page__time--missed,
+.calls-page__no-answer {
   color: var(--error-color);
 }
 

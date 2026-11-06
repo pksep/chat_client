@@ -83,7 +83,10 @@
                       { 'calls-page__time--missed': call.kind === 'missed' }
                     ]"
                   >
-                    {{ call.detailLabel }}
+                    {{ call.detailLabel
+                    }}<span v-if="call.noAnswer" class="calls-page__no-answer">
+                      (нет ответа)</span
+                    >
                   </span>
                 </div>
               </div>
@@ -256,6 +259,7 @@ interface CallHistoryItem {
   duration: string | null;
   detailLabel: string;
   kind: CallMessageKind;
+  noAnswer: boolean;
   timeLabel: string;
   createdAt: number;
   callSummary?: CallBotCallSummaryBrief | null;
@@ -374,6 +378,7 @@ const buildCallItem = (
       ? `${formatTime(createdAt)} (${parsedCall.duration})`
       : formatTime(createdAt),
     kind: parsedCall.kind,
+    noAnswer: parsedCall.noAnswer,
     timeLabel: formatTime(createdAt),
     createdAt: createdAt.getTime(),
     callSummary: serverCall.callSummary || null

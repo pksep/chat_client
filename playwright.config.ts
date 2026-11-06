@@ -51,6 +51,7 @@ export default defineConfig({
         'media-preview-recovery.spec.ts',
         'slider-download-focus.spec.ts',
         'call-download.spec.ts',
+        'unanswered-call.spec.ts',
         'content-editor-button-colors.spec.ts',
         'ios-requests.spec.ts',
         'ios-web-push.spec.ts',

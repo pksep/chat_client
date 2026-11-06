@@ -114,8 +114,15 @@ test('сохранённый в localStorage прошлый день обнов�
       localStorage.setItem('chat_web_update_day', '2026-11-05');
     }
   });
-  const state = await openUpdates(page);
-  await expect.poll(() => state.navigations).toBe(2);
+  const [, state] = await Promise.all([
+    page.waitForEvent(
+      'framenavigated',
+      frame =>
+        frame === page.mainFrame() && frame.url().includes('_chat_update=')
+    ),
+    openUpdates(page)
+  ]);
+  expect(state.navigations).toBe(2);
   await ready(page);
   expect(
     await page.evaluate(() => localStorage.getItem('chat_web_update_day'))
