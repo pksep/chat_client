@@ -164,6 +164,7 @@ import {
   getLatestReadOutgoingMessageIndex,
   shouldDisplayMessageAsRead
 } from '../../utils/messageReadStatus';
+import { getMessageDisplayStatus } from '../../utils/message-delivery-status';
 import {
   managerMessageChannel,
   type ManagerMessageChannel
@@ -1013,7 +1014,7 @@ const getBubbleProps = (message: IMessage, index: number) => ({
   ),
   isEdit: message.isEdit,
   isPin: isMessagePinned(message),
-  messageStatus: message.status,
+  messageStatus: getMessageDisplayStatus(message),
   messageEx: message.ex,
   authUserId: props.authUserId,
   topicId: message.topicId,

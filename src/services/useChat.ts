@@ -54,6 +54,7 @@ import {
 import {
   addMessageToLocal,
   changeLocalReadStatus,
+  changeLocalDeliveryStatus,
   changeReactionFromLocal,
   clearMessagesForTopic,
   deleteMessageFromLocal,
@@ -1084,6 +1085,27 @@ const setupChatListeners = (): void => {
     handleReadMessagePayload(payload);
   });
 
+  const handleDeliveryPayload = (payload: {
+    topicId: string;
+    userId: string;
+    deliveries: { messageId: string; createdAt: string }[];
+    ptsMeta?: PtsMeta;
+  }) => {
+    if (!shouldProcessPtsMeta(payload.ptsMeta)) return;
+    persistPtsMeta(payload.ptsMeta);
+    changeLocalDeliveryStatus(
+      payload.topicId,
+      payload.userId,
+      payload.deliveries
+    );
+  };
+  chatSDK.subscribeToEvent(
+    WebSocketEventType.MESSAGE_DELIVERED,
+    ({ payload }) => {
+      handleDeliveryPayload(payload);
+    }
+  );
+
   chatSDK.subscribeToEvent(
     WebSocketEventType.REACTION_UPDATED,
     ({ payload }) => {
@@ -1133,6 +1155,9 @@ const setupChatListeners = (): void => {
               ...(event.payload as any),
               ptsMeta
             });
+            break;
+          case 'message.delivered':
+            handleDeliveryPayload({ ...(event.payload as any), ptsMeta });
             break;
           case 'message.reaction':
             handleReactionPayload({

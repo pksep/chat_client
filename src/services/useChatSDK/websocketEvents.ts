@@ -71,6 +71,8 @@ export enum WebSocketEventType {
   CHANGE_TOPIC = 'changeTopic',
   CHANGE_MESSAGE = 'changeMessage',
   READ_MESSAGE = 'readMessage',
+  DELIVER_MESSAGE = 'deliverMessage',
+  MESSAGE_DELIVERED = 'messageDelivered',
   USER_UPDATED = 'userUpdated',
   TYPING_STATUS = 'typingStatus',
   TOGGLE_PRESENCE = 'togglePresence',
@@ -89,6 +91,16 @@ export enum WebSocketEventType {
 }
 
 export interface WebSocketEventPayloads {
+  [WebSocketEventType.DELIVER_MESSAGE]: {
+    topicId: string;
+    messageIds: string[];
+  };
+  [WebSocketEventType.MESSAGE_DELIVERED]: {
+    topicId: string;
+    userId: string;
+    deliveries: { messageId: string; createdAt: string }[];
+    ptsMeta?: PtsMeta;
+  };
   [WebSocketEventType.GET_CHAT_FOLDERS]: Record<string, never>;
   [WebSocketEventType.CREATE_CHAT_FOLDER]: CreateChatFolderPayload;
   [WebSocketEventType.UPDATE_CHAT_FOLDER]: SaveChatFolderPayload & {

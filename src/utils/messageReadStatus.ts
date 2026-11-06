@@ -1,5 +1,6 @@
 import type { IMessage } from '../components/interfaces/interfaces';
 import { MessageStatus } from '../services/useChatSDK/types';
+import { getMessageDisplayStatus } from './message-delivery-status';
 
 type IsOutgoingMessage = (message: IMessage) => boolean;
 
@@ -24,7 +25,9 @@ export const shouldDisplayMessageAsRead = (
   latestReadOutgoingMessageIndex: number,
   isOutgoingMessage: IsOutgoingMessage
 ): boolean =>
-  message.status === MessageStatus.Read ||
-  (message.status === MessageStatus.Delivery &&
-    isOutgoingMessage(message) &&
-    messageIndex < latestReadOutgoingMessageIndex);
+  message.deliveryState
+    ? getMessageDisplayStatus(message) === MessageStatus.Read
+    : message.status === MessageStatus.Read ||
+      (message.status === MessageStatus.Delivery &&
+        isOutgoingMessage(message) &&
+        messageIndex < latestReadOutgoingMessageIndex);
