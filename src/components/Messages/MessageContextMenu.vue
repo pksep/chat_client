@@ -88,59 +88,16 @@
               <Icon :name="IconNameEnum.arrowLeft" :width="20" :height="20" />
             </Button>
           </span>
-          <span>Просмотрено</span>
-
-          <Icon
-            :name="IconNameEnum.read"
-            :data-testid="`${dataTestid}-ReadIcon`"
-            color="var(--text-link)"
-            :width="20"
-            :height="20"
-          />
+          <span>Данные сообщения</span>
         </div>
 
-        <div
-          v-if="readDetails.length"
-          class="message-context-menu__details-list"
-        >
-          <div
-            v-for="reader in readDetails"
-            :key="reader.userId"
-            :class="[
-              'message-context-menu__details-item',
-              {
-                'message-context-menu__details-item--interactive':
-                  canOpenUserInfo(reader.user)
-              }
-            ]"
-            @click.stop="handleOpenReadDetailUser(reader.user)"
-          >
-            <CachedAvatar
-              class="message-context-menu__details-avatar"
-              :path="reader.avatarPath"
-              :initials="reader.avatarInitials"
-              :alt="reader.name"
-            />
-
-            <div class="message-context-menu__details-meta">
-              <div class="message-context-menu__details-name">
-                {{ reader.name }}
-              </div>
-              <div class="message-context-menu__details-time">
-                <span class="message-context-menu__details-date">
-                  {{ reader.readAtDateLabel }}
-                </span>
-                <span class="message-context-menu__details-time-value">
-                  {{ reader.readAtTimeLabel }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div v-else class="message-context-menu__details-empty">
-          Никто еще не просмотрел сообщение
-        </div>
+        <MessageReceiptList
+          v-if="currentMessage"
+          :message="currentMessage"
+          :topic="currentTopic"
+          :data-testid="`${props.dataTestid}-MessageBubble-ReceiptList`"
+          @select-user="handleOpenReadDetailUser"
+        />
       </div>
     </template>
 
@@ -319,54 +276,16 @@
           @mouseleave="handleLeaveReadDetails"
         >
           <div class="message-context-menu__details-title">
-            Просмотрено
-            <Icon
-              :name="IconNameEnum.read"
-              :data-testid="`${dataTestid}-ReadIcon`"
-              color="var(--text-link)"
-              :width="20"
-              :height="20"
-            />
+            Данные сообщения
           </div>
 
-          <div
-            v-if="readDetails.length"
-            class="message-context-menu__details-list"
-          >
-            <div
-              v-for="reader in readDetails"
-              :key="reader.userId"
-              :class="[
-                'message-context-menu__details-item',
-                {
-                  'message-context-menu__details-item--interactive':
-                    canOpenUserInfo(reader.user)
-                }
-              ]"
-              @click.stop="handleOpenReadDetailUser(reader.user)"
-            >
-              <CachedAvatar
-                class="message-context-menu__details-avatar"
-                :path="reader.avatarPath"
-                :initials="reader.avatarInitials"
-                :alt="reader.name"
-              />
-
-              <div class="message-context-menu__details-meta">
-                <div class="message-context-menu__details-name">
-                  {{ reader.name }}
-                </div>
-                <div class="message-context-menu__details-time">
-                  <span class="message-context-menu__details-date">
-                    {{ reader.readAtDateLabel }}
-                  </span>
-                  <span class="message-context-menu__details-time-value">
-                    {{ reader.readAtTimeLabel }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+          <MessageReceiptList
+            v-if="currentMessage"
+            :message="currentMessage"
+            :topic="currentTopic"
+            :data-testid="`${props.dataTestid}-MessageBubble-ReceiptList`"
+            @select-user="handleOpenReadDetailUser"
+          />
         </div>
 
         <Button
@@ -445,7 +364,7 @@ import { getVisibleViewport } from '../../utils/visible-viewport';
 import { getAndroidKeyboardInset } from '../../utils/android-keyboard-viewport';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import PinConfirmModal from '../UI/PinConfirmModal.vue';
-import CachedAvatar from '../UI/CachedAvatar.vue';
+import MessageReceiptList from './MessageReceiptList.vue';
 import ReplyIcon from '../UI/ReplyIcon.vue';
 import EditIcon from '../UI/EditIcon.vue';
 import { getMessageSticker } from '../../utils/stickers';
@@ -478,7 +397,6 @@ import { getAuthUser } from '../../composables/useAuth';
 import { closeActivePopover } from '../../composables/useContextMenu';
 import { getSelectedTopic } from '../../composables/useTopics';
 import { useResizeState } from '../../composables/useResizeState';
-import { getUserById } from '../../composables/useUsers';
 import {
   clearSelectedMessages,
   enterMessageSelection,
@@ -504,12 +422,12 @@ import {
 
 import type { ITopic } from '../interfaces/interfaces';
 import type { IMessageContextMenu } from './interface/interface';
-import { MessageStatus, TopicType } from '../../services/useChatSDK/types';
+import { MessageStatus } from '../../services/useChatSDK/types';
 
 const props = withDefaults(defineProps<IMessageContextMenu>(), {
   dataTestid: 'MessageContextMenu'
 });
-const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
+const { openUserInfo } = useUserInfoModal();
 
 const emits = defineEmits([
   'unmount-edit-message-id',
@@ -608,10 +526,6 @@ watch(
   },
   { immediate: true }
 );
-const isGroupTopic = computed(
-  () => currentTopic.value?.type === TopicType.Group
-);
-
 const currentMessage = computed(() =>
   messages.value.find(message => message.id === props.messageId)
 );
@@ -754,79 +668,9 @@ const canRetryMessage = computed(
 const canShowMessageDetails = computed(
   () =>
     !!props.isMeSender &&
-    isGroupTopic.value &&
     !isSelectionContextMenu.value &&
     !canRetryMessage.value &&
-    (currentMessage.value?.messageRead || []).some(
-      item =>
-        !!item.userId && item.userId !== currentMessage.value?.senderUserId
-    ) &&
     !!currentMessage.value
-);
-
-const formatReadDateTime = (
-  value?: string | Date | null
-): { dateLabel: string; timeLabel: string } => {
-  if (!value) {
-    return {
-      dateLabel: 'Время неизвестно',
-      timeLabel: ''
-    };
-  }
-
-  const date = value instanceof Date ? value : new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return {
-      dateLabel: 'Время неизвестно',
-      timeLabel: ''
-    };
-  }
-
-  return {
-    dateLabel: new Intl.DateTimeFormat('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    }).format(date),
-    timeLabel: new Intl.DateTimeFormat('ru-RU', {
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date)
-  };
-};
-
-const readDetails = computed(() =>
-  (currentMessage.value?.messageRead || [])
-    .filter(
-      item =>
-        !!item.userId && item.userId !== currentMessage.value?.senderUserId
-    )
-    .map(item => {
-      const user =
-        getUserById(item.userId) ||
-        currentTopic.value?.members?.find(
-          member => member.id === item.userId
-        ) ||
-        (currentTopic.value?.user?.id === item.userId
-          ? currentTopic.value.user
-          : undefined);
-      const name = user?.initials || user?.nickname || 'Пользователь';
-      const readAt = item.updatedAt || item.createdAt || null;
-      const formattedReadAt = formatReadDateTime(readAt);
-
-      return {
-        userId: item.userId,
-        user,
-        name,
-        readAtDateLabel: formattedReadAt.dateLabel,
-        readAtTimeLabel: formattedReadAt.timeLabel,
-        readAtMs: readAt ? new Date(readAt).getTime() : 0,
-        avatarPath: user?.avatarUrl || '',
-        avatarInitials: user?.initials || user?.nickname || name
-      };
-    })
-    .sort((left, right) => left.readAtMs - right.readAtMs)
 );
 
 const deleteModalTitle = computed(() =>

@@ -1,5 +1,6 @@
 import type { IMessage } from '../components/interfaces/interfaces';
 import { MessageStatus } from '../services/useChatSDK/types';
+import { mergeMessageDeliveryState } from './message-delivery-status';
 import {
   isSameMessage,
   isTemporaryMessage,
@@ -8,7 +9,7 @@ import {
 
 type MessageStatusSnapshot = MessageIdentity &
   Pick<IMessage, 'id'> &
-  Partial<Pick<IMessage, 'status'>>;
+  Partial<Pick<IMessage, 'status' | 'deliveryState' | 'messageRead'>>;
 type TopicLastMessage = Pick<IMessage, 'createdAt'> & MessageStatusSnapshot;
 
 export const resolveLastMessageStatus = (
@@ -39,7 +40,17 @@ const preserveConfirmedStatus = <T extends MessageStatusSnapshot>(
     !isTemporaryMessage(currentMessage)
       ? currentMessage
       : nextMessage;
-  return status === canonical.status ? canonical : { ...canonical, status };
+  const deliveryState = mergeMessageDeliveryState(
+    currentMessage?.deliveryState,
+    nextMessage.deliveryState
+  );
+  if (status === canonical.status && deliveryState === canonical.deliveryState)
+    return canonical;
+  return {
+    ...canonical,
+    status,
+    deliveryState
+  };
 };
 
 const getCreatedAtTimestamp = (message?: TopicLastMessage): number => {

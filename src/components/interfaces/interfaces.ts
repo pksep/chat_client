@@ -140,6 +140,17 @@ export interface IMessageRead {
   updatedAt?: string | Date;
 }
 
+export interface IMessageReceipt {
+  userId: string;
+  createdAt?: string | Date;
+}
+
+export interface IMessageDeliveryState {
+  recipientUserIds: string[];
+  delivered: IMessageReceipt[];
+  read: IMessageReceipt[];
+}
+
 export enum MessageStatusEnum {
   READ = 'READ',
   DELIVERED = 'DELIVERED',
@@ -186,6 +197,7 @@ export interface IGroupProfileProps {
 }
 
 export type IMessage = Message & {
+  deliveryState?: IMessageDeliveryState;
   senderUser?: IUser;
   media?: IMedia[];
   messageRead?: IMessageRead[];

@@ -412,23 +412,30 @@ const runChatBackgroundSyncFromPayload = async (payload, source) => {
     return { ok: false, retryable: false };
   }
 
-  const result = await self.chatBackgroundSync.runChatBackgroundSync({
-    reason: payload.reason || source || 'push',
-    topicId: payload.topicId || payload.tag || null,
-    pts: payload.pts || payload.toPts || null,
-    eventId: payload.eventId || null
-  });
+  const [result, delivery] = await Promise.all([
+    self.chatBackgroundSync.runChatBackgroundSync({
+      reason: payload.reason || source || 'push',
+      topicId: payload.topicId || payload.tag || null,
+      pts: payload.pts || payload.toPts || null,
+      eventId: payload.eventId || null
+    }),
+    self.chatBackgroundSync.flushPushDeliveries?.()
+  ]);
 
   if (result?.ok) {
     await closeDeletedMessageNotificationsFromEvents(
       result.snapshot?.events || []
     );
     await notifyChatBackgroundSyncUpdated(source);
-  } else if (result?.retryable) {
+  }
+  if (result?.retryable || delivery?.retryable) {
     await registerChatBackgroundSyncRetry();
   }
 
-  return result;
+  return {
+    ...result,
+    retryable: Boolean(result?.retryable || delivery?.retryable)
+  };
 };
 
 const showPayloadNotification = async payload => {
@@ -568,6 +575,21 @@ self.addEventListener('push', event => {
       const payload = normalizePayload(rawData);
       const topicId = payload.topicId || payload.tag || null;
 
+      // Подтверждаем получение push независимо от открытого окна и загрузки истории.
+      event.waitUntil(
+        Promise.resolve()
+          .then(() => self.chatBackgroundSync?.recordPushDelivery?.(payload))
+          .then(result => {
+            if (result?.retryable) return registerChatBackgroundSyncRetry();
+          })
+          .catch(error => {
+            console.warn(
+              '[ChatBackgroundSyncSW] Ошибка подтверждения доставки push',
+              error
+            );
+          })
+      );
+
       if (payload.action === 'CLEAR_CHAT_NOTIFICATIONS') {
         const stateAt =
           parsePushTimestamp(payload.stateAt) ||
@@ -619,7 +641,13 @@ self.addEventListener('sync', event => {
         reason: 'sync-retry'
       },
       'sync'
-    )
+    ).then(result => {
+      if (result?.retryable) {
+        throw new Error(
+          'Подтверждение доставки или синхронизация ожидает повторной попытки'
+        );
+      }
+    })
   );
 });
 

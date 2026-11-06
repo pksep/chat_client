@@ -74,6 +74,7 @@ import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { compareMessages, getMessageTimestamp } from '../utils/messageOrder';
 import { parseMessageEx } from '../utils/messageReplyQuote';
 import { mergeMessageSnapshots } from '../utils/merge-message-snapshots';
+import { mergeMessageReceipts } from '../utils/message-delivery-status';
 import {
   isMessageIdDeleted,
   pendingMessageTombstone
@@ -84,12 +85,28 @@ import { recordMessageDeletionTelemetry } from './message-deletion-telemetry';
 // Read может прийти до echo или загрузки истории. Сохраняем подтверждение
 // по серверному ID, чтобы последующий снимок не вернул WAIT/DELIVERED.
 const readReceiptsByMessage = new Map<string, Map<string, string>>();
+const deliveryReceiptsByMessage = new Map<string, Map<string, string>>();
 const readReceiptKey = (topicId: string, messageId: string): string =>
   JSON.stringify([authedUser.value?.id, topicId, messageId]);
 const applyKnownReadReceipts = (
   topicId: string,
   message: IMessage
 ): IMessage => {
+  const deliveries = deliveryReceiptsByMessage.get(
+    readReceiptKey(topicId, message.id)
+  );
+  if (message.deliveryState && deliveries?.size) {
+    message = {
+      ...message,
+      deliveryState: {
+        ...message.deliveryState,
+        delivered: mergeMessageReceipts(
+          message.deliveryState.delivered,
+          [...deliveries].map(([userId, createdAt]) => ({ userId, createdAt }))
+        )
+      }
+    };
+  }
   const receipts = readReceiptsByMessage.get(
     readReceiptKey(topicId, message.id)
   );
@@ -107,6 +124,13 @@ const applyKnownReadReceipts = (
     status: MessageStatus.Read,
     isRead: true,
     isReadByMe: receipts.has(authedUser.value?.id) || message.isReadByMe,
+    deliveryState: message.deliveryState && {
+      ...message.deliveryState,
+      read: mergeMessageReceipts(
+        message.deliveryState.read,
+        [...receipts].map(([userId, createdAt]) => ({ userId, createdAt }))
+      )
+    },
     messageRead
   };
 };
@@ -3369,6 +3393,12 @@ const applyLocalReadStatus = (
         status: MessageStatus.Read,
         isRead: true,
         isReadByMe: isReadByCurrentUser ? true : message.isReadByMe,
+        deliveryState: message.deliveryState && {
+          ...message.deliveryState,
+          read: mergeMessageReceipts(message.deliveryState.read, [
+            { userId, createdAt: readAt }
+          ])
+        },
         messageRead: isReadByCurrentUser
           ? message.messageRead
           : upsertMessageReadEntry(message.messageRead, {
@@ -3395,6 +3425,14 @@ const applyLocalReadStatus = (
   );
   const updatedMessages = fullReadUpdate.messages;
 
+  const lastMessage = getSelectedTopic(topicId)?.lastMessage;
+  if (lastMessage?.deliveryState && readMessageIds.has(lastMessage.id)) {
+    useTopics().updateLocalLastMessageTopic(
+      topicId,
+      applyKnownReadReceipts(topicId, lastMessage)
+    );
+  }
+
   updateLocalTopicReadStatus(topicId, messageIds);
   if (fullReadUpdate.didChange) {
     fullMessagesStore[topicId] = updatedMessages;
@@ -3414,6 +3452,42 @@ const applyLocalReadStatus = (
   if (!didSyncUnreadFromPreview) {
     syncTopicUnreadState(topicId);
   }
+};
+
+export const changeLocalDeliveryStatus = (
+  topicId: string,
+  userId: string,
+  deliveries: { messageId: string; createdAt: string }[]
+): void => {
+  deliveries.forEach(({ messageId, createdAt }) => {
+    const key = readReceiptKey(topicId, messageId);
+    const receipts =
+      deliveryReceiptsByMessage.get(key) || new Map<string, string>();
+    if (!receipts.has(userId)) receipts.set(userId, createdAt);
+    deliveryReceiptsByMessage.set(key, receipts);
+  });
+  while (deliveryReceiptsByMessage.size > 10_000)
+    deliveryReceiptsByMessage.delete(
+      deliveryReceiptsByMessage.keys().next().value!
+    );
+  const ids = new Set(deliveries.map(item => item.messageId));
+  const update = (messages: IMessage[]) =>
+    messages.map(message =>
+      ids.has(message.id) ? applyKnownReadReceipts(topicId, message) : message
+    );
+  if (fullMessagesStore[topicId])
+    fullMessagesStore[topicId] = update(fullMessagesStore[topicId]);
+  if (messagesStore[topicId])
+    messagesStore[topicId] = update(messagesStore[topicId]);
+  if (pinnedMessagesStore[topicId])
+    pinnedMessagesStore[topicId] = update(pinnedMessagesStore[topicId]);
+  const lastMessage = getSelectedTopic(topicId)?.lastMessage;
+  if (lastMessage && ids.has(lastMessage.id))
+    useTopics().updateLocalLastMessageTopic(
+      topicId,
+      applyKnownReadReceipts(topicId, lastMessage)
+    );
+  if (fullMessagesStore[topicId]) schedulePersistMessages(topicId);
 };
 
 export const flushDeferredLocalOwnReadStatus = (topicId: string): void => {
@@ -3507,7 +3581,7 @@ export const changeFileLoadingStatus = (
 export const changeMessageStatusLocally = (
   topicId: string,
   messageId: string,
-  status: MessageStatus
+  status: IMessage['status']
 ): void => {
   const currentMessage = getFullMessagesByTopicId(topicId).find(
     message => message.id === messageId

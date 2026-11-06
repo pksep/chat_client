@@ -78,6 +78,7 @@ export interface TopicSettingWithUser extends TopicSetting {
 }
 
 export enum MessageStatus {
+  Sent = 'SENT',
   Delivery = 'DELIVERED',
   Wait = 'WAIT',
   NotDelivered = 'NOT_DELIVERED',
