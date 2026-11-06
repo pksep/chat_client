@@ -1,3 +1,10 @@
+## [1.45.2](https://github.com/pksep/chat_client/compare/v1.45.1...v1.45.2) (2026-11-06)
+
+
+### Bug Fixes
+
+* record displayed errors and request diagnostics ([d81462c](https://github.com/pksep/chat_client/commit/d81462c8997c0bd67ef306c7dbd561843d16906a))
+
 ## [1.45.1](https://github.com/pksep/chat_client/compare/v1.45.0...v1.45.1) (2026-11-06)
 
 
