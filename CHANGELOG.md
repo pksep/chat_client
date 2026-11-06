@@ -1,3 +1,10 @@
+## [1.48.1](https://github.com/pksep/chat_client/compare/v1.48.0...v1.48.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* учитывать тёмную тему для эмодзи с цитатой ([f28a707](https://github.com/pksep/chat_client/commit/f28a70756a84d6d32149646b8b0e59d84a50319a))
+
 # [1.48.0](https://github.com/pksep/chat_client/compare/v1.47.0...v1.48.0) (2026-11-06)
 
 
