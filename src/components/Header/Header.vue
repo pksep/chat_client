@@ -856,7 +856,7 @@ const actionModalTitle = computed(() =>
         ? 'Удаление чата'
         : currentRouteGroup.value?.isAdmin
           ? 'Удаление канала'
-          : 'Выход из канала'
+          : 'Выход из группы'
 );
 
 const actionModalDescription = computed(() =>
@@ -870,7 +870,7 @@ const actionModalDescription = computed(() =>
         ? 'Вы уверены, что хотите удалить чат?'
         : currentRouteGroup.value?.isAdmin
           ? 'Вы уверены, что хотите удалить канал?'
-          : 'Вы уверены, что хотите покинуть канал?'
+          : 'Вы уверены, что хотите покинуть группу?'
 );
 const currentTypingUsers = computed(() =>
   route.value?.id ? getTopicTypingUsers(route.value.id) : []
@@ -1502,16 +1502,6 @@ const getHeaderContextMenuOptions = computed(() => {
       return options;
     }
 
-    if (route.value.type === RouteTypes.GROUP) {
-      options.push({
-        value: 'Информация',
-        function: () => {
-          void handleClickHeader();
-        },
-        iconName: IconNameEnum.info
-      });
-    }
-
     if (route.value.type === RouteTypes.DIALOGS && isBotDialogTopic.value) {
       options.push({
         value: 'Информация о боте',
@@ -1528,6 +1518,9 @@ const getHeaderContextMenuOptions = computed(() => {
         function: () => {
           toggleMuteTopic(currentTopic.value);
         },
+        style: currentTopic.value?.info?.isMute
+          ? undefined
+          : 'color: var(--error-color)',
         customIcon: currentTopic.value?.info?.isMute
           ? 'notificationOn'
           : 'notificationOff'
@@ -1549,7 +1542,7 @@ const getHeaderContextMenuOptions = computed(() => {
       options.push({
         value: currentRouteGroup.value?.isAdmin
           ? 'Удалить канал'
-          : 'Выйти из канала',
+          : 'Выйти из группы',
         function: handleOpenActionModal,
         style: 'color: var(--error-color)',
         iconName: currentRouteGroup.value?.isAdmin
