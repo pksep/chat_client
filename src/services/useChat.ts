@@ -16,6 +16,10 @@ import type { PtsMeta } from './useChatSDK/websocketEvents';
 import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { authedUser } from '../composables/useAuth';
+import {
+  clearTopicUploadStatuses,
+  setTopicUploadStatus
+} from '../composables/useTopicActivity';
 import { showErrorNotification } from '../composables/useNotifications';
 import {
   configureChatFolderSync,
@@ -1071,6 +1075,9 @@ const setupChatListeners = (): void => {
 
   chatSDK.subscribeToEvent(WebSocketEventType.TYPING_STATUS, ({ payload }) => {
     setTopicTypingState(payload.topicId, payload.userId, payload.isTyping);
+  });
+  chatSDK.subscribeToEvent(WebSocketEventType.UPLOAD_STATUS, ({ payload }) => {
+    setTopicUploadStatus(payload);
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_TOPIC, ({ payload }) => {
@@ -2544,6 +2551,7 @@ export const initializeChat = async (options: {
   cacheReady?: Promise<void>;
 }): Promise<void> => {
   const previousSDK = chatSDK;
+  clearTopicUploadStatuses();
   ptsSnapshotRefresh = null;
   ptsSnapshotRefreshNeeded = false;
   minimumReplayPts = 0;
