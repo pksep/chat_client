@@ -314,7 +314,7 @@
 }
 
 .message__article--emoji-referenced {
-  background-color: var(--message-background-color, var(--white));
+  background-color: var(--message-background-color, var(--surface-overlay));
   border-radius: 20px;
   padding: 10px 15px;
   gap: 8px;
