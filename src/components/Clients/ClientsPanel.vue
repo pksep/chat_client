@@ -33,6 +33,7 @@
       v-model="search"
       title="Клиенты"
       :show-create="false"
+      :show-filters="!isMobile"
       :class="{ 'mobile-list-container__toolbar': isMobile }"
       data-testid="Clients"
     >

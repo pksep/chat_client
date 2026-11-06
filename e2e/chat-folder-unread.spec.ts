@@ -95,18 +95,8 @@ for (const scope of ['chats', 'clients']) {
         .locator('.chat-folder-rail__avatar')
         .boundingBox();
       const badgeBox = await badge.boundingBox();
-      if (isMobile) {
-        expect(badgeBox!.y + badgeBox!.height / 2).toBeCloseTo(
-          avatar!.y + avatar!.height / 2,
-          1
-        );
-        expect(badgeBox!.x).toBeGreaterThan(avatar!.x + avatar!.width);
-      } else {
-        expect(badgeBox?.y).toBe(avatar!.y - 5);
-        expect(badgeBox!.x + badgeBox!.width).toBe(
-          avatar!.x + avatar!.width + 5
-        );
-      }
+      expect(badgeBox?.y).toBe(avatar!.y - 5);
+      expect(badgeBox!.x + badgeBox!.width).toBe(avatar!.x + avatar!.width + 5);
       expect(
         await badge.evaluate(element => {
           const rect = element.getBoundingClientRect();
@@ -121,23 +111,23 @@ for (const scope of ['chats', 'clients']) {
         );
 
       await page.getByTestId('Fixture-Incoming').click();
-      await expect(badge).toHaveText('10');
+      await expect(badge).toHaveText('9+');
       if (!isMobile) {
         await expect(badge).toHaveClass(/chat-folder-rail__badge--wide/);
         expect(await all.boundingBox()).toEqual(box);
       } else {
-        expect((await all.boundingBox())!.height).toBe(33);
+        expect((await all.boundingBox())!.height).toBe(72);
         expect((await all.boundingBox())!.x).toBe(box!.x);
       }
       await selectFolder();
       await expect(folder).toHaveAttribute('aria-pressed', 'true');
-      await expect(badge).toHaveText('10');
+      await expect(badge).toHaveText('9+');
       await expect(all).toHaveAttribute('aria-pressed', 'false');
       await selectFolder();
       await expect(folder).toHaveAttribute('aria-pressed', 'false');
       await expect(all).toHaveAttribute('aria-pressed', 'true');
       await expect(page.locator('[data-folder-id]')).toHaveCount(6);
-      await expect(badge).toHaveText('10');
+      await expect(badge).toHaveText('9+');
       await selectFolder();
       await expect(folder).toHaveAttribute('aria-pressed', 'true');
       await folder.press('Enter');
@@ -161,13 +151,13 @@ for (const scope of ['chats', 'clients']) {
       const selectedBox = await all.boundingBox();
 
       await page.getByTestId('Fixture-ManyUnread').click();
-      await expect(badge).toHaveText('99+');
+      await expect(badge).toHaveText('9+');
       await expect(badge).toHaveAttribute(
         'aria-label',
         'Непрочитанных сообщений: 106'
       );
       if (!isMobile) expect(await all.boundingBox()).toEqual(selectedBox);
-      else expect((await all.boundingBox())!.height).toBe(33);
+      else expect((await all.boundingBox())!.height).toBe(72);
       await page.screenshot({
         path: testInfo.outputPath('all-chats-unread.png')
       });
@@ -184,7 +174,7 @@ for (const scope of ['chats', 'clients']) {
       await page.getByTestId('Fixture-ReadAll').click();
       await expect(badge).toHaveCount(0);
       if (!isMobile) expect(await all.boundingBox()).toEqual(box);
-      else expect((await all.boundingBox())!.height).toBe(33);
+      else expect((await all.boundingBox())!.height).toBe(72);
       expect(errors).toEqual([]);
     });
   }

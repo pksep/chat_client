@@ -64,11 +64,11 @@ const refreshInquiries = (page: Page) =>
     await refreshManagerInquiries();
   });
 
-test('Мобильные папки заменяют фильтры и не наследуют скрытый фильтр desktop', async ({
+test('Мобильные папки находятся сверху, фильтры типов управляют списком', async ({
   page,
   isMobile
 }) => {
-  test.skip(!isMobile, 'Новая навигация только на мобильных экранах');
+  test.skip(!isMobile, 'Проверка мобильной навигации');
   await page.goto('/');
   const chats = page.locator('.mobile-list-container__section--chats');
   await expect(chats.locator('.chat-folder-rail--mobile')).toBeVisible({
@@ -109,19 +109,30 @@ test('Мобильные папки заменяют фильтры и не на
       }
     ]);
   });
-  await expect(chats.locator('.chats-toolbar__filters')).toHaveCount(0);
+  await expect(chats.locator('.chats-toolbar__filters')).toBeVisible();
   await expect(
     chats.getByRole('heading', { name: 'Личный тест', exact: true })
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(
     chats.getByRole('heading', { name: 'Групповой тест', exact: true })
   ).toBeVisible();
   await expect(
     chats.locator('.chat-folder-rail__items > button').first()
-  ).toHaveAttribute('data-testid', 'ChatFolders-Rail-Manage');
+  ).toHaveAttribute('data-testid', 'ChatFolders-Rail-All');
   const search = (await chats.locator('.chats-toolbar__search').boundingBox())!;
   const folders = (await chats.locator('.chat-folder-rail').boundingBox())!;
-  expect(folders.y - search.y - search.height).toBe(10);
+  expect(search.y - folders.y - folders.height).toBe(10);
+  const filters = chats.locator('.chats-toolbar__filters');
+  expect((await filters.boundingBox())!.y - search.y - search.height).toBe(10);
+  await filters.getByRole('button', { name: 'Чаты', exact: true }).tap();
+  await expect(
+    chats.getByRole('heading', { name: 'Личный тест', exact: true })
+  ).toBeVisible();
+  await expect(
+    chats.getByRole('heading', { name: 'Групповой тест', exact: true })
+  ).toHaveCount(0);
+  await filters.getByRole('button', { name: 'Все', exact: true }).tap();
+  await expect(chats.locator('.contact-list__li')).toHaveCount(2);
   await chats.getByTestId('ChatFolders-Rail-Manage').tap();
   await expect(chats.getByTestId('ChatFolders-Panel')).toBeVisible();
 });
@@ -226,6 +237,16 @@ for (const scope of ['chats', 'clients'] as const) {
         exact: true
       });
     await expect(visibleTopic(0)).toBeVisible();
+    const toolbar = section.locator('.chats-toolbar');
+    const heading = (await toolbar
+      .locator('.chats-toolbar__headline')
+      .boundingBox())!;
+    const folders = (await toolbar.locator('.chat-folder-rail').boundingBox())!;
+    const toolbarSearch = (await toolbar
+      .locator('.chats-toolbar__search')
+      .boundingBox())!;
+    const folderOffset = folders.y - heading.y - heading.height;
+    const searchOffset = toolbarSearch.y - heading.y - heading.height;
     for (const folder of ['work', 'empty']) {
       await section.getByTestId('ChatFolders-Rail-Manage').click();
       await expect(panel).toBeVisible();
@@ -233,6 +254,34 @@ for (const scope of ['chats', 'clients'] as const) {
       await expect(
         panel.getByTestId('ChatFolders-Rail-Manage')
       ).toHaveAttribute('aria-pressed', 'true');
+      const rail = await panel
+        .locator('.chat-folders-panel__rail')
+        .boundingBox();
+      const search = await panel
+        .getByTestId('ChatFolders-Search')
+        .boundingBox();
+      const list = await panel
+        .locator('.chat-folders-panel__list')
+        .boundingBox();
+      const panelHeading = (await panel
+        .locator('.chat-folders-panel__header')
+        .boundingBox())!;
+      const panelFolders = (await panel
+        .locator('.chat-folder-rail')
+        .boundingBox())!;
+      expect(rail).not.toBeNull();
+      expect(search).not.toBeNull();
+      expect(list).not.toBeNull();
+      expect(panelFolders.y - panelHeading.y - panelHeading.height).toBeCloseTo(
+        folderOffset,
+        0
+      );
+      expect(search!.y - panelHeading.y - panelHeading.height).toBeCloseTo(
+        searchOffset,
+        0
+      );
+      expect(search!.y - rail!.y - rail!.height).toBeCloseTo(10, 0);
+      expect(list!.y).toBeGreaterThanOrEqual(search!.y + search!.height);
       await page.screenshot({
         path: testInfo.outputPath(`${scope}-folder-navigation-${folder}.png`),
         animations: 'disabled'

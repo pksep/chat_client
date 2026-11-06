@@ -63,18 +63,19 @@
           <template v-else>
             <ChatsToolbar
               :model-value="toolbarState.search"
+              :filter="toolbarState.filter"
               :filter-counts="filterCounts"
               :filter-muted-only="filterMutedOnly"
               class="mobile-list-container__toolbar"
               :data-testid="`${props.dataTestid}-MobileList`"
               @update:model-value="setSearch"
+              @update:filter="setFilter"
               @create-chat="handleShowAccount(TopicType.DM)"
               @create-group="handleShowAccount(TopicType.Group)"
               @create-bot="handleShowBot"
             >
-              <template #folders>
+              <template v-if="!isShareSelectionActive" #folders>
                 <ChatFolderRail
-                  v-if="!isShareSelectionActive"
                   mobile
                   :loading="isChatFoldersLoading"
                   :folders="chatFolders"
@@ -261,7 +262,7 @@ import {
   searchMessages,
   type IMessageSearchResult
 } from '../../composables/useMessageSearch';
-import { isCallTopic } from '../../utils/call-topic';
+import { getTopicsByChatsToolbarFilter } from '../../utils/chats-toolbar-filter';
 import {
   getChatsToolbarFilterBadgeState,
   getChatsToolbarFilterCounts,
@@ -307,7 +308,7 @@ const {
   hasMoreTopics,
   loading: isTopicsLoading
 } = useTopics();
-const { state: toolbarState, setSearch } = useChatsToolbarState();
+const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, animateSectionChange, setActiveSection } = useChatMenu();
 const { allowed: managerAllowed } = useManagerInquiries();
 const mountedSections = reactive(new Set<ChatMenuSection>(['chats']));
@@ -384,16 +385,18 @@ const state = reactive({
   checkUsers: new Set<string | number>()
 });
 
-const isVisibleChatTopic = (topic?: ITopic | null): boolean => {
+const matchesToolbarFilter = (topic?: ITopic | null): boolean => {
   if (!topic) {
     return false;
   }
 
-  if (isCallTopic(topic)) {
-    return false;
-  }
-
-  return true;
+  return (
+    getTopicsByChatsToolbarFilter(
+      [topic],
+      toolbarState.filter,
+      authUserId.value
+    ).length > 0
+  );
 };
 
 const matchesActiveFolder = (topic?: ITopic | null): boolean =>
@@ -402,9 +405,11 @@ const matchesActiveFolder = (topic?: ITopic | null): boolean =>
 
 const contactList = computed(() => {
   const query = normalizeAtSearchQuery(toolbarState.search);
-  const filteredByFolder = allTopics.value.filter(
-    topic => isVisibleChatTopic(topic) && matchesActiveFolder(topic)
-  );
+  const filteredByFolder = getTopicsByChatsToolbarFilter(
+    allTopics.value,
+    toolbarState.filter,
+    authUserId.value
+  ).filter(matchesActiveFolder);
 
   if (!query) {
     return [...filteredByFolder];
@@ -423,7 +428,7 @@ const filteredMessageSearchResults = computed(() => {
       result.topic || allTopics.value.find(t => t.id === result.topicId);
 
     return (
-      isVisibleChatTopic(topic || null) && matchesActiveFolder(topic || null)
+      matchesToolbarFilter(topic || null) && matchesActiveFolder(topic || null)
     );
   });
 });

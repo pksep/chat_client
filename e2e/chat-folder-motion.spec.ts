@@ -33,7 +33,9 @@ for (const theme of ['light', 'dark']) {
       }));
       const firstBox = (await first.boundingBox())!;
       const background = await first.evaluate(
-        element => getComputedStyle(element).backgroundColor
+        element =>
+          getComputedStyle(element.closest('.chat-folder-rail') || element)
+            .backgroundColor
       );
       const targetBox = (await items.last().boundingBox())!;
       const allBox = await page
@@ -87,7 +89,7 @@ for (const theme of ['light', 'dark']) {
       const previewBox = (await preview.boundingBox())!;
       expect(previewBox.width).toBeCloseTo(firstBox.width, 1);
       expect(previewBox.height).toBeCloseTo(firstBox.height, 1);
-      if (horizontal) expect(previewBox.y).toBeCloseTo(targetBox.y + 20, 1);
+      if (horizontal) expect(previewBox.y).toBeCloseTo(firstBox.y, 1);
       else expect(previewBox.x).toBeCloseTo(firstBox.x, 1);
       await expect(preview).toHaveCSS('transition-duration', '0s');
       if (horizontal)
