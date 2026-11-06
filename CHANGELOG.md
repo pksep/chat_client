@@ -1,3 +1,10 @@
+# [1.47.0](https://github.com/pksep/chat_client/compare/v1.46.0...v1.47.0) (2026-11-06)
+
+
+### Features
+
+* **chat-553:** add header actions and attachment activity indicators ([727353d](https://github.com/pksep/chat_client/commit/727353de530a7ecce1a56c22e9007895877882b1))
+
 # [1.46.0](https://github.com/pksep/chat_client/compare/v1.45.2...v1.46.0) (2026-11-06)
 
 
