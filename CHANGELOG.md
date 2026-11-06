@@ -1,3 +1,10 @@
+# [1.46.0](https://github.com/pksep/chat_client/compare/v1.45.2...v1.46.0) (2026-11-06)
+
+
+### Features
+
+* **chat-552:** add delivery receipts and PWA push acknowledgements ([3cbf271](https://github.com/pksep/chat_client/commit/3cbf2719278eeda912e9709f2aad846f4c17605c))
+
 ## [1.45.2](https://github.com/pksep/chat_client/compare/v1.45.1...v1.45.2) (2026-11-06)
 
 
