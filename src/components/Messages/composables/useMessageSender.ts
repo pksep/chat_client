@@ -83,6 +83,8 @@ import {
   parseCallTopicDescription
 } from '../../../utils/call-topic';
 import { stageAiAttachments } from '../../../services/aiAttachments';
+import { startMessageUploadStatus } from '../../../services/message-upload-status';
+import { getMessageUploadKind } from '../../../utils/message-upload-activity';
 import { buildForwardMessageSendPlan } from '../../../utils/forward-message-send-plan';
 import { getUploadFileSizeError } from '../../../services/useChatSDK/multipart-upload';
 import { createStickerMessage } from '../../../utils/stickers';
@@ -1308,6 +1310,10 @@ export function useMessageSender(
     };
 
     const request = (async (): Promise<boolean> => {
+      const stopUploadStatus = startMessageUploadStatus(
+        topicId,
+        getMessageUploadKind(payload.file, payload.isMedia)
+      );
       recordTelemetryEvent({
         category: 'upload',
         name: 'upload.message_file.start',
@@ -1422,6 +1428,7 @@ export function useMessageSender(
         });
         return false;
       } finally {
+        stopUploadStatus();
         activeUploadRequests.delete(requestKey);
       }
     })();

@@ -82,7 +82,7 @@
         {{ topicPresenceText }}
       </div>
       <div
-        v-else-if="!props.showLastOnline && props.topic.typingUserIds?.length"
+        v-else-if="!props.showLastOnline && topicTypingLabel"
         :class="[
           'contact-list__description',
           'contact-list__description--typing',
@@ -230,7 +230,7 @@ import {
 } from '../../services/useCallState';
 import { getClientMessageById } from '../../services/useMessages';
 import { isFavoriteTopic } from '../../utils/favorite-topic';
-import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
+import { getTopicActivityLabel } from '../../composables/useTopicActivity';
 import {
   getTopicUnreadBadgeCount,
   hasTopicUnreadIndicator
@@ -362,7 +362,7 @@ const showMessageStatus = computed(
     !hasExternalMessageChannel(props.topic.lastMessage?.ex)
 );
 const topicTypingLabel = computed(() =>
-  getTypingIndicatorLabel(props.topic.type, getTopicTypingUsers(props.topic.id))
+  getTopicActivityLabel(props.topic, getTopicTypingUsers(props.topic.id))
 );
 const unreadReactionMessageId = computed(
   () =>
