@@ -1,3 +1,10 @@
+## [1.45.1](https://github.com/pksep/chat_client/compare/v1.45.0...v1.45.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* restore mobile folders ([3308554](https://github.com/pksep/chat_client/commit/3308554beb9315f994004d63bf84c17853f27655))
+
 # [1.45.0](https://github.com/pksep/chat_client/compare/v1.44.0...v1.45.0) (2026-11-05)
 
 
