@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openFixture } from './fixtures/topic-performance-page';
+import webUpdateInfo from '../public/web-update.json' with { type: 'json' };
+
+const webVersion = webUpdateInfo.version;
 
 test.setTimeout(90_000);
 
@@ -427,18 +430,19 @@ test('автопроверка обновления молчит в скрыто
         () => (window as any).networkUpdates.updates.showUpdateBanner.value
       )
     )
-    .toBe(true);
+    .toBe(false);
   await page.evaluate(() =>
     (window as any).networkUpdates.updates.checkForUpdates()
   );
   expect(requests).toBe(3);
 });
 
-test('кнопка веб-обновления перезагружает страницу без загрузки чанка звонков', async ({
+test('ежедневное веб-обновление перезагружает страницу без загрузки чанка звонков', async ({
   page
 }) => {
+  await page.clock.install({ time: new Date('2026-11-06T10:00:00Z') });
   await openFixture(page);
-  let version = 1;
+  let version = webVersion;
   let blockedLiveKitRequests = 0;
   await page.route('**/web-update.json*', route =>
     route.fulfill({ json: { version } })
@@ -456,23 +460,13 @@ test('кнопка веб-обновления перезагружает стр
     )
     .toBe(true);
 
-  version = 2;
-  await page.evaluate(() =>
-    (window as any).networkUpdates.updates.checkForUpdates()
-  );
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () => (window as any).networkUpdates.updates.showUpdateBanner.value
-      )
-    )
-    .toBe(true);
-
+  version = webVersion + 1;
+  await page.clock.setSystemTime(new Date('2026-11-07T10:00:00Z'));
   await Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-    page.evaluate(() => {
-      void (window as any).networkUpdates.updates.handleUpdateClick();
-    })
+    page.evaluate(() =>
+      (window as any).networkUpdates.updates.checkForUpdates()
+    )
   ]);
 
   expect(page.url()).toContain('/__topic-performance');

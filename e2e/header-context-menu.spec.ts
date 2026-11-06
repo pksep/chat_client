@@ -157,17 +157,41 @@ test('Клиентское обращение показывает только 
 
 test('Без папок остаются закрепление, уведомления и удаление', async ({
   page
-}) => {
+}, testInfo) => {
   const state = await fixture(page, 'group', true);
   await openMenu(page);
   await expect(page.getByTestId(`${menuId}-AddToFolder`)).toHaveCount(0);
   await expect(page.getByTestId(`${menuId}-Pin`)).toBeVisible();
   await expect(
-    menu(page).getByRole('button', { name: 'Выйти из канала' })
+    menu(page).getByRole('button', { name: 'Выйти из группы' })
   ).toBeVisible();
-  await menu(page).getByRole('button', { name: 'Выкл. уведомления' }).click();
+  await expect(
+    menu(page).getByRole('button', { name: 'Информация', exact: true })
+  ).toHaveCount(0);
+  const mute = menu(page).getByRole('button', { name: 'Выкл. уведомления' });
+  const destructiveColor = await menu(page)
+    .getByRole('button', { name: 'Выйти из группы' })
+    .evaluate(button => getComputedStyle(button).color);
+  await expect(mute).toHaveCSS('color', destructiveColor);
+  await expect(mute.locator('svg')).toHaveCSS('color', destructiveColor);
+  await menu(page).screenshot({
+    path: testInfo.outputPath('header-disable-notifications.png')
+  });
+  await mute.click();
   await expect(page.getByTestId('Fixture-MuteState')).toHaveText('true');
   await expect(menu(page)).toHaveCount(0);
+  await openMenu(page);
+  const unmute = menu(page).getByRole('button', { name: 'Вкл. уведомления' });
+  const regularColor = await page
+    .getByTestId(`${menuId}-Pin`)
+    .evaluate(button => getComputedStyle(button).color);
+  await expect(unmute).toHaveCSS('color', regularColor);
+  await expect(unmute.locator('svg')).toHaveCSS('color', regularColor);
+  await menu(page).screenshot({
+    path: testInfo.outputPath('header-enable-notifications.png')
+  });
+  await unmute.click();
+  await expect(page.getByTestId('Fixture-MuteState')).toHaveText('false');
   expect(state.errors).toEqual([]);
 });
 

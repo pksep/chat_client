@@ -59,36 +59,16 @@ async function openMenu(
   });
 }
 
-test('Обновление доступно в меню без выбранного топика и применяется по нажатию', async ({
+test('Новая веб-версия не показывает кнопку ручного обновления', async ({
   page
 }) => {
   await openMenu(page, 1);
-  const button = page.locator('.menu-update-button:visible');
-  await expect(button).toBeVisible();
-  await expect(button).toHaveAccessibleName('Обновить чат');
-  await expect(button).toBeEnabled();
+  await expect(page.locator('.menu-update-button')).toHaveCount(0);
   const navigation = page.locator('.menu-bottom-nav:visible');
   const navBefore = (await navigation.boundingBox())!;
-  const buttonBox = (await button.boundingBox())!;
-  expect(buttonBox.y + buttonBox.height).toBeLessThanOrEqual(navBefore.y);
-  expect(buttonBox.height).toBe(40);
   expect(navBefore.y + navBefore.height).toBeGreaterThan(
     page.viewportSize()!.height - 30
   );
-
-  await Promise.all([
-    page.waitForEvent('framenavigated', frame => frame === page.mainFrame()),
-    button.click()
-  ]);
-  await expect(navigation).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('.menu-update-button')).toHaveCount(0);
-  expect(
-    await page.evaluate(() =>
-      localStorage.getItem('chat_web_seen_update_version')
-    )
-  ).toBe('2');
-  const navAfter = (await navigation.boundingBox())!;
-  expect(navAfter.y).toBe(navBefore.y);
 });
 
 test('При актуальной версии кнопка обновления не занимает место в меню', async ({
@@ -102,25 +82,14 @@ test('При актуальной версии кнопка обновления
 });
 
 for (const seenVersion of [79, 79.4]) {
-  test(`Дробное обновление ${seenVersion} → 79.5 применяется и сохраняется целиком`, async ({
+  test(`Дробное обновление ${seenVersion} → 79.5 не показывает веб-кнопку`, async ({
     page
   }) => {
     await openMenu(page, seenVersion, '79.5');
-    const button = page.locator('.menu-update-button:visible');
-    await expect(button).toBeVisible();
-    await Promise.all([
-      page.waitForEvent('framenavigated', frame => frame === page.mainFrame()),
-      button.click()
-    ]);
     await expect(page.locator('.menu-bottom-nav:visible')).toBeVisible({
       timeout: 30_000
     });
     await expect(page.locator('.menu-update-button')).toHaveCount(0);
-    expect(
-      await page.evaluate(() =>
-        localStorage.getItem('chat_web_seen_update_version')
-      )
-    ).toBe('79.5');
   });
 }
 
@@ -133,17 +102,14 @@ test('Актуальная дробная версия не предлагает
   await expect(page.locator('.menu-update-button')).toHaveCount(0);
 });
 
-test('В свернутом меню доступна кнопка обновления с понятным названием', async ({
+test('В свернутом веб-меню нет кнопки ручного обновления', async ({
   page,
   isMobile
 }) => {
   test.skip(isMobile, 'Сворачивание меню доступно на desktop');
   await openMenu(page, 1);
-  await expect(page.locator('.menu-update-button:visible')).toBeVisible();
+  await expect(page.locator('.menu-update-button')).toHaveCount(0);
   await page.locator('[data-testid$="Menu-ChatsToolbar-CollapseIcon"]').click();
   await expect(page.locator('.menu--collapse')).toBeVisible();
-  const button = page.locator('.menu-update-button:visible');
-  await expect(button).toBeVisible();
-  await expect(button).toHaveAccessibleName('Обновить чат');
-  await expect(button.locator('svg')).toBeVisible();
+  await expect(page.locator('.menu-update-button')).toHaveCount(0);
 });

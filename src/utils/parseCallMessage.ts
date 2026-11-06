@@ -5,6 +5,7 @@ export interface ParsedCallMessage {
   title: string;
   duration: string | null;
   isOutgoing: boolean;
+  noAnswer: boolean;
 }
 
 interface CallMessageOptions {
@@ -77,7 +78,12 @@ export const parseCallMessage = (
       parsedEx.call.wasAnswered === false;
 
     if (parsedEx.call.event === 'end') {
-      const kind = isMissed ? 'missed' : isOutgoing ? 'outgoing' : 'incoming';
+      const kind =
+        isMissed && !isOutgoing
+          ? 'missed'
+          : isOutgoing
+            ? 'outgoing'
+            : 'incoming';
 
       return {
         kind,
@@ -91,7 +97,8 @@ export const parseCallMessage = (
           !isMissed && typeof parsedEx.call.durationSec === 'number'
             ? formatDuration(parsedEx.call.durationSec)
             : null,
-        isOutgoing
+        isOutgoing,
+        noAnswer: isMissed && isOutgoing
       };
     }
 
@@ -101,7 +108,8 @@ export const parseCallMessage = (
       kind,
       title: kind === 'outgoing' ? 'Исходящий' : 'Входящий',
       duration: null,
-      isOutgoing
+      isOutgoing,
+      noAnswer: false
     };
   }
 

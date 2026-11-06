@@ -11,6 +11,7 @@ import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
 // import basicSsl from '@vitejs/plugin-basic-ssl';
 import { version } from './package.json';
+import { version as webUpdateVersion } from './public/web-update.json';
 import { externalizeUiKitPdfWorker } from './scripts/externalize-ui-kit-pdf-worker';
 import { preloadStartupModules } from './scripts/preload-startup-modules';
 import { inlineStartupTheme } from './scripts/inline-startup-theme';
@@ -361,7 +362,8 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
     define: {
       __APP_VERSION__: JSON.stringify(
         process.env.npm_package_version || version
-      )
+      ),
+      __WEB_UPDATE_VERSION__: JSON.stringify(webUpdateVersion)
     },
     server: {
       host: '0.0.0.0',

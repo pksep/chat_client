@@ -1,6 +1,7 @@
 import { refreshChatAccess } from '../../composables/useChatAccess';
 import { watchIosUpload } from '../../utils/ios-upload-watchdog';
 import { observeUploadRequest } from '../upload-request-telemetry';
+import { deferWebUpdateReload } from '../web-update-activity';
 import { bindIncomingChatEvents } from './incoming-events';
 import { createMessageDeliveryQueue } from '../message-delivery-queue';
 import { createSocketReconnectScheduler } from '../socket-reconnect';
@@ -1890,6 +1891,7 @@ export class ChatSDK {
     };
     reportUploadProgress(0);
     let currentUploadStep = 'start';
+    const releaseWebUpdateReload = deferWebUpdateReload();
 
     try {
       const videoCoverObjectNamePromise =
@@ -2067,6 +2069,7 @@ export class ChatSDK {
       });
       throw error;
     } finally {
+      releaseWebUpdateReload();
       telemetry?.signal?.removeEventListener('abort', abortFromCaller);
 
       if (

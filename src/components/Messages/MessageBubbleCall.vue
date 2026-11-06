@@ -42,6 +42,13 @@
           >
             {{ callMessage.duration }}
           </div>
+          <div
+            v-if="callMessage.noAnswer"
+            class="message-call__duration message-call__no-answer"
+            :data-testid="`${props.dataTestid}-CallNoAnswer`"
+          >
+            Нет ответа
+          </div>
         </div>
         <div class="message-call__meta">
           <span :data-testid="`${props.dataTestid}-TimeText`">{{

@@ -1,5 +1,6 @@
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
+import { isTauri } from '@tauri-apps/api/core';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { MobilePlatformEnum } from '../components/interfaces/interfaces';
 import { afterStartupPaint } from '../utils/after-startup-paint';
@@ -15,6 +16,15 @@ import {
   type RuStoreInstallState
 } from '../services/useRuStoreUpdate';
 import { markLiveKitPageReloadIntent } from '../services/live-kit-page-reload-intent';
+import { createDailyWebUpdate } from '../services/daily-web-update';
+import { hasActiveWebUpdateOperations } from '../services/web-update-activity';
+import {
+  activeCallTopicId,
+  isAnyCallDialing,
+  isAnyCallIncoming,
+  isAnyCallModalVisible,
+  isCallActive
+} from '../services/useCallState';
 import {
   createTelemetryTraceId,
   flushTelemetryEvents,
@@ -62,6 +72,39 @@ let updateWatchdog: ReturnType<typeof setTimeout> | null = null;
 let lastUpdateProgressBucket = -1;
 let lastTelemetryInstallStatus = -1;
 let lastDownloadedBytes = 0;
+
+const isAutomaticWebUpdate = () => !Capacitor.isNativePlatform() && !isTauri();
+const dailyWebUpdate = createDailyWebUpdate({
+  runningVersion: __WEB_UPDATE_VERSION__,
+  canReload: () =>
+    isAutomaticWebUpdate() &&
+    activeConsumers > 0 &&
+    navigator.onLine &&
+    document.visibilityState === 'visible' &&
+    !isCallActive.value &&
+    !isAnyCallDialing.value &&
+    !isAnyCallIncoming.value &&
+    !isAnyCallModalVisible.value &&
+    !activeCallTopicId.value &&
+    !hasActiveWebUpdateOperations() &&
+    !(
+      document.activeElement?.matches(
+        'input, textarea, [contenteditable="true"]'
+      ) &&
+      ((document.activeElement as HTMLInputElement).value ||
+        document.activeElement.textContent?.trim())
+    ),
+  onReload: version => {
+    recordTelemetryEvent({
+      category: 'app',
+      name: 'app.update.web.auto_reload',
+      entityType: 'app_update',
+      payload: { runningVersion: __WEB_UPDATE_VERSION__, nextVersion: version }
+    });
+    void flushTelemetryEvents();
+    markLiveKitPageReloadIntent();
+  }
+});
 
 const recordUpdateTelemetry = (
   name: string,
@@ -293,21 +336,32 @@ export function useMobileApp() {
   };
 
   const fetchWebUpdateVersion = async (): Promise<number | null> => {
-    const response = await fetch(WEB_UPDATE_INFO_URL, { cache: 'no-cache' });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const response = await fetch(WEB_UPDATE_INFO_URL, {
+        cache: 'no-store',
+        signal: controller.signal
+      });
 
-    if (!response.ok) {
-      return null;
+      if (!response.ok) {
+        return null;
+      }
+
+      const payload = (await response.json()) as {
+        version?: number | string;
+      };
+      const parsedVersion = Number(String(payload.version ?? ''));
+
+      return Number.isFinite(parsedVersion) && parsedVersion > 0
+        ? parsedVersion
+        : null;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const payload = (await response.json()) as {
-      version?: number | string;
-    };
-    const parsedVersion = Number.parseFloat(String(payload.version ?? ''));
-
-    return Number.isFinite(parsedVersion) ? parsedVersion : null;
   };
 
-  const applyWebUpdateVersion = (nextVersion: number | null) => {
+  const applyWebUpdateVersion = async (nextVersion: number | null) => {
     if (Capacitor.isNativePlatform()) {
       isWebUpdateBanner.value = false;
       return;
@@ -318,6 +372,13 @@ export function useMobileApp() {
     }
 
     latestWebUpdateVersion.value = nextVersion;
+
+    if (isAutomaticWebUpdate()) {
+      isWebUpdateBanner.value = false;
+      showUpdateBanner.value = false;
+      await dailyWebUpdate.apply(nextVersion!);
+      return;
+    }
 
     const storedVersion = Number.parseFloat(
       localStorage.getItem(WEB_UPDATE_VERSION_STORAGE_KEY) || ''
@@ -350,9 +411,12 @@ export function useMobileApp() {
     pendingWebUpdate = (async () => {
       try {
         const nextVersion = await fetchWebUpdateVersion();
-        applyWebUpdateVersion(nextVersion);
+        await applyWebUpdateVersion(nextVersion);
       } catch (error) {
-        console.warn('Failed to check web update version:', error);
+        console.warn(
+          'Не удалось проверить или применить обновление веб-чата:',
+          error
+        );
       }
     })().finally(() => {
       pendingWebUpdate = null;
@@ -366,19 +430,28 @@ export function useMobileApp() {
       return;
     }
 
+    if (isAutomaticWebUpdate()) dailyWebUpdate.cleanReloadUrl();
     await checkWebUpdate();
 
     if (activeConsumers === 0 || generation !== webUpdateGeneration) return;
 
     if (!removeWebUpdateListeners) {
       const checkWhenActive = () => {
-        void checkWebUpdate();
+        if (document.visibilityState === 'visible') {
+          void checkWebUpdate(
+            isAutomaticWebUpdate() && dailyWebUpdate.hasDayChanged()
+          );
+        }
       };
       document.addEventListener('visibilitychange', checkWhenActive);
       window.addEventListener('online', checkWhenActive);
+      window.addEventListener('focus', checkWhenActive);
+      window.addEventListener('pageshow', checkWhenActive);
       removeWebUpdateListeners = () => {
         document.removeEventListener('visibilitychange', checkWhenActive);
         window.removeEventListener('online', checkWhenActive);
+        window.removeEventListener('focus', checkWhenActive);
+        window.removeEventListener('pageshow', checkWhenActive);
       };
     }
 
