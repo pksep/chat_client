@@ -9,6 +9,8 @@ import {
 import { getChatSDK, sendMessageChat, waitForChatSDK } from './useChat';
 import { useChatApi } from './useApi';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
+import { addMessageToLocal } from './useMessages';
+import type { IMessage } from '../components/interfaces/interfaces';
 
 export type CallSummaryStatus =
   | 'STARTING'
@@ -807,52 +809,76 @@ export const sendCallSummaryPromptToChat = async (
   });
 };
 
-export const sendGeneratedCallSummaryBriefToChat = async (
+const sendGeneratedCallMaterialToChat = async (
   summary: CallSummaryDto,
-  targetTopicId: string
+  targetTopicId: string,
+  kind: 'brief' | 'actions' | 'prompt',
+  prompt?: string
 ): Promise<boolean> => {
-  if (!summary.id || !targetTopicId) {
+  if (!summary.id || !targetTopicId || (kind === 'prompt' && !prompt?.trim())) {
     return false;
   }
 
   try {
     const api = useChatApi();
     const response = await api.post(
-      `/calls/summaries/${encodeURIComponent(summary.id)}/brief/send`,
-      { targetTopicId },
+      `/calls/summaries/${encodeURIComponent(summary.id)}/${kind}/send`,
+      { targetTopicId, ...(kind === 'prompt' ? { prompt } : {}) },
       { parsed: false }
     );
-    await readResponse<{ text?: string; message?: unknown }>(response);
+    const payload = await readResponse<{
+      message?: IMessage;
+      errorMessage?: string;
+    }>(response);
+    if (payload?.message?.topicId === targetTopicId) {
+      addMessageToLocal(targetTopicId, payload.message);
+    }
+    if (payload?.errorMessage) {
+      showErrorNotification(payload.errorMessage);
+      return false;
+    }
     return true;
-  } catch (error) {
-    showErrorNotification(error);
+  } catch {
+    const text =
+      'Не удалось получить ответ по звонку. Проверьте соединение и повторите запрос.';
+    const createdAt = new Date();
+    addMessageToLocal(targetTopicId, {
+      id: `call-material-error-${crypto.randomUUID()}`,
+      topicId: targetTopicId,
+      text,
+      status: 'READ',
+      replyMessageId: null,
+      deletedAt: null,
+      isEdit: false,
+      isPin: false,
+      isSystem: true,
+      ex: JSON.stringify({ type: 'call-summary-material-error' }),
+      senderUserId: authedUser.value?.id,
+      senderUser: authedUser.value,
+      createdAt,
+      updatedAt: createdAt,
+      media: [],
+      reactions: [],
+      messageRead: [],
+      isReadByMe: true
+    });
+    showErrorNotification(text);
     return false;
   }
 };
+
+export const sendGeneratedCallSummaryBriefToChat = async (
+  summary: CallSummaryDto,
+  targetTopicId: string
+): Promise<boolean> =>
+  sendGeneratedCallMaterialToChat(summary, targetTopicId, 'brief');
 
 export const sendGeneratedCallPromptResponseToChat = async (
   summary: CallSummaryDto,
   targetTopicId: string,
   prompt: string
-): Promise<boolean> => {
-  if (!summary.id || !targetTopicId || !prompt.trim()) {
-    return false;
-  }
-
-  try {
-    const api = useChatApi();
-    const response = await api.post(
-      `/calls/summaries/${encodeURIComponent(summary.id)}/prompt/send`,
-      { targetTopicId, prompt },
-      { parsed: false }
-    );
-    await readResponse<{ text?: string; message?: unknown }>(response);
-    return true;
-  } catch (error) {
-    showErrorNotification(error);
-    return false;
-  }
-};
+): Promise<boolean> =>
+  sendGeneratedCallMaterialToChat(summary, targetTopicId, 'prompt', prompt);
 
 export const sendCallTopicPromptPlaceholderToChat = async (
   targetTopicId: string,
@@ -920,25 +946,8 @@ export const sendCallActionListToChat = async (
 export const sendGeneratedCallActionListToChat = async (
   summary: CallSummaryDto,
   targetTopicId: string
-): Promise<boolean> => {
-  if (!summary.id || !targetTopicId) {
-    return false;
-  }
-
-  try {
-    const api = useChatApi();
-    const response = await api.post(
-      `/calls/summaries/${encodeURIComponent(summary.id)}/actions/send`,
-      { targetTopicId },
-      { parsed: false }
-    );
-    await readResponse<{ text?: string; message?: unknown }>(response);
-    return true;
-  } catch (error) {
-    showErrorNotification(error);
-    return false;
-  }
-};
+): Promise<boolean> =>
+  sendGeneratedCallMaterialToChat(summary, targetTopicId, 'actions');
 
 export const sendCallActionListNotFoundToChat = async (
   targetTopicId: string
