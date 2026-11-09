@@ -1,3 +1,11 @@
+## [1.48.2](https://github.com/pksep/chat_client/compare/v1.48.1...v1.48.2) (2026-11-09)
+
+
+### Bug Fixes
+
+* restore call topic actions and bump web version to 97 ([aeb87bb](https://github.com/pksep/chat_client/commit/aeb87bb8fb66de1c9c1392b12352fb1ccb12b482))
+* smooth message navigation and stabilize context menus ([518fc03](https://github.com/pksep/chat_client/commit/518fc0385b9f372e836b722f699e4896c141b974))
+
 ## [1.48.1](https://github.com/pksep/chat_client/compare/v1.48.0...v1.48.1) (2026-11-06)
 
 
