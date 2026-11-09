@@ -160,9 +160,10 @@
         </template>
         <template #after>
           <CallTopicActions
-            v-if="activeTopic && shouldShowInlineCallTopicActions"
+            v-if="shouldShowInlineCallTopicActions"
             class="call-topic-actions--message-inline"
             :topic="activeTopic"
+            :topic-id="route.id"
             :room-id="callTopicRoomId"
             :data-testid="`${props.dataTestid}-CallTopicActionsInline`"
           />
@@ -347,10 +348,10 @@
     v-if="
       !shouldRenderUserMessageSkeleton &&
       !isSelectionMode &&
-      activeTopic &&
       shouldShowDockedCallTopicActions
     "
     :topic="activeTopic"
+    :topic-id="route.id"
     :room-id="callTopicRoomId"
     :data-testid="`${props.dataTestid}-CallTopicActions`"
   />
