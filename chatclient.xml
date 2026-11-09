@@ -5,10 +5,10 @@
     <cycles t="I">1</cycles>
     <deleted t="I">8</deleted>
     <inserted t="I">8</inserted>
-    <seconds t="F">260.190114117</seconds>
+    <seconds t="F">253.118113425</seconds>
     <version t="S">0.60.0</version>
     <what t="S">judges-summary</what>
-    <when t="T">2026-11-09T03:02:41Z</when>
+    <when t="T">2026-11-09T12:09:58Z</when>
   </f>
   <f>
     <_id t="I">1</_id>
@@ -28156,19 +28156,6 @@ The average monthly turnover (1.0 developers) is increasing (R=0.74).</text>
     <who t="I">41898282</who>
   </f>
   <f>
-    <_id t="I">1474</_id>
-    <_job t="I">42513197173</_job>
-    <_time t="T">2026-11-08T19:06:34Z</_time>
-    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
-    <earliest_issue_was_found t="I">1</earliest_issue_was_found>
-    <events_were_scanned t="I">26564173090</events_were_scanned>
-    <latest_issue_was_found t="I">72</latest_issue_was_found>
-    <min_pull_was_found t="I">484</min_pull_was_found>
-    <repository t="I">1053332035</repository>
-    <what t="S">iterate</what>
-    <where t="S">github</where>
-  </f>
-  <f>
     <_id t="I">1475</_id>
     <_job t="I">42533543942</_job>
     <_time t="T">2026-11-08T23:08:01Z</_time>
@@ -28198,5 +28185,18 @@ The average number of releases per month (5.9) is decreasing (R=-0.63).
 The average monthly turnover (1.0 developers) is increasing (R=0.68).</text>
     <what t="S">assessment</what>
     <when t="T">2026-11-08T23:13:02Z</when>
+  </f>
+  <f>
+    <_id t="I">1477</_id>
+    <_job t="I">42613955769</_job>
+    <_time t="T">2026-11-09T12:05:50Z</_time>
+    <_version t="S">0.19.6/0.60.0/0.17.11</_version>
+    <earliest_issue_was_found t="I">1</earliest_issue_was_found>
+    <events_were_scanned t="I">26635343827</events_were_scanned>
+    <latest_issue_was_found t="I">72</latest_issue_was_found>
+    <min_pull_was_found t="I">484</min_pull_was_found>
+    <repository t="I">1053332035</repository>
+    <what t="S">iterate</what>
+    <where t="S">github</where>
   </f>
 </fb>
