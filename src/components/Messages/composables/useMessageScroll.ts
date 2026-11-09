@@ -1597,7 +1597,13 @@ export function useMessageScroll(
 
   let scrollStateRevision = 0;
 
-  const handleScrollToButton = async (isCurrentNavigation = () => true) => {
+  const handleScrollToButton = async (
+    isCurrentNavigation = () => true,
+    options: {
+      smooth?: boolean;
+      waitForTransition?: () => Promise<void>;
+    } = {}
+  ) => {
     const topicId = route.value.id;
     if (!topicId) return;
     resetScrollState();
@@ -1606,7 +1612,7 @@ export function useMessageScroll(
       route.value.id === topicId &&
       revision === scrollStateRevision &&
       isCurrentNavigation();
-    scrollAnchor.setViewportMode('live', { pin: false });
+    scrollAnchor.prepareJumpMutation();
     isShowScrollToBottomButton.value = false;
     hasOldMessage = true;
     hasNewMessage = true;
@@ -1616,34 +1622,7 @@ export function useMessageScroll(
       if (!isCurrentTopic()) return;
     }
 
-    const bufferedIncomingMessages =
-      consumeBufferedIncomingMessagesForTopic(topicId);
-
-    if (bufferedIncomingMessages.length > 0) {
-      mergeMessagesForTopic(topicId, bufferedIncomingMessages, 'append', {
-        syncLastMessage: false
-      });
-    }
-
-    const localLatestMessages = getFullMessagesByTopicId(topicId).slice(-50);
-
-    if (localLatestMessages.length > 0) {
-      scrollAnchor.prepareJumpMutation();
-      mergeMessagesForTopic(topicId, localLatestMessages, 'replace', {
-        syncLastMessage: false,
-        windowMode: 'latest',
-        visibleMessages: localLatestMessages
-      });
-    }
-
-    await nextTick();
-    if (!isCurrentTopic()) return;
-    await scrollAnchor.scrollToBottomSmooth(isCurrentTopic);
-    if (!isCurrentTopic()) return;
-    schedulePersistScrollMeta();
-    markAllVisibleAsRead();
-
-    const latestMessages = await fetchMessagesForTopic(topicId, {
+    const latestRequest = fetchMessagesForTopic(topicId, {
       limit: 50,
       newMessages: true,
       syncLastMessage: false,
@@ -1651,34 +1630,51 @@ export function useMessageScroll(
       forceRefresh: true,
       forceNetwork: true
     });
-    if (!isCurrentTopic()) return;
-
-    if (latestMessages.length > 0) {
+    const applyLatestWindow = async (messages: IMessage[]) => {
+      if (!isCurrentTopic() || !messages.length) return;
+      suspendHistoryFetch(1800);
+      suspendAutoRead(500);
       scrollAnchor.prepareJumpMutation();
-      mergeMessagesForTopic(topicId, latestMessages, 'replace', {
+      mergeMessagesForTopic(topicId, messages, 'replace', {
         syncLastMessage: false,
         windowMode: 'latest',
-        visibleMessages: latestMessages
+        visibleMessages: messages
       });
+      const bufferedMessages = consumeBufferedIncomingMessagesForTopic(topicId);
+      if (bufferedMessages.length > 0) {
+        mergeMessagesForTopic(topicId, bufferedMessages, 'append', {
+          syncLastMessage: false,
+          windowMode: 'latest'
+        });
+      }
+
+      await nextTick();
+      if (!isCurrentTopic()) return;
+      if (options.smooth === false) {
+        scrollAnchor.scrollToBottomInstant();
+      } else {
+        await scrollAnchor.scrollToBottomSmooth(isCurrentTopic);
+      }
+      if (!isCurrentTopic()) return;
+      isShowScrollToBottomButton.value = false;
+      markAllVisibleAsRead();
+      schedulePersistScrollMeta();
+    };
+
+    const localMessages = getFullMessagesByTopicId(topicId).slice(-50);
+    const refreshLatestWindow = async () => {
+      const latestMessages = await latestRequest;
+      if (localMessages.length) await options.waitForTransition?.();
+      if (!isCurrentTopic()) return;
+      await applyLatestWindow(latestMessages.slice(-50));
+    };
+    if (localMessages.length) {
+      // Переходим сразу; ответ сети не задерживает появление конца ленты.
+      await applyLatestWindow(localMessages);
+      void refreshLatestWindow();
+    } else {
+      await refreshLatestWindow();
     }
-
-    const bufferedMessagesAfterFetch =
-      consumeBufferedIncomingMessagesForTopic(topicId);
-
-    if (bufferedMessagesAfterFetch.length > 0) {
-      mergeMessagesForTopic(topicId, bufferedMessagesAfterFetch, 'append', {
-        syncLastMessage: false,
-        windowMode: 'latest'
-      });
-    }
-
-    await nextTick();
-    if (!isCurrentTopic()) return;
-    await scrollAnchor.scrollToBottomSmooth(isCurrentTopic);
-    if (!isCurrentTopic()) return;
-    isShowScrollToBottomButton.value = false;
-    markAllVisibleAsRead();
-    schedulePersistScrollMeta();
   };
 
   const handleHistoryScrollInteraction = (event: WheelEvent) => {

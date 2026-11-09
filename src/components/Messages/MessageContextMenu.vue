@@ -12,7 +12,7 @@
     :top-overflow="
       !showEmojies &&
       !isSelectionContextMenu &&
-      !showReadDetails &&
+      !(isMobile && showReadDetails) &&
       !canRetryMessage
         ? 47
         : 0
@@ -368,6 +368,7 @@ import MessageReceiptList from './MessageReceiptList.vue';
 import ReplyIcon from '../UI/ReplyIcon.vue';
 import EditIcon from '../UI/EditIcon.vue';
 import { getMessageSticker } from '../../utils/stickers';
+import { isFavoriteTopic } from '../../utils/favorite-topic';
 import {
   createChatClipboardContent,
   writeChatClipboardContent,
@@ -668,6 +669,7 @@ const canRetryMessage = computed(
 const canShowMessageDetails = computed(
   () =>
     !!props.isMeSender &&
+    !isFavoriteTopic(currentTopic.value, getAuthUser()?.id) &&
     !isSelectionContextMenu.value &&
     !canRetryMessage.value &&
     !!currentMessage.value

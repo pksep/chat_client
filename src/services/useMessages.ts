@@ -147,7 +147,14 @@ const INITIAL_TOPIC_WINDOW_MESSAGES = 100;
 const ACTIVE_MOBILE_APPEND_PERSIST_DELAY_MS = 1000;
 const MOBILE_VIEWPORT_MAX_WIDTH = 768;
 const MAX_RESIDENT_MESSAGE_TOPICS = 10;
-const aroundMessageContextPrefetches = new Map<string, Promise<IMessage[]>>();
+const aroundMessageContextPrefetches = new Map<
+  string,
+  {
+    sdk: ReturnType<typeof getChatSDK>;
+    startedAt: number;
+    request: Promise<IMessage[]>;
+  }
+>();
 interface PendingMessagePersist {
   timeoutId: ReturnType<typeof setTimeout> | null;
   idleId: number | null;
@@ -2019,26 +2026,38 @@ export const prefetchAroundMessageContext = (
     return Promise.resolve([]);
   }
 
-  if (
-    getFullMessagesByTopicId(topicId).some(message => message.id === messageId)
-  ) {
-    return Promise.resolve([]);
-  }
-
   const requestKey = `${topicId}:${messageId}`;
   const existingRequest = aroundMessageContextPrefetches.get(requestKey);
 
-  if (existingRequest) {
-    return existingRequest;
+  if (
+    existingRequest &&
+    existingRequest.sdk === getChatSDK() &&
+    Date.now() - existingRequest.startedAt < 15_000
+  ) {
+    return existingRequest.request;
   }
 
   const request = fetchAroundMessage(messageId, topicId, {
-    updateVisible: false
-  }).finally(() => {
-    aroundMessageContextPrefetches.delete(requestKey);
+    updateVisible: false,
+    forceNetwork: getHasBrowserNetwork()
+  }).then(messages => {
+    if (!messages?.some(message => message.id === messageId)) {
+      aroundMessageContextPrefetches.delete(requestKey);
+    }
+    return messages || [];
   });
 
-  aroundMessageContextPrefetches.set(requestKey, request);
+  aroundMessageContextPrefetches.delete(requestKey);
+  aroundMessageContextPrefetches.set(requestKey, {
+    sdk: getChatSDK(),
+    startedAt: Date.now(),
+    request
+  });
+  while (aroundMessageContextPrefetches.size > 32) {
+    aroundMessageContextPrefetches.delete(
+      aroundMessageContextPrefetches.keys().next().value!
+    );
+  }
 
   return request;
 };

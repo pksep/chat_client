@@ -134,10 +134,12 @@
         :key="renderedTopicId"
         ref="messageListUserItemsRef"
         :class="{
-          'chat__message-bubble--warming': shouldCoverUserMessagesWithSkeleton
+          'chat__message-bubble--warming': shouldCoverUserMessagesWithSkeleton,
+          'chat__message-bubble--pin-context': isPinnedNavigationContext
         }"
         :messages="renderedUserMessages"
         :auth-user-id="authUserId"
+        :navigation-anchor-message-id="pinnedNavigationMessageId"
         :hide-unread-marker="state.hideUnreadMarker"
         :unread-marker-message-id="state.unreadMarkerMessageId"
         :data-testid="props.dataTestid"
@@ -231,6 +233,12 @@
         </div>
       </Transition>
     </div>
+    <div
+      ref="messageNavigationOverlayRef"
+      class="chat__message-navigation-overlay"
+      aria-hidden="true"
+      inert
+    />
   </div>
 
   <div
@@ -295,7 +303,7 @@
       !isAiRoute &&
       !isDefaultRoute &&
       !shouldRenderUserMessageSkeleton &&
-      (isShowScrollToBottomButton || showUnreadReactionScrollButton)
+      (shouldShowScrollToLatestButton || showUnreadReactionScrollButton)
     "
     :class="[
       'chat__message-bubble__scroll-indicators',
@@ -320,7 +328,7 @@
       <span class="contact-list__notification">1</span>
     </button>
     <button
-      v-if="isShowScrollToBottomButton"
+      v-if="shouldShowScrollToLatestButton"
       type="button"
       class="chat__message-bubble__arrow-down"
       :aria-label="'Перейти к новым сообщениям'"
@@ -411,6 +419,7 @@ import {
   initAndroidKeyboardViewport
 } from '../utils/android-keyboard-viewport';
 import MessageListUserItems from './Messages/MessageListUserItems.vue';
+import { useMessageNavigationTransition } from './Messages/composables/useMessageNavigationTransition';
 import MessageListInput from './Messages/MessageListInput.vue';
 import ReactionHeartIcon from './UI/ReactionHeartIcon.vue';
 import { subscribeToOwnReactions } from '../services/useChat';
@@ -450,6 +459,7 @@ import {
   hydrateMessagePreviewFromCache,
   MOBILE_NOTIFICATION_HISTORY_LIMIT,
   mergeMessagesForTopic,
+  prefetchAroundMessageContext,
   setVisibleMessagesLimitForTopic,
   suppressNotificationSoundForTopic,
   suspendLocalOwnReadStatus
@@ -621,6 +631,29 @@ const unreadMarkerMessageIdsByTopic = reactive<Record<string, string | null>>(
 );
 const dismissedUnreadMarkerTopics = new Set<string>();
 let messageNavigationRevision = 0;
+const messageNavigationOverlayRef = ref<HTMLElement | null>(null);
+const isPinnedNavigationContext = ref(false);
+const pinnedNavigationMessageId = ref('');
+const shouldShowScrollToLatestButton = computed(
+  () =>
+    isShowScrollToBottomButton.value ||
+    (isPinnedNavigationContext.value &&
+      renderedUserMessages.value.at(-1)?.id !==
+        getFullMessagesByTopicId(route.value.id).at(-1)?.id)
+);
+watch(
+  () => route.value.id,
+  () => {
+    isPinnedNavigationContext.value = false;
+    pinnedNavigationMessageId.value = '';
+  },
+  { flush: 'sync' }
+);
+const messageNavigationTransition = useMessageNavigationTransition(
+  chatWrapperRef,
+  messageNavigationOverlayRef,
+  () => route.value.id
+);
 const { pendingForwardMessages, pendingForwardTopicId } =
   usePendingForwardMessages();
 const { pendingDraftTopicId, pendingDraftText, consumePendingMessageDraft } =
@@ -1903,9 +1936,12 @@ const syncFloatingDateDivider = (): void => {
   const isScrollable = container.scrollHeight > container.clientHeight + 1;
   const isFavoriteTopicAtStart =
     isFavoriteMessageTopic.value && container.scrollTop <= 1;
+  const isPinnedContextAtStart =
+    isPinnedNavigationContext.value && container.scrollTop <= 1;
 
   if (
     isFavoriteTopicAtStart ||
+    isPinnedContextAtStart ||
     ((!isScrollable || isViewingBottom.value) && !isNativeAndroid)
   ) {
     floatingDateDividerLabel.value = '';
@@ -2594,6 +2630,7 @@ type ScrollToMessageObjectPayload = {
   quoteText?: string;
   quoteOccurrenceIndex?: number;
   allowOptimisticTarget?: boolean;
+  shortTransition?: boolean;
   scrollBehavior?: MessageScrollBehavior;
 };
 
@@ -3013,6 +3050,8 @@ const refreshAroundMessageAfterOptimisticJump = async (
     forceNetwork: getHasBrowserNetwork()
   });
 
+  await messageNavigationTransition.waitForIdle();
+
   if (!isCurrent()) return;
 
   if (!messages?.some(message => message.id === messageId)) {
@@ -3095,17 +3134,154 @@ const jumpToOptimisticTarget = async (
   return didJump;
 };
 
+const navigateToPinnedMessage = async (
+  message: IMessage,
+  behavior: MessageScrollBehavior,
+  isCurrent: () => boolean
+): Promise<boolean> => {
+  const topicId = message.topicId;
+  clearVisibleMessagesExpansionSchedule();
+  // Краткий ответ закрепов может не содержать цитату и реакции. Открываем полный контекст целиком.
+  const ready = await prefetchAroundMessageContext(message.id, topicId);
+  if (!isCurrent()) return false;
+  const memory = getFullMessagesByTopicId(topicId);
+  const memoryIndex = memory.findIndex(row => row.id === message.id);
+  const memoryContext =
+    memoryIndex < 0
+      ? [message]
+      : memory.slice(Math.max(0, memoryIndex - 40), memoryIndex + 41);
+  const context = ready?.some(row => row.id === message.id)
+    ? ready
+    : memoryContext;
+  const container = chatWrapperRef.value;
+  if (!container) return false;
+  suspendHistoryFetch(1800);
+  suspendAutoRead(500);
+  const previousOverflowAnchor = container.style.overflowAnchor;
+  container.style.overflowAnchor = 'none';
+  const anchor = scrollAnchor.captureViewportAnchor();
+  isPinnedNavigationContext.value = true;
+  pinnedNavigationMessageId.value = message.id;
+  scrollAnchor.prepareJumpMutation();
+  try {
+    mergeMessagesForTopic(topicId, context, 'replace', {
+      syncLastMessage: false,
+      windowMode: 'around-anchor',
+      anchorMessageId: message.id,
+      visibleMessages: context
+    });
+    await nextTick();
+    if (!isCurrent()) return false;
+    if (behavior === 'smooth' && anchor) {
+      const mutation = scrollAnchor.beginViewportMutation('replace', {
+        forcePreserve: true
+      });
+      scrollAnchor.commitViewportMutation(mutation.revision, {
+        forceAnchor: anchor
+      });
+    }
+    // Дожидаемся измерений цитат и системных строк до первого видимого кадра.
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    await nextTick();
+    return await jumpToMessageWithHighlight(
+      message.id,
+      '',
+      undefined,
+      behavior,
+      isCurrent
+    );
+  } finally {
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    container.style.overflowAnchor = previousOverflowAnchor;
+  }
+};
+
 const navigateToMessageId = async (
   messageId: string,
   quoteText = '',
   quoteOccurrenceIndex?: number,
   optimisticMessage?: IMessage | null,
-  behavior: MessageScrollBehavior = 'smooth'
+  behavior: MessageScrollBehavior = 'smooth',
+  shortTransition = false
 ): Promise<boolean> => {
   const topicId = route.value.id;
   const revision = ++messageNavigationRevision;
+  const navigationStartedAt = performance.now();
   const isCurrent = () =>
-    route.value.id === topicId && revision === messageNavigationRevision;
+    route.value.id === topicId &&
+    revision === messageNavigationRevision &&
+    (!shortTransition ||
+      !scrollAnchor.hasUserScrollIntentAfter(navigationStartedAt));
+  messageNavigationTransition.cancel();
+  const container = chatWrapperRef.value;
+  const target = container?.querySelector<HTMLElement>(
+    `[data-message-id="${escapeCssValue(messageId)}"]`
+  );
+  const containerBounds = container?.getBoundingClientRect();
+  const targetBounds = target?.getBoundingClientRect();
+  const distance =
+    containerBounds && targetBounds
+      ? targetBounds.top +
+        targetBounds.height / 2 -
+        (containerBounds.top + containerBounds.height / 2)
+      : null;
+  const direction =
+    distance !== null
+      ? -Math.sign(distance || -1)
+      : new Date(optimisticMessage?.createdAt || 0).getTime() >
+          new Date(state.messages.at(-1)?.createdAt || 0).getTime()
+        ? -1
+        : 1;
+  const transition =
+    shortTransition &&
+    behavior === 'smooth' &&
+    (distance === null || Math.abs(distance) > 120)
+      ? messageNavigationTransition.start(direction, () => {
+          if (isCurrent()) {
+            messageNavigationRevision += 1;
+            scrollAnchor.setViewportMode('history');
+          }
+        })
+      : null;
+  try {
+    if (transition) {
+      // Даём браузеру показать снимок до перестройки истории.
+      await new Promise<void>(resolve =>
+        requestAnimationFrame(() => resolve())
+      );
+    }
+    if (!isCurrent()) return false;
+    const didNavigate =
+      shortTransition && optimisticMessage
+        ? await navigateToPinnedMessage(
+            optimisticMessage,
+            transition ? 'instant' : behavior,
+            isCurrent
+          )
+        : await resolveMessageNavigation(
+            messageId,
+            quoteText,
+            quoteOccurrenceIndex,
+            optimisticMessage,
+            transition ? 'instant' : behavior,
+            isCurrent
+          );
+    if (isCurrent()) await transition?.finish();
+    return didNavigate && isCurrent();
+  } finally {
+    transition?.cancel();
+  }
+};
+
+const resolveMessageNavigation = async (
+  messageId: string,
+  quoteText: string,
+  quoteOccurrenceIndex: number | undefined,
+  optimisticMessage: IMessage | null | undefined,
+  behavior: MessageScrollBehavior,
+  isCurrent: () => boolean
+): Promise<boolean> => {
+  const topicId = route.value.id;
   clearVisibleMessagesExpansionSchedule();
   scrollAnchor.prepareJumpMutation();
 
@@ -3230,13 +3406,17 @@ const handleScrollToMessage = async (
   }
 
   suspendHistoryFetch(1800);
+  if (isScrollToMessageObjectPayload(payload) && payload.shortTransition) {
+    suspendAutoRead(500);
+  }
 
   return navigateToMessageId(
     message.id,
     getScrollTargetQuoteText(payload),
     getScrollTargetQuoteOccurrenceIndex(payload),
     getScrollTargetAllowOptimisticTarget(payload) ? message : null,
-    getScrollTargetBehavior(payload)
+    getScrollTargetBehavior(payload),
+    isScrollToMessageObjectPayload(payload) && payload.shortTransition === true
   );
 };
 
@@ -3358,9 +3538,36 @@ const bootstrapPendingSearchNavigation = async (): Promise<void> => {
 };
 
 const handleArrowDownClick = async (): Promise<void> => {
+  const topicId = route.value.id;
   const revision = ++messageNavigationRevision;
-  if (route.value.id) dismissUnreadMarkerForTopic(route.value.id);
-  await handleScrollToButton(() => revision === messageNavigationRevision);
+  const navigationStartedAt = performance.now();
+  const isCurrent = () =>
+    route.value.id === topicId &&
+    revision === messageNavigationRevision &&
+    !scrollAnchor.hasUserScrollIntentAfter(navigationStartedAt);
+  messageNavigationTransition.cancel();
+  const transition = messageNavigationTransition.start(-1, () => {
+    if (route.value.id === topicId && revision === messageNavigationRevision) {
+      messageNavigationRevision += 1;
+      scrollAnchor.setViewportMode('history');
+    }
+  });
+  clearVisibleMessagesExpansionSchedule();
+  suspendHistoryFetch(1800);
+  suspendAutoRead(500);
+  isPinnedNavigationContext.value = false;
+  pinnedNavigationMessageId.value = '';
+  if (topicId) dismissUnreadMarkerForTopic(topicId);
+  try {
+    if (!isCurrent()) return;
+    await handleScrollToButton(isCurrent, {
+      smooth: false,
+      waitForTransition: messageNavigationTransition.waitForIdle
+    });
+    if (isCurrent()) await transition?.finish({ duration: 140 });
+  } finally {
+    transition?.cancel();
+  }
 };
 
 const handleUnreadReactionClick = async (): Promise<void> => {
