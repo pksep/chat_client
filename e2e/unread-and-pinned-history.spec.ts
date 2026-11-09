@@ -620,7 +620,7 @@ for (const unreadCount of [3, 180, 900]) {
   });
 }
 
-test('возврат вниз после закрепа запрашивает последние сообщения и игнорирует поздний контекст', async ({
+test('возврат вниз отменяет ожидающий переход к закрепу и игнорирует поздний контекст', async ({
   page
 }) => {
   const state = await openFixture(page, {
@@ -656,7 +656,12 @@ test('возврат вниз после закрепа запрашивает �
       .getByTestId('Pinned-Messages')
       .locator('.chat__input__action__blog')
       .click();
-    await expect(message(page, 0, 0)).toBeInViewport();
+    await expect(
+      page.locator('.chat__message-navigation-overlay')
+    ).toBeVisible();
+    await expect(message(page, 0, 0)).not.toBeAttached();
+    await page.locator('.chat__message-wrapper').hover();
+    await page.mouse.wheel(0, -500);
     const latestRequest = page.waitForRequest(request => {
       const url = new URL(request.url());
       return (

@@ -23,9 +23,10 @@ import {
   getFullMessagesByTopicId,
   getMessagesByTopicId,
   getPinnedMessagesByTopicId,
+  prefetchAroundMessageContext,
   unpinLocalMessageForMe
 } from '../../services/useMessages';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { togglePinMessageChat } from '../../services/useChat';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import PinnedMessageBanner from './PinnedMessageBanner.vue';
@@ -102,6 +103,15 @@ const currentPinnedMessage = computed(() => {
 const pinnedPreviewText = computed(() =>
   stripHtml(currentPinnedMessage.value?.text || 'Вложение')
 );
+
+watch(
+  () => currentPinnedMessage.value?.id,
+  () => {
+    const message = currentPinnedMessage.value;
+    if (message) void prefetchAroundMessageContext(message.id, message.topicId);
+  },
+  { immediate: true }
+);
 const pinnedPreviewKey = computed(
   () =>
     `${activeTopicId.value || 'no-topic'}:${currentPinnedMessage.value?.id || 'no-message'}:${pinnedPreviewText.value}`
@@ -119,7 +129,8 @@ const handleChangeCurrentIndex = () => {
   emits('unmount-set-selected-message', {
     message: currentPinnedMessage.value,
     allowOptimisticTarget: true,
-    scrollBehavior: 'auto'
+    shortTransition: true,
+    scrollBehavior: 'smooth'
   });
 };
 

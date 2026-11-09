@@ -86,15 +86,15 @@
               'message-group__avatar',
               {
                 'message-group__avatar--interactive': canOpenUserInfo(
-                  item.messages[0].senderUser
+                  getMessageSender(item.messages[0])
                 )
               }
             ]"
-            :path="item.messages[0].senderUser?.avatarUrl || ''"
-            :alt="item.messages[0].senderUser?.initials || ''"
-            :initials="item.messages[0].senderUser?.initials || ''"
+            :path="getMessageSender(item.messages[0])?.avatarUrl || ''"
+            :alt="getMessageSender(item.messages[0])?.initials || ''"
+            :initials="getMessageSender(item.messages[0])?.initials || ''"
             :defer-offscreen="isMobile"
-            @click.stop="openUserInfo(item.messages[0].senderUser)"
+            @click.stop="openUserInfo(getMessageSender(item.messages[0]))"
           />
         </div>
 
@@ -159,6 +159,7 @@ import { getPinnedMessagesByTopicId } from '../../services/useMessages';
 import { isUnreadTrackableMessage } from '../../utils/messageTracking';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import { getSelectedTopic } from '../../composables/useTopics';
+import { getUserById } from '../../composables/useUsers';
 import { isCallTopic, isCallTopicDefaultMessage } from '../../utils/call-topic';
 import {
   getLatestReadOutgoingMessageIndex,
@@ -184,6 +185,7 @@ interface Props {
   authUserId?: string;
   hideUnreadMarker?: boolean;
   unreadMarkerMessageId?: string | null;
+  navigationAnchorMessageId?: string;
 }
 
 type RenderItem =
@@ -580,8 +582,30 @@ const latestReadOutgoingMessageIndex = computed(() =>
   )
 );
 
+const messageSenders = computed(() => {
+  const senders = new Map<string, NonNullable<IMessage['senderUser']>>();
+  const topic = getSelectedTopic(route.value.id);
+  for (const member of topic?.members || []) senders.set(member.id, member);
+  if (topic?.user?.initials) senders.set(topic.user.id, topic.user);
+  for (const message of props.messages) {
+    const knownUser = getUserById(message.senderUserId);
+    const sender = knownUser?.initials ? knownUser : message.senderUser;
+    if (sender?.initials) senders.set(message.senderUserId, sender);
+  }
+  return senders;
+});
+const getMessageSender = (message: IMessage): IMessage['senderUser'] =>
+  message.senderUser?.initials
+    ? message.senderUser
+    : messageSenders.value.get(message.senderUserId) || message.senderUser;
+
 const getRenderItemMemo = (item: RenderItem): unknown[] => {
-  const memo: unknown[] = [item.kind, props.authUserId, isMobile.value];
+  const memo: unknown[] = [
+    item.kind,
+    props.authUserId,
+    isMobile.value,
+    props.navigationAnchorMessageId
+  ];
 
   if (item.kind !== 'group') {
     memo.push(item.message);
@@ -593,6 +617,7 @@ const getRenderItemMemo = (item: RenderItem): unknown[] => {
   item.messages.forEach(message => {
     memo.push(
       message,
+      getMessageSender(message),
       isDialogStyleMessage(message),
       isMessagePinned(message),
       isSelectionMode(message.topicId),
@@ -642,6 +667,9 @@ const isSameMessageGroup = (
   if (!currentMessage || !nextMessage) {
     return false;
   }
+
+  // Догрузка предыдущих сообщений не убирает уже показанное имя у закрепа.
+  if (nextMessage.id === props.navigationAnchorMessageId) return false;
 
   if (currentMessage.isSystem || nextMessage.isSystem) {
     return false;
@@ -976,7 +1004,7 @@ const getMessageSenderRole = (message: IMessage): string => {
 
   return channel
     ? channelLabel(channel)
-    : parseUserEx(message.senderUser?.ex)?.erpRole || '';
+    : parseUserEx(getMessageSender(message)?.ex)?.erpRole || '';
 };
 
 watch(
@@ -998,14 +1026,14 @@ const getBubbleProps = (message: IMessage, index: number) => ({
   time: getCachedMessageTime(message),
   sender: isCallTopicDefaultMessage(message)
     ? ''
-    : message.senderUser?.initials || '',
+    : getMessageSender(message)?.initials || '',
   senderUser: isCallTopicDefaultMessage(message)
     ? undefined
-    : message.senderUser,
+    : getMessageSender(message),
   senderRole: getMessageSenderRole(message),
   avatar: isCallTopicDefaultMessage(message)
     ? ''
-    : message.senderUser?.avatarUrl || '',
+    : getMessageSender(message)?.avatarUrl || '',
   isRead: shouldDisplayMessageAsRead(
     message,
     index,

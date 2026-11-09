@@ -236,6 +236,16 @@ button.button-yui-kit.select-reactions-list-button {
   overflow-y: auto;
 }
 
+.message-context-menu__details-panel,
+.message-context-menu__mobile-details,
+.message-context-menu__details-list {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 .message-context-menu__details-item {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) 20px;
