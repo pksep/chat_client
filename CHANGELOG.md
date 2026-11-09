@@ -1,3 +1,10 @@
+## [1.48.3](https://github.com/pksep/chat_client/compare/v1.48.2...v1.48.3) (2026-11-09)
+
+
+### Bug Fixes
+
+* **chat-554:** show call material errors and bump web version to 98 ([f92aba0](https://github.com/pksep/chat_client/commit/f92aba058ad3d8a0d8ac449aea41136fdf90549b))
+
 ## [1.48.2](https://github.com/pksep/chat_client/compare/v1.48.1...v1.48.2) (2026-11-09)
 
 
