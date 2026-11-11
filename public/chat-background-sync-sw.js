@@ -6,12 +6,14 @@
   const SNAPSHOT_KEY = 'snapshot';
   const STATUS_KEY = 'status';
   const PENDING_HINTS_KEY = 'pendingHints';
+  const PUSH_DELIVERIES_KEY = 'pushDeliveries';
   const MAX_PENDING_TOPIC_IDS = 32;
   const MAX_MESSAGE_TOPICS = 8;
   const MESSAGE_LIMIT = 50;
   const HTTP_REQUEST_TIMEOUT_MS = 10000;
 
   let runningSync = null;
+  let runningDelivery = null;
 
   const nowIso = () => new Date().toISOString();
 
@@ -122,7 +124,8 @@
       deleteValue(SESSION_KEY),
       deleteValue(SNAPSHOT_KEY),
       deleteValue(STATUS_KEY),
-      deleteValue(PENDING_HINTS_KEY)
+      deleteValue(PENDING_HINTS_KEY),
+      deleteValue(PUSH_DELIVERIES_KEY)
     ]);
     await setStatus({ state: 'session_cleared' });
   };
@@ -135,18 +138,18 @@
 
   // Чтение и изменение очереди выполняются одной транзакцией: push и retry
   // могут добавлять задания одновременно с завершением сетевого запроса.
-  const changePendingHints = async update => {
+  const changeValue = async (key, update) => {
     const db = await openDb();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
-      const request = store.get(PENDING_HINTS_KEY);
+      const request = store.get(key);
       let previous;
       request.onsuccess = () => {
         previous = (request.result && request.result.value) || {};
         const next = update(previous);
-        if (next) store.put({ key: PENDING_HINTS_KEY, value: next });
-        else store.delete(PENDING_HINTS_KEY);
+        if (next) store.put({ key, value: next });
+        else store.delete(key);
       };
       tx.oncomplete = () => {
         db.close();
@@ -158,6 +161,8 @@
       };
     });
   };
+
+  const changePendingHints = update => changeValue(PENDING_HINTS_KEY, update);
 
   const appendPendingHint = async hint =>
     changePendingHints(current => ({
@@ -216,7 +221,7 @@
     return body.trim() ? JSON.parse(body) : null;
   };
 
-  const fetchJson = async (session, path) => {
+  const fetchJson = async (session, path, body) => {
     const controller = new AbortController();
     let timer;
     const timeout = new Promise((_, reject) => {
@@ -234,8 +239,11 @@
       return await Promise.race([
         (async () => {
           const response = await fetch(`${session.apiUrl}${path}`, {
+            method: body ? 'POST' : 'GET',
+            ...(body ? { body: JSON.stringify(body) } : {}),
             headers: {
               Accept: 'application/json',
+              ...(body ? { 'Content-Type': 'application/json' } : {}),
               Authorization: `Bearer ${session.token}`
             },
             signal: controller.signal
@@ -247,6 +255,96 @@
     } finally {
       clearTimeout(timer);
     }
+  };
+
+  const sameDeliverySession = (receipt, session) =>
+    receipt.userId === session.userId && receipt.apiUrl === session.apiUrl;
+
+  const flushPushDeliveries = () => {
+    if (runningDelivery) return runningDelivery;
+    runningDelivery = (async () => {
+      try {
+        while (true) {
+          const session = await getSession();
+          if (!session?.token || !session.userId || !session.apiUrl) {
+            return { ok: false, retryable: false };
+          }
+          const saved = await getValue(PUSH_DELIVERIES_KEY);
+          const pending = (Array.isArray(saved) ? saved : []).filter(receipt =>
+            sameDeliverySession(receipt, session)
+          );
+          if (!pending.length) return { ok: true, retryable: false };
+          const topicId = pending[0].topicId;
+          const messageIds = pending
+            .filter(receipt => receipt.topicId === topicId)
+            .slice(0, 250)
+            .map(receipt => receipt.messageId);
+          // Сверяем сессию перед отправкой: токен старого аккаунта не заменяется новым.
+          const current = await getSession();
+          if (
+            !current ||
+            !sameDeliverySession(session, current) ||
+            current.token !== session.token
+          )
+            continue;
+          await fetchJson(session, '/messages/delivery', {
+            topicId,
+            messageIds
+          });
+          await changeValue(PUSH_DELIVERIES_KEY, value =>
+            (Array.isArray(value) ? value : []).filter(
+              receipt =>
+                !sameDeliverySession(receipt, session) ||
+                receipt.topicId !== topicId ||
+                !messageIds.includes(receipt.messageId)
+            )
+          );
+        }
+      } catch (error) {
+        // При истёкшем sync-токене очередь продолжится после обновления сессии.
+        return { ok: false, retryable: true };
+      }
+    })().finally(() => {
+      runningDelivery = null;
+    });
+    return runningDelivery;
+  };
+
+  const recordPushDelivery = async payload => {
+    const uuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (
+      (payload.action && payload.action !== 'CHAT_SYNC') ||
+      payload.type === 'incoming_call' ||
+      !uuid.test(payload.topicId) ||
+      !uuid.test(payload.messageId)
+    )
+      return { ok: true, retryable: false };
+    const session = await getSession();
+    if (!session?.userId || !session.apiUrl || !session.token) {
+      return { ok: false, retryable: false };
+    }
+    await changeValue(PUSH_DELIVERIES_KEY, value => {
+      const pending = (Array.isArray(value) ? value : []).filter(receipt =>
+        sameDeliverySession(receipt, session)
+      );
+      if (
+        !pending.some(
+          receipt =>
+            receipt.topicId === payload.topicId &&
+            receipt.messageId === payload.messageId
+        )
+      ) {
+        pending.push({
+          userId: session.userId,
+          apiUrl: session.apiUrl,
+          topicId: payload.topicId,
+          messageId: payload.messageId
+        });
+      }
+      return pending;
+    });
+    return flushPushDeliveries();
   };
 
   const asArray = payload => {
@@ -573,6 +671,8 @@
     consumePendingHints,
     getLastPts,
     getSession,
+    recordPushDelivery,
+    flushPushDeliveries,
     runChatBackgroundSync,
     saveSnapshot,
     setStatus

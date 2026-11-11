@@ -194,6 +194,7 @@ const isCallBotResponse = (message: {
   senderUser?: unknown;
 }): boolean =>
   parseMessageEx(message.ex).type === 'call-summary-bot-response' ||
+  parseMessageEx(message.ex).type === 'call-summary-material-error' ||
   isBotUser(message.senderUser as Parameters<typeof isBotUser>[0]);
 
 const isOutgoingChatMessage = (message: {
@@ -216,7 +217,11 @@ const visibleChatMessages = computed<CallsBotChatMessage[]>(() => {
 
   const storedMessages = getMessagesByTopicId(topicId)
     .filter(message => {
-      if (message.isSystem || !message.text) {
+      if (
+        !message.text ||
+        (message.isSystem &&
+          parseMessageEx(message.ex).type !== 'call-summary-material-error')
+      ) {
         return false;
       }
 

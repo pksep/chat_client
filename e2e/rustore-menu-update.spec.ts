@@ -168,6 +168,25 @@ const emitState = (page: Page, status: number, percent?: number) =>
     { status, percent }
   );
 
+test('RuStore: смена дня не включает автоматическое веб-обновление', async ({
+  page
+}) => {
+  await page.clock.install({ time: new Date('2026-11-06T10:00:00Z') });
+  let webChecks = 0;
+  await page.route('**/web-update.json*', route => {
+    webChecks++;
+    return route.fulfill({ json: { version: 1000000 } });
+  });
+  await openNativeMenu(page);
+  await page.clock.setSystemTime(new Date('2026-11-07T10:00:00Z'));
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(menuButton(page)).toBeVisible();
+  expect(webChecks).toBe(0);
+  expect(
+    await page.evaluate(() => localStorage.getItem('chat_web_update_day'))
+  ).toBeNull();
+});
+
 test('RuStore: кнопка обновления проходит загрузку и перезапуск без баннера в сообщениях', async ({
   page,
   isMobile

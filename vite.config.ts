@@ -11,6 +11,7 @@ import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
 // import basicSsl from '@vitejs/plugin-basic-ssl';
 import { version } from './package.json';
+import { version as webUpdateVersion } from './public/web-update.json';
 import { externalizeUiKitPdfWorker } from './scripts/externalize-ui-kit-pdf-worker';
 import { preloadStartupModules } from './scripts/preload-startup-modules';
 import { inlineStartupTheme } from './scripts/inline-startup-theme';
@@ -19,6 +20,7 @@ import { lazyUiKitPdfRuntime } from './scripts/lazy-ui-kit-pdf-runtime';
 import { lazyUiKitEmojiRuntime } from './scripts/lazy-ui-kit-emoji-runtime';
 import { lazyUiKitEditorRuntime } from './scripts/lazy-ui-kit-editor-runtime';
 import { lazyUiKitSliderRuntime } from './scripts/lazy-ui-kit-slider-runtime';
+import { uiKitEditorCamera } from './scripts/ui-kit-editor-camera';
 
 const BUILD_OUT_DIR = 'build';
 const PUBLIC_BUILD_ENTRIES = new Set([
@@ -241,7 +243,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         display: 'standalone',
         description: 'Chatting application',
         theme_color: '#ffffff',
-        background_color: '#ffffff',
+        background_color: '#f8f9fd',
         icons: [
           {
             src: 'images/pwa-64x64.png?v=20260909-dark',
@@ -280,6 +282,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
   ];
 
   const plugins: PluginOption[] = [
+    uiKitEditorCamera(),
     externalizeUiKitPdfWorker(),
     lazyUiKitPdfRuntime(),
     lazyUiKitEmojiRuntime(),
@@ -359,7 +362,8 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
     define: {
       __APP_VERSION__: JSON.stringify(
         process.env.npm_package_version || version
-      )
+      ),
+      __WEB_UPDATE_VERSION__: JSON.stringify(webUpdateVersion)
     },
     server: {
       host: '0.0.0.0',

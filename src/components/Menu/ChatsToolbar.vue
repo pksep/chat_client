@@ -79,6 +79,10 @@
 
     <Line :data-testid="`${props.dataTestid}-ChatsToolbar-Line`" />
 
+    <div v-if="$slots.folders" class="chats-toolbar__folders">
+      <slot name="folders" />
+    </div>
+
     <div class="chats-toolbar__controls">
       <MenuSearch
         v-if="!props.isCollapse"
@@ -88,11 +92,7 @@
         :data-testid="`${props.dataTestid}-ChatsToolbar-Search`"
       />
 
-      <div v-if="$slots.folders" class="chats-toolbar__folders">
-        <slot name="folders" />
-      </div>
-
-      <template v-else-if="!props.isCollapse">
+      <template v-if="!props.isCollapse && props.showFilters">
         <slot name="filters">
           <ChatsToolbarFilters
             :model-value="props.filter"
@@ -142,6 +142,7 @@ const props = withDefaults(
     modelValue: string;
     title?: string;
     showCreate?: boolean;
+    showFilters?: boolean;
     filter?: ChatsToolbarFilter;
     filterCounts?: ChatsToolbarCounts;
     filterMutedOnly?: ChatsToolbarMutedOnly;
@@ -152,6 +153,7 @@ const props = withDefaults(
   {
     title: 'Чаты',
     showCreate: true,
+    showFilters: true,
     filter: 'all',
     filterCounts: () => ({
       all: 0,

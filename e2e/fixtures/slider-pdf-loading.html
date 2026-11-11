@@ -15,8 +15,11 @@
       import { initIosPwaViewport } from '../../src/utils/ios-pwa-viewport';
       import { mountSliderDownloadFixture } from './slider-download-harness';
       initIosPwaViewport();
-      document.documentElement.classList.add('theme-dark');
-      window.sliderDownloadFixture = await mountSliderDownloadFixture([
+      const params = new URLSearchParams(location.search);
+      document.documentElement.classList.add(
+        `theme-${params.get('theme') || 'dark'}`
+      );
+      const items = [
         {
           path: '/__review.pdf',
           name: 'Документ.pdf',
@@ -27,7 +30,10 @@
           name: 'Изображение.svg',
           downloadPath: '/__review.svg'
         }
-      ]);
+      ];
+      window.sliderDownloadFixture = await mountSliderDownloadFixture(
+        params.has('single') ? items.slice(0, 1) : items
+      );
     </script>
   </body>
 </html>

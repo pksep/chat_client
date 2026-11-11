@@ -1,3 +1,156 @@
+## [1.48.3](https://github.com/pksep/chat_client/compare/v1.48.2...v1.48.3) (2026-11-09)
+
+
+### Bug Fixes
+
+* **chat-554:** show call material errors and bump web version to 98 ([f92aba0](https://github.com/pksep/chat_client/commit/f92aba058ad3d8a0d8ac449aea41136fdf90549b))
+
+## [1.48.2](https://github.com/pksep/chat_client/compare/v1.48.1...v1.48.2) (2026-11-09)
+
+
+### Bug Fixes
+
+* restore call topic actions and bump web version to 97 ([aeb87bb](https://github.com/pksep/chat_client/commit/aeb87bb8fb66de1c9c1392b12352fb1ccb12b482))
+* smooth message navigation and stabilize context menus ([518fc03](https://github.com/pksep/chat_client/commit/518fc0385b9f372e836b722f699e4896c141b974))
+
+## [1.48.1](https://github.com/pksep/chat_client/compare/v1.48.0...v1.48.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* учитывать тёмную тему для эмодзи с цитатой ([f28a707](https://github.com/pksep/chat_client/commit/f28a70756a84d6d32149646b8b0e59d84a50319a))
+
+# [1.48.0](https://github.com/pksep/chat_client/compare/v1.47.0...v1.48.0) (2026-11-06)
+
+
+### Bug Fixes
+
+* различать пропущенные звонки и исходящие без ответа ([33c191b](https://github.com/pksep/chat_client/commit/33c191be127390fb20e9259d863dc34063184f4b))
+
+
+### Features
+
+* обновлять веб-чат автоматически при смене дня ([dae0021](https://github.com/pksep/chat_client/commit/dae002184710bffb9db64cc7c24912860e2c095f))
+
+# [1.47.0](https://github.com/pksep/chat_client/compare/v1.46.0...v1.47.0) (2026-11-06)
+
+
+### Features
+
+* **chat-553:** add header actions and attachment activity indicators ([727353d](https://github.com/pksep/chat_client/commit/727353de530a7ecce1a56c22e9007895877882b1))
+
+# [1.46.0](https://github.com/pksep/chat_client/compare/v1.45.2...v1.46.0) (2026-11-06)
+
+
+### Features
+
+* **chat-552:** add delivery receipts and PWA push acknowledgements ([3cbf271](https://github.com/pksep/chat_client/commit/3cbf2719278eeda912e9709f2aad846f4c17605c))
+
+## [1.45.2](https://github.com/pksep/chat_client/compare/v1.45.1...v1.45.2) (2026-11-06)
+
+
+### Bug Fixes
+
+* record displayed errors and request diagnostics ([d81462c](https://github.com/pksep/chat_client/commit/d81462c8997c0bd67ef306c7dbd561843d16906a))
+
+## [1.45.1](https://github.com/pksep/chat_client/compare/v1.45.0...v1.45.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* restore mobile folders ([3308554](https://github.com/pksep/chat_client/commit/3308554beb9315f994004d63bf84c17853f27655))
+
+# [1.45.0](https://github.com/pksep/chat_client/compare/v1.44.0...v1.45.0) (2026-11-05)
+
+
+### Bug Fixes
+
+* **chat-540:** keep QR device sessions renewable after access expiry ([0bb30d1](https://github.com/pksep/chat_client/commit/0bb30d1d94d91e970a058b80f8882ca61dd46242))
+* **chat-550:** temporarily disable short QR login ([860f3a7](https://github.com/pksep/chat_client/commit/860f3a75122ca0fdd751eb2e97f9f1e5de5736ac))
+
+
+### Features
+
+* add QR for autorization ([db32dab](https://github.com/pksep/chat_client/commit/db32dab69a41987ded14fe53a53a1a5e9c6c29df))
+
+# [1.44.0](https://github.com/pksep/chat_client/compare/v1.43.0...v1.44.0) (2026-11-03)
+
+
+### Bug Fixes
+
+* **android:** send videos in background and open full file cards ([cbd37cc](https://github.com/pksep/chat_client/commit/cbd37cc39a5d72cd43ca5a221124a6323572f478))
+* **auth:** keep shared chat sessions refreshed ([217cdfb](https://github.com/pksep/chat_client/commit/217cdfb2f995bdf80d5de3a22644237ea754c1a6))
+* **auth:** prefer chat access token after sign-in ([ec645d9](https://github.com/pksep/chat_client/commit/ec645d9e28aca32076d7bf95858cd0bb429f3429))
+* **auth:** preserve session when logout fails ([20cda82](https://github.com/pksep/chat_client/commit/20cda828468d29f413f32fc9daa17a63ac064ae8))
+* bugs ([50d64e2](https://github.com/pksep/chat_client/commit/50d64e290f1e7369fc582890514d3453120242b5))
+* **calls:** recover unstable connections through TURN relay ([980900c](https://github.com/pksep/chat_client/commit/980900ce844ef60e13c47725c419e137ac91249c))
+* **calls:** trace LiveKit disconnect initiators ([f1cc712](https://github.com/pksep/chat_client/commit/f1cc712f0fb55d649533c0581da45930f33e119e))
+* **chat-521:** recover chat connectivity and background sync ([a459d61](https://github.com/pksep/chat_client/commit/a459d61821f03afe317587c86c6990d730ea9f7b))
+* **chat-532:** apply Figma message and call UI fixes ([c0c4e58](https://github.com/pksep/chat_client/commit/c0c4e58d308d280a428fbc2eaea49e4635c3e5d1))
+* **chat-533:** synchronize paginated chats and stabilize startup ([a4cba6c](https://github.com/pksep/chat_client/commit/a4cba6c5a11e0d555ebd68df0f4ee82684bb45f0))
+* **chat-534:** load AI schedules from restored session ([8a6a1cb](https://github.com/pksep/chat_client/commit/8a6a1cb02133a8c5d9c99f386f2da453328b8f75))
+* **chat-534:** stabilize iPhone PWA viewport and attachments ([b936ed0](https://github.com/pksep/chat_client/commit/b936ed08f36f3b5e03d019184fdb7c4bc64afe9b))
+* **chat-537:** center mobile connection status between header actions ([ca1b0db](https://github.com/pksep/chat_client/commit/ca1b0dbc2d29fa6d9e4e90a8dea6edc38e70a5c0))
+* **chat-537:** improve iPhone PWA and message interactions ([b2047bf](https://github.com/pksep/chat_client/commit/b2047bf899b7282b11bbf14967ce7f1eb885234b))
+* **chat-537:** keep menus above keyboard and restore deletion effects ([4b4f5c8](https://github.com/pksep/chat_client/commit/4b4f5c8adb0ee7c85db41e33770dd8adb934dec2))
+* **chat-537:** polish iPhone PWA and unread notifications ([4c6df65](https://github.com/pksep/chat_client/commit/4c6df65a1631e13dff1f55bcf70b1550a2ad0727))
+* **chat-537:** restore keyboard viewport on Pixel and preserve menu focus ([5ba9457](https://github.com/pksep/chat_client/commit/5ba9457cae021a6eb6cebc37a34a34c8cea91b6d))
+* **chat-537:** stabilize Android keyboard and composer popups ([0d1de1e](https://github.com/pksep/chat_client/commit/0d1de1e4679b83d08a6de29e013382f8360ff6a4))
+* **chat-538:** restore group edits, mentions and Android notifications ([3a555a5](https://github.com/pksep/chat_client/commit/3a555a5a9384548297b67449618aeccba5fe500c))
+* **chat-542:** refresh ERP sessions before access tokens expire ([e5833ad](https://github.com/pksep/chat_client/commit/e5833ada797e4be38bc1a69d9d2f1acf92f10e46))
+* **chat-546:** recover iPhone media and correct mobile interface ([14803e9](https://github.com/pksep/chat_client/commit/14803e94a007e10494a652908ecf73f328fd5dcb))
+* **chat-546:** resolve iPhone PWA review issues ([616c5ce](https://github.com/pksep/chat_client/commit/616c5ceb0c1dd3a6851f492ddae48028c88c436b))
+* **chat-546:** resolve iPhone review issues and preserve video covers ([75b01e7](https://github.com/pksep/chat_client/commit/75b01e7652847a8bde231ab2fea8b8444b727a85))
+* **chat-546:** restore editor colors and stabilize media UI ([bccbc7a](https://github.com/pksep/chat_client/commit/bccbc7a346ec886cc81416b78099805672a88f63))
+* **chat-546:** stabilize iPhone media, history and web notifications ([9362dae](https://github.com/pksep/chat_client/commit/9362daebdda287b9e7637c9bca2774bbb90c9f89))
+* **chat-546:** use native emoji fonts in iPhone drafts ([44f102e](https://github.com/pksep/chat_client/commit/44f102e04d91f8846740fc10b74847b3284d8d52))
+* **chat-549:** preserve screen sharing during call recovery ([dbeb911](https://github.com/pksep/chat_client/commit/dbeb911db21553df6a5f8b71cd7acf8557049f26))
+* **chat:** handle fractional updates, unread navigation and self unpinning ([78f1188](https://github.com/pksep/chat_client/commit/78f1188a340d315cab85dceefec0e0286863de80))
+* **chat:** keep iPhone PWA overlays and emoji within visible viewport ([9697886](https://github.com/pksep/chat_client/commit/9697886e7d18253e87fc3d940cc4bc43db4aebfd))
+* **chat:** limit hover replies to incoming group messages ([dd406e7](https://github.com/pksep/chat_client/commit/dd406e76e5f77979490938b7d27adffa603120ee))
+* **chat:** match reaction navigation icon to theme ([3fa76e6](https://github.com/pksep/chat_client/commit/3fa76e6b5598aeca3bdbf71570fe5ec758ad7c7f))
+* **chat:** reply on desktop double click in empty message areas ([5b80ae2](https://github.com/pksep/chat_client/commit/5b80ae217a669cf350707b4db614cc509867a92c))
+* **chat:** restore iOS PWA controls and persist group edits ([9b84120](https://github.com/pksep/chat_client/commit/9b841200b84355df992635798cf1ef4427d2f38e))
+* **chat:** stabilize iOS PWA, unread navigation and PTS recovery ([8c7b244](https://github.com/pksep/chat_client/commit/8c7b244933e13f3518e6eb989a8517ff605badd6))
+* **chat:** stabilize session refresh, push cleanup, and network status ([f9ca7aa](https://github.com/pksep/chat_client/commit/f9ca7aab7fa4108492c43cb93c9b415534cef30f))
+* **chat:** synchronize message status and deletion across devices ([012fcc6](https://github.com/pksep/chat_client/commit/012fcc69a03fbcec9662d714a7072f26904ebb26))
+* **clients:** cap unread badges and hide internal membership messages ([c80af2b](https://github.com/pksep/chat_client/commit/c80af2b3393615ab9d8db78cb6fa12589f3f23ab))
+* **docker:** normalize static permissions and bump web update to 79.5 ([f44bb04](https://github.com/pksep/chat_client/commit/f44bb042d34a1076bec14ae65b54076bfec8ec4f))
+* improve mobile offline behavior and fresh history entry ([3337b04](https://github.com/pksep/chat_client/commit/3337b04eb7dc3f8ea6240d89f08cfc4dafe5c755))
+* keep AI failure messages next to their requests ([feedcca](https://github.com/pksep/chat_client/commit/feedcca22e3b74a8a7567ea32456430007367d01))
+* load external customer avatars without CORS fetch ([a353234](https://github.com/pksep/chat_client/commit/a353234ece0051cfbc5b8a41f72588aed4a2ffcf))
+* **messages:** recover history and pending text after connection failures ([bc22947](https://github.com/pksep/chat_client/commit/bc229472ff87bcaa342850b85cf400c716d7f646))
+* reconnect ([98abc10](https://github.com/pksep/chat_client/commit/98abc10d3aad752d2ad92bd794d79735fa61e6bb))
+* stabilize private inquiry media previews ([94be016](https://github.com/pksep/chat_client/commit/94be016e522bfd6ac231a51611d9af74337920ce))
+* **startup:** open recent chats early and reconcile stale history ([7dce0f6](https://github.com/pksep/chat_client/commit/7dce0f66e1e6ec92f5dbac949c0d3f4458409ed9))
+* **telemetry:** collect location by default without profile checkbox ([f11808e](https://github.com/pksep/chat_client/commit/f11808e3987f8f7a6afbeb4c3a7eb5a6f07f64da))
+* **telemetry:** request location during app startup ([90ddbfb](https://github.com/pksep/chat_client/commit/90ddbfb2178777d075947b41acdd866ea21ec926))
+* **telemetry:** retain upload diagnostics and readiness changes ([6aefb35](https://github.com/pksep/chat_client/commit/6aefb3572c6f3a4daa070eb47a153faaf4f6cfd0))
+* use the official MAX icon for client channels ([d994f21](https://github.com/pksep/chat_client/commit/d994f212bee0064d3757560b34c604aee5de0807))
+* versions ([069ab5d](https://github.com/pksep/chat_client/commit/069ab5d46838d57e6a115e87226c7273522d0bdc))
+* web version ([3278ca0](https://github.com/pksep/chat_client/commit/3278ca0f6dab453931310f0f144cc38a5a8feb6e))
+
+
+### Features
+
+* **auth:** support shared auth sessions ([d0206dc](https://github.com/pksep/chat_client/commit/d0206dc6520a0efd94988863870d6da18c416bac))
+* **calls:** collect correlated WebRTC diagnostics ([3ae4902](https://github.com/pksep/chat_client/commit/3ae490226474d1d9555f8c337243a489b520f77f))
+* **calls:** trace connection lifecycles and browser tabs ([e9092ce](https://github.com/pksep/chat_client/commit/e9092ce9c7dbf6da1595bf60c50ea000c8502fc1))
+* **chat:** integrate server stickers and finish message fixes ([493bfa6](https://github.com/pksep/chat_client/commit/493bfa625184ec9c24b9b2511ea84c8a5fe80dc6))
+* **erp-725:** honor authorization login mode in client ([a066c7e](https://github.com/pksep/chat_client/commit/a066c7e3d36cae4f9395ad5d413b0f343123c9a2))
+* **ERP-828:** support short QR login links ([1fc85ea](https://github.com/pksep/chat_client/commit/1fc85eab4ccb0b9cdd6ee0d9584927acb108c192))
+* refresh customer details after saving ERP contact ([1ebe32a](https://github.com/pksep/chat_client/commit/1ebe32a5961db9d7a4bc5322db139ad76929fdf5))
+* show Telegram and MAX channels in client chats ([4c5c2c5](https://github.com/pksep/chat_client/commit/4c5c2c53ee2dfae560cda971df373968d47661d7))
+* **telemetry:** add location, topic state and update diagnostics ([78c6607](https://github.com/pksep/chat_client/commit/78c6607d1f09c273ac7b037a1289d4c991c637e5))
+* upgrade stickers ([de17980](https://github.com/pksep/chat_client/commit/de17980dcdd9caadbd0e7781b77b2bd7870dfb0e))
+* upgrade stickers and fix back event ([8fad712](https://github.com/pksep/chat_client/commit/8fad712b8cf9e640d8472bb3f211c2ef6e3f443c))
+* удаление клиентских чатов с сохранением истории ([46d2d3b](https://github.com/pksep/chat_client/commit/46d2d3bc7cb11536d3baf0f16d94b1d0f5b61ee6))
+
+
+### Reverts
+
+* **docker:** restore previous static permission handling ([0e9c109](https://github.com/pksep/chat_client/commit/0e9c1094ec243aa3626cd4e021a1f0706b0430c3))
+
 # [1.43.0](https://github.com/pksep/chat_client/compare/v1.42.0...v1.43.0) (2026-10-08)
 
 

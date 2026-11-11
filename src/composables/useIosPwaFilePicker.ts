@@ -77,23 +77,42 @@ export function useIosPwaFilePicker(
           if (disposed || processing || !input.files?.length) return;
           processing = true;
           try {
-            const files = Array.from(input.files);
-            const sizeError = files.map(getUploadFileSizeError).find(Boolean);
-            if (sizeError) {
-              showErrorNotification(sizeError);
-              return;
-            }
-            try {
-              validateFiles?.(files);
-            } catch (error) {
-              showErrorNotification(error);
-              return;
-            }
-            const selection = new DataTransfer();
-            for (const file of files) {
-              selection.items.add(await snapshotFile(file));
+            const deadline = Date.now() + 10_000;
+            let selection: DataTransfer;
+            for (;;) {
               if (disposed) return;
+              const files = Array.from(input.files || []);
+              const sizeError = files.map(getUploadFileSizeError).find(Boolean);
+              if (sizeError) {
+                showErrorNotification(sizeError);
+                return;
+              }
+              try {
+                validateFiles?.(files);
+              } catch (error) {
+                showErrorNotification(error);
+                return;
+              }
+              try {
+                selection = new DataTransfer();
+                if (!files.length) throw new Error('Файл камеры ещё не готов');
+                for (const file of files) {
+                  if (
+                    !file.size &&
+                    (onlyMedia || /^(image|video)\//i.test(file.type))
+                  )
+                    throw new Error('Файл камеры ещё не готов');
+                  selection.items.add(await snapshotFile(file));
+                  if (disposed) return;
+                }
+                break;
+              } catch (error) {
+                // files появляется раньше, чем WebKit заканчивает сохранять снимок.
+                if (Date.now() >= deadline) throw error;
+                await new Promise(resolve => setTimeout(resolve, 100));
+              }
             }
+            // Повторяем только чтение: обработчик отправки вызывается один раз.
             if (!disposed) await onFiles(selection.files, onlyMedia);
           } catch {
             if (!disposed) {

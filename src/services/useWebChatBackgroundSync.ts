@@ -785,7 +785,8 @@ export const clearWebChatBackgroundSyncSession = async (): Promise<void> => {
       deleteValue(SESSION_KEY),
       deleteValue(SNAPSHOT_KEY),
       deleteValue(STATUS_KEY),
-      deleteValue(PENDING_HINTS_KEY)
+      deleteValue(PENDING_HINTS_KEY),
+      deleteValue('pushDeliveries')
     ]);
     await setStatus({
       state: 'session_cleared',

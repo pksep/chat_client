@@ -72,7 +72,8 @@ import { parseCallTopicDescription } from '../../utils/call-topic';
 
 const props = withDefaults(
   defineProps<{
-    topic: ITopic;
+    topic?: ITopic | null;
+    topicId?: string;
     roomId?: string | null;
     dataTestid?: string;
   }>(),
@@ -91,8 +92,9 @@ interface SummaryActionContext {
 }
 
 const callTopicMeta = computed(() =>
-  parseCallTopicDescription(props.topic.group?.description)
+  parseCallTopicDescription(props.topic?.group?.description)
 );
+const summaryTopicId = computed(() => props.topic?.id || props.topicId || '');
 const summaryRoomId = computed(
   () => callTopicMeta.value?.roomId || props.roomId || null
 );
@@ -104,7 +106,7 @@ const canUseTranscriptActions = computed(() =>
 const hydrateSummary = async (): Promise<void> => {
   const token = ++summaryLoadToken;
   const roomId = summaryRoomId.value;
-  const topicId = props.topic.id;
+  const topicId = summaryTopicId.value;
   summary.value = null;
 
   if (!topicId) {
@@ -118,7 +120,7 @@ const hydrateSummary = async (): Promise<void> => {
 };
 
 const getSummaryActionContext = (): SummaryActionContext => ({
-  topicId: props.topic.id,
+  topicId: summaryTopicId.value,
   roomId: summaryRoomId.value
 });
 
@@ -251,7 +253,7 @@ const handleSendActionList = (): void => {
 };
 
 watch(
-  () => [props.topic.id, summaryRoomId.value],
+  () => [summaryTopicId.value, summaryRoomId.value],
   () => {
     void hydrateSummary();
   },

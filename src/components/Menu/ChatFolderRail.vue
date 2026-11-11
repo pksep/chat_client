@@ -14,28 +14,6 @@
       @keydown="onKeydown"
     >
       <button
-        v-if="props.mobile"
-        type="button"
-        :class="[
-          'chat-folder-rail__item',
-          'chat-folder-rail__item--manage',
-          {
-            'chat-folder-rail__item--active': props.isActive && props.isManaging
-          }
-        ]"
-        title="Настройки"
-        aria-label="Открыть папки"
-        :aria-pressed="props.isActive && props.isManaging"
-        data-testid="ChatFolders-Rail-Manage"
-        @click="emits('manage')"
-      >
-        <span class="chat-folder-rail__avatar">
-          <span class="chat-folder-rail__manage-icon" aria-hidden="true" />
-        </span>
-        <span class="visually-hidden">Настройки</span>
-      </button>
-
-      <button
         type="button"
         :class="[
           'chat-folder-rail__item',
@@ -60,7 +38,7 @@
         <span class="chat-folder-rail__avatar">
           <MessageIcon />
           <span
-            v-if="!props.mobile && allUnreadCount"
+            v-if="allUnreadCount"
             class="chat-folder-rail__badge"
             :class="{
               'chat-folder-rail__badge--wide': allUnreadCount > 9,
@@ -73,15 +51,6 @@
           </span>
         </span>
         <span class="chat-folder-rail__label">Все чаты</span>
-        <span
-          v-if="props.mobile && allUnreadCount"
-          class="chat-folder-rail__badge chat-folder-rail__badge--inline"
-          :class="{ 'chat-folder-rail__badge--muted': allUnreadBadge.isMuted }"
-          :aria-label="`Непрочитанных сообщений: ${allUnreadCount}`"
-          data-testid="ChatFolders-Rail-All-UnreadCount"
-        >
-          {{ unreadBadgeLabel(allUnreadCount) }}
-        </span>
       </button>
 
       <template v-if="props.loading && !props.folders.length">
@@ -157,6 +126,28 @@
       </TransitionGroup>
 
       <slot v-if="props.mobile" name="system-folders" />
+
+      <button
+        v-if="props.mobile"
+        type="button"
+        :class="[
+          'chat-folder-rail__item',
+          'chat-folder-rail__item--manage',
+          {
+            'chat-folder-rail__item--active': props.isActive && props.isManaging
+          }
+        ]"
+        title="Настройки"
+        aria-label="Открыть папки"
+        :aria-pressed="props.isActive && props.isManaging"
+        data-testid="ChatFolders-Rail-Manage"
+        @click="emits('manage')"
+      >
+        <span class="chat-folder-rail__avatar">
+          <span class="chat-folder-rail__manage-icon" aria-hidden="true" />
+        </span>
+        <span class="chat-folder-rail__label">Настройки</span>
+      </button>
     </div>
 
     <div v-if="!props.mobile" class="chat-folder-rail__footer">
@@ -241,7 +232,6 @@ const {
   folders: () => props.folders,
   disabled: () => props.loading || isReordering.value,
   horizontal: () => props.mobile,
-  wrapped: () => props.mobile,
   onReorder: folderIds => useChatFolders(props.scope).reorderFolders(folderIds)
 });
 

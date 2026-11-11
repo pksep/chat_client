@@ -1,6 +1,7 @@
 <template>
   <Teleport to="body" :disabled="!isMobile">
     <ContextMenu
+      v-bind="$attrs"
       class="topic-folder-context-menu"
       :class="{ 'topic-folder-context-menu--folders': folders.length }"
       :visible="true"
@@ -33,6 +34,7 @@
           <Icon :name="IconNameEnum.chevronRight" :width="20" :height="20" />
         </Button>
         <slot name="after" />
+        <slot />
       </template>
       <div
         v-if="showFolders && folders.length"
@@ -125,6 +127,7 @@ const props = defineProps<{
   position: { x: number; y: number };
   dataTestid: string;
 }>();
+defineOptions({ inheritAttrs: false });
 const emit = defineEmits<{ (event: 'close'): void }>();
 const {
   folders: allFolders,

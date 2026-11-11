@@ -74,6 +74,7 @@ import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { compareMessages, getMessageTimestamp } from '../utils/messageOrder';
 import { parseMessageEx } from '../utils/messageReplyQuote';
 import { mergeMessageSnapshots } from '../utils/merge-message-snapshots';
+import { mergeMessageReceipts } from '../utils/message-delivery-status';
 import {
   isMessageIdDeleted,
   pendingMessageTombstone
@@ -84,12 +85,28 @@ import { recordMessageDeletionTelemetry } from './message-deletion-telemetry';
 // Read может прийти до echo или загрузки истории. Сохраняем подтверждение
 // по серверному ID, чтобы последующий снимок не вернул WAIT/DELIVERED.
 const readReceiptsByMessage = new Map<string, Map<string, string>>();
+const deliveryReceiptsByMessage = new Map<string, Map<string, string>>();
 const readReceiptKey = (topicId: string, messageId: string): string =>
   JSON.stringify([authedUser.value?.id, topicId, messageId]);
 const applyKnownReadReceipts = (
   topicId: string,
   message: IMessage
 ): IMessage => {
+  const deliveries = deliveryReceiptsByMessage.get(
+    readReceiptKey(topicId, message.id)
+  );
+  if (message.deliveryState && deliveries?.size) {
+    message = {
+      ...message,
+      deliveryState: {
+        ...message.deliveryState,
+        delivered: mergeMessageReceipts(
+          message.deliveryState.delivered,
+          [...deliveries].map(([userId, createdAt]) => ({ userId, createdAt }))
+        )
+      }
+    };
+  }
   const receipts = readReceiptsByMessage.get(
     readReceiptKey(topicId, message.id)
   );
@@ -107,6 +124,13 @@ const applyKnownReadReceipts = (
     status: MessageStatus.Read,
     isRead: true,
     isReadByMe: receipts.has(authedUser.value?.id) || message.isReadByMe,
+    deliveryState: message.deliveryState && {
+      ...message.deliveryState,
+      read: mergeMessageReceipts(
+        message.deliveryState.read,
+        [...receipts].map(([userId, createdAt]) => ({ userId, createdAt }))
+      )
+    },
     messageRead
   };
 };
@@ -123,7 +147,14 @@ const INITIAL_TOPIC_WINDOW_MESSAGES = 100;
 const ACTIVE_MOBILE_APPEND_PERSIST_DELAY_MS = 1000;
 const MOBILE_VIEWPORT_MAX_WIDTH = 768;
 const MAX_RESIDENT_MESSAGE_TOPICS = 10;
-const aroundMessageContextPrefetches = new Map<string, Promise<IMessage[]>>();
+const aroundMessageContextPrefetches = new Map<
+  string,
+  {
+    sdk: ReturnType<typeof getChatSDK>;
+    startedAt: number;
+    request: Promise<IMessage[]>;
+  }
+>();
 interface PendingMessagePersist {
   timeoutId: ReturnType<typeof setTimeout> | null;
   idleId: number | null;
@@ -1995,26 +2026,38 @@ export const prefetchAroundMessageContext = (
     return Promise.resolve([]);
   }
 
-  if (
-    getFullMessagesByTopicId(topicId).some(message => message.id === messageId)
-  ) {
-    return Promise.resolve([]);
-  }
-
   const requestKey = `${topicId}:${messageId}`;
   const existingRequest = aroundMessageContextPrefetches.get(requestKey);
 
-  if (existingRequest) {
-    return existingRequest;
+  if (
+    existingRequest &&
+    existingRequest.sdk === getChatSDK() &&
+    Date.now() - existingRequest.startedAt < 15_000
+  ) {
+    return existingRequest.request;
   }
 
   const request = fetchAroundMessage(messageId, topicId, {
-    updateVisible: false
-  }).finally(() => {
-    aroundMessageContextPrefetches.delete(requestKey);
+    updateVisible: false,
+    forceNetwork: getHasBrowserNetwork()
+  }).then(messages => {
+    if (!messages?.some(message => message.id === messageId)) {
+      aroundMessageContextPrefetches.delete(requestKey);
+    }
+    return messages || [];
   });
 
-  aroundMessageContextPrefetches.set(requestKey, request);
+  aroundMessageContextPrefetches.delete(requestKey);
+  aroundMessageContextPrefetches.set(requestKey, {
+    sdk: getChatSDK(),
+    startedAt: Date.now(),
+    request
+  });
+  while (aroundMessageContextPrefetches.size > 32) {
+    aroundMessageContextPrefetches.delete(
+      aroundMessageContextPrefetches.keys().next().value!
+    );
+  }
 
   return request;
 };
@@ -2770,7 +2813,7 @@ export const hydrateMessagesFromCache = async (
     hydratedResidentTopicUsers.get(topicId) === resolvedUserId &&
     canonicalTopicStateIds.has(topicId)
   ) {
-    if (opts?.visibleLimit) {
+    if (opts?.visibleLimit && !recentTopicFetches.has(topicId)) {
       return setVisibleMessagesLimitForTopic(topicId, opts.visibleLimit, {
         allowShrink: opts.allowVisibleShrink
       });
@@ -2789,7 +2832,7 @@ export const hydrateMessagesFromCache = async (
     messageHydrationsInFlight.set(hydrationKey, hydration);
   }
   const result = await hydration;
-  if (opts?.visibleLimit) {
+  if (opts?.visibleLimit && !recentTopicFetches.has(topicId)) {
     setVisibleMessagesLimitForTopic(topicId, opts.visibleLimit, {
       allowShrink: opts.allowVisibleShrink
     });
@@ -2886,6 +2929,42 @@ const loadMessagesFromCache = async (
   }
 
   const resolvedUserId = userId || authedUser.value?.id;
+  const networkReadAtStart = recentTopicFetches.get(topicId);
+  const saveRestoredMessages = (messages: IMessage[]): void => {
+    // Позднее чтение кеша восстанавливает отправку, сохраняя историю и окно HTTP.
+    const preserveNetworkHistory =
+      recentTopicFetches.has(topicId) ||
+      recentTopicFetches.get(topicId) !== networkReadAtStart;
+    const visibleMessages = preserveNetworkHistory
+      ? mergeWithPendingOutgoingMessages(
+          getMessagesByTopicId(topicId),
+          messages
+        )
+      : undefined;
+    saveMessagesToLocal(
+      topicId,
+      preserveNetworkHistory
+        ? mergeWithPendingOutgoingMessages(
+            getFullMessagesByTopicId(topicId),
+            messages
+          )
+        : messages,
+      {
+        syncLastMessage: false,
+        windowMode: 'latest',
+        visibleMessages,
+        visibleLimit: getNonShrinkingVisibleLimit(
+          topicId,
+          visibleMessages
+            ? Math.max(opts?.visibleLimit || 0, visibleMessages.length)
+            : opts?.visibleLimit,
+          false,
+          !preserveNetworkHistory && opts?.allowVisibleShrink
+        ),
+        skipPersist: true
+      }
+    );
+  };
   const existingFullMessages = getFullMessagesByTopicId(topicId);
   const hasCanonicalMessages =
     existingFullMessages.length > 0 && canonicalTopicStateIds.has(topicId);
@@ -2922,17 +3001,7 @@ const loadMessagesFromCache = async (
       ])
     );
 
-    saveMessagesToLocal(topicId, earlyShadowMessages, {
-      syncLastMessage: false,
-      windowMode: 'latest',
-      visibleLimit: getNonShrinkingVisibleLimit(
-        topicId,
-        opts?.visibleLimit,
-        false,
-        opts?.allowVisibleShrink
-      ),
-      skipPersist: true
-    });
+    saveRestoredMessages(earlyShadowMessages);
     markTopicStateCanonical(topicId);
   }
 
@@ -2952,17 +3021,7 @@ const loadMessagesFromCache = async (
       )
     );
 
-    saveMessagesToLocal(topicId, normalizedExistingMessages, {
-      syncLastMessage: false,
-      windowMode: 'latest',
-      visibleLimit: getNonShrinkingVisibleLimit(
-        topicId,
-        opts?.visibleLimit,
-        false,
-        opts?.allowVisibleShrink
-      ),
-      skipPersist: true
-    });
+    saveRestoredMessages(normalizedExistingMessages);
 
     return getMessagesByTopicId(topicId);
   }
@@ -2989,20 +3048,10 @@ const loadMessagesFromCache = async (
         )
       );
 
-      saveMessagesToLocal(topicId, normalizedShadowMessages, {
-        syncLastMessage: false,
-        windowMode: 'latest',
-        visibleLimit: getNonShrinkingVisibleLimit(
-          topicId,
-          opts?.visibleLimit,
-          false,
-          opts?.allowVisibleShrink
-        ),
-        skipPersist: true
-      });
+      saveRestoredMessages(normalizedShadowMessages);
       markTopicStateCanonical(topicId);
 
-      return normalizedShadowMessages;
+      return getFullMessagesByTopicId(topicId);
     }
   }
 
@@ -3019,24 +3068,14 @@ const loadMessagesFromCache = async (
       )
     );
 
-    saveMessagesToLocal(topicId, normalizedCachedMessages, {
-      syncLastMessage: false,
-      windowMode: 'latest',
-      visibleLimit: getNonShrinkingVisibleLimit(
-        topicId,
-        opts?.visibleLimit,
-        false,
-        opts?.allowVisibleShrink
-      ),
-      skipPersist: true
-    });
+    saveRestoredMessages(normalizedCachedMessages);
     markTopicStateCanonical(topicId);
     schedulePersistMessages(topicId, 150, {
       userId: resolvedUserId,
       migrateLegacyCache: true
     });
 
-    return normalizedCachedMessages;
+    return getFullMessagesByTopicId(topicId);
   }
 
   if (existingFullMessages.length > 0) {
@@ -3047,17 +3086,7 @@ const loadMessagesFromCache = async (
       )
     );
 
-    saveMessagesToLocal(topicId, normalizedExistingMessages, {
-      syncLastMessage: false,
-      windowMode: 'latest',
-      visibleLimit: getNonShrinkingVisibleLimit(
-        topicId,
-        opts?.visibleLimit,
-        false,
-        opts?.allowVisibleShrink
-      ),
-      skipPersist: true
-    });
+    saveRestoredMessages(normalizedExistingMessages);
 
     return getMessagesByTopicId(topicId);
   }
@@ -3069,20 +3098,10 @@ const loadMessagesFromCache = async (
         prepareMessagesForPersistence(pendingUploadMessages)
       );
 
-    saveMessagesToLocal(topicId, normalizedPendingUploadMessages, {
-      syncLastMessage: false,
-      windowMode: 'latest',
-      visibleLimit: getNonShrinkingVisibleLimit(
-        topicId,
-        opts?.visibleLimit,
-        false,
-        opts?.allowVisibleShrink
-      ),
-      skipPersist: true
-    });
+    saveRestoredMessages(normalizedPendingUploadMessages);
     markTopicStateCanonical(topicId);
 
-    return normalizedPendingUploadMessages;
+    return getFullMessagesByTopicId(topicId);
   }
 
   return [];
@@ -3393,6 +3412,12 @@ const applyLocalReadStatus = (
         status: MessageStatus.Read,
         isRead: true,
         isReadByMe: isReadByCurrentUser ? true : message.isReadByMe,
+        deliveryState: message.deliveryState && {
+          ...message.deliveryState,
+          read: mergeMessageReceipts(message.deliveryState.read, [
+            { userId, createdAt: readAt }
+          ])
+        },
         messageRead: isReadByCurrentUser
           ? message.messageRead
           : upsertMessageReadEntry(message.messageRead, {
@@ -3419,6 +3444,14 @@ const applyLocalReadStatus = (
   );
   const updatedMessages = fullReadUpdate.messages;
 
+  const lastMessage = getSelectedTopic(topicId)?.lastMessage;
+  if (lastMessage?.deliveryState && readMessageIds.has(lastMessage.id)) {
+    useTopics().updateLocalLastMessageTopic(
+      topicId,
+      applyKnownReadReceipts(topicId, lastMessage)
+    );
+  }
+
   updateLocalTopicReadStatus(topicId, messageIds);
   if (fullReadUpdate.didChange) {
     fullMessagesStore[topicId] = updatedMessages;
@@ -3438,6 +3471,42 @@ const applyLocalReadStatus = (
   if (!didSyncUnreadFromPreview) {
     syncTopicUnreadState(topicId);
   }
+};
+
+export const changeLocalDeliveryStatus = (
+  topicId: string,
+  userId: string,
+  deliveries: { messageId: string; createdAt: string }[]
+): void => {
+  deliveries.forEach(({ messageId, createdAt }) => {
+    const key = readReceiptKey(topicId, messageId);
+    const receipts =
+      deliveryReceiptsByMessage.get(key) || new Map<string, string>();
+    if (!receipts.has(userId)) receipts.set(userId, createdAt);
+    deliveryReceiptsByMessage.set(key, receipts);
+  });
+  while (deliveryReceiptsByMessage.size > 10_000)
+    deliveryReceiptsByMessage.delete(
+      deliveryReceiptsByMessage.keys().next().value!
+    );
+  const ids = new Set(deliveries.map(item => item.messageId));
+  const update = (messages: IMessage[]) =>
+    messages.map(message =>
+      ids.has(message.id) ? applyKnownReadReceipts(topicId, message) : message
+    );
+  if (fullMessagesStore[topicId])
+    fullMessagesStore[topicId] = update(fullMessagesStore[topicId]);
+  if (messagesStore[topicId])
+    messagesStore[topicId] = update(messagesStore[topicId]);
+  if (pinnedMessagesStore[topicId])
+    pinnedMessagesStore[topicId] = update(pinnedMessagesStore[topicId]);
+  const lastMessage = getSelectedTopic(topicId)?.lastMessage;
+  if (lastMessage && ids.has(lastMessage.id))
+    useTopics().updateLocalLastMessageTopic(
+      topicId,
+      applyKnownReadReceipts(topicId, lastMessage)
+    );
+  if (fullMessagesStore[topicId]) schedulePersistMessages(topicId);
 };
 
 export const flushDeferredLocalOwnReadStatus = (topicId: string): void => {
@@ -3531,7 +3600,7 @@ export const changeFileLoadingStatus = (
 export const changeMessageStatusLocally = (
   topicId: string,
   messageId: string,
-  status: MessageStatus
+  status: IMessage['status']
 ): void => {
   const currentMessage = getFullMessagesByTopicId(topicId).find(
     message => message.id === messageId

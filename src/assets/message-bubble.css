@@ -314,7 +314,7 @@
 }
 
 .message__article--emoji-referenced {
-  background-color: var(--message-background-color, var(--white));
+  background-color: var(--message-background-color, var(--surface-overlay));
   border-radius: 20px;
   padding: 10px 15px;
   gap: 8px;
@@ -448,6 +448,10 @@
 
 .message-call__title--missed {
   color: #ff6b6b;
+}
+
+.message-call__no-answer {
+  color: var(--error-color);
 }
 
 .message-call__title--incoming,
@@ -1932,6 +1936,17 @@ div.message-content__file {
 @media screen and (width <= 768px) {
   .slider-modal .slider-modal__content {
     gap: 0;
+  }
+
+  .slider-modal .slider-modal__bottom {
+    box-sizing: border-box;
+    height: 48px;
+    min-height: 48px;
+    align-items: center;
+  }
+
+  .slider-modal .slider-modal__nav-block {
+    min-width: 0;
   }
 }
 

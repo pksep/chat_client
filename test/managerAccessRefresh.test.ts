@@ -41,10 +41,15 @@ function fixture(clientAccess = true): {
   routeClears(): number;
   setRequest(value: Request): void;
   setToken(value: string): void;
+  failures: Array<{ error: unknown; details: Record<string, unknown> }>;
 } {
   const user = vue.ref({ id: 'synthetic-operator' });
   const access = vue.ref({ client: clientAccess, ai: false });
   const notices: string[] = [];
+  const failures: Array<{
+    error: unknown;
+    details: Record<string, unknown>;
+  }> = [];
   let clears = 0;
   let token = 'synthetic-session';
   let request: Request = async (path: string): Promise<Response> =>
@@ -53,6 +58,14 @@ function fixture(clientAccess = true): {
   const dependencies: Record<string, object> = {
     vue,
     '../utils/inquiry-message-visibility': inquiryVisibility,
+    '../services/error-notification-telemetry': {
+      recordErrorRequest: (
+        error: unknown,
+        details: Record<string, unknown>
+      ): void => {
+        failures.push({ error, details });
+      }
+    },
     './useAuth': {
       authedUser: user,
       getStoredChatAccessToken: (): string => token,
@@ -102,6 +115,7 @@ function fixture(clientAccess = true): {
     state: exported.useManagerInquiries(),
     user,
     notices,
+    failures,
     routeClears: (): number => clears,
     setRequest: (value: Request): void => {
       request = value;
@@ -115,6 +129,45 @@ function fixture(clientAccess = true): {
 afterEach((): void => {
   for (const scope of scopes) scope.stop();
   scopes.clear();
+});
+
+test('таймаут запроса сохраняет исходную ошибку и записывает диагностику', async () => {
+  const probe = fixture();
+  const error = new DOMException('signal timed out', 'TimeoutError');
+  probe.setRequest(async () => {
+    throw error;
+  });
+
+  await expect(probe.module.managerRequest('access')).rejects.toBe(error);
+  expect(probe.failures).toEqual([
+    {
+      error,
+      details: {
+        source: 'managerRequest',
+        url: 'https://synthetic.invalid/api/manager/access',
+        method: 'GET',
+        elapsedMs: expect.any(Number),
+        timeoutMs: 20000,
+        httpStatus: undefined,
+        phase: 'request'
+      }
+    }
+  ]);
+});
+
+test('ошибка HTTP записывает статус без изменения обработки доступа', async () => {
+  const probe = fixture();
+  probe.setRequest(async () => Response.json({}, { status: 503 }));
+
+  await expect(probe.module.managerRequest('access')).rejects.toThrow(
+    'Не удалось выполнить действие. Попробуйте ещё раз.'
+  );
+  expect(probe.failures).toHaveLength(1);
+  expect(probe.failures[0].details).toMatchObject({
+    httpStatus: 503,
+    phase: 'http_status'
+  });
+  expect(probe.state.allowed.value).toBe(true);
 });
 
 describe('отказ на действие не закрывает доступный раздел клиентов', (): void => {

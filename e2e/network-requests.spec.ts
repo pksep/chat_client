@@ -263,7 +263,7 @@ test('700 одновременных чтений справочников и к
   expect(state.failures).toEqual([]);
 });
 
-test('закрепление вне истории не загружает контекст до нажатия', async ({
+test('контекст закрепа готовится заранее и повторно используется при нажатии', async ({
   page
 }) => {
   const state = await openFixture(page, {
@@ -276,7 +276,7 @@ test('закрепление вне истории не загружает ко�
   const pin = page.getByTestId('Pinned-Messages');
   await expect(pin).toBeVisible();
   await page.waitForTimeout(800);
-  expect(state.requests.filter(url => url.includes('/around'))).toEqual([]);
+  expect(state.requests.filter(url => url.includes('/around'))).toHaveLength(1);
   await pin.click();
   await expect(message(page, 0, 0)).toBeVisible();
   await expect

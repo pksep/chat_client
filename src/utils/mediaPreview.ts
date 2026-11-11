@@ -14,6 +14,8 @@ export interface MediaPreviewDimensions extends MediaDimensions {
   fillPreview?: boolean;
 }
 
+// Один и тот же кадр используется в локальном превью и при загрузке обложки.
+const videoThumbnailCache = new WeakMap<File, string>();
 const VIDEO_THUMBNAIL_TIMESTAMPS = [0.1, 0.5, 1, 2];
 const VIDEO_BLACK_FRAME_BRIGHTNESS_THRESHOLD = 10;
 const VIDEO_METADATA_TIMEOUT_MS = 2500;
@@ -212,6 +214,9 @@ export const getVideoThumbnail = (
   file: File,
   options?: { timeoutMs?: number }
 ): Promise<string | null> => {
+  const cachedThumbnail = videoThumbnailCache.get(file);
+  if (cachedThumbnail) return Promise.resolve(cachedThumbnail);
+
   return new Promise(resolve => {
     const video = document.createElement('video');
     const videoWithFrameCallback = video as VideoWithFrameCallback;
@@ -241,7 +246,9 @@ export const getVideoThumbnail = (
 
       resolved = true;
       cleanup();
-      resolve(value);
+      const thumbnail = videoThumbnailCache.get(file) || value;
+      if (thumbnail) videoThumbnailCache.set(file, thumbnail);
+      resolve(thumbnail);
     };
 
     video.preload = 'auto';

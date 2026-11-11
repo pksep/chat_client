@@ -1,10 +1,15 @@
 import { reactive, readonly } from 'vue';
 import { MessageTypeEnum } from '@pksep/yui';
+import {
+  recordErrorNotification,
+  type NotificationDiagnostics
+} from '../services/error-notification-telemetry';
 
 interface INotificationPayload {
   title: string;
   description: unknown;
   type?: MessageTypeEnum;
+  diagnostics?: NotificationDiagnostics;
 }
 
 export interface INotificationItem extends INotificationPayload {
@@ -72,7 +77,8 @@ export const closeNotification = (key?: number) => {
 export const showNotification = ({
   title,
   description,
-  type = MessageTypeEnum.error
+  type = MessageTypeEnum.error,
+  diagnostics
 }: INotificationPayload) => {
   const notification: INotificationItem = {
     key: nextNotificationKey,
@@ -90,13 +96,27 @@ export const showNotification = ({
       closeNotification(notification.key);
     }, NOTIFICATION_TIMEOUT_MS)
   );
+
+  if (type === MessageTypeEnum.error) {
+    recordErrorNotification({
+      title,
+      description,
+      error: diagnostics?.error ?? description,
+      source: diagnostics?.source,
+      stack: new Error().stack
+    });
+  }
 };
 
-export const showErrorNotification = (description: unknown) => {
+export const showErrorNotification = (
+  description: unknown,
+  diagnostics?: NotificationDiagnostics
+) => {
   showNotification({
     title: 'Ошибка',
     description,
-    type: MessageTypeEnum.error
+    type: MessageTypeEnum.error,
+    diagnostics
   });
 };
 

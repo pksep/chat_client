@@ -65,6 +65,10 @@ for (const { delayMs, targetInCache } of [
         .getByTestId('Pinned-Messages')
         .locator('.chat__input__action__blog')
         .click();
+      if (!targetInCache) {
+        await expect(message(page, 0, 0)).not.toBeAttached();
+        releaseContext();
+      }
       await expect(message(page, 0, 0)).toBeInViewport();
 
       const historyResponse = page.waitForResponse(response =>
@@ -76,11 +80,6 @@ for (const { delayMs, targetInCache } of [
 
       await expect(message(page, 0, 0)).toBeInViewport();
       if (!targetInCache) {
-        const contextResponse = page.waitForResponse(response =>
-          response.url().includes('/messages/performance-0-message-0/around')
-        );
-        releaseContext();
-        await contextResponse;
         await expect(message(page, 0, 29)).toBeAttached();
         await page.waitForTimeout(300);
         await expect(message(page, 0, 0)).toBeInViewport();

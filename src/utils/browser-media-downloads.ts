@@ -1,8 +1,7 @@
 const DOWNLOAD_FRAME_LIFETIME_MS = 10 * 60_000;
 
-// Ссылки UI-kit скачивают вложения с другого origin через новую вкладку.
 // Ответ media/object с downloadName уже имеет Content-Disposition: attachment:
-// отдельный фрейм сохраняет потоковую загрузку без смены фокуса приложения.
+// отдельный фрейм скачивает файл без beforeunload вкладки и предупреждения о звонке.
 export const initBrowserMediaDownloads = (): (() => void) => {
   const frames = new Map<HTMLIFrameElement, number>();
   const removeFrame = (frame: HTMLIFrameElement): void => {
@@ -13,15 +12,12 @@ export const initBrowserMediaDownloads = (): (() => void) => {
 
   const handleDownload = (event: MouseEvent): void => {
     if (event.defaultPrevented || !(event.target instanceof Element)) return;
-    const link = event.target.closest<HTMLAnchorElement>(
-      'a[download][target="_blank"]'
-    );
+    const link = event.target.closest<HTMLAnchorElement>('a[download]');
     if (!link) return;
 
     const url = new URL(link.href, window.location.href);
     if (
       !['http:', 'https:'].includes(url.protocol) ||
-      url.origin === window.location.origin ||
       !url.pathname.includes('/media/object/') ||
       !url.searchParams.get('downloadName')
     )

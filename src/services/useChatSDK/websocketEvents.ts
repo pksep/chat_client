@@ -1,4 +1,5 @@
 import { Message, Topic, User, Group, Reaction } from '@pksep/zod-shared-chat';
+import type { MessageUploadActivity } from '../../utils/message-upload-activity';
 import { IMedia, ITopic } from 'src/components/interfaces/interfaces';
 import type {
   ChatFolderChange,
@@ -71,8 +72,11 @@ export enum WebSocketEventType {
   CHANGE_TOPIC = 'changeTopic',
   CHANGE_MESSAGE = 'changeMessage',
   READ_MESSAGE = 'readMessage',
+  DELIVER_MESSAGE = 'deliverMessage',
+  MESSAGE_DELIVERED = 'messageDelivered',
   USER_UPDATED = 'userUpdated',
   TYPING_STATUS = 'typingStatus',
+  UPLOAD_STATUS = 'uploadStatus',
   TOGGLE_PRESENCE = 'togglePresence',
   ACTIVE_CALLS = 'activeCalls',
   START_CALL = 'startCall',
@@ -89,6 +93,16 @@ export enum WebSocketEventType {
 }
 
 export interface WebSocketEventPayloads {
+  [WebSocketEventType.DELIVER_MESSAGE]: {
+    topicId: string;
+    messageIds: string[];
+  };
+  [WebSocketEventType.MESSAGE_DELIVERED]: {
+    topicId: string;
+    userId: string;
+    deliveries: { messageId: string; createdAt: string }[];
+    ptsMeta?: PtsMeta;
+  };
   [WebSocketEventType.GET_CHAT_FOLDERS]: Record<string, never>;
   [WebSocketEventType.CREATE_CHAT_FOLDER]: CreateChatFolderPayload;
   [WebSocketEventType.UPDATE_CHAT_FOLDER]: SaveChatFolderPayload & {
@@ -209,6 +223,7 @@ export interface WebSocketEventPayloads {
     userId?: string;
     isTyping: boolean;
   };
+  [WebSocketEventType.UPLOAD_STATUS]: MessageUploadActivity;
   [WebSocketEventType.CONNECTED]: null;
   [WebSocketEventType.DISCONNECTED]: null;
   [WebSocketEventType.AUTHENTICATED]: { userId: string };

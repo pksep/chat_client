@@ -16,6 +16,10 @@ import type { PtsMeta } from './useChatSDK/websocketEvents';
 import { MessageStatus, TopicType } from './useChatSDK/types';
 import type { ChatMessage } from '../types/messages';
 import { authedUser } from '../composables/useAuth';
+import {
+  clearTopicUploadStatuses,
+  setTopicUploadStatus
+} from '../composables/useTopicActivity';
 import { showErrorNotification } from '../composables/useNotifications';
 import {
   configureChatFolderSync,
@@ -54,6 +58,7 @@ import {
 import {
   addMessageToLocal,
   changeLocalReadStatus,
+  changeLocalDeliveryStatus,
   changeReactionFromLocal,
   clearMessagesForTopic,
   deleteMessageFromLocal,
@@ -71,6 +76,7 @@ import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
 import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { Capacitor } from '@capacitor/core';
 import { isTauriRuntime } from './useTauriNotifications';
+import { showWebSocketMessageNotification } from './web-socket-notifications';
 import { App as CapacitorApp } from '@capacitor/app';
 import {
   clearMessageNotification,
@@ -578,6 +584,13 @@ const setupChatListeners = (): void => {
           sender: message.senderUser || getUserById(message.senderUserId),
           topic
         });
+        if (topic && isTrackableUnreadIncomingMessage) {
+          void showWebSocketMessageNotification({
+            message,
+            sender: message.senderUser || getUserById(message.senderUserId),
+            topic
+          });
+        }
       }
     }
 
@@ -1063,6 +1076,9 @@ const setupChatListeners = (): void => {
   chatSDK.subscribeToEvent(WebSocketEventType.TYPING_STATUS, ({ payload }) => {
     setTopicTypingState(payload.topicId, payload.userId, payload.isTyping);
   });
+  chatSDK.subscribeToEvent(WebSocketEventType.UPLOAD_STATUS, ({ payload }) => {
+    setTopicUploadStatus(payload);
+  });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CHANGE_TOPIC, ({ payload }) => {
     handleTopicChangePayload(payload);
@@ -1075,6 +1091,27 @@ const setupChatListeners = (): void => {
   chatSDK.subscribeToEvent(WebSocketEventType.READ_MESSAGE, ({ payload }) => {
     handleReadMessagePayload(payload);
   });
+
+  const handleDeliveryPayload = (payload: {
+    topicId: string;
+    userId: string;
+    deliveries: { messageId: string; createdAt: string }[];
+    ptsMeta?: PtsMeta;
+  }) => {
+    if (!shouldProcessPtsMeta(payload.ptsMeta)) return;
+    persistPtsMeta(payload.ptsMeta);
+    changeLocalDeliveryStatus(
+      payload.topicId,
+      payload.userId,
+      payload.deliveries
+    );
+  };
+  chatSDK.subscribeToEvent(
+    WebSocketEventType.MESSAGE_DELIVERED,
+    ({ payload }) => {
+      handleDeliveryPayload(payload);
+    }
+  );
 
   chatSDK.subscribeToEvent(
     WebSocketEventType.REACTION_UPDATED,
@@ -1125,6 +1162,9 @@ const setupChatListeners = (): void => {
               ...(event.payload as any),
               ptsMeta
             });
+            break;
+          case 'message.delivered':
+            handleDeliveryPayload({ ...(event.payload as any), ptsMeta });
             break;
           case 'message.reaction':
             handleReactionPayload({
@@ -2511,6 +2551,7 @@ export const initializeChat = async (options: {
   cacheReady?: Promise<void>;
 }): Promise<void> => {
   const previousSDK = chatSDK;
+  clearTopicUploadStatuses();
   ptsSnapshotRefresh = null;
   ptsSnapshotRefreshNeeded = false;
   minimumReplayPts = 0;

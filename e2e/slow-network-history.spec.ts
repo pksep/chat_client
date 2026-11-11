@@ -93,7 +93,7 @@ for (const cacheSource of ['память', 'IndexedDB']) {
   });
 }
 
-test('онлайн: скелетон скрывает кеш до HTTP, свежий ответ заменяет удалённые сообщения', async ({
+test('онлайн: сообщения из IndexedDB видны до HTTP, свежий ответ заменяет удалённые сообщения', async ({
   page
 }) => {
   const state = await openFixture(page, { shell: true });
@@ -126,10 +126,10 @@ test('онлайн: скелетон скрывает кеш до HTTP, свеж
   });
   try {
     await openTopic(page, 0);
+    await expect(message(page, 0, 19)).toBeVisible();
     await expect(
       page.locator('[data-testid$="-MessageList-Skeleton"]')
-    ).toBeVisible();
-    await expect(page.locator('[data-message-id]')).toHaveCount(0);
+    ).toHaveCount(0);
     expect(
       await page.evaluate(() => (window as any).savedHistoryReadCalls)
     ).toBe(0);
@@ -142,7 +142,7 @@ test('онлайн: скелетон скрывает кеш до HTTP, свеж
   expect(state.errors).toEqual([]);
 });
 
-test('онлайн: смена чата во время скелетона защищена от позднего HTTP', async ({
+test('онлайн: смена сохранённого чата защищена от позднего HTTP', async ({
   page
 }) => {
   const state = await openFixture(page, { shell: true });
@@ -168,9 +168,10 @@ test('онлайн: смена чата во время скелетона за�
   });
   try {
     await openTopic(page, 0);
+    await expect(message(page, 0, 19)).toBeVisible();
     await expect(
       page.locator('[data-testid$="-MessageList-Skeleton"]')
-    ).toBeVisible();
+    ).toHaveCount(0);
     await openTopic(page, 1);
     await expect(message(page, 1)).toBeVisible();
   } finally {
@@ -306,90 +307,137 @@ test('чтение свежей истории не сбрасывает про�
   await expect.poll(visibleAnchor).toEqual(before!);
 });
 
-test('поздний preview не возвращает историю, которую сервер уже очистил', async ({
-  page
-}) => {
-  const state = await openFixture(page, { shell: true });
-  await page.evaluate(
-    async rows => {
-      await (window as any).topicPerformance.shadow.saveShadowTopicSnapshot(
-        'performance-0',
-        rows,
-        'local',
-        'performance-user',
-        { replace: true }
-      );
-      const original = IDBObjectStore.prototype.get;
-      let complete = () => {};
-      IDBObjectStore.prototype.get = function (...args) {
-        const request = original.apply(this, args);
-        if (this.name === 'topicPreviews') {
-          Object.defineProperty(request, 'onsuccess', {
-            set(handler) {
-              request.addEventListener('success', event => {
-                (window as any).previewReadWaiting = true;
-                complete = () => handler.call(request, event);
-              });
-            }
-          });
-        }
-        return request;
-      };
-      (window as any).releaseOldPreview = () => {
-        IDBObjectStore.prototype.get = original;
-        complete();
-      };
-    },
-    makeMessages('performance-0', 20)
-  );
-  let release!: () => void;
-  const gate = new Promise<void>(resolve => {
-    release = resolve;
-  });
-  await page.route('**/messages/topic/performance-0?*', async route => {
-    await gate;
-    await route.fulfill({ json: [] });
-  });
-  await page.evaluate(() => {
-    void (
-      window as any
-    ).topicPerformance.messages.hydrateMessagePreviewFromCache(
-      'performance-0',
-      'performance-user',
-      24
-    );
-  });
-  try {
-    await openTopic(page, 0);
-    await expect
-      .poll(() =>
-        page.evaluate(() => (window as any).previewReadWaiting === true)
-      )
-      .toBe(true);
-    release();
-    await expect(
-      page.locator('[data-testid$="-MessageList-EmptyChat"]')
-    ).toBeVisible();
-    await page.evaluate(async () => {
-      (window as any).releaseOldPreview();
-      await new Promise<void>(resolve =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-      );
+for (const { delayedStore, unread } of [
+  { delayedStore: 'topicPreviews', unread: false },
+  { delayedStore: 'topicSnapshots', unread: false },
+  { delayedStore: 'topicSnapshots', unread: true }
+]) {
+  test(`позднее чтение IndexedDB сохраняет свежую историю и позицию: ${delayedStore}, ${unread ? 'непрочитанные' : 'пустой чат'}`, async ({
+    page
+  }) => {
+    const state = await openFixture(page, {
+      shell: true,
+      unreadCount: unread ? 60 : 0
     });
-    await expect(page.locator('[data-message-id]')).toHaveCount(0);
-    expect(
-      await page.evaluate(() =>
-        (window as any).topicPerformance.messages.getFullMessagesByTopicId(
-          'performance-0'
+    const freshMessages = unread
+      ? makeMessages('performance-0', 140).map((row, index) => ({
+          ...row,
+          isReadByMe: index < 80
+        }))
+      : [];
+    if (unread)
+      await page.evaluate(lastMessage => {
+        const fixture = (window as any).topicPerformance;
+        fixture.setTopics([
+          { ...fixture.getSelectedTopic('performance-0'), lastMessage }
+        ]);
+      }, freshMessages.at(-1));
+    await page.evaluate(
+      async ({ rows, delayedStore }) => {
+        await (window as any).topicPerformance.shadow.saveShadowTopicSnapshot(
+          'performance-0',
+          rows,
+          'local',
+          'performance-user',
+          { replace: true }
+        );
+        const original = IDBObjectStore.prototype.get;
+        const completions: (() => void)[] = [];
+        IDBObjectStore.prototype.get = function (...args) {
+          const request = original.apply(this, args);
+          if (this.name === delayedStore) {
+            Object.defineProperty(request, 'onsuccess', {
+              set(handler) {
+                request.addEventListener('success', event => {
+                  (window as any).previewReadWaiting = true;
+                  completions.push(() => handler.call(request, event));
+                });
+              }
+            });
+          }
+          return request;
+        };
+        (window as any).releaseOldPreview = () => {
+          IDBObjectStore.prototype.get = original;
+          completions.splice(0).forEach(complete => complete());
+        };
+      },
+      { rows: makeMessages('performance-0', 20), delayedStore }
+    );
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    await page.route('**/messages/topic/performance-0?*', async route => {
+      await gate;
+      await route.fulfill({ json: freshMessages.slice(60) });
+    });
+    if (delayedStore === 'topicPreviews') {
+      await page.evaluate(() => {
+        void (
+          window as any
+        ).topicPerformance.messages.hydrateMessagePreviewFromCache(
+          'performance-0',
+          'performance-user',
+          24
+        );
+      });
+    }
+    try {
+      await openTopic(page, 0);
+      await expect
+        .poll(() =>
+          page.evaluate(() => (window as any).previewReadWaiting === true)
         )
-      )
-    ).toEqual([]);
-  } finally {
-    release();
-    await page.evaluate(() => (window as any).releaseOldPreview());
-  }
-  expect(state.errors).toEqual([]);
-});
+        .toBe(true);
+      release();
+      if (unread) await expect(message(page, 0, 80)).toBeInViewport();
+      else
+        await expect(
+          page.locator('[data-testid$="-MessageList-EmptyChat"]')
+        ).toBeVisible();
+      await page.evaluate(async () => {
+        (window as any).releaseOldPreview();
+        await (
+          window as any
+        ).topicPerformance.messages.hydrateMessagesFromCache(
+          'performance-0',
+          'performance-user',
+          { visibleLimit: 24, allowVisibleShrink: true }
+        );
+        await new Promise<void>(resolve =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        );
+      });
+      if (unread) {
+        await expect(message(page, 0, 80)).toBeInViewport();
+        const markerTop = await page
+          .locator('.chat__message-unread_messages_start')
+          .evaluate(
+            marker =>
+              marker.getBoundingClientRect().top -
+              marker.closest('.chat__message-wrapper')!.getBoundingClientRect()
+                .top
+          );
+        expect(Math.abs(markerTop - 8)).toBeLessThan(3);
+        await expect(message(page, 0, 19)).toHaveCount(0);
+      } else {
+        await expect(page.locator('[data-message-id]')).toHaveCount(0);
+        expect(
+          await page.evaluate(() =>
+            (window as any).topicPerformance.messages.getFullMessagesByTopicId(
+              'performance-0'
+            )
+          )
+        ).toEqual([]);
+      }
+    } finally {
+      release();
+      await page.evaluate(() => (window as any).releaseOldPreview());
+    }
+    expect(state.errors).toEqual([]);
+  });
+}
 
 test('свежий ответ истории сохраняет локальную отправку', async ({ page }) => {
   await openFixture(page, { shell: true });

@@ -56,6 +56,25 @@ const createWorker = (userAgent = '') => {
     clients,
     context,
     push,
+    socket: (data: any = {}, clientId = 'browser') => {
+      const pending: Promise<unknown>[] = [];
+      handlers.get('message')!({
+        source: { id: clientId, postMessage() {} },
+        data: {
+          type: 'SOCKET_MESSAGE_NOTIFICATION',
+          payload: {
+            title: 'Сообщение из сокета',
+            body: 'Текст',
+            topicId: 'topic',
+            messageId: 'message',
+            type: 'new_message',
+            ...data
+          }
+        },
+        waitUntil: (promise: Promise<unknown>) => pending.push(promise)
+      });
+      return Promise.all(pending);
+    },
     stallSync: () => {
       let release!: (value: unknown) => void;
       sync = new Promise(resolve => {
@@ -79,6 +98,51 @@ test('свёрнутая и закрытая PWA показывают push, да
     await worker.push().visible;
     expect(worker.notifications).toHaveLength(1);
   }
+});
+
+test('сообщение из сокета показывает уведомление при открытом другом чате', async () => {
+  const worker = createWorker();
+  worker.context('browser', true, 'other');
+  worker.clients.push({
+    id: 'browser',
+    visibilityState: 'visible',
+    focused: true
+  });
+  await worker.socket();
+  expect(worker.notifications).toHaveLength(1);
+  expect(worker.notifications[0].options.data.messageId).toBe('message');
+});
+
+test('сокет не показывает уведомление, если этот чат открыт с фокусом в любой вкладке', async () => {
+  const worker = createWorker();
+  worker.context('other-tab');
+  worker.clients.push({
+    id: 'other-tab',
+    visibilityState: 'visible',
+    focused: true
+  });
+  await worker.socket();
+  expect(worker.notifications).toHaveLength(0);
+});
+
+test('несколько вкладок и гонка push/сокета показывают сообщение один раз', async () => {
+  for (const pushFirst of [false, true]) {
+    const worker = createWorker();
+    if (pushFirst) await worker.push({ messageId: 'message' }).visible;
+    await Promise.all([worker.socket(), worker.socket({}, 'second-tab')]);
+    await worker.push({ messageId: 'message' }).visible;
+    expect(worker.notifications).toHaveLength(1);
+    await worker.socket({ messageId: 'next-message' });
+    expect(worker.notifications).toHaveLength(2);
+  }
+});
+
+test('Apple сохраняет штатную доставку push без второго уведомления из сокета', async () => {
+  const worker = createWorker('iPhone Safari');
+  await worker.socket();
+  expect(worker.notifications).toHaveLength(0);
+  await worker.push({ messageId: 'message' }).visible;
+  expect(worker.notifications).toHaveLength(1);
 });
 
 test('проверяется контекст именно видимой вкладки, а не последней скрытой', async () => {
@@ -105,6 +169,23 @@ test('показ push не ждёт зависшую фоновую синхро
   expect(push.pending).toHaveLength(2);
   release();
   await Promise.all(push.pending);
+});
+
+test('видимая вкладка без фокуса и другой открытый чат не подавляют уведомление', async () => {
+  for (const [focused, topicId] of [
+    [false, 'topic'],
+    [true, 'other']
+  ] as const) {
+    const worker = createWorker();
+    worker.context('browser', focused, topicId);
+    worker.clients.push({
+      id: 'browser',
+      visibilityState: 'visible',
+      focused
+    });
+    await worker.push().visible;
+    expect(worker.notifications).toHaveLength(1);
+  }
 });
 
 test('Apple получает видимое уведомление даже в открытом чате, чтобы сохранить подписку', async () => {

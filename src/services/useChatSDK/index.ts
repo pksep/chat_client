@@ -1,7 +1,9 @@
 import { refreshChatAccess } from '../../composables/useChatAccess';
 import { watchIosUpload } from '../../utils/ios-upload-watchdog';
 import { observeUploadRequest } from '../upload-request-telemetry';
+import { deferWebUpdateReload } from '../web-update-activity';
 import { bindIncomingChatEvents } from './incoming-events';
+import { createMessageDeliveryQueue } from '../message-delivery-queue';
 import { createSocketReconnectScheduler } from '../socket-reconnect';
 import {
   User,
@@ -58,7 +60,7 @@ import { ChatGroup, ChatGroupInterface } from './group';
 import { ChatMedia, ChatMediaInterface } from './media';
 import { ChatWS, ChatWSInterface } from './ws';
 import { ChatUtils, ChatUtilsInterface } from './utils';
-import { ITopic } from '../../components/interfaces/interfaces';
+import { IMessage, ITopic } from '../../components/interfaces/interfaces';
 import { getAuthToken, subscribeAuthToken } from '../../composables/useLogin';
 import {
   handleConfirmedInactiveSession,
@@ -67,6 +69,7 @@ import {
   tryRefreshErpSession,
   withErpRefreshOnAuthError
 } from '../../composables/useAuth';
+import { getAuthUser } from '../../composables/useAuth';
 import { getConfig } from '../useConfig';
 import { getVideoThumbnail } from '../../utils/mediaPreview';
 import type { MediaPreviewDimensions } from '../../utils/mediaPreview';
@@ -139,6 +142,15 @@ export interface NetworkReachabilityProbeResult {
 }
 
 export class ChatSDK {
+  private readonly deliveryQueue = createMessageDeliveryQueue({
+    getUserId: () => getAuthUser()?.id,
+    isConnected: () => !!this.socket?.connected,
+    send: (topicId, messageIds) =>
+      this.ws.sendWebSocketEventWithAck(WebSocketEventType.DELIVER_MESSAGE, {
+        topicId,
+        messageIds
+      })
+  });
   private apiUrl: string;
   private wsUrl: string;
   private token?: string;
@@ -216,6 +228,7 @@ export class ChatSDK {
   }
 
   private emitConnectionState(connected: boolean): void {
+    if (connected) this.deliveryQueue.resume();
     this.connectionStateListener?.(connected);
   }
 
@@ -1192,6 +1205,7 @@ export class ChatSDK {
   }
 
   disconnect(): void {
+    this.deliveryQueue.dispose();
     this.socketReconnect.reset();
     this.cancelConnectionAttempt?.();
     this.cancelConnectionAttempt = null;
@@ -1253,6 +1267,21 @@ export class ChatSDK {
   }
 
   private handleWebSocketEvent(rawEvent: any): void {
+    if (rawEvent.type === WebSocketEventType.NEW_MESSAGE)
+      this.deliveryQueue.enqueue([rawEvent.payload]);
+    if (
+      rawEvent.type === WebSocketEventType.CHANGE_MESSAGE &&
+      ['NEW', 'CHANGE'].includes(rawEvent.payload?.type)
+    )
+      this.deliveryQueue.enqueue([rawEvent.payload.data]);
+    if (rawEvent.type === WebSocketEventType.SYNC_REPLAY)
+      this.deliveryQueue.enqueue(
+        (rawEvent.payload?.events || [])
+          .filter((event: any) =>
+            ['message.new', 'message.change'].includes(event.eventType)
+          )
+          .map((event: any) => event.payload.data)
+      );
     this.ws.handleWebSocketEvent(rawEvent);
   }
 
@@ -1699,7 +1728,9 @@ export class ChatSDK {
       fresh?: boolean;
     }
   ): Promise<Message[]> {
-    return await this.message.getMessages(topicId, opts);
+    const messages = await this.message.getMessages(topicId, opts);
+    this.deliveryQueue.enqueue(messages as IMessage[]);
+    return messages;
   }
 
   async getTopicMedia(
@@ -1728,7 +1759,9 @@ export class ChatSDK {
   }
 
   async getAroundMessage(messageId: string): Promise<Message[]> {
-    return await this.message.getAroundMessage(messageId);
+    const messages = await this.message.getAroundMessage(messageId);
+    this.deliveryQueue.enqueue(messages as IMessage[]);
+    return messages;
   }
 
   async editMessage(
@@ -1858,6 +1891,7 @@ export class ChatSDK {
     };
     reportUploadProgress(0);
     let currentUploadStep = 'start';
+    const releaseWebUpdateReload = deferWebUpdateReload();
 
     try {
       const videoCoverObjectNamePromise =
@@ -2035,6 +2069,7 @@ export class ChatSDK {
       });
       throw error;
     } finally {
+      releaseWebUpdateReload();
       telemetry?.signal?.removeEventListener('abort', abortFromCaller);
 
       if (

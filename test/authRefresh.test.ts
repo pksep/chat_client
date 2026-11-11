@@ -15,7 +15,8 @@ import {
   tryRefreshErpSession,
   withAuthResponseRefresh,
   setAuthUser,
-  getAuthUser
+  getAuthUser,
+  loginWithQrToken
 } from '../src/composables/useAuth';
 import {
   getAuthToken,
@@ -274,7 +275,11 @@ describe('обновление общей сессии чата', () => {
     expect(getChatAuthSession()?.token).toBe(newToken);
   });
 
-  for (const source of ['erp_bootstrap', 'unknown_shared'] as const) {
+  for (const source of [
+    'erp_bootstrap',
+    'unknown_shared',
+    'chat_qr'
+  ] as const) {
     test(`${source}: продление запланировано до истечения с учётом часов браузера`, () => {
       const serverNow = Math.floor(Date.now() / 1000);
       const token = sharedToken(`proactive-${source}`, {
@@ -288,6 +293,63 @@ describe('обновление общей сессии чата', () => {
       saveChatAuthSession({ token, user, source });
 
       expect(timers.mock.calls.at(-1)?.[1]).toBe(834_000);
+    });
+  }
+
+  test('QR получает новую сессию без преждевременного изменения текущего аккаунта', async () => {
+    const oldToken = sharedToken('previous-account');
+    const qrToken = sharedToken('computer');
+    const phoneToken = sharedToken('phone');
+    setAuthToken(oldToken, 900);
+    saveChatAuthSession({ token: oldToken, user, source: 'chat_credentials' });
+    globalThis.fetch = mock(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        expect(String(input)).toBe('http://chat.test/api/auth/qr-login');
+        expect(init?.method).toBe('POST');
+        expect(init?.credentials).toBe('include');
+        expect(new Headers(init?.headers).get('Authorization')).toBe(
+          `Bearer ${qrToken}`
+        );
+        return Response.json({
+          token: phoneToken,
+          expireTimeSeconds: 900,
+          user
+        });
+      }
+    ) as typeof fetch;
+    const phone = await loginWithQrToken(qrToken);
+    expect(phone).toMatchObject({ token: phoneToken, source: 'chat_qr', user });
+    expect(phone.erpToken).toBeUndefined();
+    expect(getChatAuthSession()?.token).toBe(oldToken);
+    expect(getAuthToken()).toBe(oldToken);
+    setAuthToken(phone.token, 900);
+    saveChatAuthSession(phone);
+    globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe('http://chat.test/api/auth/refresh');
+      return Response.json({ token: sharedToken('phone-renewed'), user });
+    }) as typeof fetch;
+    await expect(tryRefreshErpSession()).resolves.toMatchObject({
+      source: 'chat_qr'
+    });
+  });
+
+  for (const status of [401, 503]) {
+    test(`отказ QR ${status} сохраняет прежний аккаунт и не использует ERP refresh`, async () => {
+      const previous = sharedToken('previous');
+      setAuthToken(previous, 900);
+      saveChatAuthSession({
+        token: previous,
+        user,
+        source: 'chat_credentials'
+      });
+      const fetchMock = mock(async () => Response.json({}, { status }));
+      globalThis.fetch = fetchMock as typeof fetch;
+      await expect(
+        loginWithQrToken(sharedToken('rejected-qr'))
+      ).rejects.toMatchObject({ status });
+      expect(getChatAuthSession()?.token).toBe(previous);
+      expect(getAuthToken()).toBe(previous);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
   }
 

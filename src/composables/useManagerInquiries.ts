@@ -12,6 +12,7 @@ import { showErrorNotification } from './useNotifications';
 import type { ITopic, IUser } from '../components/interfaces/interfaces';
 import { useChatAccess } from './useChatAccess';
 import { hasInquiryTopicMarker } from '../utils/inquiry-message-visibility';
+import { recordErrorRequest } from '../services/error-notification-telemetry';
 
 export interface ManagerInquiry {
   id: string;
@@ -93,7 +94,10 @@ const notifyRefreshError = (cause: unknown): void => {
   if (message === lastRefreshError) return;
 
   lastRefreshError = message;
-  showErrorNotification(message);
+  showErrorNotification(message, {
+    error: cause,
+    source: 'manager.inquiries.refresh'
+  });
 };
 
 function revokeManagerAccess(): void {
@@ -119,42 +123,69 @@ export async function managerRequest<T>(
     base === getConfig().CHAT_API_DOMAIN?.replace(/\/+$/, '') &&
     token === (getAuthToken() || getStoredChatAccessToken());
 
-  const response = await fetchWithAuthRedirect(`${base}/manager/${path}`, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(20000)
-  });
-  const data = await response.json().catch(() => ({}));
+  const url = `${base}/manager/${path}`;
+  const method = body === undefined ? 'GET' : 'POST';
+  const startedAt = Date.now();
+  let response: Response;
+  const recordFailure = (
+    error: unknown,
+    phase: 'request' | 'response_body' | 'http_status'
+  ): void =>
+    recordErrorRequest(error, {
+      source: 'managerRequest',
+      url,
+      method,
+      elapsedMs: Date.now() - startedAt,
+      timeoutMs: 20000,
+      httpStatus: response?.status,
+      phase
+    });
 
-  if (!response.ok) {
-    let accessDenied = response.status === 403 && path === 'access';
+  try {
+    response = await fetchWithAuthRedirect(url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(20000)
+    });
+    const data = await response.json().catch(error => {
+      recordFailure(error, 'response_body');
+      return {};
+    });
 
-    if (response.status === 403 && path !== 'access' && isCurrentRequest()) {
-      // Отказ на отдельное действие не означает отзыв права на весь раздел.
-      const access = await managerRequest<{ allowed: boolean }>('access').catch(
-        (cause: unknown): { allowed: false } | null =>
+    if (!response.ok) {
+      let accessDenied = response.status === 403 && path === 'access';
+
+      if (response.status === 403 && path !== 'access' && isCurrentRequest()) {
+        // Отказ на отдельное действие не означает отзыв права на весь раздел.
+        const access = await managerRequest<{ allowed: boolean }>(
+          'access'
+        ).catch((cause: unknown): { allowed: false } | null =>
           cause instanceof ManagerRequestError && cause.accessDenied
             ? { allowed: false }
             : null
+        );
+        accessDenied = access?.allowed === false;
+      }
+
+      if (accessDenied && isCurrentRequest()) revokeManagerAccess();
+
+      throw new ManagerRequestError(
+        response.status === 403 && !accessDenied
+          ? 'Нет доступа к этому действию'
+          : managerRequestErrorMessage(response.status),
+        response.status,
+        accessDenied
       );
-      accessDenied = access?.allowed === false;
     }
-
-    if (accessDenied && isCurrentRequest()) revokeManagerAccess();
-
-    throw new ManagerRequestError(
-      response.status === 403 && !accessDenied
-        ? 'Нет доступа к этому действию'
-        : managerRequestErrorMessage(response.status),
-      response.status,
-      accessDenied
-    );
+    return data as T;
+  } catch (error) {
+    recordFailure(error, response ? 'http_status' : 'request');
+    throw error;
   }
-  return data as T;
 }
 
 export function isClientTopic(topic?: ITopic | null): boolean {

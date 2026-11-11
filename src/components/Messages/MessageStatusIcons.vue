@@ -1,12 +1,17 @@
 <template>
   <div class="message-status-icons">
     <Icon
-      v-if="props.isRead"
+      v-if="props.isRead || props.messageStatus === MessageStatus.Read"
       :name="IconNameEnum.read"
       :data-testid="`${dataTestid}-ReadIcon`"
       color="var(--text-link)"
     />
     <template v-else-if="props.messageStatus">
+      <SentIcon
+        v-if="props.messageStatus === MessageStatus.Sent"
+        :data-testid="`${dataTestid}-SentIcon`"
+        aria-label="Отправлено"
+      />
       <Icon
         v-if="props.messageStatus === MessageStatus.Delivery"
         :name="IconNameEnum.read"
@@ -30,6 +35,7 @@ import { Icon, IconNameEnum } from '@pksep/yui';
 import type { IMessageStatusIconsProps } from './interface/interface';
 import { MessageStatus } from '../../services/useChatSDK/types';
 import ErrorIcon from '../UI/ErrorIcon.vue';
+import SentIcon from '../UI/SentIcon.vue';
 
 const props = withDefaults(defineProps<IMessageStatusIconsProps>(), {
   isRead: false,

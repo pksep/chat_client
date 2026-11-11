@@ -78,6 +78,9 @@ const shouldPersistTelemetry = (
 ): boolean =>
   event.category === 'network' ||
   event.category === 'upload' ||
+  (event.category === 'notification' &&
+    event.name === 'notification.error.shown' &&
+    event.level === 'error') ||
   (event.category === 'call' &&
     (event.name.startsWith('call.livekit.') ||
       event.level === 'warn' ||

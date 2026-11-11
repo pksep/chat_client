@@ -186,15 +186,38 @@
             event => openActivePopover('headerMenu', event as MouseEvent)
           "
         />
-        <ContextMenu
-          v-if="getHeaderContextMenuOptions.length"
+        <component
+          :is="canOrganizeHeaderTopic ? TopicFolderContextMenu : ContextMenu"
+          v-if="getHeaderContextMenuOptions.length && isOpen['headerMenu']"
+          :key="route.id || route.type"
           class="chat__header-context-menu"
-          :visible="!!isOpen['headerMenu']"
+          v-bind="
+            canOrganizeHeaderTopic && currentTopic
+              ? {
+                  topicId: currentTopic.id,
+                  scope: isExternalInquiry ? 'clients' : 'chats'
+                }
+              : { visible: true }
+          "
           :position="position"
           :data-testid="`${props.dataTestid}-Header-ContextMenu`"
+          @close="closeActivePopover('headerMenu')"
           @unmount-close="closeActivePopover('headerMenu')"
-          @click="closeActivePopover('headerMenu')"
         >
+          <template #before>
+            <Button
+              v-if="canOrganizeHeaderTopic && currentTopic"
+              :type="ButtonTypeEnum.popover"
+              :size="SizesEnum.small"
+              class="chat__header-context-menu-button"
+              :data-testid="`${props.dataTestid}-Header-ContextMenu-Pin`"
+              @click.stop="handleContextMenuAction(handlePinHeaderTopic)"
+            >
+              <UnpinIcon v-if="currentTopic.info.isPin" />
+              <PinIcon v-else />
+              {{ currentTopic.info.isPin ? 'Открепить' : 'Закрепить' }}
+            </Button>
+          </template>
           <Button
             v-for="option in getHeaderContextMenuOptions"
             :key="option.value"
@@ -240,7 +263,7 @@
             />
             {{ option.value }}
           </Button>
-        </ContextMenu>
+        </component>
       </div>
     </div>
 
@@ -540,6 +563,7 @@ import {
   deleteTopic,
   getTopicTypingUsers,
   toggleMuteTopic,
+  togglePinTopic,
   useTopics
 } from '../../composables/useTopics';
 import {
@@ -558,9 +582,12 @@ import HeaderContextSearchIcon from '../UI/HeaderContextSearchIcon.vue';
 import MessageIcon from '../UI/MessageIcon.vue';
 import MuteIcon from '../UI/MuteIcon.vue';
 import UnmuteIcon from '../UI/UnmuteIcon.vue';
+import PinIcon from '../UI/PinIcon.vue';
+import UnpinIcon from '../UI/UnpinIcon.vue';
 import LoadingIcon from '../UI/LoadingIcon.vue';
 import TypingIndicator from '../UI/TypingIndicator.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
+import TopicFolderContextMenu from '../ContactList/TopicFolderContextMenu.vue';
 import {
   activeCallParticipantCount,
   activeCallTopicId,
@@ -574,7 +601,7 @@ import {
   pendingGroupCallInfo
 } from '../../services/useCallState';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
-import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
+import { getTopicActivityLabel } from '../../composables/useTopicActivity';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import { useContextMenu } from '../../composables/useContextMenu';
 import {
@@ -754,6 +781,13 @@ const headerDmUser = computed<IUser | undefined>(() => {
 const isCallTopicRoute = computed(
   () => route.value.type === RouteTypes.CALL || isCallTopic(currentTopic.value)
 );
+const canOrganizeHeaderTopic = computed(
+  () =>
+    !!currentTopic.value &&
+    route.value.type !== RouteTypes.AI &&
+    !isFavoriteDialogTopic.value &&
+    !isCallTopicRoute.value
+);
 const currentRouteGroup = computed(() => {
   if (currentTopic.value?.type !== TopicType.Group) {
     return null;
@@ -822,7 +856,7 @@ const actionModalTitle = computed(() =>
         ? 'Удаление чата'
         : currentRouteGroup.value?.isAdmin
           ? 'Удаление канала'
-          : 'Выход из канала'
+          : 'Выход из группы'
 );
 
 const actionModalDescription = computed(() =>
@@ -836,13 +870,13 @@ const actionModalDescription = computed(() =>
         ? 'Вы уверены, что хотите удалить чат?'
         : currentRouteGroup.value?.isAdmin
           ? 'Вы уверены, что хотите удалить канал?'
-          : 'Вы уверены, что хотите покинуть канал?'
+          : 'Вы уверены, что хотите покинуть группу?'
 );
 const currentTypingUsers = computed(() =>
   route.value?.id ? getTopicTypingUsers(route.value.id) : []
 );
 const headerTypingLabel = computed(() =>
-  getTypingIndicatorLabel(currentTopic.value?.type, currentTypingUsers.value)
+  getTopicActivityLabel(currentTopic.value, currentTypingUsers.value)
 );
 const callTopicTypingLabel = computed(() =>
   isCallSummaryMaterialTypingInTopic(currentTopic.value?.id) ? 'печатает' : ''
@@ -1468,16 +1502,6 @@ const getHeaderContextMenuOptions = computed(() => {
       return options;
     }
 
-    if (route.value.type === RouteTypes.GROUP) {
-      options.push({
-        value: 'Информация',
-        function: () => {
-          void handleClickHeader();
-        },
-        iconName: IconNameEnum.info
-      });
-    }
-
     if (route.value.type === RouteTypes.DIALOGS && isBotDialogTopic.value) {
       options.push({
         value: 'Информация о боте',
@@ -1494,6 +1518,9 @@ const getHeaderContextMenuOptions = computed(() => {
         function: () => {
           toggleMuteTopic(currentTopic.value);
         },
+        style: currentTopic.value?.info?.isMute
+          ? undefined
+          : 'color: var(--error-color)',
         customIcon: currentTopic.value?.info?.isMute
           ? 'notificationOn'
           : 'notificationOff'
@@ -1515,7 +1542,7 @@ const getHeaderContextMenuOptions = computed(() => {
       options.push({
         value: currentRouteGroup.value?.isAdmin
           ? 'Удалить канал'
-          : 'Выйти из канала',
+          : 'Выйти из группы',
         function: handleOpenActionModal,
         style: 'color: var(--error-color)',
         iconName: currentRouteGroup.value?.isAdmin
@@ -1609,6 +1636,10 @@ const handleContextMenuAction = (callback: () => void) => {
   callback();
 };
 
+const handlePinHeaderTopic = () => {
+  if (currentTopic.value) void togglePinTopic(currentTopic.value);
+};
+
 const handleCloseActionModal = () => {
   state.openActionModal = false;
 };
@@ -1681,6 +1712,7 @@ const handleExit = (): void => {
 watch(
   () => route.value.id,
   () => {
+    closeActivePopover('headerMenu');
     state.openMobileUserProfileModal = false;
     hideSearch();
 

@@ -392,6 +392,17 @@ export const getCachedMediaObjectUrl = (
   return objectUrlCache.get(getMediaCacheKey(path)) || null;
 };
 
+export const discardFailedMediaObjectUrl = (
+  path: string,
+  failedUrl: string
+): void => {
+  if (isInquiryFile(path)) return;
+  const key = getMediaCacheKey(path);
+  if (objectUrlCache.get(key) !== failedUrl) return;
+  objectUrlCache.delete(key);
+  void deleteRecord(key).catch(() => undefined);
+};
+
 export const loadCachedMediaObjectUrl = async (
   path?: string | null
 ): Promise<string | null> => {

@@ -82,7 +82,7 @@
         {{ topicPresenceText }}
       </div>
       <div
-        v-else-if="!props.showLastOnline && props.topic.typingUserIds?.length"
+        v-else-if="!props.showLastOnline && topicTypingLabel"
         :class="[
           'contact-list__description',
           'contact-list__description--typing',
@@ -230,12 +230,17 @@ import {
 } from '../../services/useCallState';
 import { getClientMessageById } from '../../services/useMessages';
 import { isFavoriteTopic } from '../../utils/favorite-topic';
-import { getTypingIndicatorLabel } from '../../utils/typingIndicator';
+import { getTopicActivityLabel } from '../../composables/useTopicActivity';
 import {
   getTopicUnreadBadgeCount,
   hasTopicUnreadIndicator
 } from '../../utils/topicUnreadBadge';
 import { resolveLastMessageStatus } from '../../utils/topic-last-message';
+import {
+  getMessageDisplayStatus,
+  mergeMessageDeliveryState,
+  mergeMessageReceipts
+} from '../../utils/message-delivery-status';
 import { getTopicStateDiagnostic } from '../../utils/topic-state-diagnostics';
 import { recordTopicStateTelemetry } from '../../services/topic-state-telemetry';
 import { useMessagePreview } from '../../composables/useMessagePreview';
@@ -327,12 +332,24 @@ const topicPresenceIsOnline = computed(() => {
     authedUser.value?.id !== user.id
   );
 });
-const topicLastMessageStatus = computed(() =>
-  resolveLastMessageStatus(
-    props.topic.lastMessage,
-    getClientMessageById(props.topic.id, props.topic.lastMessage?.id)
-  )
-);
+const topicLastMessageStatus = computed(() => {
+  const message = props.topic.lastMessage;
+  if (!message) return undefined;
+  const cached = getClientMessageById(props.topic.id, message.id);
+  const deliveryState = mergeMessageDeliveryState(
+    message.deliveryState,
+    cached?.deliveryState
+  );
+  const status = resolveLastMessageStatus(message, cached);
+  return getMessageDisplayStatus({
+    ...message,
+    status,
+    deliveryState: deliveryState && {
+      ...deliveryState,
+      read: mergeMessageReceipts(deliveryState.read, cached?.messageRead)
+    }
+  });
+});
 const lastMessagePreviewKey = computed(() => {
   const lastMessage = props.topic.lastMessage;
 
@@ -345,7 +362,7 @@ const showMessageStatus = computed(
     !hasExternalMessageChannel(props.topic.lastMessage?.ex)
 );
 const topicTypingLabel = computed(() =>
-  getTypingIndicatorLabel(props.topic.type, getTopicTypingUsers(props.topic.id))
+  getTopicActivityLabel(props.topic, getTopicTypingUsers(props.topic.id))
 );
 const unreadReactionMessageId = computed(
   () =>

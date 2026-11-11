@@ -1,6 +1,7 @@
 import type { IMessage } from '../components/interfaces/interfaces';
 import { getMessageClientId, isTemporaryMessage } from './message-identity';
 import { resolveLastMessageStatus } from './topic-last-message';
+import { mergeMessageDeliveryState } from './message-delivery-status';
 
 const version = (message: IMessage): number =>
   Math.max(
@@ -26,6 +27,10 @@ export const mergeMessageSnapshots = (messages: IMessage[]): IMessage[] => {
       ...previous,
       ...next,
       status,
+      deliveryState: mergeMessageDeliveryState(
+        previous.deliveryState,
+        message.deliveryState
+      ),
       ...(previous.isReadByMe || message.isReadByMe
         ? { isReadByMe: true }
         : {}),
