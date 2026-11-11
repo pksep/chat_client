@@ -1,4 +1,4 @@
-import type { IMessage } from '../components/interfaces/interfaces';
+import type { IMessage, ITopic } from '../components/interfaces/interfaces';
 import { MessageStatus } from '../services/useChatSDK/types';
 import { getMessageDisplayStatus } from './message-delivery-status';
 
@@ -23,10 +23,11 @@ export const shouldDisplayMessageAsRead = (
   message: IMessage,
   messageIndex: number,
   latestReadOutgoingMessageIndex: number,
-  isOutgoingMessage: IsOutgoingMessage
+  isOutgoingMessage: IsOutgoingMessage,
+  topicType?: ITopic['type']
 ): boolean =>
   message.deliveryState
-    ? getMessageDisplayStatus(message) === MessageStatus.Read
+    ? getMessageDisplayStatus(message, topicType) === MessageStatus.Read
     : message.status === MessageStatus.Read ||
       (message.status === MessageStatus.Delivery &&
         isOutgoingMessage(message) &&

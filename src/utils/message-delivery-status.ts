@@ -4,7 +4,7 @@ import type {
   IMessageReceipt,
   ITopic
 } from '../components/interfaces/interfaces';
-import { MessageStatus } from '../services/useChatSDK/types';
+import { MessageStatus, TopicType } from '../services/useChatSDK/types';
 
 export const mergeMessageReceipts = (
   ...lists: (IMessageReceipt[] | undefined)[]
@@ -78,7 +78,10 @@ export const getRecipientMessageStatus = (
   return MessageStatus.Sent;
 };
 
-export const getMessageDisplayStatus = (message: IMessage): string => {
+export const getMessageDisplayStatus = (
+  message: IMessage,
+  topicType?: ITopic['type']
+): string => {
   if (
     !message.deliveryState ||
     message.status === MessageStatus.Wait ||
@@ -96,7 +99,9 @@ export const getMessageDisplayStatus = (message: IMessage): string => {
     ...read,
     ...message.deliveryState.delivered.map(receipt => receipt.userId)
   ]);
-  return recipients.every(id => delivered.has(id))
-    ? MessageStatus.Delivery
-    : MessageStatus.Sent;
+  const isDelivered =
+    topicType === TopicType.Group
+      ? recipients.some(id => delivered.has(id))
+      : recipients.every(id => delivered.has(id));
+  return isDelivered ? MessageStatus.Delivery : MessageStatus.Sent;
 };
