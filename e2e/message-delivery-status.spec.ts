@@ -269,7 +269,7 @@ test('Данные показывает всех получателей по п�
 }, testInfo) => {
   const { errors } = await seed(page);
   const bubble = page.locator(`[data-message-id="${outgoing.id}"]`);
-  await expect(bubble.locator('[data-testid$="-SentIcon"]')).toBeVisible();
+  await expect(bubble.locator('[data-testid$="-DeliveredIcon"]')).toBeVisible();
   const details = await showDetails(page);
   await expect(details.locator('[data-user-id]')).toHaveCount(3);
   expect(
@@ -294,15 +294,77 @@ test('Данные показывает всех получателей по п�
   expect(errors).toEqual([]);
 });
 
-test('галочки переходят в доставлено и прочитано после подтверждений всех участников', async ({
+test('в группе две серые после доставки одному, голубые после прочтения всеми', async ({
   page
 }) => {
-  const { errors } = await seed(page);
+  const { errors } = await seed(page, true, false, 3);
   const bubble = page.locator(`[data-message-id="${outgoing.id}"]`);
   await expect(bubble.locator('[data-testid$="-SentIcon"]')).toBeVisible();
   await page.evaluate(outgoing => {
     const fixture = (window as any).topicPerformance;
     fixture.emitChatEvent({
+      type: 'messageDelivered',
+      payload: {
+        topicId: outgoing.topicId,
+        userId: 'recipient-0',
+        deliveries: [
+          { messageId: outgoing.id, createdAt: '2026-11-06T08:02:00Z' }
+        ]
+      }
+    });
+  }, outgoing);
+  await expect(bubble.locator('[data-testid$="-DeliveredIcon"]')).toBeVisible();
+  await page.evaluate(outgoing => {
+    const fixture = (window as any).topicPerformance;
+    fixture.emitChatEvent({
+      type: 'readMessage',
+      payload: {
+        topicId: outgoing.topicId,
+        userId: 'recipient-1',
+        messageIds: [outgoing.id]
+      }
+    });
+  }, outgoing);
+  await expect(bubble.locator('[data-testid$="-DeliveredIcon"]')).toBeVisible();
+  const details = await showDetails(page);
+  await expect(
+    details.locator(
+      '[data-user-id="recipient-0"] [data-testid$="-DeliveredIcon"]'
+    )
+  ).toBeVisible();
+  await expect(
+    details.locator('[data-user-id="recipient-1"] [data-testid$="-ReadIcon"]')
+  ).toBeVisible();
+  await expect(
+    details.locator('[data-user-id="recipient-2"] [data-testid$="-SentIcon"]')
+  ).toBeVisible();
+  await page.evaluate(outgoing => {
+    const fixture = (window as any).topicPerformance;
+    for (const userId of ['recipient-0', 'recipient-2'])
+      fixture.emitChatEvent({
+        type: 'readMessage',
+        payload: {
+          topicId: outgoing.topicId,
+          userId,
+          messageIds: [outgoing.id]
+        }
+      });
+  }, outgoing);
+  await expect(bubble.locator('[data-testid$="-ReadIcon"]')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('в личном чате галочки по-прежнему зависят от подтверждений собеседника', async ({
+  page
+}) => {
+  const { errors } = await seed(page, false);
+  const bubble = page.locator(`[data-message-id="${outgoing.id}"]`);
+  await page.evaluate(() => (window as any).topicPerformance.mountTopicList());
+  const row = page.locator(`[data-topic-id="${topicId}"]`);
+  for (const container of [bubble, row])
+    await expect(container.locator('[data-testid$="-SentIcon"]')).toBeVisible();
+  await page.evaluate(outgoing => {
+    (window as any).topicPerformance.emitChatEvent({
       type: 'messageDelivered',
       payload: {
         topicId: outgoing.topicId,
@@ -313,21 +375,22 @@ test('галочки переходят в доставлено и прочит�
       }
     });
   }, outgoing);
-  await expect(bubble.locator('[data-testid$="-DeliveredIcon"]')).toBeVisible();
+  for (const container of [bubble, row])
+    await expect(
+      container.locator('[data-testid$="-DeliveredIcon"]')
+    ).toBeVisible();
   await page.evaluate(outgoing => {
-    const fixture = (window as any).topicPerformance;
-    for (const userId of ['delivered', 'waiting'])
-      fixture.emitChatEvent({
-        type: 'readMessage',
-        payload: {
-          topicId: outgoing.topicId,
-          userId,
-          messageIds: [outgoing.id]
-        }
-      });
-    fixture.seed(outgoing.topicId, [outgoing]);
+    (window as any).topicPerformance.emitChatEvent({
+      type: 'readMessage',
+      payload: {
+        topicId: outgoing.topicId,
+        userId: 'waiting',
+        messageIds: [outgoing.id]
+      }
+    });
   }, outgoing);
-  await expect(bubble.locator('[data-testid$="-ReadIcon"]')).toBeVisible();
+  for (const container of [bubble, row])
+    await expect(container.locator('[data-testid$="-ReadIcon"]')).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -398,6 +461,14 @@ test('превью закрытой группы сохраняет подтве
   page
 }) => {
   await openFixture(page, { count: 0 });
+  const pending = {
+    ...outgoing,
+    deliveryState: {
+      ...outgoing.deliveryState,
+      delivered: [],
+      read: []
+    }
+  };
   await page.evaluate(outgoing => {
     const fixture = (window as any).topicPerformance;
     fixture.setTopics([
@@ -408,7 +479,7 @@ test('превью закрытой группы сохраняет подтве
       }
     ]);
     fixture.mountTopicList();
-  }, outgoing);
+  }, pending);
   const row = page.locator(`[data-topic-id="${topicId}"]`);
   await expect(row.locator('[data-testid$="-SentIcon"]')).toBeVisible();
   await page.evaluate(outgoing => {
@@ -417,7 +488,7 @@ test('превью закрытой группы сохраняет подтве
       type: 'messageDelivered',
       payload: {
         topicId: outgoing.topicId,
-        userId: 'waiting',
+        userId: 'delivered',
         deliveries: [
           { messageId: outgoing.id, createdAt: '2026-11-06T08:02:00Z' }
         ]
@@ -429,7 +500,25 @@ test('превью закрытой группы сохраняет подтве
         lastMessage: outgoing
       }
     ]);
-  }, outgoing);
+  }, pending);
+  await expect(row.locator('[data-testid$="-DeliveredIcon"]')).toBeVisible();
+  await page.evaluate(outgoing => {
+    const fixture = (window as any).topicPerformance;
+    fixture.emitChatEvent({
+      type: 'readMessage',
+      payload: {
+        topicId: outgoing.topicId,
+        userId: 'reader',
+        messageIds: [outgoing.id]
+      }
+    });
+    fixture.setTopics([
+      {
+        ...fixture.getSelectedTopic(outgoing.topicId),
+        lastMessage: outgoing
+      }
+    ]);
+  }, pending);
   await expect(row.locator('[data-testid$="-DeliveredIcon"]')).toBeVisible();
   await page.evaluate(outgoing => {
     const fixture = (window as any).topicPerformance;
@@ -448,6 +537,6 @@ test('превью закрытой группы сохраняет подтве
         lastMessage: outgoing
       }
     ]);
-  }, outgoing);
+  }, pending);
   await expect(row.locator('[data-testid$="-ReadIcon"]')).toBeVisible();
 });
