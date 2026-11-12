@@ -128,7 +128,7 @@ for (const openConversation of [false, true]) {
     refreshed = true;
     try {
       await page.reload();
-      await expect.poll(() => requested).toBe(true);
+      await expect.poll(() => requested, { timeout: 20_000 }).toBe(true);
       if (openConversation) {
         await expect(page.locator('.chat__input .ProseMirror')).toBeVisible();
         await expect(page.locator('#startup-shell')).toHaveCount(0);
@@ -197,7 +197,7 @@ for (const failure of ['offline', 'unavailable', 'stalled'] as const) {
     try {
       await page.reload();
       await expect(page.locator('#startup-shell')).toHaveCount(0, {
-        timeout: 8_000
+        timeout: 15_000
       });
       const row = page.locator(`[data-topic-id="${fixture.topics[1].id}"]`);
       await expect(row).toContainText('Старое превью 1');

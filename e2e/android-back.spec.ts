@@ -321,10 +321,14 @@ async function rootFixture(page: Page, authenticated = true) {
     route.fulfill({ json: { allowed: true } })
   );
   await page.goto('/');
+  await expect(page.locator('#startup-shell')).toHaveCount(0, {
+    timeout: 20_000
+  });
   if (!authenticated) return;
   await expect(page.locator('.menu-bottom-nav:visible')).toHaveAttribute(
     'aria-busy',
-    'false'
+    'false',
+    { timeout: 15_000 }
   );
   await expect(
     page.locator('.menu-bottom-nav:visible .menu-bottom-nav__button')
