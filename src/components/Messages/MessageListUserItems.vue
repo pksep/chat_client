@@ -1038,11 +1038,15 @@ const getBubbleProps = (message: IMessage, index: number) => ({
     message,
     index,
     latestReadOutgoingMessageIndex.value,
-    resolveMessageIsMeSender
+    resolveMessageIsMeSender,
+    getSelectedTopic(message.topicId)?.type
   ),
   isEdit: message.isEdit,
   isPin: isMessagePinned(message),
-  messageStatus: getMessageDisplayStatus(message),
+  messageStatus: getMessageDisplayStatus(
+    message,
+    getSelectedTopic(message.topicId)?.type
+  ),
   messageEx: message.ex,
   authUserId: props.authUserId,
   topicId: message.topicId,

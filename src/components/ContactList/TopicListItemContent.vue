@@ -341,14 +341,17 @@ const topicLastMessageStatus = computed(() => {
     cached?.deliveryState
   );
   const status = resolveLastMessageStatus(message, cached);
-  return getMessageDisplayStatus({
-    ...message,
-    status,
-    deliveryState: deliveryState && {
-      ...deliveryState,
-      read: mergeMessageReceipts(deliveryState.read, cached?.messageRead)
-    }
-  });
+  return getMessageDisplayStatus(
+    {
+      ...message,
+      status,
+      deliveryState: deliveryState && {
+        ...deliveryState,
+        read: mergeMessageReceipts(deliveryState.read, cached?.messageRead)
+      }
+    },
+    props.topic.type
+  );
 });
 const lastMessagePreviewKey = computed(() => {
   const lastMessage = props.topic.lastMessage;

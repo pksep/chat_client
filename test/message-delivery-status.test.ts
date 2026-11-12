@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { IMessage } from '../src/components/interfaces/interfaces';
-import { MessageStatus } from '../src/services/useChatSDK/types';
+import { MessageStatus, TopicType } from '../src/services/useChatSDK/types';
 import {
   getMessageDisplayStatus,
   getMessageRecipients,
@@ -23,7 +23,59 @@ const message = (delivered: string[] = [], read: string[] = []): IMessage =>
   }) as IMessage;
 
 describe('подтверждения получения сообщения', () => {
-  test('общий статус меняется только после доставки и прочтения всеми получателями', () => {
+  test('в группе достаточно доставки одному, а для голубых галочек нужно прочтение всеми', () => {
+    const status = (row: IMessage) =>
+      getMessageDisplayStatus(row, TopicType.Group);
+    expect(status(message())).toBe(MessageStatus.Sent);
+    expect(status(message(['alice']))).toBe(MessageStatus.Delivery);
+    expect(status(message([], ['bob']))).toBe(MessageStatus.Delivery);
+    expect(status(message(['alice'], ['bob']))).toBe(MessageStatus.Delivery);
+    expect(status(message([], ['alice', 'bob']))).toBe(MessageStatus.Read);
+    expect(
+      status(message(['sender', 'outsider'], ['sender', 'outsider']))
+    ).toBe(MessageStatus.Sent);
+    expect(
+      status({
+        ...message([], ['bob']),
+        messageRead: [{ id: 'read', messageId: 'message', userId: 'alice' }]
+      })
+    ).toBe(MessageStatus.Read);
+    expect(status({ ...message(['alice'], ['alice']), status: 'WAIT' })).toBe(
+      MessageStatus.Wait
+    );
+    expect(
+      status({ ...message(['alice'], ['alice']), status: 'NOT_DELIVERED' })
+    ).toBe(MessageStatus.NotDelivered);
+  });
+
+  test('в личном чате сохраняются подтверждения единственного собеседника', () => {
+    const row = message();
+    row.deliveryState!.recipientUserIds = ['alice'];
+    expect(getMessageDisplayStatus(row, TopicType.DM)).toBe(MessageStatus.Sent);
+    row.deliveryState!.delivered = [{ userId: 'alice' }];
+    expect(getMessageDisplayStatus(row, TopicType.DM)).toBe(
+      MessageStatus.Delivery
+    );
+    row.deliveryState!.read = [{ userId: 'alice' }];
+    expect(getMessageDisplayStatus(row, TopicType.DM)).toBe(MessageStatus.Read);
+  });
+
+  test('в группе прочтение другого сообщения не меняет галочки текущего', () => {
+    const isRead = (row: IMessage) =>
+      shouldDisplayMessageAsRead(row, 0, 10, () => true, TopicType.Group);
+    expect(isRead(message(['alice']))).toBe(false);
+    expect(isRead(message([], ['alice']))).toBe(false);
+    expect(isRead(message([], ['alice', 'bob']))).toBe(true);
+    const merged = mergeMessageSnapshots([
+      message(['alice'], ['alice', 'bob']),
+      message()
+    ])[0];
+    expect(getMessageDisplayStatus(merged, TopicType.Group)).toBe(
+      MessageStatus.Read
+    );
+  });
+
+  test('без типа группы сохраняется требование подтверждений всех получателей', () => {
     expect(getMessageDisplayStatus(message())).toBe(MessageStatus.Sent);
     expect(getMessageDisplayStatus(message(['alice']))).toBe(
       MessageStatus.Sent
@@ -46,7 +98,7 @@ describe('подтверждения получения сообщения', () 
     expect(getMessageDisplayStatus(row)).toBe(MessageStatus.Delivery);
   });
 
-  test('частичное групповое прочтение не становится полным из-за более позднего сообщения', () => {
+  test('без типа группы позднее прочтение не заменяет подтверждения текущего сообщения', () => {
     const row = message(['alice'], ['alice']);
     expect(shouldDisplayMessageAsRead(row, 0, 10, () => true)).toBe(false);
     row.messageRead = [{ id: 'read', messageId: row.id, userId: 'bob' }];

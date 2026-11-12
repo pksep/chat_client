@@ -1,3 +1,10 @@
+## [1.48.4](https://github.com/pksep/chat_client/compare/v1.48.3...v1.48.4) (2026-11-11)
+
+
+### Bug Fixes
+
+* **CHAT-555:** show group delivery after the first recipient ([d54fbd9](https://github.com/pksep/chat_client/commit/d54fbd98453cad532dc95ca04bbcf833f893b491))
+
 ## [1.48.3](https://github.com/pksep/chat_client/compare/v1.48.2...v1.48.3) (2026-11-09)
 
 
