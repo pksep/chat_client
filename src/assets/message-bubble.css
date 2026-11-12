@@ -1302,8 +1302,9 @@ div.message-content__file {
 
   & .message-content__file__upload-percent {
     display: inline-block;
-    flex: 0 0 32px;
-    width: 32px;
+    flex: 0 0 36px;
+    width: 36px;
+    white-space: nowrap;
     text-align: right;
     font-variant-numeric: tabular-nums;
     color: var(--text-link);

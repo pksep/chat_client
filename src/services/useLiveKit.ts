@@ -6727,6 +6727,13 @@ export const syncActiveCalls = async (
     }
 
     const previousEntry = previousActiveGroupCalls[call.topicId];
+    if (!status) {
+      // Ошибка проверки не подтверждает новый звонок и не отменяет уже известный.
+      if (previousEntry?.roomId === call.roomId) {
+        nextActiveGroupCalls[call.topicId] = previousEntry;
+      }
+      return;
+    }
     nextActiveGroupCalls[call.topicId] = {
       roomId: call.roomId,
       topicId: call.topicId,

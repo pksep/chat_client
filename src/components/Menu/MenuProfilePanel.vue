@@ -45,11 +45,6 @@
       :data-testid="`${props.dataTestid}-MenuProfilePanel-Title`"
     >
       <span class="menu-section-heading__label">Профиль</span>
-      <ProfileQrLogin
-        v-if="authUser && props.isActive"
-        :key="authUser.id"
-        :data-testid="`${props.dataTestid}-MenuProfilePanel-QrLogin`"
-      />
     </MenuSectionHeading>
     <div v-if="authUser && !props.isCollapse" class="menu-profile__body">
       <header class="menu-profile__header">
@@ -62,6 +57,12 @@
       </header>
 
       <div class="menu-profile__form">
+        <ProfileQrLogin
+          v-if="props.isActive"
+          :key="authUser.id"
+          :data-testid="`${props.dataTestid}-MenuProfilePanel-QrLogin`"
+        />
+
         <div class="menu-profile__row">
           <span
             class="menu-profile__row-value"

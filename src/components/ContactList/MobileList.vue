@@ -99,7 +99,7 @@
                 :show-checkbox="isShareSelectionActive"
                 :selected-topic-ids="selectedTopicIds"
                 :search-query="toolbarState.search"
-                :is-loading="isTopicsLoading"
+                :is-loading="isTopicsLoading || initialTopicListPending"
                 :message-results="
                   isShareSelectionActive ? [] : filteredMessageSearchResults
                 "
@@ -306,6 +306,7 @@ const {
   getUnreadTopicList,
   loadRemainingTopics,
   hasMoreTopics,
+  initialTopicListPending,
   loading: isTopicsLoading
 } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
@@ -315,7 +316,9 @@ const mountedSections = reactive(new Set<ChatMenuSection>(['chats']));
 const { isShareSelectionActive, selectedTopicIds, toggleShareTopic } =
   useShareSelection();
 const allTopics = computed(() =>
-  getTopicList().filter(topic => !isClientTopic(topic))
+  initialTopicListPending.value
+    ? []
+    : getTopicList().filter(topic => !isClientTopic(topic))
 );
 const chatBadgeTopics = computed(() =>
   getUnreadTopicList().filter(topic => !isClientTopic(topic))

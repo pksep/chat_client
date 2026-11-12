@@ -93,7 +93,7 @@ createApp({
               ['dialogs', 'group', 'favorites', 'ai', 'call'].map(type =>
                 h(Header, {
                   dataTestid: `Fixture-${type}`,
-                  displayRoute: { type, id: null }
+                  displayRoute: { type, id: `android-back-${type}` }
                 })
               )
             )

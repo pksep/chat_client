@@ -1471,8 +1471,10 @@ const refreshActiveTopicFromPreview = async (
     shouldKeepBottomPosition && shouldKeepCurrentTopicBottomPosition();
 
   if (shouldApplyVisibleRefresh) {
-    setVisibleMessagesLimitForTopic(topicId, visibleLimit, {
-      allowShrink: false
+    mergeMessagesForTopic(topicId, messages, 'replace', {
+      syncLastMessage: false,
+      windowMode: 'latest',
+      visibleLimit: Math.max(visibleLimit, getMessagesByTopicId(topicId).length)
     });
   }
 
@@ -4487,6 +4489,8 @@ watch(
       }
       setupIntersectionObserver();
       syncVisibleUnreadAfterAutoScroll();
+      // Превью могло обновиться, пока выполнялся запрос старой истории.
+      scheduleActiveTopicPreviewRefresh('resident-history-refreshed');
       return;
     }
     if (
@@ -4714,6 +4718,7 @@ watch(
     setReadReceiptsEnabled(true);
     setupIntersectionObserver();
     syncVisibleUnreadAfterAutoScroll();
+    scheduleActiveTopicPreviewRefresh('initial-history-loaded');
   },
   { immediate: true }
 );
