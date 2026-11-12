@@ -558,6 +558,14 @@
   transform: translateY(6px);
 }
 
+.ai-assistant__empty {
+  container-name: ai-welcome;
+  container-type: inline-size;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+}
+
 .ai-assistant__hero-icon,
 .ai-assistant__tasks-icon {
   display: grid;
@@ -589,6 +597,7 @@
   display: grid;
   grid-template-columns: max-content max-content;
   justify-content: center;
+  max-width: 100%;
   gap: 15px 16px;
 }
 
@@ -1783,4 +1792,25 @@
   .message-content__html:empty
   + .ai-action-pipeline {
   margin-top: 0;
+}
+
+@container ai-welcome (width <= 480px) {
+  .ai-assistant__suggestions {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .ai-assistant__suggestion {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: center;
+    justify-content: center;
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    min-height: 30px;
+    overflow-wrap: anywhere;
+    text-align: center;
+    white-space: normal;
+  }
 }
