@@ -1,3 +1,10 @@
+## [1.48.5](https://github.com/pksep/chat_client/compare/v1.48.4...v1.48.5) (2026-11-12)
+
+
+### Bug Fixes
+
+* refresh chat list consistently and refine profile controls ([cd45c90](https://github.com/pksep/chat_client/commit/cd45c9056d6d09fe5d8a3e2df50d9fad0c604bea))
+
 ## [1.48.4](https://github.com/pksep/chat_client/compare/v1.48.3...v1.48.4) (2026-11-11)
 
 
