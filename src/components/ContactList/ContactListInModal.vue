@@ -33,7 +33,9 @@
             :class="[
               'menu__user-profile',
               {
-                'user-profile--interactive': canOpenUserInfo(user)
+                'user-profile--interactive': canOpenUserInfo(user),
+                'menu__user-profile--admin':
+                  !props.creating && user.role === GroupMemberRole.Admin
               },
               props.userClass ?? ''
             ]"
@@ -45,7 +47,17 @@
                 user.id !== authUser?.id &&
                 openActivePopover(user.id.toString(), $event)
             "
-          />
+          >
+            <template #corner>
+              <span
+                v-if="!props.creating && user.role === GroupMemberRole.Admin"
+                class="menu__info-user-role"
+                :data-testid="`${props.dataTestid}-ContactListInModal-AdminBadge${index + 1}`"
+              >
+                Администратор
+              </span>
+            </template>
+          </UserProfile>
           <ContextMenu
             v-if="!props.creating && currentGroup?.isAdmin"
             :visible="isOpen[user.id.toString()]"
@@ -103,6 +115,7 @@ import {
   SizesEnum
 } from '@pksep/yui';
 import UserProfile from '../UserProfile/UserProfile.vue';
+import { GroupMemberRole } from '@pksep/zod-shared-chat';
 import { ref, computed } from 'vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
@@ -219,3 +232,41 @@ const closeContactModal = (): void => {
   newContactOpen.value = false;
 };
 </script>
+
+<style scoped>
+.menu__user-profile {
+  grid-template-columns: calc(var(--size-avatar) * 2) minmax(0, 1fr);
+}
+
+.menu__user-profile--admin {
+  grid-template-columns: calc(var(--size-avatar) * 2) minmax(0, 1fr) max-content;
+  grid-template-areas:
+    'avatar title role'
+    'avatar description description';
+}
+
+.menu__user-profile :deep(.user-profile__title-text) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu__info-user-role {
+  grid-area: role;
+  justify-self: end;
+  align-self: center;
+  margin-bottom: 2px;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 17px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  background: var(--action-secondary-pressed-bg);
+  color: var(--text-link);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 15px;
+  white-space: nowrap;
+}
+</style>

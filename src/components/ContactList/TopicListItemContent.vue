@@ -448,7 +448,7 @@ const formatElapsedDuration = (durationMs: number): string => {
     ? `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
     : `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
-const topicActiveCall = computed(() => {
+const topicActiveCall = computed<ITopic['activeCall']>(() => {
   if (topicIsFavorite.value) return null;
 
   if (isCallActive.value && activeCallTopicId.value === props.topic.id) {
@@ -458,11 +458,7 @@ const topicActiveCall = computed(() => {
     };
   }
 
-  return (
-    pendingGroupCallInfo.value?.[props.topic.id] ||
-    props.topic.activeCall ||
-    null
-  );
+  return pendingGroupCallInfo.value?.[props.topic.id] || null;
 });
 const topicActiveCallTime = computed(() => {
   if (isCallActive.value && activeCallTopicId.value === props.topic.id) {

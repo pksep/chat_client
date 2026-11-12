@@ -252,6 +252,7 @@ const {
   getUnreadTopicList,
   loadRemainingTopics,
   hasMoreTopics,
+  initialTopicListPending,
   loading: isTopicsLoading
 } = useTopics();
 const route = useUrlWatcher();
@@ -273,7 +274,9 @@ const {
   sendSharedFiles
 } = useShareSelection();
 const allTopics = computed(() =>
-  getTopicList().filter(topic => !isClientTopic(topic))
+  initialTopicListPending.value
+    ? []
+    : getTopicList().filter(topic => !isClientTopic(topic))
 );
 const messageSearchResults = ref<IMessageSearchResult[]>([]);
 const isMessageSearchLoading = ref(false);
@@ -383,7 +386,7 @@ const shouldShowTopicListSkeleton = computed(
   () =>
     activeSection.value === 'chats' &&
     !isShareSelectionActive.value &&
-    isTopicsLoading.value &&
+    (isTopicsLoading.value || initialTopicListPending.value) &&
     allTopics.value.length === 0 &&
     !normalizeAtSearchQuery(toolbarState.search)
 );

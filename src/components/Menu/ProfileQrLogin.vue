@@ -3,16 +3,21 @@
     <button
       ref="trigger"
       type="button"
-      class="profile-qr-login__trigger"
-      aria-label="Вход по QR-коду"
-      title="Вход по QR-коду"
+      class="menu-profile__row profile-qr-login__trigger"
       aria-haspopup="dialog"
       :aria-expanded="isOpen"
       :aria-controls="dialogId"
       :data-testid="`${props.dataTestid}-Trigger`"
       @click="toggle"
     >
-      <Icon :name="IconNameEnum.qrCode" :width="20" :height="20" />
+      <Icon
+        class="menu-profile__icon"
+        :name="IconNameEnum.qrCode"
+        :width="20"
+        :height="20"
+        aria-hidden="true"
+      />
+      <span>Авторизоваться через QR</span>
     </button>
 
     <Teleport to="body">
@@ -163,30 +168,38 @@ onBeforeUnmount(clear);
 
 <style scoped>
 .profile-qr-login-control {
-  display: inline-flex;
-  flex-shrink: 0;
-  margin-right: auto;
-}
-
-.menu-section-heading--waiting > .profile-qr-login-control {
-  margin-left: auto;
-  margin-right: 0;
+  display: flex;
+  min-width: 0;
 }
 
 .profile-qr-login__trigger {
-  display: inline-grid;
-  place-items: center;
-  flex-shrink: 0;
-  vertical-align: middle;
-  width: 24px;
-  height: 24px;
-  padding: 0;
+  width: 100%;
+  gap: 10px;
   margin: 0;
   border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-link);
+  color: var(--text-primary);
+  font-family: inherit;
+  text-align: left;
   cursor: pointer;
+}
+
+.profile-qr-login__trigger .menu-profile__icon {
+  flex-shrink: 0;
+}
+
+@media (hover: hover) {
+  .profile-qr-login__trigger:hover {
+    background: var(--action-secondary-hover-bg);
+  }
+}
+
+.profile-qr-login__trigger:active {
+  background: var(--action-secondary-pressed-bg);
+}
+
+.profile-qr-login__trigger:focus-visible {
+  outline: 2px solid var(--text-link);
+  outline-offset: 2px;
 }
 
 .profile-qr-login {

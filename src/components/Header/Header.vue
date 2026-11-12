@@ -33,6 +33,7 @@
         :type="ButtonTypeEnum.popover"
         :size="SizesEnum.small"
         class="chat__header-back"
+        aria-label="Назад"
         :data-testid="`${props.dataTestid}-Header-BackButton`"
         @click.stop="handleExit"
       >
@@ -893,25 +894,16 @@ const currentPendingCall = computed(
   () => pendingGroupCallInfo.value?.[route.value.id || ''] || null
 );
 const currentInvitedCall = computed(() => invitedGroupCallInfo.value || null);
-const currentTopicActiveCall = computed(
-  () => currentTopic.value?.activeCall || null
-);
-const activeCallTopicEntry = computed(
-  () =>
-    activeCallTopic.value?.activeCall ||
-    (activeCallTopicId.value
-      ? pendingGroupCallInfo.value?.[activeCallTopicId.value] || null
-      : null)
+const activeCallTopicEntry = computed(() =>
+  activeCallTopicId.value
+    ? pendingGroupCallInfo.value?.[activeCallTopicId.value] || null
+    : null
 );
 const currentHeaderCallEntry = computed(
-  () =>
-    currentPendingCall.value ||
-    currentTopicActiveCall.value ||
-    activeCallTopicEntry.value ||
-    null
+  () => currentPendingCall.value || activeCallTopicEntry.value || null
 );
 const hasPendingCallForCurrentTopic = computed(
-  () => !!currentPendingCall.value || !!currentTopicActiveCall.value?.roomId
+  () => !!currentPendingCall.value
 );
 const showHeaderCallAction = computed(() => {
   if (route.value.type === RouteTypes.AI) {

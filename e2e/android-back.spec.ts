@@ -17,15 +17,15 @@ test('стрелка Назад сохраняет размер и эффект�
       .locator('button.chat__header-back');
     await expect(buttons).toHaveCount(5);
     for (const button of await buttons.all()) {
-      await expect(button).toHaveCSS('width', '30px');
-      await expect(button).toHaveCSS('height', '30px');
+      await expect(button).toHaveCSS('width', '44px');
+      await expect(button).toHaveCSS('height', '44px');
       await expect(button).toHaveClass(/popover-yui-kit/);
     }
     const button = buttons.first();
     const idle = await button.evaluate(
       element => getComputedStyle(element).backgroundColor
     );
-    await button.hover();
+    await button.hover({ position: { x: 2, y: 2 } });
     await expect(button).not.toHaveCSS('background-color', idle);
     const hover = await button.evaluate(
       element => getComputedStyle(element).backgroundColor
@@ -33,8 +33,8 @@ test('стрелка Назад сохраняет размер и эффект�
     await page.mouse.down();
     await expect(button).not.toHaveCSS('background-color', hover);
     await expect(button).not.toHaveCSS('background-color', idle);
-    await expect(button).toHaveCSS('width', '30px');
-    await expect(button).toHaveCSS('height', '30px');
+    await expect(button).toHaveCSS('width', '44px');
+    await expect(button).toHaveCSS('height', '44px');
     await page.mouse.up();
   }
 });
@@ -62,8 +62,8 @@ test('Звонилка сохраняет оформление при загру
   await expect(title).toHaveText('Звонилка');
   await expect(message).toBeVisible();
   await expect(page.locator('.message-group__avatar-slot')).toHaveCount(0);
-  await expect(back).toHaveCSS('width', '30px');
-  await expect(back).toHaveCSS('height', '30px');
+  await expect(back).toHaveCSS('width', '44px');
+  await expect(back).toHaveCSS('height', '44px');
   const initialStyle = await titleStyle();
   for (const state of ['Clear', 'Load']) {
     await page.getByTestId(`Fixture-${state}CallMetadata`).click();
@@ -71,7 +71,11 @@ test('Звонилка сохраняет оформление при загру
     await expect(page.locator('.message-group__avatar-slot')).toHaveCount(0);
     expect(await titleStyle()).toEqual(initialStyle);
   }
-  await back.click();
+  const backBounds = (await back.boundingBox())!;
+  await page.touchscreen.tap(
+    backBounds.x + 2,
+    backBounds.y + backBounds.height / 2
+  );
   await expect(page).toHaveURL(/\/call$/);
   await expect(page.getByTestId('Fixture-CallTopic')).toHaveCount(0);
   await page.getByTestId('Fixture-OpenCallTopic').click();

@@ -29,6 +29,14 @@ button.calls-bot__back {
   justify-content: center;
 }
 
+button.chat__header-back {
+  width: 44px !important;
+  min-width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  margin: -7px;
+}
+
 .chat__header-buttons {
   display: flex;
   align-items: center;

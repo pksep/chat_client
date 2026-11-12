@@ -5,7 +5,8 @@ import type {
   Message,
   Group,
   Media,
-  Reaction
+  Reaction,
+  GroupMemberRoleType
 } from '@pksep/zod-shared-chat';
 
 export interface IHeaderProps {
@@ -58,6 +59,7 @@ export interface IUserStatus {
 }
 
 export type IUser = User & {
+  role?: GroupMemberRoleType;
   isBot?: boolean;
   status?: IUserStatus | null;
   ex?: unknown;

@@ -1581,7 +1581,7 @@ const getTopicActiveCall = (topic: ITopic) => {
     };
   }
 
-  return pendingGroupCallInfo.value?.[topic.id] || topic.activeCall || null;
+  return pendingGroupCallInfo.value?.[topic.id] || null;
 };
 </script>
 

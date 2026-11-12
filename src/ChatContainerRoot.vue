@@ -113,7 +113,7 @@ const emit = defineEmits<{
 installNotoEmojiFontFaces();
 onUnmounted(initBrowserMediaDownloads());
 
-const { fetchAllTopics } = useTopics();
+const { fetchAllTopics, initialTopicListPending } = useTopics();
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const route = useUrlWatcher();
 let removeAppVisibilityListener: (() => void) | null = null;
@@ -169,6 +169,16 @@ const handleAttachModalEmojiPickerClick = (event: MouseEvent): void => {
 
 const hasStartupNetwork = (): boolean =>
   typeof navigator === 'undefined' || navigator.onLine;
+
+const isPageReload =
+  (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming)
+    ?.type === 'reload';
+const shouldRefreshListBeforePreview = isPageReload && hasStartupNetwork();
+// Явное обновление страницы должно сначала подтвердить порядок и превью чатов.
+initialTopicListPending.value = shouldRefreshListBeforePreview;
+onUnmounted(() => {
+  initialTopicListPending.value = false;
+});
 
 const getStartupSnapshotMaxAge = (): number | undefined =>
   hasStartupNetwork()
@@ -389,7 +399,8 @@ const hydrateFreshChatContent = async (
     }
     // Присутствие обновляется параллельно переписке; отложенный запуск
     // увидит результат этого же запроса и не загрузит справочник повторно.
-    if (!isMobile.value) return freshContentState;
+    if (!isMobile.value && !shouldRefreshListBeforePreview)
+      return freshContentState;
   }
 
   if (!getAuthUser()) {
@@ -399,7 +410,10 @@ const hydrateFreshChatContent = async (
     }
   }
 
-  const shouldDeferTopicsRefresh = !!getActiveChatTopicId() && !isMobile.value;
+  const shouldDeferTopicsRefresh =
+    !!getActiveChatTopicId() &&
+    !isMobile.value &&
+    !shouldRefreshListBeforePreview;
   let topicsRefreshed = false;
 
   if (!shouldDeferTopicsRefresh) {
@@ -409,6 +423,7 @@ const hydrateFreshChatContent = async (
       deferMaintenanceUntil: waitForStartupPaint(),
       onNetworkApplied: () => {
         topicsRefreshed = true;
+        initialTopicListPending.value = false;
         if (
           isMobile.value &&
           !getActiveChatTopicId() &&
@@ -421,6 +436,7 @@ const hydrateFreshChatContent = async (
         }
       }
     });
+    initialTopicListPending.value = false;
     performance.mark('chat-startup:topics-resolved', {
       detail: { isFresh: topicsRefreshed }
     });
@@ -702,6 +718,7 @@ const runAppInitialization = async () => {
   const revealCachedList = (userId: string): void => {
     if (
       !isInitialListReady.value &&
+      !shouldRefreshListBeforePreview &&
       isMobile.value &&
       !getActiveChatTopicId() &&
       getAuthUser()?.id === userId &&
@@ -831,6 +848,7 @@ const runAppInitialization = async () => {
     if (authData.user) setAuthUser(authData.user);
 
     const canPreviewCachedList =
+      !shouldRefreshListBeforePreview &&
       !tokenUrl &&
       !!authUserId &&
       initialUserId === authUserId &&
@@ -889,6 +907,7 @@ const runAppInitialization = async () => {
       return;
     }
   } finally {
+    initialTopicListPending.value = false;
     // Ранний показ кеша не отменяет ещё выполняющиеся нативные запросы.
     finishNativeStartupReads();
     if (tokenUrl) {

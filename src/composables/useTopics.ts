@@ -87,6 +87,7 @@ const topicsById = computed(
   () => new Map(topics.value.map(topic => [topic.id, topic] as const))
 );
 const loading = ref(false);
+const initialTopicListPending = ref(false);
 const error = ref<string | null>(null);
 const topicsRefreshFailed = ref(false);
 const hasMoreTopics = ref(false);
@@ -928,27 +929,29 @@ const createTopicsApi = () => {
     if (sync) rememberNativeTopicSync(sync);
   };
 
+  const syncTopicActiveCalls = async (): Promise<void> => {
+    const serverActiveCalls = topics.value
+      .filter(
+        topic =>
+          !!topic.activeCall?.roomId &&
+          typeof topic.activeCall?.callType === 'string'
+      )
+      .map(topic => ({
+        roomId: topic.activeCall!.roomId,
+        topicId: topic.id,
+        callType: topic.activeCall!.callType || 'livekit',
+        startTime: topic.activeCall?.startTime ?? null,
+        participantCount: topic.activeCall?.participantCount,
+        groupMode: topic.activeCall?.groupMode,
+        elapsedDurationMs: topic.activeCall?.elapsedDurationMs
+      }));
+    const { syncServerActiveCalls } = await import('../services/useCalls');
+    await syncServerActiveCalls(serverActiveCalls, !hasMoreTopics.value);
+  };
+
   const finishTopicMaintenance = async (): Promise<void> => {
-    if (!hasMoreTopics.value) {
-      await ensureFavoriteTopic();
-      const serverActiveCalls = topics.value
-        .filter(
-          topic =>
-            !!topic.activeCall?.roomId &&
-            typeof topic.activeCall?.callType === 'string'
-        )
-        .map(topic => ({
-          roomId: topic.activeCall!.roomId,
-          topicId: topic.id,
-          callType: topic.activeCall!.callType || 'livekit',
-          startTime: topic.activeCall?.startTime ?? null,
-          participantCount: topic.activeCall?.participantCount,
-          groupMode: topic.activeCall?.groupMode,
-          elapsedDurationMs: topic.activeCall?.elapsedDurationMs
-        }));
-      const { syncServerActiveCalls } = await import('../services/useCalls');
-      await syncServerActiveCalls(serverActiveCalls);
-    }
+    if (!hasMoreTopics.value) await ensureFavoriteTopic();
+    await syncTopicActiveCalls();
     await warmShadowUnreadStateForTopics(topics.value);
   };
 
@@ -1163,6 +1166,7 @@ const createTopicsApi = () => {
       applyTopicPage(response, session, page);
       if (session.sync) await persistTopicSyncSession(session);
       if (!hasMoreTopics.value) await finishTopicMaintenance();
+      else await syncTopicActiveCalls();
       return topics.value;
     })()
       .catch(err => {
@@ -2108,6 +2112,7 @@ const createTopicsApi = () => {
   return {
     topics,
     loading,
+    initialTopicListPending,
     error,
     totalUnreadCount,
     setTopics,
