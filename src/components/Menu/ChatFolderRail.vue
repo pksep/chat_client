@@ -1,6 +1,13 @@
 <template>
   <nav
-    :class="['chat-folder-rail', { 'chat-folder-rail--mobile': props.mobile }]"
+    :class="[
+      'chat-folder-rail',
+      {
+        'chat-folder-rail--mobile': props.mobile,
+        'chat-folder-rail--tabs': props.mobile && props.tabs,
+        'chat-folder-rail--with-filters': props.mobile && !!$slots.filters
+      }
+    ]"
     aria-label="Папки чатов"
   >
     <div
@@ -13,7 +20,9 @@
       @contextmenu.capture="onClickCapture"
       @keydown="onKeydown"
     >
+      <slot v-if="props.mobile" name="filters" />
       <button
+        v-if="!props.tabs || !$slots.filters"
         type="button"
         :class="[
           'chat-folder-rail__item',
@@ -35,8 +44,11 @@
         data-testid="ChatFolders-Rail-All"
         @click="emits('select', null)"
       >
-        <span class="chat-folder-rail__avatar">
-          <MessageIcon />
+        <span
+          v-if="!props.tabs || allUnreadCount"
+          class="chat-folder-rail__avatar"
+        >
+          <MessageIcon v-if="!props.tabs" />
           <span
             v-if="allUnreadCount"
             class="chat-folder-rail__badge"
@@ -50,7 +62,9 @@
             {{ unreadBadgeLabel(allUnreadCount) }}
           </span>
         </span>
-        <span class="chat-folder-rail__label">Все чаты</span>
+        <span class="chat-folder-rail__label">{{
+          props.tabs ? 'Все' : 'Все чаты'
+        }}</span>
       </button>
 
       <template v-if="props.loading && !props.folders.length">
@@ -128,7 +142,7 @@
       <slot v-if="props.mobile" name="system-folders" />
 
       <button
-        v-if="props.mobile"
+        v-if="props.mobile && !props.tabs"
         type="button"
         :class="[
           'chat-folder-rail__item',
@@ -193,6 +207,7 @@ const props = withDefaults(
     isManaging: boolean;
     isActive: boolean;
     mobile?: boolean;
+    tabs?: boolean;
     authUserId?: string;
     scope?: ChatFolderScope;
     loading?: boolean;
@@ -200,6 +215,7 @@ const props = withDefaults(
   }>(),
   {
     mobile: false,
+    tabs: false,
     authUserId: '',
     scope: 'chats',
     loading: false

@@ -10,6 +10,7 @@ import '../../src/assets/menu-layout.css';
 import '../../src/assets/chat-folders.css';
 import ChatsToolbar from '../../src/components/Menu/ChatsToolbar.vue';
 import ChatFolderRail from '../../src/components/Menu/ChatFolderRail.vue';
+import ChatsToolbarFilters from '../../src/components/Menu/ChatsToolbarFilters.vue';
 import ChatFoldersPanel from '../../src/components/Menu/ChatFoldersPanel.vue';
 import ClientsPanel from '../../src/components/Clients/ClientsPanel.vue';
 import TopicList from '../../src/components/ContactList/TopicList.vue';
@@ -17,13 +18,17 @@ import { authedUser, saveChatAuthSession } from '../../src/composables/useAuth';
 import { refreshChatAccess } from '../../src/composables/useChatAccess';
 import { refreshManagerInquiries } from '../../src/composables/useManagerInquiries';
 import { useChatFolders } from '../../src/composables/useChatFolders';
+import { useChatListSelection } from '../../src/composables/useChatListSelection';
 import { setTopics } from '../../src/composables/useTopics';
 import { setConfig } from '../../src/services/useConfig';
 import { getChatSDK, initializeChat } from '../../src/services/useChat';
 import { ChatSDK } from '../../src/services/useChatSDK';
 import { installFolderFixtureSocket } from './folder-fixture-socket';
 import { emojiDirective } from '../../src/directives/emoji';
-import { useChatsToolbarState } from '../../src/composables/useChatsToolbarState';
+import {
+  chatsToolbarFilterOptions,
+  useChatsToolbarState
+} from '../../src/composables/useChatsToolbarState';
 import { getTopicsByChatsToolbarFilter } from '../../src/utils/chats-toolbar-filter';
 import type { ITopic, IUser } from '../../src/components/interfaces/interfaces';
 
@@ -68,6 +73,7 @@ createApp({
   setup() {
     const search = ref('');
     const { state: toolbar, setFilter } = useChatsToolbarState();
+    const { selectedFilter: clientFilter } = useChatListSelection('clients');
     return () =>
       h(
         'main',
@@ -82,7 +88,26 @@ createApp({
               class: mobile ? 'mobile-list-container__section' : 'menu__start'
             },
             clients
-              ? [h(ClientsPanel, { isMobile: mobile })]
+              ? [
+                  ...(!mobile
+                    ? [
+                        h(ChatFolderRail, {
+                          scope: 'clients',
+                          folders: state.folders.value,
+                          topics,
+                          selectedFolderId: state.activeFolderId.value,
+                          isManaging: state.isManagingFolders.value,
+                          isActive: true,
+                          systemActive:
+                            !!clientFilter.value &&
+                            clientFilter.value !== 'all',
+                          onSelect: state.selectFolder,
+                          onManage: state.openFolderManager
+                        })
+                      ]
+                    : []),
+                  h(ClientsPanel, { isMobile: mobile })
+                ]
               : [
                   ...(!mobile
                     ? [
@@ -92,6 +117,7 @@ createApp({
                           selectedFolderId: state.activeFolderId.value,
                           isManaging: state.isManagingFolders.value,
                           isActive: true,
+                          systemActive: toolbar.filter !== 'all',
                           onSelect: state.selectFolder,
                           onManage: state.openFolderManager
                         })
@@ -110,7 +136,7 @@ createApp({
                         ChatsToolbar,
                         {
                           modelValue: search.value,
-                          filter: toolbar.filter,
+                          filter: toolbar.selectedFilter,
                           'onUpdate:filter': setFilter,
                           'onUpdate:modelValue': (value: string) =>
                             (search.value = value),
@@ -121,21 +147,37 @@ createApp({
                             groups: 4,
                             bots: 0
                           },
-                          dataTestid: 'MobileFolders'
+                          dataTestid: 'MobileFolders',
+                          onManageFolders: state.openFolderManager
                         },
                         mobile
                           ? {
                               folders: () =>
-                                h(ChatFolderRail, {
-                                  mobile,
-                                  folders: state.folders.value,
-                                  topics,
-                                  selectedFolderId: state.activeFolderId.value,
-                                  isManaging: false,
-                                  isActive: true,
-                                  onSelect: state.selectFolder,
-                                  onManage: state.openFolderManager
-                                })
+                                h(
+                                  ChatFolderRail,
+                                  {
+                                    mobile,
+                                    tabs: true,
+                                    folders: state.folders.value,
+                                    topics,
+                                    selectedFolderId:
+                                      state.activeFolderId.value,
+                                    isManaging: false,
+                                    isActive: true,
+                                    onSelect: state.selectFolder,
+                                    onManage: state.openFolderManager
+                                  },
+                                  {
+                                    filters: () =>
+                                      h(ChatsToolbarFilters, {
+                                        modelValue: toolbar.selectedFilter,
+                                        options: chatsToolbarFilterOptions,
+                                        dataTestid:
+                                          'MobileFolders-ChatsToolbar',
+                                        'onUpdate:modelValue': setFilter
+                                      })
+                                  }
+                                )
                             }
                           : {}
                       ),

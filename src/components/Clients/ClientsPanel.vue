@@ -9,7 +9,7 @@
       :loading="isFoldersLoading"
       :selected-folder-id="activeFolderId"
       @close="closeFolderManager"
-      @select-folder="selectMobileFolder"
+      @select-folder="selectFolder"
       @select-topic="openTopic"
     >
       <template v-if="isMobile" #folders>
@@ -22,7 +22,7 @@
           :selected-system-folder="mobileSystemFolder"
           :system-folders="mobileSystemFolders"
           :auth-user-id="getAuthUser()?.id"
-          @select="selectMobileFolder"
+          @select="selectFolder"
           @select-system="selectMobileSystemFolder"
           @manage="closeFolderManager"
         />
@@ -36,9 +36,11 @@
       :show-filters="!isMobile"
       :class="{ 'mobile-list-container__toolbar': isMobile }"
       data-testid="Clients"
+      @manage-folders="openFolderManager"
     >
       <template v-if="isMobile" #folders>
         <ClientsFolderRail
+          tabs
           :loading="isFoldersLoading"
           :folders="clientFolders"
           :topics="folderTopics"
@@ -47,7 +49,7 @@
           :selected-system-folder="mobileSystemFolder"
           :system-folders="mobileSystemFolders"
           :auth-user-id="getAuthUser()?.id"
-          @select="selectMobileFolder"
+          @select="selectFolder"
           @select-system="selectMobileSystemFolder"
           @manage="openFolderManager"
         />
@@ -55,17 +57,20 @@
       <template #filters>
         <div class="clients-panel__filter-rows">
           <ChatsToolbarFilters
-            v-model="queue"
+            :model-value="selectedFilter"
             :options="filters"
             aria-label="Заявки"
             data-testid="Clients"
+            @update:model-value="selectFilter"
           />
           <ChatsToolbarFilters
             :model-value="source"
             :options="platforms"
             aria-label="Платформа"
             data-testid="Clients-Platforms"
-            @update:model-value="source = source === $event ? '' : $event"
+            @update:model-value="
+              selectFilter(source === $event ? 'all' : $event)
+            "
           >
             <template #icon="{ option }">
               <ClientPlatformIcon :platform="option.value" />
@@ -124,6 +129,7 @@ import ChatsToolbar from '../Menu/ChatsToolbar.vue';
 import MenuEmptyState from '../Menu/MenuEmptyState.vue';
 import type { ITopic } from '../interfaces/interfaces';
 import { useChatFolders } from '../../composables/useChatFolders';
+import { useChatListSelection } from '../../composables/useChatListSelection';
 import ClientsFolderRail from './ClientsFolderRail.vue';
 import ChatFoldersPanel from '../Menu/ChatFoldersPanel.vue';
 const props = defineProps<{ isCollapse?: boolean; isMobile?: boolean }>();
@@ -157,8 +163,17 @@ watch(
     if (allowed.value) void loadFolders(true);
   }
 );
-const queue = ref('all');
-const source = ref('');
+const { selectedFilter, selectFilter } = useChatListSelection('clients');
+const queue = computed(() =>
+  ['new', 'mine', 'support'].includes(selectedFilter.value || '')
+    ? selectedFilter.value || 'all'
+    : 'all'
+);
+const source = computed(
+  () =>
+    platforms.find(platform => platform.value === selectedFilter.value)
+      ?.value || ''
+);
 const search = ref('');
 const filters = [
   { value: 'all', label: 'Все' },
@@ -193,19 +208,12 @@ const mobileSystemFolder = computed(() =>
       ? ''
       : queue.value
 );
-const selectMobileFolder = (folderId: string | null) => {
-  queue.value = 'all';
-  source.value = '';
-  selectFolder(folderId);
-};
 const selectMobileSystemFolder = (folderId: string) => {
   const wasSelected =
     !isManagingFolders.value && mobileSystemFolder.value === folderId;
-  selectMobileFolder(null);
-  if (wasSelected) return;
   const folder = mobileSystemFolders.find(item => item.id === folderId)!;
-  if (folder.platform) source.value = folder.platform;
-  else queue.value = folder.id;
+  closeFolderManager();
+  selectFilter(wasSelected ? 'all' : folder.platform || folder.id);
 };
 const isSupportInquiry = (item: ManagerInquiry) =>
   (item.channels || [item.source?.channel || 'widget']).some(

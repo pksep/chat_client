@@ -38,7 +38,7 @@
 <script setup lang="ts" generic="T extends string">
 // Общая разметка и существующие стили фильтров для чатов и клиентских заявок.
 const props = defineProps<{
-  modelValue: T;
+  modelValue: T | null;
   options: Array<{ value: T; label: string }>;
   counts?: Partial<Record<T, number>>;
   mutedOnly?: Partial<Record<T, boolean>>;

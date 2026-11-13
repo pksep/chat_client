@@ -27,6 +27,11 @@
           : isManagingFolders
       "
       :is-active="activeSection === 'chats' || activeSection === 'clients'"
+      :system-active="
+        activeSection === 'clients'
+          ? !!clientListFilter && clientListFilter !== 'all'
+          : toolbarState.filter !== 'all'
+      "
       :auth-user-id="authUserId"
       @select="handleSelectFolder"
       @manage="handleOpenFolderManager"
@@ -52,7 +57,7 @@
           <ChatsToolbar
             v-if="!isShareSelectionActive"
             :model-value="toolbarState.search"
-            :filter="toolbarState.filter"
+            :filter="toolbarState.selectedFilter"
             :filter-counts="filterCounts"
             :filter-muted-only="filterMutedOnly"
             :is-collapse="isCollapse"
@@ -230,6 +235,7 @@ import {
   type ChatTopicOpenTelemetryMeta
 } from '../services/useChatNavigationTelemetry';
 import { useChatFolders } from '../composables/useChatFolders';
+import { useChatListSelection } from '../composables/useChatListSelection';
 import ChatFolderRail from './Menu/ChatFolderRail.vue';
 import { useChatAccess } from '../composables/useChatAccess';
 import ChatFoldersPanel from './Menu/ChatFoldersPanel.vue';
@@ -302,6 +308,7 @@ const {
   selectFolder: selectClientFolder,
   openFolderManager: openClientFolderManager
 } = useChatFolders('clients');
+const { selectedFilter: clientListFilter } = useChatListSelection('clients');
 const clientFolderTopics = computed(() =>
   getUnreadTopicList().filter(isClientTopic)
 );

@@ -5,6 +5,7 @@ import { getConfig } from '../services/useConfig';
 import { readChatFolders, saveChatFolders } from '../utils/chat-folder-cache';
 import { sortChatFolders } from '../utils/chat-folder-order';
 import { showNotification } from './useNotifications';
+import { useChatListSelection } from './useChatListSelection';
 import type { ChatSDK } from '../services/useChatSDK';
 import { WebSocketEventType } from '../services/useChatSDK/websocketEvents';
 import type {
@@ -17,12 +18,12 @@ import type {
 const folders = ref<ChatFolder[]>([]);
 const selections = {
   chats: {
-    activeFolderId: ref<string | null>(null),
+    activeFolderId: useChatListSelection('chats').activeFolderId,
     isManagingFolders: ref(false),
     isReordering: ref(false)
   },
   clients: {
-    activeFolderId: ref<string | null>(null),
+    activeFolderId: useChatListSelection('clients').activeFolderId,
     isManagingFolders: ref(false),
     isReordering: ref(false)
   }
