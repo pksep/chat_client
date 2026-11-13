@@ -1,3 +1,11 @@
+## [1.48.6](https://github.com/pksep/chat_client/compare/v1.48.5...v1.48.6) (2026-11-13)
+
+
+### Bug Fixes
+
+* prevent sticker catalog flash on first opening ([26fa3d3](https://github.com/pksep/chat_client/commit/26fa3d3a88f349fbb5c98a376654477f8c9cd285))
+* restore compact folder navigation and a single active selection ([ec9f9ec](https://github.com/pksep/chat_client/commit/ec9f9ecb35bc65c2dad1772356f5c1c9d3e0397b))
+
 ## [1.48.5](https://github.com/pksep/chat_client/compare/v1.48.4...v1.48.5) (2026-11-12)
 
 
