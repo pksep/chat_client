@@ -66,9 +66,11 @@ test('первый рендер редактора готовит набор п�
       );
       const mode = panel?.querySelector('.chat-sticker-picker__mode');
       if (mode && mode.getBoundingClientRect().width > 0) {
-        const selected = mode.querySelector('[aria-label="Стикеры"]');
+        const selected = [...mode.querySelectorAll('button')].find(
+          button => button.textContent?.trim() === 'Стикеры'
+        );
         state.frames.push({
-          selected: selected?.classList.contains('switch-yui-kit-active'),
+          selected: selected?.getAttribute('aria-pressed') === 'true',
           item:
             canvas.isConnected &&
             canvas.classList.contains(

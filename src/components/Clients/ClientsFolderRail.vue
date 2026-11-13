@@ -1,6 +1,7 @@
 <template>
   <ChatFolderRail
     mobile
+    :tabs="tabs"
     scope="clients"
     :loading="loading"
     :folders="folders"
@@ -48,6 +49,7 @@ import ChatFolderRail from '../Menu/ChatFolderRail.vue';
 import ClientPlatformIcon from './ClientPlatformIcon.vue';
 
 defineProps<{
+  tabs?: boolean;
   folders: readonly ChatFolder[];
   topics: ITopic[];
   selectedFolderId: string | null;

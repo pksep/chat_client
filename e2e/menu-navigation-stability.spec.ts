@@ -64,7 +64,7 @@ const refreshInquiries = (page: Page) =>
     await refreshManagerInquiries();
   });
 
-test('Мобильные папки находятся сверху, фильтры типов управляют списком', async ({
+test('Мобильные папки находятся под поиском, фильтры типов управляют списком', async ({
   page,
   isMobile
 }) => {
@@ -117,11 +117,11 @@ test('Мобильные папки находятся сверху, фильт�
     chats.getByRole('heading', { name: 'Групповой тест', exact: true })
   ).toBeVisible();
   await expect(
-    chats.locator('.chat-folder-rail__items > button').first()
-  ).toHaveAttribute('data-testid', 'ChatFolders-Rail-All');
+    chats.locator('.chat-folder-rail__items .chats-toolbar__filters')
+  ).toBeVisible();
   const search = (await chats.locator('.chats-toolbar__search').boundingBox())!;
   const folders = (await chats.locator('.chat-folder-rail').boundingBox())!;
-  expect(search.y - folders.y - folders.height).toBe(10);
+  expect(folders.y - search.y - search.height).toBe(10);
   const filters = chats.locator('.chats-toolbar__filters');
   expect((await filters.boundingBox())!.y - search.y - search.height).toBe(10);
   await filters.getByRole('button', { name: 'Чаты', exact: true }).tap();
@@ -133,7 +133,7 @@ test('Мобильные папки находятся сверху, фильт�
   ).toHaveCount(0);
   await filters.getByRole('button', { name: 'Все', exact: true }).tap();
   await expect(chats.locator('.contact-list__li')).toHaveCount(2);
-  await chats.getByTestId('ChatFolders-Rail-Manage').tap();
+  await chats.getByRole('button', { name: 'Открыть папки', exact: true }).tap();
   await expect(chats.getByTestId('ChatFolders-Panel')).toBeVisible();
 });
 
@@ -238,21 +238,19 @@ for (const scope of ['chats', 'clients'] as const) {
       });
     await expect(visibleTopic(0)).toBeVisible();
     const toolbar = section.locator('.chats-toolbar');
-    const heading = (await toolbar
-      .locator('.chats-toolbar__headline')
-      .boundingBox())!;
     const folders = (await toolbar.locator('.chat-folder-rail').boundingBox())!;
     const toolbarSearch = (await toolbar
       .locator('.chats-toolbar__search')
       .boundingBox())!;
-    const folderOffset = folders.y - heading.y - heading.height;
-    const searchOffset = toolbarSearch.y - heading.y - heading.height;
+    expect(folders.y - toolbarSearch.y - toolbarSearch.height).toBe(10);
     for (const folder of ['work', 'empty']) {
-      await section.getByTestId('ChatFolders-Rail-Manage').click();
+      await section
+        .getByRole('button', { name: 'Открыть папки', exact: true })
+        .click();
       await expect(panel).toBeVisible();
       await expect(panel.getByTestId('ChatFolders-Rail-All')).toBeVisible();
       await expect(
-        panel.getByTestId('ChatFolders-Rail-Manage')
+        panel.getByRole('button', { name: 'Открыть папки', exact: true })
       ).toHaveAttribute('aria-pressed', 'true');
       const rail = await panel
         .locator('.chat-folders-panel__rail')
@@ -273,11 +271,7 @@ for (const scope of ['chats', 'clients'] as const) {
       expect(search).not.toBeNull();
       expect(list).not.toBeNull();
       expect(panelFolders.y - panelHeading.y - panelHeading.height).toBeCloseTo(
-        folderOffset,
-        0
-      );
-      expect(search!.y - panelHeading.y - panelHeading.height).toBeCloseTo(
-        searchOffset,
+        10,
         0
       );
       expect(search!.y - rail!.y - rail!.height).toBeCloseTo(10, 0);
@@ -296,15 +290,33 @@ for (const scope of ['chats', 'clients'] as const) {
       if (folder === 'work') {
         await expect(visibleTopic(1)).toBeVisible();
         await expect(visibleTopic(0)).toHaveCount(0);
+        const all =
+          scope === 'clients'
+            ? section.getByTestId('ChatFolders-Rail-All')
+            : section.locator('[data-testid$="ChatsToolbar-Filter-all"]');
+        await expect(all).toHaveAttribute('aria-pressed', 'false');
+        await all.click();
+        await expect(visibleTopic(0)).toBeVisible();
+        const selectedFolder = section.getByTestId(
+          `ChatFolders-Rail-Folder-${scope}-work`
+        );
+        await expect(selectedFolder).toHaveAttribute('aria-pressed', 'false');
+        await selectedFolder.click();
+        await expect(visibleTopic(0)).toHaveCount(0);
+        await expect(all).toHaveAttribute('aria-pressed', 'false');
         // Повторный выбор уже активной папки из управления сохраняет её.
-        await section.getByTestId('ChatFolders-Rail-Manage').click();
+        await section
+          .getByRole('button', { name: 'Открыть папки', exact: true })
+          .click();
         await panel
           .getByTestId(`ChatFolders-Rail-Folder-${scope}-work`)
           .click();
         await expect(visibleTopic(1)).toBeVisible();
         await expect(visibleTopic(0)).toHaveCount(0);
       } else await expect(visibleTopic(1)).toHaveCount(0);
-      await section.getByTestId('ChatFolders-Rail-Manage').click();
+      await section
+        .getByRole('button', { name: 'Открыть папки', exact: true })
+        .click();
       await panel.getByTestId('ChatFolders-Rail-All').click();
       await expect(panel).toHaveCount(0);
       await expect(visibleTopic(0)).toBeVisible();
@@ -320,7 +332,9 @@ for (const scope of ['chats', 'clients'] as const) {
         'new'
       ];
       for (const [index, filter] of filters.entries()) {
-        await section.getByTestId('ChatFolders-Rail-Manage').click();
+        await section
+          .getByRole('button', { name: 'Открыть папки', exact: true })
+          .click();
         await panel.getByTestId(`Clients-SystemFolder-${filter}`).click();
         await expect(panel).toHaveCount(0);
         await expect(
@@ -330,14 +344,18 @@ for (const scope of ['chats', 'clients'] as const) {
         await expect(
           visibleTopic(index === 0 || index === 6 ? 1 : 0)
         ).toHaveCount(0);
-        await section.getByTestId('ChatFolders-Rail-Manage').click();
+        await section
+          .getByRole('button', { name: 'Открыть папки', exact: true })
+          .click();
         await panel.getByTestId(`Clients-SystemFolder-${filter}`).click();
         await expect(panel).toHaveCount(0);
         await expect(
           section.getByTestId(`Clients-SystemFolder-${filter}`)
         ).toHaveAttribute('aria-pressed', 'true');
       }
-      await section.getByTestId('ChatFolders-Rail-Manage').click();
+      await section
+        .getByRole('button', { name: 'Открыть папки', exact: true })
+        .click();
       await panel.getByTestId('ChatFolders-Rail-All').click();
       await expect(visibleTopic(0)).toBeVisible();
       await expect(visibleTopic(1)).toBeVisible();
@@ -566,7 +584,7 @@ for (const scope of ['Chats', 'Clients']) {
       await finishTransition();
       await page
         .locator('.mobile-list-container__section[aria-hidden="false"]')
-        .getByTestId('ChatFolders-Rail-Manage')
+        .getByRole('button', { name: 'Открыть папки', exact: true })
         .click();
       await expect(page.getByTestId('ChatFolders-Panel')).toBeVisible();
       await resetTransitions();

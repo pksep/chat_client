@@ -95,9 +95,15 @@ const order = (page: Page) =>
       elements.map(e => e.getAttribute('data-folder-id'))
     );
 
+const folderSettings = (page: Page) =>
+  page.locator('.chats-toolbar__headline').getByRole('button', {
+    name: 'Открыть папки',
+    exact: true
+  });
+
 for (const clients of [false, true]) {
   for (const dark of [false, true]) {
-    test(`Папки сверху в одну строку, поиск и фильтры ниже: ${clients ? 'клиенты' : 'чаты'}, ${dark ? 'тёмная' : 'светлая'}`, async ({
+    test(`Папки под поиском в одну строку, настройки в хедере: ${clients ? 'клиенты' : 'чаты'}, ${dark ? 'тёмная' : 'светлая'}`, async ({
       page,
       isMobile
     }, testInfo) => {
@@ -112,23 +118,28 @@ for (const clients of [false, true]) {
         return;
       }
       const buttons = page.locator('.chat-folder-rail__items > button');
-      await expect(buttons.first()).toHaveAttribute(
-        'data-testid',
-        'ChatFolders-Rail-All'
-      );
-      await expect(buttons.last()).toHaveAttribute(
-        'data-testid',
-        'ChatFolders-Rail-Manage'
-      );
+      await expect(folderSettings(page)).toBeInViewport();
+      await expect(page.getByTestId('ChatFolders-Rail-Manage')).toHaveCount(0);
       expect(
-        (await buttons.allTextContents())
-          .map(text => text.trim())
-          .slice(1, 1 + names.length)
+        (
+          await page
+            .locator('[data-folder-id] .chat-folder-rail__label')
+            .allTextContents()
+        ).map(text => text.trim())
       ).toEqual(names);
       const filters = page.locator('.chats-toolbar__filters');
-      if (clients) await expect(filters).toHaveCount(0);
-      else {
+      if (clients) {
+        await expect(filters).toHaveCount(0);
+        await expect(
+          page
+            .getByTestId('ChatFolders-Rail-All')
+            .locator('.chat-folder-rail__avatar')
+        ).toHaveCount(0);
+      } else {
         await expect(filters).toBeVisible();
+        await expect(
+          page.locator('.chat-folder-rail__items .chats-toolbar__filters')
+        ).toHaveCount(1);
         await expect(filters.locator('button > span:first-child')).toHaveText([
           'Все',
           'Чаты',
@@ -141,8 +152,8 @@ for (const clients of [false, true]) {
       );
       for (const icon of await icons.all())
         expect(await icon.boundingBox()).toMatchObject({
-          width: 24,
-          height: 24
+          width: 16,
+          height: 16
         });
       for (const width of [320, 360, 393, 412, 768]) {
         await page.setViewportSize({ width, height: 851 });
@@ -155,8 +166,32 @@ for (const clients of [false, true]) {
         expect(search.width).toBe(width - 32);
         expect(rail.x).toBe(0);
         expect(rail.width).toBe(width);
-        expect(rail.height).toBe(72);
-        expect(search.y - rail.y - rail.height).toBe(10);
+        expect(rail.height).toBe(43);
+        expect(rail.y - search.y - search.height).toBe(10);
+        expect(
+          (await (clients ? buttons.first() : filters).boundingBox())!.x
+        ).toBe(16);
+        await expect(page.locator('.chat-folder-rail__items')).toHaveCSS(
+          'column-gap',
+          '5px'
+        );
+        const firstFolder = page.getByTestId(
+          'ChatFolders-Rail-Folder-folder-0'
+        );
+        await expect(firstFolder).toHaveCSS('padding-left', '10px');
+        await expect(firstFolder).toHaveCSS('padding-right', '10px');
+        const iconBox = (await firstFolder
+          .locator('.chat-folder-rail__avatar')
+          .boundingBox())!;
+        const labelBox = (await firstFolder
+          .locator('.chat-folder-rail__label')
+          .boundingBox())!;
+        expect(labelBox.x - iconBox.x - iconBox.width).toBeCloseTo(5, 1);
+        const firstBox = (await firstFolder.boundingBox())!;
+        const secondBox = (await page
+          .getByTestId('ChatFolders-Rail-Folder-folder-1')
+          .boundingBox())!;
+        expect(secondBox.x - firstBox.x - firstBox.width).toBeCloseTo(5, 1);
         if (!clients)
           expect(
             (await filters.boundingBox())!.y - search.y - search.height
@@ -168,8 +203,14 @@ for (const clients of [false, true]) {
           })
         );
         expect(new Set(boxes.map(box => box.y)).size).toBe(1);
-        for (const box of boxes)
-          expect(box).toMatchObject({ width: 70, height: 72 });
+        for (const box of boxes) expect(box.height).toBe(33);
+        expect(
+          await page
+            .locator('.chat-folder-rail__label')
+            .evaluateAll(labels =>
+              labels.every(label => label.scrollWidth <= label.clientWidth)
+            )
+        ).toBe(true);
         expect(
           await page.evaluate(
             () => document.documentElement.scrollWidth <= innerWidth
@@ -180,33 +221,57 @@ for (const clients of [false, true]) {
           animations: 'disabled'
         });
       }
+      await folderSettings(page).tap();
+      await expect(page.getByTestId('ChatFolders-Panel')).toBeVisible();
       expect(errors).toEqual([]);
     });
   }
 }
 
-test('Фильтр типов работает внутри папки и вместе с поиском', async ({
-  page,
-  isMobile
+test('Папки и фильтры имеют единый выбор, «Все» сбрасывает папку', async ({
+  page
 }) => {
-  test.skip(!isMobile);
   await openFixture(page);
   const topics = page.locator('.contact-list__li');
+  const folder = page.getByTestId('ChatFolders-Rail-Folder-folder-0');
+  const filter = (value: string) =>
+    page.getByTestId(`MobileFolders-ChatsToolbar-Filter-${value}`);
+  const selected = page.locator(
+    '[data-folder-id][aria-pressed="true"], .chats-toolbar__filter-button[aria-pressed="true"]'
+  );
   await expect(topics).toHaveCount(4);
-  await page.getByTestId('ChatFolders-Rail-Folder-folder-0').tap();
+  await folder.click();
   await expect(topics).toHaveCount(2);
-  await page.getByTestId('MobileFolders-ChatsToolbar-Filter-chats').tap();
+  await expect(folder).toHaveAttribute('aria-pressed', 'true');
+  await expect(filter('all')).toHaveAttribute('aria-pressed', 'false');
+  await expect(selected).toHaveCount(1);
+  await filter('all').click();
+  await expect(topics).toHaveCount(4);
+  await expect(folder).toHaveAttribute('aria-pressed', 'false');
+  await expect(filter('all')).toHaveAttribute('aria-pressed', 'true');
+  await expect(selected).toHaveCount(1);
+  await filter('chats').click();
   await expect(topics).toHaveCount(0);
-  await page.getByTestId('MobileFolders-ChatsToolbar-Filter-groups').tap();
+  await folder.click();
   await expect(topics).toHaveCount(2);
+  await expect(filter('chats')).toHaveAttribute('aria-pressed', 'false');
+  await expect(selected).toHaveCount(1);
+  await filter('groups').click();
+  await expect(topics).toHaveCount(4);
+  await expect(folder).toHaveAttribute('aria-pressed', 'false');
+  await expect(selected).toHaveCount(1);
+  await folder.click();
+  await expect(topics).toHaveCount(2);
+  await expect(filter('groups')).toHaveAttribute('aria-pressed', 'false');
   await page.locator('.chats-toolbar__search input').fill('Авито');
   await expect(topics).toHaveCount(1);
   await expect(topics).toContainText('Клиент Авито');
-  await page.getByTestId('ChatFolders-Rail-All').tap();
-  await expect(
-    page.getByTestId('MobileFolders-ChatsToolbar-Filter-groups')
-  ).toHaveAttribute('aria-pressed', 'true');
+  await filter('all').click();
   await expect(topics).toHaveCount(1);
+  await expect(folder).toHaveAttribute('aria-pressed', 'false');
+  await expect(selected).toHaveCount(1);
+  await page.locator('.chats-toolbar__search input').fill('');
+  await expect(topics).toHaveCount(4);
 });
 
 test('Системные папки клиентов и настройки доступны в горизонтальной полосе', async ({
@@ -216,6 +281,7 @@ test('Системные папки клиентов и настройки до�
   test.skip(!isMobile);
   await openFixture(page, { clients: true });
   const topics = page.locator('.contact-list__li');
+  const selected = page.locator('.chat-folder-rail [aria-pressed="true"]');
   await expect(topics).toHaveCount(4);
   for (const [id, label] of [
     ['site', 'Сайт'],
@@ -227,16 +293,62 @@ test('Системные папки клиентов и настройки до�
     const button = page.getByTestId(`Clients-SystemFolder-${id}`);
     await button.tap();
     await expect(button).toHaveAttribute('aria-pressed', 'true');
+    await expect(selected).toHaveCount(1);
     await expect(topics).toHaveCount(1);
     await expect(topics).toContainText(`Клиент ${label}`);
     await page.getByTestId('ChatFolders-Rail-Folder-folder-0').tap();
     await expect(button).toHaveAttribute('aria-pressed', 'false');
     await expect(topics).toHaveCount(2);
+    await expect(selected).toHaveCount(1);
     await page.getByTestId('ChatFolders-Rail-All').tap();
     await expect(topics).toHaveCount(4);
+    await expect(
+      page.getByTestId('ChatFolders-Rail-Folder-folder-0')
+    ).toHaveAttribute('aria-pressed', 'false');
+    await expect(selected).toHaveCount(1);
   }
-  await page.getByTestId('ChatFolders-Rail-Manage').tap();
+  await folderSettings(page).tap();
   await expect(page.getByTestId('ChatFolders-Panel')).toBeVisible();
+});
+
+test('В клиентах на компьютере папка, платформа и очередь выбираются по одной', async ({
+  page,
+  isMobile
+}) => {
+  test.skip(isMobile);
+  await openFixture(page, { clients: true });
+  const topics = page.locator('.contact-list__li');
+  const folder = page.getByTestId('ChatFolders-Rail-Folder-folder-0');
+  const all = page.getByTestId('Clients-Filter-all');
+  const site = page.getByTestId('Clients-Platforms-Filter-Сайт');
+  const newInquiries = page.getByTestId('Clients-Filter-new');
+  const selected = page.locator(
+    '[data-folder-id][aria-pressed="true"], .chats-toolbar__filter-button[aria-pressed="true"]'
+  );
+  await folder.click();
+  await expect(topics).toHaveCount(2);
+  await expect(all).toHaveAttribute('aria-pressed', 'false');
+  await expect(selected).toHaveCount(1);
+  await all.click();
+  await expect(topics).toHaveCount(4);
+  await expect(folder).toHaveAttribute('aria-pressed', 'false');
+  await expect(selected).toHaveCount(1);
+  await site.click();
+  await expect(topics).toHaveCount(2);
+  await expect(topics.first()).toContainText('Клиент Сайт');
+  await folder.click();
+  await expect(topics).toHaveCount(2);
+  await expect(site).toHaveAttribute('aria-pressed', 'false');
+  await expect(selected).toHaveCount(1);
+  await newInquiries.click();
+  await expect(topics).toHaveCount(1);
+  await expect(folder).toHaveAttribute('aria-pressed', 'false');
+  await expect(selected).toHaveCount(1);
+  await page.getByTestId('ChatFolders-Rail-All').click();
+  await expect(topics).toHaveCount(4);
+  await expect(all).toHaveAttribute('aria-pressed', 'true');
+  await expect(newInquiries).toHaveAttribute('aria-pressed', 'false');
+  await expect(selected).toHaveCount(1);
 });
 
 test('Перетаскивание по горизонтали сохраняет порядок папок', async ({
@@ -244,6 +356,7 @@ test('Перетаскивание по горизонтали сохраняе�
   isMobile
 }) => {
   test.skip(!isMobile);
+  await page.setViewportSize({ width: 768, height: 851 });
   const saves = await openFixture(page);
   const initial = await order(page);
   const source = (await page
@@ -328,6 +441,43 @@ test('Свайп прокручивает папки, удержание поз�
   await cdp.detach();
 });
 
+for (const clients of [false, true]) {
+  test(`Свайп прокручивает общую строку папок: ${clients ? 'клиенты' : 'чаты'}`, async ({
+    page,
+    isMobile
+  }) => {
+    test.skip(!isMobile);
+    await page.setViewportSize({ width: 320, height: 640 });
+    const saves = await openFixture(page, { clients, many: true });
+    const folderList = page.locator('.chat-folder-rail__items');
+    const initialHeader = await folderSettings(page).boundingBox();
+    const rail = (await folderList.boundingBox())!;
+    const y = rail.y + 16;
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: 290, y, id: 1 }]
+    });
+    for (const x of [270, 230, 190, 150, 110, 70]) {
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x, y, id: 1 }]
+      });
+    }
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchEnd',
+      touchPoints: []
+    });
+    await expect
+      .poll(() => folderList.evaluate(el => el.scrollLeft))
+      .toBeGreaterThan(100);
+    await expect(page.locator('.chat-folder-drag-preview')).toHaveCount(0);
+    expect(await folderSettings(page).boundingBox()).toEqual(initialHeader);
+    expect(saves).toEqual([]);
+    await cdp.detach();
+  });
+}
+
 test('Настройки и системные папки доступны без созданных папок', async ({
   page,
   isMobile
@@ -338,11 +488,11 @@ test('Настройки и системные папки доступны бе�
     page.locator('.chat-folder-rail__items [data-folder-id]')
   ).toHaveCount(0);
   await expect(page.locator('.chat-folder-rail__items > button')).toHaveCount(
-    9
+    8
   );
   await page.getByTestId('Clients-SystemFolder-site').tap();
   await expect(page.locator('.contact-list__li')).toHaveCount(1);
-  await page.getByTestId('ChatFolders-Rail-Manage').tap();
+  await folderSettings(page).tap();
   await expect(page.getByTestId('ChatFolders-Panel')).toBeVisible();
 });
 
@@ -367,7 +517,7 @@ for (const clients of [false, true]) {
       await expect(page.locator('.chat-folder-rail')).toBeInViewport();
       if (!clients)
         await expect(page.locator('.chats-toolbar__filters')).toBeInViewport();
-      await page.getByTestId('ChatFolders-Rail-Manage').tap();
+      await folderSettings(page).tap();
       await expect(page.getByTestId('ChatFolders-Panel')).toBeVisible();
     });
   }
@@ -383,13 +533,16 @@ test('Большое число папок не увеличивает высо�
   const folderList = page.locator('.chat-folder-rail__items');
   const toolbar = page.locator('.mobile-list-container__toolbar');
   const height = (await toolbar.boundingBox())!.height;
-  expect((await folderList.boundingBox())!.height).toBe(72);
+  expect((await folderList.boundingBox())!.height).toBe(43);
   const last = page.getByTestId('ChatFolders-Rail-Folder-folder-29');
   await last.scrollIntoViewIfNeeded();
   await expect(last).toBeInViewport();
   expect((await toolbar.boundingBox())!.height).toBe(height);
-  await expect(page.locator('.chats-toolbar__filters')).toBeInViewport();
+  await expect(folderSettings(page)).toBeInViewport();
   await folderList.evaluate(el => (el.scrollLeft = 0));
+  await page
+    .getByTestId('ChatFolders-Rail-Folder-folder-0')
+    .scrollIntoViewIfNeeded();
   const source = (await page
     .getByTestId('ChatFolders-Rail-Folder-folder-0')
     .boundingBox())!;

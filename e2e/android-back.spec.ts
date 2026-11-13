@@ -353,7 +353,7 @@ test('Назад из мобильных разделов возвращает �
     await noExit(page);
   }
   await page
-    .getByTestId('ChatFolders-Rail-Manage')
+    .getByRole('button', { name: 'Открыть папки', exact: true })
     .filter({ visible: true })
     .click();
   await expect(page.getByTestId('ChatFolders-Panel')).toBeVisible();

@@ -55,9 +55,13 @@ test('iPhone PWA: папки сохраняют панель навигации,
   await expect(
     page.getByTestId('ChatFolders-Rail-Folder-iphone-folder')
   ).toBeVisible();
-  await page.getByTestId('ChatFolders-Rail-Manage').click();
+  await page
+    .getByRole('button', { name: 'Открыть папки', exact: true })
+    .click();
   const panel = page.getByTestId('ChatFolders-Panel');
-  await expect(panel.getByTestId('ChatFolders-Rail-Manage')).toBeVisible();
+  await expect(
+    panel.getByRole('button', { name: 'Открыть папки', exact: true })
+  ).toBeVisible();
   await expect(panel.getByTestId('ChatFolders-Rail-All')).toBeVisible();
   await panel.getByTestId('ChatFolders-CreateButton').click();
   const editor = page.locator('dialog.chat-folder-editor-mobile');
