@@ -57,9 +57,9 @@
     <section
       ref="scroller"
       class="chat-sticker-picker chat-scrollbar"
-      :class="{ 'chat-sticker-picker--preparing': !active }"
-      :aria-hidden="!active"
-      :inert="!active"
+      :class="{ 'chat-sticker-picker--preparing': !isVisible }"
+      :aria-hidden="!isVisible"
+      :inert="!isVisible"
       aria-label="Каталог стикеров"
       @scroll.passive="handleScroll"
     >
@@ -211,6 +211,8 @@ const emit = defineEmits<{ select: [id: string] }>();
 const active = ref(false);
 const prepared = ref(false);
 const bodyTarget = shallowRef<HTMLElement | null>(null);
+// Первый клик может прийти раньше загрузки контейнера панели из UI-kit.
+const isVisible = computed(() => active.value && !!bodyTarget.value);
 const headerTarget = shallowRef<HTMLElement | null>(null);
 const modeTarget = shallowRef<HTMLElement | null>(null);
 const modeControl = ref<HTMLElement | null>(null);
@@ -939,12 +941,12 @@ watch(
   },
   { immediate: true }
 );
-watch([scroller, active], async ([element]) => {
+watch([scroller, isVisible], async ([element]) => {
   resizeObserver?.disconnect();
   if (!element) return;
   await nextTick();
   const measure = () => {
-    if (!active.value) return;
+    if (!isVisible.value) return;
     viewportHeight.value = element.clientHeight;
     viewportWidth.value = element.clientWidth;
   };

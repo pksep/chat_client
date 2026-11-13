@@ -373,7 +373,7 @@ test('удержание стикера сохраняет фокус редак
   );
 });
 
-test('первое нажатие открывает нужный набор после отложенной загрузки панели в мобильной сборке', async ({
+test('первое нажатие открывает набор без скачков сетки после отложенной загрузки панели', async ({
   page,
   isMobile
 }) => {
@@ -382,17 +382,53 @@ test('первое нажатие открывает нужный набор п�
   page.on('pageerror', error => errors.push(error.message));
   const finishLoading = await delayEmojiRuntime(page);
   await page.goto(
-    '/e2e/fixtures/stickers.html?catalog=1&message-pack=fishprometheus'
+    '/e2e/fixtures/stickers.html?catalog=1&composer=1&message-pack=fishprometheus'
   );
   const image = page.getByRole('button', {
     name: 'Открыть набор стикеров',
     exact: true
   });
   await expect(image).toBeVisible();
+  await expect(page.locator('.fixture-editor .ProseMirror')).toBeVisible();
   await expect(page.locator('.emoji-picker .v3-body')).toHaveCount(0);
+  const editorBounds = await page.locator('.fixture-editor').boundingBox();
+  await page.evaluate(() => {
+    const state = { running: true, frames: [] as object[] };
+    (window as any).stickerOpeningLayout = state;
+    const sample = () => {
+      const picker = document.querySelector<HTMLElement>(
+        '.chat-sticker-picker:not(.chat-sticker-picker--preparing)'
+      );
+      const body = picker?.closest<HTMLElement>('.v3-body');
+      const item = picker?.querySelector<HTMLElement>(
+        '.chat-sticker-picker__item'
+      );
+      if (picker && picker.getClientRects().length) {
+        const bounds = picker.getBoundingClientRect();
+        const bodyBounds = body?.getBoundingClientRect();
+        state.frames.push({
+          inBody: !!body,
+          width: bounds.width,
+          height: bounds.height,
+          bodyWidth: bodyBounds?.width,
+          bodyHeight: bodyBounds?.height,
+          itemWidth: item?.offsetWidth,
+          editorHeight: document
+            .querySelector('.fixture-editor')!
+            .getBoundingClientRect().height
+        });
+      }
+      if (state.running) requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
   if (isMobile) await image.tap();
   else await image.click();
   await expect(page.locator('.emoji-picker .v3-body')).toHaveCount(0);
+  await expect(page.locator('.chat-sticker-picker')).toBeHidden();
+  expect(await page.locator('.fixture-editor').boundingBox()).toEqual(
+    editorBounds
+  );
   finishLoading();
   const picker = page.getByRole('region', { name: 'Каталог стикеров' });
   await expect(picker).toBeVisible();
@@ -405,6 +441,32 @@ test('первое нажатие открывает нужный набор п�
   await expect(
     picker.locator('.chat-sticker-picker__item').first()
   ).toHaveAttribute('data-sticker-id', 'fishprometheus-0');
+  const frames = await page.evaluate(async () => {
+    const state = (window as any).stickerOpeningLayout;
+    // Проверяем каждый кадр первой секунды, включая появление сетки.
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    state.running = false;
+    return state.frames as {
+      inBody: boolean;
+      width: number;
+      height: number;
+      bodyWidth: number;
+      bodyHeight: number;
+      itemWidth?: number;
+      editorHeight: number;
+    }[];
+  });
+  expect(frames.length).toBeGreaterThan(1);
+  expect(frames.some(frame => frame.itemWidth)).toBe(true);
+  for (const frame of frames) {
+    expect(frame.inBody).toBe(true);
+    expect(frame.width).toBeGreaterThan(0);
+    expect(frame.height).toBeGreaterThan(0);
+    expect(frame.width).toBeCloseTo(frame.bodyWidth, 0);
+    expect(frame.height).toBeLessThanOrEqual(frame.bodyHeight + 1);
+    expect(frame.editorHeight).toBe(editorBounds!.height);
+    if (frame.itemWidth) expect(frame.itemWidth).toBe(60);
+  }
   const smile = page.locator('.smile-button:visible');
   await smile.click();
   await smile.click();
