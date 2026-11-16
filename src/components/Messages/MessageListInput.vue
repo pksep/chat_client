@@ -186,12 +186,14 @@
     />
     <Teleport to="body">
       <div
-        v-if="isTauriFileDragging"
+        v-if="isTauriFileDragging || isTauriFileReading"
         class="chat__input-tauri-dropzone"
         :data-testid="`${props.dataTestid}-MessageList-TauriDropzone`"
       >
         <div class="chat__input-tauri-dropzone__zone">
-          <div class="chat__input-tauri-dropzone__title">Загрузить файл</div>
+          <div class="chat__input-tauri-dropzone__title">
+            {{ isTauriFileReading ? 'Подготовка файлов…' : 'Загрузить файл' }}
+          </div>
         </div>
       </div>
     </Teleport>
@@ -263,6 +265,8 @@ import {
 import { useManagerRouteSubscription } from '../../composables/useManagerRoutes';
 import { useComposerKeyboard } from '../../composables/useComposerKeyboard';
 import { useIosPwaFilePicker } from '../../composables/useIosPwaFilePicker';
+import { useTauriFilePicker } from '../../composables/useTauriFilePicker';
+import { showErrorNotification } from '../../composables/useNotifications';
 import { getStickerReference } from '../../utils/stickers';
 import { DESKTOP_UPDATE_MESSAGES } from '../../services/desktop-update-messages';
 import {
@@ -539,6 +543,7 @@ useIosPwaFilePicker(inputContainerRef, (files, onlyMedia) => {
   return contentEditorRef.value?.emitAttachFiles(files, onlyMedia);
 });
 const isTauriFileDragging = ref(false);
+const isTauriFileReading = ref(false);
 const isEditorReady = ref(false);
 let shouldFocusEditorWhenReady = false;
 
@@ -769,14 +774,16 @@ const reportInputHeight = (): void => {
   emit('heightChange', nextHeight);
 };
 
-const handleTauriFilesDropped = (files: File[]): void => {
+const handleTauriFilesDropped = (
+  files: File[],
+  onlyMedia = files.every(isMediaFile)
+): void => {
   isTauriFileDragging.value = false;
 
   if (!files.length || !props.allowAttachFile) {
     return;
   }
 
-  const onlyMedia = files.every(isMediaFile);
   const editor = contentEditorRef.value as typeof contentEditorRef.value & {
     queueAttachFiles?: (files: FileList | File[], onlyMedia: boolean) => void;
   };
@@ -788,6 +795,13 @@ const handleTauriFilesDropped = (files: File[]): void => {
 
   emit('attachFile', toFileList(files), onlyMedia);
 };
+
+useTauriFilePicker(
+  inputContainerRef,
+  handleTauriFilesDropped,
+  () => props.allowAttachFile,
+  () => `${props.topicId || ''}:${composerDraftKey.value}`
+);
 
 defineExpose({
   openStickerPack: (pack: string) => stickerPickerRef.value?.openPack(pack),
@@ -923,13 +937,20 @@ onMounted(() => {
   void bindTauriFileDrop({
     getTargetElement: () =>
       props.allowAttachFile ? inputContainerRef.value : null,
+    getContextKey: () => `${props.topicId || ''}:${composerDraftKey.value}`,
     onDragStateChange: isDragging => {
       isTauriFileDragging.value = isDragging;
     },
+    onReadStateChange: isReading => {
+      isTauriFileReading.value = isReading;
+    },
     onFilesDropped: handleTauriFilesDropped
-  }).then(unlisten => {
-    unlistenTauriFileDrop = unlisten;
-  });
+  })
+    .then(unlisten => {
+      if (keyboardMediaDisposed) unlisten?.();
+      else unlistenTauriFileDrop = unlisten;
+    })
+    .catch(showErrorNotification);
 });
 
 onBeforeUnmount(() => {

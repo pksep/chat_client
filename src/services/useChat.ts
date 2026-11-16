@@ -1,5 +1,6 @@
 import { ref, shallowRef } from 'vue';
 import { MessageTypeEnum } from '@pksep/yui';
+import { registerTauriUploadedFile } from './tauri-upload-files';
 import { ChatSDK } from './useChatSDK';
 import { createReconnectRefreshCoordinator } from './reconnect-refresh';
 import { createNetworkReachabilityCheck } from './network-reachability';
@@ -3166,6 +3167,7 @@ export const uploadFile = async (
       getConnectionState: getChatConnectionDiagnosticState
     }
   );
+  await registerTauriUploadedFile(file, objectName);
   return { file, path: objectName, thumbnailPath: thumbnailObjectName, ex };
 };
 

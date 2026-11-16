@@ -3,13 +3,51 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicUsize, Ordering},
     time::{Duration, Instant},
 };
 use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+fn guess_mime_type(path: &Path) -> String {
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    match extension.as_str() {
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "svg" => "image/svg+xml",
+        "heic" => "image/heic",
+        "heif" => "image/heif",
+        "avif" => "image/avif",
+        "mp4" => "video/mp4",
+        "m4v" => "video/x-m4v",
+        "mov" => "video/quicktime",
+        "webm" => "video/webm",
+        "avi" => "video/x-msvideo",
+        "mkv" => "video/x-matroska",
+        "pdf" => "application/pdf",
+        "txt" => "text/plain",
+        "csv" => "text/csv",
+        "json" => "application/json",
+        "zip" => "application/zip",
+        "doc" => "application/msword",
+        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xls" => "application/vnd.ms-excel",
+        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        _ => "",
+    }
+    .to_string()
+}
 
 static ACTIVE_FILE_WRITES: AtomicUsize = AtomicUsize::new(0);
 
@@ -81,6 +119,170 @@ struct SavedFile {
     file_name: String,
     mime_type: String,
     size: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source_modified: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalFileInfo {
+    name: String,
+    mime_type: String,
+    last_modified: Option<u64>,
+    size: u64,
+}
+
+fn modified_stamp(metadata: &std::fs::Metadata) -> Option<String> {
+    metadata
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .map(|value| value.as_nanos().to_string())
+}
+
+async fn upload_metadata(path: &Path) -> Result<std::fs::Metadata, FileError> {
+    let metadata = tokio::fs::metadata(path).await?;
+    if !metadata.is_file() {
+        return Err(error(
+            "FILE_TYPE",
+            "Выберите файл. Отправка папок не поддерживается",
+        ));
+    }
+    if metadata.len() > 600 * 1024 * 1024 {
+        return Err(error("FILE_SIZE", "Размер файла превышает лимит 600MB"));
+    }
+    Ok(metadata)
+}
+
+#[tauri::command]
+pub async fn desktop_file_read_info(path: String) -> Result<LocalFileInfo, FileError> {
+    let path = Path::new(&path);
+    let metadata = upload_metadata(path).await?;
+    Ok(LocalFileInfo {
+        name: path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into(),
+        mime_type: guess_mime_type(path),
+        last_modified: metadata
+            .modified()
+            .ok()
+            .and_then(|value| value.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|value| value.as_millis() as u64),
+        size: metadata.len(),
+    })
+}
+
+#[tauri::command]
+pub async fn read_dropped_file(path: String) -> Result<tauri::ipc::Response, FileError> {
+    upload_metadata(Path::new(&path)).await?;
+    // Бинарный IPC не превращает большой файл в массив миллионов JSON-чисел.
+    let mut file = tokio::fs::File::open(path).await?;
+    let mut bytes = Vec::new();
+    (&mut file)
+        .take(600 * 1024 * 1024 + 1)
+        .read_to_end(&mut bytes)
+        .await?;
+    if bytes.len() > 600 * 1024 * 1024 {
+        return Err(error("FILE_SIZE", "Размер файла превышает лимит 600MB"));
+    }
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+#[tauri::command]
+pub async fn desktop_file_pick<R: Runtime>(
+    app: AppHandle<R>,
+    only_media: bool,
+) -> Result<Vec<String>, String> {
+    let mut dialog = app.dialog().file().set_title(if only_media {
+        "Выберите фото или видео"
+    } else {
+        "Выберите файлы"
+    });
+    if only_media {
+        dialog = dialog.add_filter(
+            "Фото и видео",
+            &[
+                "jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "heic", "heif", "mp4", "mov",
+                "webm", "avi", "mkv", "m4v", "avif",
+            ],
+        );
+    }
+    let (send, receive) = tokio::sync::oneshot::channel();
+    dialog.pick_files(move |paths| {
+        let _ = send.send(paths);
+    });
+    let paths = receive.await.map_err(|_| "Не удалось выбрать файлы")?;
+    paths
+        .unwrap_or_default()
+        .into_iter()
+        .map(|path| {
+            path.into_path()
+                .map(|path| path.to_string_lossy().into())
+                .map_err(|_| "Не удалось прочитать путь файла".into())
+        })
+        .collect()
+}
+
+async fn file_digest(path: &Path) -> Result<String, FileError> {
+    let mut file = tokio::fs::File::open(path).await?;
+    let mut hash = Sha256::new();
+    let mut buffer = vec![0_u8; 1024 * 1024];
+    loop {
+        let count = file.read(&mut buffer).await?;
+        if count == 0 {
+            break;
+        }
+        hash.update(&buffer[..count]);
+    }
+    Ok(format!("{:x}", hash.finalize()))
+}
+
+async fn persist_record(path: PathBuf, file: &SavedFile) -> Result<(), FileError> {
+    tokio::fs::create_dir_all(path.parent().unwrap()).await?;
+    let temporary = path.with_extension("tmp");
+    let bytes = serde_json::to_vec(file).map_err(|e| error("FILE_INDEX", e.to_string()))?;
+    tokio::fs::write(&temporary, bytes).await?;
+    tokio::fs::rename(temporary, path).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn desktop_file_register_source<R: Runtime>(
+    app: AppHandle<R>,
+    options: FileOptions,
+    path: String,
+    sha256: String,
+) -> Result<FileStatus, FileError> {
+    let _active = ActiveFileWrite::begin();
+    let path = tokio::fs::canonicalize(path).await?;
+    let metadata = upload_metadata(&path).await?;
+    let modified = modified_stamp(&metadata)
+        .ok_or_else(|| error("FILE_IO", "Не удалось проверить исходный файл"))?;
+    if options.size != Some(metadata.len())
+        || file_digest(&path).await? != sha256
+        || modified_stamp(&tokio::fs::metadata(&path).await?) != Some(modified.clone())
+    {
+        return Err(error(
+            "FILE_CHANGED",
+            "Исходный файл изменился после выбора",
+        ));
+    }
+    let file = SavedFile {
+        file_name: path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into(),
+        path,
+        size: metadata.len(),
+        mime_type: options.mime_type.clone().unwrap_or_default(),
+        source_modified: Some(modified),
+    };
+    persist_record(record_path(&app, &options)?, &file).await?;
+    Ok(file.into())
 }
 
 #[derive(Serialize)]
@@ -198,6 +400,10 @@ async fn saved_file<R: Runtime>(
                     .size
                     .filter(|size| *size > 0)
                     .is_none_or(|size| size == meta.len())
+                && file
+                    .source_modified
+                    .as_ref()
+                    .is_none_or(|modified| modified_stamp(&meta).as_ref() == Some(modified))
         }) {
             Some(file)
         } else {
@@ -340,16 +546,9 @@ pub async fn desktop_file_download<R: Runtime>(
         path: path.clone(),
         mime_type: options.mime_type.unwrap_or_default(),
         size: received,
+        source_modified: None,
     };
-    let persist: Result<(), FileError> = async {
-        tokio::fs::create_dir_all(record_path.parent().unwrap()).await?;
-        let temporary = record_path.with_extension("tmp");
-        let bytes = serde_json::to_vec(&file).map_err(|e| error("FILE_INDEX", e.to_string()))?;
-        tokio::fs::write(&temporary, bytes).await?;
-        tokio::fs::rename(temporary, record_path).await?;
-        Ok(())
-    }
-    .await;
+    let persist: Result<(), FileError> = async { persist_record(record_path, &file).await }.await;
     if let Err(e) = persist {
         let _ = tokio::fs::remove_file(&path).await;
         return Err(e);
@@ -394,6 +593,7 @@ pub async fn desktop_file_save<R: Runtime>(
         path,
         mime_type: options.mime_type.unwrap_or_default(),
         size: bytes.len() as u64,
+        source_modified: None,
     }
     .into())
 }
@@ -424,6 +624,168 @@ pub async fn desktop_file_open<R: Runtime>(
 mod tests {
     use super::*;
     use std::io::{Read, Write};
+    use tauri::ipc::IpcResponse;
+
+    #[test]
+    fn local_upload_reads_binary_and_persists_original_location() {
+        let app = tauri::test::mock_builder()
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap();
+        let handle = app.handle().clone();
+        let body = "Локальный исходник\n".repeat(10_000).into_bytes();
+        let url = serve_file("200 OK", &body);
+        let directory =
+            std::env::temp_dir().join(format!("sep-upload-{}", file_key(&url).unwrap()));
+        std::fs::create_dir(&directory).unwrap();
+        let original = directory.join("Исходный файл.txt");
+        std::fs::write(&original, &body).unwrap();
+        tauri::async_runtime::block_on(async {
+            let path = original.to_string_lossy().to_string();
+            let info = desktop_file_read_info(path.clone()).await.unwrap();
+            assert_eq!(info.name, "Исходный файл.txt");
+            assert_eq!(info.size, body.len() as u64);
+            assert_eq!(info.mime_type, "text/plain");
+            assert!(info.last_modified.is_some());
+            match read_dropped_file(path.clone())
+                .await
+                .unwrap()
+                .body()
+                .unwrap()
+            {
+                tauri::ipc::InvokeResponseBody::Raw(bytes) => assert_eq!(bytes, body),
+                _ => panic!("Файл должен передаваться бинарно"),
+            }
+            let saved = desktop_file_register_source(
+                handle.clone(),
+                options(&url, body.len() as u64),
+                path.clone(),
+                format!("{:x}", Sha256::digest(&body)),
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                PathBuf::from(&saved.path),
+                tokio::fs::canonicalize(&original).await.unwrap()
+            );
+            let status = desktop_file_status(handle.clone(), options(&url, body.len() as u64))
+                .await
+                .unwrap();
+            assert!(status.downloaded);
+            assert_eq!(status.path, saved.path);
+            // Индекс читается с диска, исходник повторно не скачивается.
+            assert_eq!(
+                desktop_file_download(handle.clone(), options(&url, body.len() as u64))
+                    .await
+                    .unwrap()
+                    .path,
+                saved.path
+            );
+            assert!(
+                tokio::fs::read(record_path(&handle, &options(&url, body.len() as u64)).unwrap())
+                    .await
+                    .unwrap()
+                    .len()
+                    > 0
+            );
+            std::fs::remove_file(&original).unwrap();
+            assert!(
+                !desktop_file_status(handle.clone(), options(&url, body.len() as u64))
+                    .await
+                    .unwrap()
+                    .downloaded
+            );
+            let downloaded =
+                desktop_file_download(handle.clone(), options(&url, body.len() as u64))
+                    .await
+                    .unwrap();
+            assert_ne!(downloaded.path, saved.path);
+            assert_eq!(
+                Path::new(&downloaded.path)
+                    .parent()
+                    .unwrap()
+                    .file_name()
+                    .unwrap(),
+                "SEP Chat"
+            );
+            assert_eq!(tokio::fs::read(&downloaded.path).await.unwrap(), body);
+            tokio::fs::remove_file(downloaded.path).await.unwrap();
+            tokio::fs::remove_file(
+                record_path(&handle, &options(&url, body.len() as u64)).unwrap(),
+            )
+            .await
+            .unwrap();
+        });
+        std::fs::remove_dir(directory).unwrap();
+    }
+
+    #[test]
+    fn changed_source_cannot_be_registered_or_opened_as_uploaded_bytes() {
+        let app = tauri::test::mock_builder()
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap();
+        let handle = app.handle().clone();
+        let original = std::env::temp_dir().join(format!(
+            "sep-source-{}.txt",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let url = "https://files.test/changed-source";
+        std::fs::write(&original, b"first").unwrap();
+        tauri::async_runtime::block_on(async {
+            let path = original.to_string_lossy().to_string();
+            let digest = format!("{:x}", Sha256::digest(b"first"));
+            desktop_file_register_source(
+                handle.clone(),
+                options(url, 5),
+                path.clone(),
+                digest.clone(),
+            )
+            .await
+            .unwrap();
+            std::fs::write(&original, b"other").unwrap();
+            std::fs::OpenOptions::new().write(true).open(&original)
+                .unwrap()
+                .set_modified(std::time::SystemTime::now() + Duration::from_secs(1))
+                .unwrap();
+            assert!(
+                !desktop_file_status(handle.clone(), options(url, 5))
+                    .await
+                    .unwrap()
+                    .downloaded
+            );
+            assert_eq!(
+                desktop_file_register_source(handle.clone(), options(url, 5), path, digest)
+                    .await
+                    .err()
+                    .unwrap()
+                    .code,
+                "FILE_CHANGED"
+            );
+            assert_eq!(
+                desktop_file_open(handle.clone(), options(url, 5), Some(true))
+                    .await
+                    .err()
+                    .unwrap()
+                    .code,
+                "FILE_NOT_FOUND"
+            );
+            assert_eq!(tokio::fs::read(&original).await.unwrap(), b"other");
+            assert_eq!(
+                desktop_file_read_info(original.parent().unwrap().to_string_lossy().into())
+                    .await
+                    .err()
+                    .unwrap()
+                    .code,
+                "FILE_TYPE"
+            );
+            tokio::fs::remove_file(record_path(&handle, &options(url, 5)).unwrap())
+                .await
+                .unwrap();
+        });
+        std::fs::remove_file(original).unwrap();
+    }
 
     fn serve_file(status: &str, body: &[u8]) -> String {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
