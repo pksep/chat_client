@@ -15,6 +15,31 @@ import {
   verifyDesktopArtifact
 } from '../scripts/desktop-release';
 
+test('иконки Tauri совместимы с ICNS: RGBA8 и корректная retina-плотность', async () => {
+  const configUrl = new URL('../src-tauri/tauri.conf.json', import.meta.url);
+  const config = await Bun.file(configUrl).json();
+  const pngIcons = (config.bundle.icon as string[]).filter(icon =>
+    icon.endsWith('.png')
+  );
+  expect(pngIcons.length).toBeGreaterThan(0);
+  for (const icon of pngIcons) {
+    const bytes = Buffer.from(
+      await Bun.file(new URL(icon, configUrl)).arrayBuffer()
+    );
+    expect([...bytes.subarray(0, 8)]).toEqual([
+      137, 80, 78, 71, 13, 10, 26, 10
+    ]);
+    expect(bytes[24], `${icon}: 8-битные каналы`).toBe(8);
+    expect(bytes[25], `${icon}: RGBA`).toBe(6);
+    const width = bytes.readUInt32BE(16);
+    expect(bytes.readUInt32BE(20)).toBe(width);
+    const sizes = icon.includes('@2x')
+      ? [32, 64, 256, 512, 1024]
+      : [16, 32, 128, 256, 512];
+    expect(sizes, `${icon}: допустимый размер ICNS`).toContain(width);
+  }
+});
+
 test('версии, prerelease и выбор правильного пакета для обновлений', () => {
   expect(releaseVersion('v1.48.7')).toBe('1.48.7');
   expect(releaseVersion('v1.49.0-beta.1')).toBe('1.49.0-beta.1');

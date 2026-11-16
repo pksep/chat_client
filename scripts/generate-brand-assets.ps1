@@ -71,11 +71,13 @@ function Generate-DesktopIcons {
         @{ Name = '32x32.png'; Size = 32 },
         @{ Name = '128x128.png'; Size = 128 },
         @{ Name = '128x128@2x.png'; Size = 256 },
-        @{ Name = 'icon.png'; Size = 1024 }
+        @{ Name = 'icon.png'; Size = 512 },
+        @{ Name = 'icon@2x.png'; Size = 1024 }
     )) {
         $rendered = Join-Path $temporaryDirectory "desktop-$($icon.Name)"
         Render-FigmaSvg $appIconAsset $icon.Size $rendered
-        & $magick $rendered -depth 8 -define png:color-type=6 $rendered
+        & $magick $rendered -depth 8 -strip -define png:exclude-chunks=date,time `
+            -define png:color-type=6 $rendered
         if ($LASTEXITCODE -ne 0) {
             throw 'Не удалось создать PNG-иконку приложения'
         }
