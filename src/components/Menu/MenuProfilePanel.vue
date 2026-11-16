@@ -438,11 +438,16 @@
           :data-testid="`${props.dataTestid}-MenuProfilePanel-Stickers`"
         />
 
-        <div
-          v-if="isMobile || isDesktopApp"
-          class="menu-profile__update"
-          :class="{ 'menu-profile__update--desktop': isDesktopApp }"
-        >
+        <MenuDesktopAppUpdate
+          v-if="isDesktopApp"
+          :state="desktopUpdater.state.value"
+          :version="currentAppVersion"
+          :data-testid="props.dataTestid"
+          @check="checkForUpdates"
+          @update="handleUpdateClick"
+        />
+
+        <div v-else-if="isMobile" class="menu-profile__update">
           <div
             class="menu-profile__wallpapers-trigger"
             :data-testid="`${props.dataTestid}-MenuProfilePanel-UpdateTrigger`"
@@ -519,13 +524,6 @@
                 <p class="menu-profile__update-title">
                   {{ profileUpdateTitle }}
                 </p>
-                <p
-                  v-if="isDesktopApp && currentAppVersion"
-                  class="menu-profile__update-description"
-                  data-testid="DesktopAppVersion"
-                >
-                  Версия {{ currentAppVersion }}
-                </p>
                 <p class="menu-profile__update-description">
                   {{ profileUpdateDescription }}
                 </p>
@@ -540,12 +538,7 @@
                 :data-testid="`${props.dataTestid}-MenuProfilePanel-UpdateAction`"
                 @click.stop="handleProfileUpdateClick"
               >
-                {{
-                  isDesktopApp &&
-                  ['idle', 'latest', 'error'].includes(profileUpdateState)
-                    ? 'Проверить обновления'
-                    : updateActionLabel
-                }}
+                {{ updateActionLabel }}
               </Button>
 
               <div
@@ -947,6 +940,7 @@ import ConfirmModal from '../UI/ConfirmModal.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import FileIcon from '../UI/FileIcon.vue';
 import { useMobileApp } from '../../composables/useMobileApp';
+import { desktopUpdater } from '../../services/useDesktopUpdater';
 import { useThemeStore } from '../../stores/theme';
 import {
   isStatusPresetDesignPreview,
@@ -955,6 +949,7 @@ import {
 import ChatsToolbar from './ChatsToolbar.vue';
 import StickerPackSelect from './StickerPackSelect.vue';
 import ProfileQrLogin from './ProfileQrLogin.vue';
+import MenuDesktopAppUpdate from './MenuDesktopAppUpdate.vue';
 
 const CallBackgroundPreviewModal = defineAsyncComponent(
   () => import('../CallModal/CallBackgroundPreviewModal.vue')
@@ -1091,8 +1086,6 @@ const {
   isUpdateActionDisabled,
   currentAppVersion,
   isDesktopApp,
-  updateError,
-  availableAppVersion,
   checkForUpdates,
   handleUpdateClick
 } = useMobileApp();
@@ -1110,8 +1103,7 @@ const shouldShowProfileUpdateAction = computed(
   () =>
     profileUpdateState.value === 'available' ||
     profileUpdateState.value === 'downloaded' ||
-    profileUpdateState.value === 'error' ||
-    (isDesktopApp && ['idle', 'latest'].includes(profileUpdateState.value))
+    profileUpdateState.value === 'error'
 );
 const profileUpdateStatusIconKind = computed<'download' | 'check' | null>(
   () => {
@@ -1139,7 +1131,7 @@ const profileUpdateTitle = computed(() => {
   }
 
   if (profileUpdateState.value === 'downloaded') {
-    return isDesktopApp ? 'Обновление скачано' : 'Установлено';
+    return 'Установлено';
   }
 
   if (profileUpdateState.value === 'installing')
@@ -1158,7 +1150,6 @@ const profileUpdateTitle = computed(() => {
   return 'Проверить обновления';
 });
 const profileUpdateDescription = computed(() => {
-  if (updateError.value) return updateError.value;
   if (profileUpdateState.value === 'checking') {
     return 'Пожалуйста, подождите несколько секунд';
   }
@@ -1168,20 +1159,16 @@ const profileUpdateDescription = computed(() => {
   }
 
   if (profileUpdateState.value === 'downloaded') {
-    return isDesktopApp
-      ? 'Установите обновление и перезапустите приложение'
-      : 'Для начала работы перезагрузите приложение';
+    return 'Для начала работы перезагрузите приложение';
   }
 
   if (profileUpdateState.value === 'latest') {
-    if (isDesktopApp) return 'Сейчас у вас актуальная версия приложения';
     return currentAppVersion.value
       ? `Сейчас у вас актуальная версия приложения ${currentAppVersion.value}`
       : 'Сейчас у вас актуальная версия приложения';
   }
 
   if (profileUpdateState.value === 'available') {
-    if (isDesktopApp) return `Доступна версия ${availableAppVersion.value}`;
     return 'Обновите приложение, чтобы получить новые функции';
   }
 
@@ -1336,17 +1323,9 @@ const toggleCallBackgroundMenu = (): void => {
 
 const toggleProfileUpdateMenu = (): void => {
   isProfileUpdateMenuOpen.value = !isProfileUpdateMenuOpen.value;
-  if (isDesktopApp && isProfileUpdateMenuOpen.value) void checkForUpdates();
 };
 
 const handleProfileUpdateClick = async (): Promise<void> => {
-  if (
-    isDesktopApp &&
-    ['idle', 'latest', 'error'].includes(profileUpdateState.value)
-  ) {
-    await checkForUpdates();
-    return;
-  }
   await handleUpdateClick();
 };
 

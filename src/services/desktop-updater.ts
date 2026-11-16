@@ -1,4 +1,5 @@
 import { shallowRef } from 'vue';
+import { DESKTOP_UPDATE_MESSAGES } from './desktop-update-messages';
 
 export type DesktopUpdatePhase =
   | 'idle'
@@ -76,8 +77,7 @@ export function createDesktopUpdater(deps: DesktopUpdateDependencies) {
     } catch {
       patch({
         phase: 'error',
-        error:
-          'Не удалось проверить обновления. Проверьте подключение и повторите.'
+        error: DESKTOP_UPDATE_MESSAGES.checkFailed
       });
     }
   };
@@ -123,8 +123,7 @@ export function createDesktopUpdater(deps: DesktopUpdateDependencies) {
       patch({
         phase: 'error',
         progress: null,
-        error:
-          'Не удалось скачать или проверить подпись обновления. Попробуйте ещё раз.'
+        error: DESKTOP_UPDATE_MESSAGES.downloadFailed
       });
     }
   };
@@ -154,8 +153,8 @@ export function createDesktopUpdater(deps: DesktopUpdateDependencies) {
       patch({
         phase: 'downloaded',
         error: installed
-          ? 'Обновление установлено. Повторите перезапуск приложения.'
-          : 'Не удалось установить обновление. Повторите установку.'
+          ? DESKTOP_UPDATE_MESSAGES.restartFailed
+          : DESKTOP_UPDATE_MESSAGES.installFailed
       });
     }
   };

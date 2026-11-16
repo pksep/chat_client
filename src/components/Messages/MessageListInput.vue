@@ -264,6 +264,7 @@ import { useManagerRouteSubscription } from '../../composables/useManagerRoutes'
 import { useComposerKeyboard } from '../../composables/useComposerKeyboard';
 import { useIosPwaFilePicker } from '../../composables/useIosPwaFilePicker';
 import { getStickerReference } from '../../utils/stickers';
+import { DESKTOP_UPDATE_MESSAGES } from '../../services/desktop-update-messages';
 import {
   desktopInstallBlockers,
   hasDesktopAttachmentPreviews
@@ -528,9 +529,7 @@ const syncAttachmentDraft = (key = composerDraftKey.value) => {
   else attachmentDrafts.delete(key);
 };
 const blockUpdateForAttachments = () =>
-  attachmentDrafts.size
-    ? 'Отправьте или удалите прикреплённые к черновикам файлы перед установкой.'
-    : '';
+  attachmentDrafts.size ? DESKTOP_UPDATE_MESSAGES.otherDraftAttachments : '';
 watch(composerDraftKey, (_next, previous) => syncAttachmentDraft(previous), {
   flush: 'sync'
 });

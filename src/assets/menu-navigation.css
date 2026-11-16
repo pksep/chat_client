@@ -876,30 +876,6 @@ fieldset.menu-profile__status-input.input-yui-kit
   white-space: nowrap;
 }
 
-.menu-profile__update--desktop .menu-profile__update-content {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
-  align-items: start;
-}
-
-.menu-profile__update--desktop .menu-profile__update-status-icon {
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.menu-profile__update--desktop .menu-profile__update-copy {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.menu-profile__update--desktop .menu-profile__update-action,
-.menu-profile__update--desktop .menu-profile__update-progress,
-.menu-profile__update--desktop .menu-profile__update-check {
-  grid-column: 2;
-  justify-self: start;
-  max-width: 100%;
-}
-
 .menu-profile__update-progress {
   display: inline-flex;
   align-items: center;

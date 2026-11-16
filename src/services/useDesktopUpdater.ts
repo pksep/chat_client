@@ -2,6 +2,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { computed, nextTick, ref } from 'vue';
 import { createDesktopUpdater } from './desktop-updater';
+import { DESKTOP_UPDATE_MESSAGES } from './desktop-update-messages';
 import { hasActiveWebUpdateOperations } from './web-update-activity';
 import {
   activeCallTopicId,
@@ -29,12 +30,12 @@ const blockingReason = () => {
     isAnyCallModalVisible.value ||
     activeCallTopicId.value
   )
-    return 'Обновление готово. Завершите звонок, затем установите его.';
+    return DESKTOP_UPDATE_MESSAGES.activeCall;
   if (hasActiveWebUpdateOperations()) {
-    return 'Дождитесь завершения отправки или скачивания файлов.';
+    return DESKTOP_UPDATE_MESSAGES.fileTransfer;
   }
   if (hasDesktopAttachmentPreviews()) {
-    return 'Отправьте или удалите прикреплённые к черновику файлы перед установкой.';
+    return DESKTOP_UPDATE_MESSAGES.draftAttachments;
   }
   for (const check of desktopInstallBlockers) {
     const reason = check();
