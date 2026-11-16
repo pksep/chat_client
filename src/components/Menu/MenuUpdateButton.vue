@@ -67,25 +67,31 @@ const {
   showUpdateBanner,
   updateActionLabel,
   updateProgress,
+  updateError,
   isUpdateActionDisabled,
   handleUpdateClick
 } = useMobileApp();
 
 const actionLabel = computed(() =>
-  updateActionLabel.value === 'Обновить' ||
-  updateActionLabel.value === 'Установить'
-    ? 'Обновить чат'
-    : updateActionLabel.value
+  updateActionLabel.value === 'Установить и перезапустить'
+    ? 'Перезапустить чат'
+    : updateActionLabel.value === 'Обновить' ||
+        updateActionLabel.value === 'Установить'
+      ? 'Обновить чат'
+      : updateActionLabel.value
 );
 const isUpdateDownloaded = computed(
   () =>
     updateActionLabel.value === 'Перезапустить' ||
+    updateActionLabel.value === 'Установить и перезапустить' ||
     updateActionLabel.value === 'Установлено'
 );
-const accessibleLabel = computed(() =>
-  updateProgress.value !== undefined
-    ? `Загружаем обновление: ${actionLabel.value}`
-    : actionLabel.value
+const accessibleLabel = computed(
+  () =>
+    updateError.value ||
+    (updateProgress.value !== undefined
+      ? `Загружаем обновление: ${actionLabel.value}`
+      : actionLabel.value)
 );
 </script>
 

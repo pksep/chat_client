@@ -237,7 +237,17 @@
           :data-testid="`${props.dataTestid}-MessageBubble-DownloadButton`"
         >
           <Icon :name="IconNameEnum.download" />
-          Скачать
+          {{ downloadButtonLabel }}
+        </Button>
+
+        <Button
+          v-if="canShowNativeFileInFolder(contextMedia)"
+          :type="ButtonTypeEnum.popover"
+          :size="SizesEnum.small"
+          @click.stop="handleShowInFolder"
+          :data-testid="`${props.dataTestid}-MessageBubble-ShowInFolderButton`"
+        >
+          <Icon :name="IconNameEnum.folder" /> Показать в папке
         </Button>
 
         <Button
@@ -377,6 +387,12 @@ import {
   type PreparedChatClipboardMedia
 } from '../../utils/chat-clipboard';
 import { prepareChatClipboardMedia } from '../../services/chat-clipboard-media';
+import {
+  canShowNativeFileInFolder,
+  isNativeFileDownloadSupported,
+  refreshNativeFileDownloadStatus,
+  showNativeFileInFolder
+} from '../../services/useNativeFile';
 import { useMessageMedia } from './composables/useMessageMedia';
 import { showErrorNotification } from '../../composables/useNotifications';
 import { MediaType } from '@pksep/zod-shared-chat';
@@ -476,15 +492,37 @@ const messageSticker = computed(() =>
 const contextMedia = computed(
   () =>
     props.media?.find(media => media.id === props.contextMediaId) ||
-    (!stripHtml(props.message || '').trim() ? props.media?.[0] : undefined)
+    (props.media?.length === 1 && !stripHtml(props.message || '').trim()
+      ? props.media[0]
+      : undefined)
 );
-const copyContent = computed(() =>
-  createChatClipboardContent(
+const downloadButtonLabel = computed(() =>
+  !contextMedia.value && (props.media?.length || 0) > 1
+    ? 'Скачать всё'
+    : 'Скачать'
+);
+watch(
+  contextMedia,
+  media => {
+    if (media && isNativeFileDownloadSupported())
+      void refreshNativeFileDownloadStatus(media, true);
+  },
+  { immediate: true }
+);
+
+const handleShowInFolder = async (): Promise<void> => {
+  const media = contextMedia.value;
+  handleClosePopover();
+  if (media) await showNativeFileInFolder(media);
+};
+const copyContent = computed(() => {
+  if ((props.media?.length || 0) > 1 && !contextMedia.value) return null;
+  return createChatClipboardContent(
     props.messageEx,
     props.media || [],
     contextMedia.value
-  )
-);
+  );
+});
 const copyContentLabel = computed(() => {
   const content = copyContent.value;
   if (content?.kind !== 'media') return 'Копировать стикер';
@@ -1120,7 +1158,7 @@ const handleSelectMessage = () => {
 };
 
 const handleDownloadMessageMedia = () => {
-  emits('unmount-download-message-media');
+  emits('unmount-download-message-media', contextMedia.value?.id);
   handleClosePopover();
 };
 

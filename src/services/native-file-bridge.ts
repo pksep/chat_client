@@ -3,6 +3,7 @@ import {
   registerPlugin,
   type PluginListenerHandle
 } from '@capacitor/core';
+import { isTauri } from '@tauri-apps/api/core';
 
 interface NativeFileDownloadProgress {
   requestId: string;
@@ -118,8 +119,17 @@ export const registerNativeFileBridge = () => {
   }
 
   window.__CHAT_NATIVE_FILE__ = {
-    isAndroidNativePlatform,
-    downloadFile: options => NativeFile.downloadFile(options),
-    downloadBase64: options => NativeFile.downloadBase64(options)
+    // UI-kit использует это историческое имя для проверки нативных скачиваний.
+    isAndroidNativePlatform: () => isAndroidNativePlatform() || isTauri(),
+    downloadFile: async options =>
+      isTauri()
+        ? (await import('./tauri-file-bridge')).TauriFile.downloadFile(options)
+        : NativeFile.downloadFile(options),
+    downloadBase64: async options =>
+      isTauri()
+        ? (await import('./tauri-file-bridge')).TauriFile.downloadBase64(
+            options
+          )
+        : NativeFile.downloadBase64(options)
   };
 };

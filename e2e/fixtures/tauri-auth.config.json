@@ -1,0 +1,16 @@
+{
+  "build": {
+    "beforeDevCommand": "",
+    "devUrl": "http://localhost:5173/e2e/fixtures/tauri-auth.html"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "SEP Chat: проверка сессии",
+        "width": 1200,
+        "height": 800
+      }
+    ]
+  }
+}

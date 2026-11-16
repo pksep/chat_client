@@ -1,16 +1,72 @@
 name: Desktop Builds
 
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag: vX.Y.Z or vX.Y.Z-beta.N'
+        required: true
+        type: string
+      publish:
+        description: 'Publish signed packages to the desktop update server'
+        default: false
+        type: boolean
+  push:
+    tags: ['v*']
+  # semantic-release uses GITHUB_TOKEN; its tags do not trigger push workflows.
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
 env:
   LEFTHOOK: 0
 
-on:
-  workflow_dispatch:
-  push:
-    tags:
-      - 'v*'
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
 
 jobs:
+  prepare:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      channel: ${{ steps.release.outputs.channel }}
+      publish: ${{ steps.release.outputs.publish }}
+    steps:
+      - uses: actions/github-script@v7
+        id: release
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+        with:
+          script: |
+            let tag;
+            if (context.eventName === 'workflow_run') {
+              const { data: release } = await github.repos.getLatestRelease(context.repo);
+              if (Date.parse(release.published_at) < Date.parse(context.payload.workflow_run.run_started_at)) {
+                core.info('No new release in this run');
+                return;
+              }
+              tag = release.tag_name;
+            } else {
+              tag = context.eventName === 'push' ? context.ref.replace('refs/tags/', '') : process.env.INPUT_TAG;
+            }
+            if (!/^v\d+\.\d+\.\d+(-beta\.\d+)?$/.test(tag)) throw new Error('Invalid desktop release tag');
+            await github.git.getRef({ ...context.repo, ref: `tags/${tag}` });
+            core.setOutput('tag', tag);
+            core.setOutput('version', tag.slice(1));
+            core.setOutput('channel', tag.includes('-beta.') ? 'beta' : 'stable');
+            core.setOutput('publish', context.eventName !== 'workflow_dispatch' || process.env.INPUT_PUBLISH === 'true');
+
   build-tauri:
+    needs: prepare
+    if: needs.prepare.outputs.tag != ''
     name: Build ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -19,80 +75,125 @@ jobs:
         include:
           - label: Windows x64
             os: windows-latest
-            args: ''
+            args: '--bundles nsis,msi'
             rust_target: ''
-            artifact_name: sep-chat-windows-x64
+            platform: windows-x86_64
           - label: Linux x64
             os: ubuntu-22.04
-            args: ''
+            args: '--bundles appimage,deb,rpm'
             rust_target: ''
-            artifact_name: sep-chat-linux-x64
+            platform: linux-x86_64
           - label: macOS Apple Silicon
             os: macos-latest
-            args: '--target aarch64-apple-darwin'
+            args: '--target aarch64-apple-darwin --bundles app,dmg'
             rust_target: aarch64-apple-darwin
-            artifact_name: sep-chat-macos-arm64
+            platform: darwin-aarch64
           - label: macOS Intel
-            os: macos-13
-            args: '--target x86_64-apple-darwin'
+            os: macos-15-intel
+            args: '--target x86_64-apple-darwin --bundles app,dmg'
             rust_target: x86_64-apple-darwin
-            artifact_name: sep-chat-macos-x64
-
+            platform: darwin-x86_64
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            libxdo-dev \
-            libasound2-dev \
-            librsvg2-dev \
-            patchelf \
-            clang \
-            libclang-dev \
-            cmake \
-            pkg-config
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libxdo-dev libasound2-dev librsvg2-dev patchelf clang libclang-dev cmake pkg-config
+      - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.2.x'
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
+          bun-version: '1.3.14'
+      - uses: dtolnay/rust-toolchain@stable
       - name: Add Rust target
         if: matrix.rust_target != ''
         run: rustup target add ${{ matrix.rust_target }}
-
-      - name: Cache Rust
-        uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build Tauri app
+      - run: bun install --frozen-lockfile
+      - name: Build signed release
+        env:
+          DESKTOP_VERSION: ${{ needs.prepare.outputs.version }}
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: bun run tauri:build -- ${{ matrix.args }}
-
-      - name: Upload bundles
-        uses: actions/upload-artifact@v4
+      - name: Collect packages and signatures
+        env:
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+        run: bun scripts/desktop-release.ts collect src-tauri/target/${{ matrix.rust_target }}/release/bundle desktop-packages ${{ matrix.platform }}
+      - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: |
-            src-tauri/target/release/bundle/**/*.exe
-            src-tauri/target/release/bundle/**/*.msi
-            src-tauri/target/release/bundle/**/*.AppImage
-            src-tauri/target/release/bundle/**/*.deb
-            src-tauri/target/release/bundle/**/*.rpm
-            src-tauri/target/release/bundle/**/*.dmg
-            src-tauri/target/release/bundle/**/*.app
-            src-tauri/target/*/release/bundle/**/*.dmg
-            src-tauri/target/*/release/bundle/**/*.app
+          name: desktop-${{ matrix.platform }}
+          path: desktop-packages/
           if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: [prepare, build-tauri]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: desktop-upload/packages
+      - name: Create complete update manifest
+        run: |
+          bun scripts/desktop-release.ts manifest desktop-upload/packages desktop-upload/publish '${{ needs.prepare.outputs.version }}'
+          mkdir -p desktop-upload/deploy desktop-upload/scripts
+          cp deploy/desktop-updates.yaml desktop-upload/deploy/
+          cp scripts/publish-desktop.sh desktop-upload/scripts/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-release-${{ needs.prepare.outputs.version }}
+          path: desktop-upload/
+          retention-days: 30
+      - name: Upload to existing deployment host
+        if: needs.prepare.outputs.publish == 'true'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEV_SSH_HOST }}
+          username: ${{ secrets.DEV_SSH_USER }}
+          key: ${{ secrets.DEV_SSH_KEY }}
+          port: ${{ secrets.DEV_SSH_PORT }}
+          source: desktop-upload
+          target: ~/sep-chat-desktop-upload/${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Publish all platforms atomically
+        if: needs.prepare.outputs.publish == 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEV_SSH_HOST }}
+          username: ${{ secrets.DEV_SSH_USER }}
+          key: ${{ secrets.DEV_SSH_KEY }}
+          port: ${{ secrets.DEV_SSH_PORT }}
+          command_timeout: 15m
+          script: |
+            set -eu
+            source_dir="$HOME/sep-chat-desktop-upload/${{ github.run_id }}-${{ github.run_attempt }}/desktop-upload"
+            bash "$source_dir/scripts/publish-desktop.sh" '${{ needs.prepare.outputs.version }}' '${{ needs.prepare.outputs.channel }}' "$source_dir"
+      - name: Verify public manifest and download URLs
+        if: needs.prepare.outputs.publish == 'true'
+        env:
+          EXPECTED_VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_CHANNEL: ${{ needs.prepare.outputs.channel }}
+        run: |
+          bun -e '
+            const url = `https://chat.pksep.ru/desktop/${process.env.RELEASE_CHANNEL}/latest.json`;
+            const response = await fetch(url, { cache: "no-store" });
+            if (!response.ok) throw new Error(`Manifest HTTP ${response.status}`);
+            const manifest = await response.json();
+            if (manifest.version !== process.env.EXPECTED_VERSION) throw new Error("Wrong public version");
+            for (const platform of Object.values(manifest.platforms)) {
+              const result = await fetch(platform.url, { method: "HEAD" });
+              if (!result.ok) throw new Error(`Download HTTP ${result.status}`);
+            }
+          '

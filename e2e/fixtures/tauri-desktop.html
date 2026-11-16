@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Проверка desktop Tauri</title>
+  <style>
+    body {
+      font: 20px system-ui;
+      padding: 28px;
+      color: #172236;
+    }
+    button {
+      display: block;
+      padding: 16px;
+      margin: 12px 0;
+      font: inherit;
+    }
+    output {
+      display: block;
+      white-space: pre-wrap;
+      margin-top: 20px;
+    }
+    video {
+      width: 320px;
+      max-height: 240px;
+      background: #eef1f6;
+    }
+  </style>
+  <h1>Локальная проверка Tauri</h1>
+  <p>
+    Только тестовое уведомление и локальные устройства. Данные не отправляются в
+    рабочие чаты.
+  </p>
+  <button id="notification">Скрыть окно и показать уведомление</button>
+  <button id="clear">Убрать тестовое уведомление</button>
+  <button id="microphone">Проверить микрофон локально</button>
+  <button id="camera">Проверить камеру локально</button>
+  <button id="screen">Проверить демонстрацию локально</button>
+  <button id="stop">Остановить захват</button>
+  <video id="preview" autoplay muted playsinline></video>
+  <output id="result">Запуск проверки…</output>
+  <script type="module">
+    import { getCurrentWindow } from '@tauri-apps/api/window';
+    import {
+      initTauriNotifications,
+      showTauriNotification,
+      clearTauriTopicNotifications,
+      isTauriRuntime
+    } from '/src/services/useTauriNotifications.ts';
+    const result = document.querySelector('#result');
+    const preview = document.querySelector('#preview');
+    const topicId = 'sep-chat-local-desktop-qa';
+    let stream = null;
+    const report = async data => {
+      result.textContent = JSON.stringify(data, null, 2);
+      await fetch('http://127.0.0.1:5208/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+    };
+    const run = task => async () => {
+      try {
+        await task();
+      } catch (error) {
+        await report({
+          step: 'error',
+          name: error.name,
+          message: error.message
+        });
+      }
+    };
+    const stop = () => {
+      stream?.getTracks().forEach(track => track.stop());
+      stream = null;
+      preview.srcObject = null;
+    };
+    const capture = async kind => {
+      stop();
+      stream =
+        kind === 'screen'
+          ? await navigator.mediaDevices.getDisplayMedia({ video: true })
+          : await navigator.mediaDevices.getUserMedia({
+              audio: kind === 'microphone',
+              video: kind === 'camera'
+            });
+      preview.srcObject = stream;
+      await report({
+        step: 'capture',
+        kind,
+        tracks: stream.getTracks().map(track => ({
+          kind: track.kind,
+          state: track.readyState,
+          enabled: track.enabled
+        }))
+      });
+    };
+    const show = async () => {
+      await clearTauriTopicNotifications(topicId);
+      await getCurrentWindow().hide();
+      const accepted = await showTauriNotification({
+        title: 'Проверка SEP Chat',
+        body: 'Локальная проверка Windows. Нажмите, чтобы вернуть тестовое окно.',
+        extra: {
+          type: 'new_message',
+          topicId,
+          messageId: 'local-qa-message',
+          topicType: 'DM'
+        }
+      });
+      await report({ step: 'notification', accepted });
+    };
+    document.querySelector('#notification').onclick = run(show);
+    document.querySelector('#clear').onclick = run(async () => {
+      await clearTauriTopicNotifications(topicId);
+      await report({ step: 'cleared' });
+    });
+    for (const kind of ['microphone', 'camera', 'screen'])
+      document.querySelector(`#${kind}`).onclick = run(() => capture(kind));
+    document.querySelector('#stop').onclick = run(async () => {
+      stop();
+      await report({ step: 'stopped' });
+    });
+    window.addEventListener('beforeunload', stop);
+    await run(async () => {
+      await initTauriNotifications(async payload => {
+        if (payload.topicId !== topicId) return;
+        await report({
+          step: 'activated',
+          topicId: payload.topicId,
+          messageId: payload.messageId
+        });
+        await clearTauriTopicNotifications(topicId);
+      });
+      await report({
+        step: 'ready',
+        tauri: isTauriRuntime(),
+        secureContext: isSecureContext,
+        mediaDevices: !!navigator.mediaDevices,
+        getUserMedia: typeof navigator.mediaDevices?.getUserMedia,
+        getDisplayMedia: typeof navigator.mediaDevices?.getDisplayMedia,
+        rtc: typeof RTCPeerConnection
+      });
+      if (new URLSearchParams(location.search).get('notification') === 'auto')
+        await show();
+    })();
+  </script>
+</html>

@@ -1,5 +1,7 @@
 import type { PluginListenerHandle } from '@capacitor/core';
 import { reactive } from 'vue';
+import { isTauri } from '@tauri-apps/api/core';
+import { TauriFile } from './tauri-file-bridge';
 import type { IMedia } from '../components/interfaces/interfaces';
 import { isAndroidNativePlatform, NativeFile } from './native-file-bridge';
 import { getConfig } from './useConfig';
@@ -33,6 +35,13 @@ const pendingNativeClicks = new Map<string, Promise<boolean>>();
 const nativeStatusCheckedAt = new Map<string, number>();
 let nativeProgressListenerPromise: Promise<PluginListenerHandle | null> | null =
   null;
+
+const nativeFileBridge = () => (isTauri() ? TauriFile : NativeFile);
+
+export const isNativeFileMediaSupported = (media: IMedia): boolean =>
+  isNativeFileDownloadSupported() &&
+  // Файлы обращений открываются через существующую проверку прав и blob.
+  !(isTauri() && /^manager-private\//i.test(media.path));
 
 const FILE_MIME_TYPES: Record<string, string> = {
   pdf: 'application/pdf',
@@ -77,7 +86,10 @@ const guessMimeType = (media: IMedia) => {
 };
 
 const getNativeFileKey = (media: IMedia) =>
-  media.path || media.id || media.originName || '';
+  (isTauri() && media.path ? buildAbsoluteFileUrl(media.path) : media.path) ||
+  media.id ||
+  media.originName ||
+  '';
 
 const getNativeFileOptions = (media: IMedia) => ({
   url: buildAbsoluteFileUrl(media.path),
@@ -91,14 +103,13 @@ const ensureNativeProgressListener = async () => {
     return nativeProgressListenerPromise;
   }
 
-  if (!isAndroidNativePlatform()) {
+  if (!isNativeFileDownloadSupported()) {
     nativeProgressListenerPromise = Promise.resolve(null);
     return nativeProgressListenerPromise;
   }
 
-  nativeProgressListenerPromise = NativeFile.addListener(
-    'fileDownloadProgress',
-    payload => {
+  nativeProgressListenerPromise = nativeFileBridge()
+    .addListener('fileDownloadProgress', payload => {
       const currentState = nativeFileDownloadStates[payload.requestId];
 
       if (!currentState || currentState.phase !== 'downloading') {
@@ -113,11 +124,11 @@ const ensureNativeProgressListener = async () => {
             ? Math.max(0, Math.min(100, payload.percent))
             : currentState.percent
       };
-    }
-  ).catch(error => {
-    console.warn('Failed to listen native file download progress:', error);
-    return null;
-  });
+    })
+    .catch(error => {
+      console.warn('Failed to listen native file download progress:', error);
+      return null;
+    });
 
   return nativeProgressListenerPromise;
 };
@@ -126,7 +137,8 @@ export const isNativePdfMedia = (media: IMedia) =>
   getFileExtension(media.originName) === 'pdf' ||
   getFileExtension(media.path) === 'pdf';
 
-export const isNativeFileDownloadSupported = () => isAndroidNativePlatform();
+export const isNativeFileDownloadSupported = () =>
+  isAndroidNativePlatform() || isTauri();
 
 export const getNativeFileDownloadState = (
   media: IMedia
@@ -142,7 +154,7 @@ export const refreshNativeFileDownloadStatus = async (
 ): Promise<boolean> => {
   const key = getNativeFileKey(media);
 
-  if (!isAndroidNativePlatform() || !media.path || !key) {
+  if (!isNativeFileMediaSupported(media) || !media.path || !key) {
     return false;
   }
 
@@ -154,35 +166,46 @@ export const refreshNativeFileDownloadStatus = async (
   if (!force && Date.now() - (nativeStatusCheckedAt.get(key) || 0) < 30_000)
     return current?.phase === 'downloaded';
 
-  const checking: NativeFileDownloadState = {
-    ...current,
-    phase: 'checking',
-    percent: null
-  };
-  nativeFileDownloadStates[key] = checking;
+  // Фоновая проверка не должна скрывать уже известный значок файла.
+  if (current?.phase !== 'downloaded' && current?.phase !== 'not-downloaded') {
+    nativeFileDownloadStates[key] = {
+      ...current,
+      phase: 'checking',
+      percent: null
+    };
+  }
+  const checkedState = nativeFileDownloadStates[key];
   const check = (async () => {
     try {
-      const status = await NativeFile.getFileStatus(
+      const status = await nativeFileBridge().getFileStatus(
         getNativeFileOptions(media)
       );
       // Ответ старой проверки не должен затереть завершившуюся загрузку.
-      if (
-        nativeFileDownloadStates[key] === checking ||
-        nativeFileDownloadStates[key]?.phase === 'checking'
-      ) {
-        nativeFileDownloadStates[key] = {
+      if (nativeFileDownloadStates[key] === checkedState) {
+        const nextState: NativeFileDownloadState = {
           phase: status.downloaded ? 'downloaded' : 'not-downloaded',
           percent: null,
           localUri: status.downloaded ? status.path : undefined,
           fileName: status.fileName,
           mimeType: status.mimeType
         };
+        if (
+          checkedState.phase !== nextState.phase ||
+          checkedState.localUri !== nextState.localUri ||
+          checkedState.fileName !== nextState.fileName ||
+          checkedState.mimeType !== nextState.mimeType
+        ) {
+          nativeFileDownloadStates[key] = nextState;
+        }
         nativeStatusCheckedAt.set(key, Date.now());
       }
       return status.downloaded;
     } catch (error) {
       console.warn('Failed to check native file status:', error);
-      if (nativeFileDownloadStates[key]?.phase === 'checking')
+      if (
+        nativeFileDownloadStates[key] === checkedState &&
+        checkedState.phase === 'checking'
+      )
         nativeFileDownloadStates[key] = { phase: 'unknown', percent: null };
       return false;
     } finally {
@@ -198,7 +221,7 @@ export const downloadNativeFileToDownloads = async (
 ): Promise<boolean> => {
   const key = getNativeFileKey(media);
 
-  if (!isAndroidNativePlatform() || !media.path || !key) {
+  if (!isNativeFileMediaSupported(media) || !media.path || !key) {
     return false;
   }
 
@@ -216,7 +239,7 @@ export const downloadNativeFileToDownloads = async (
     await ensureNativeProgressListener();
 
     try {
-      const downloadedFile = await NativeFile.downloadFileToDownloads({
+      const downloadedFile = await nativeFileBridge().downloadFileToDownloads({
         requestId: key,
         ...getNativeFileOptions(media)
       });
@@ -253,7 +276,7 @@ export const openDownloadedNativeFile = async (
 ): Promise<boolean> => {
   const key = getNativeFileKey(media);
 
-  if (!isAndroidNativePlatform() || !media.path || !key) {
+  if (!isNativeFileMediaSupported(media) || !media.path || !key) {
     return false;
   }
 
@@ -287,7 +310,7 @@ export const openDownloadedNativeFile = async (
   record('requested');
   const open = (async () => {
     try {
-      const result = await NativeFile.openDownloadedFile({
+      const result = await nativeFileBridge().openDownloadedFile({
         ...getNativeFileOptions(media),
         localUri: currentState?.localUri,
         fileName:
@@ -326,7 +349,7 @@ export const handleNativeFileClick = async (
 ): Promise<boolean> => {
   const key = getNativeFileKey(media);
 
-  if (!isAndroidNativePlatform() || !media.path || !key) {
+  if (!isNativeFileMediaSupported(media) || !media.path || !key) {
     return false;
   }
 
@@ -383,21 +406,38 @@ export const handleNativeFileClick = async (
 };
 
 export const openNativeFile = async (media: IMedia): Promise<boolean> => {
-  if (!isAndroidNativePlatform() || !media.path) {
+  if (!isNativeFileMediaSupported(media) || !media.path) {
     return false;
   }
 
-  await NativeFile.openFile(getNativeFileOptions(media));
+  await nativeFileBridge().openFile(getNativeFileOptions(media));
 
   return true;
 };
 
 export const downloadNativeFile = async (media: IMedia): Promise<boolean> => {
-  if (!isAndroidNativePlatform() || !media.path) {
+  if (!isNativeFileMediaSupported(media) || !media.path) {
     return false;
   }
 
-  await NativeFile.downloadFile(getNativeFileOptions(media));
+  if (isTauri()) {
+    await downloadNativeFileToDownloads(media);
+  } else {
+    await NativeFile.downloadFile(getNativeFileOptions(media));
+  }
 
   return true;
+};
+
+export const canShowNativeFileInFolder = (media?: IMedia | null): boolean =>
+  isTauri() &&
+  !!media &&
+  getNativeFileDownloadState(media).phase === 'downloaded';
+
+export const showNativeFileInFolder = async (media: IMedia): Promise<void> => {
+  if (!isTauri()) return;
+  if (!(await refreshNativeFileDownloadStatus(media, true))) return;
+  await TauriFile.showInFolder(getNativeFileOptions(media)).catch(error => {
+    console.warn('Не удалось показать файл в папке:', error);
+  });
 };

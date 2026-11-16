@@ -356,6 +356,81 @@ test('Android-слайдер скачивает оригинальный HEIC ч
   expect(downloads[0].fileName).toBe('photo.heic');
 });
 
+test('Tauri-слайдер скачивает оригинал и сохраняет экспорт через нативный мост', async ({
+  page
+}) => {
+  await page.addInitScript(() => {
+    const win = window as any;
+    win.isTauri = true;
+    win.nativeFileCalls = [];
+    win.__TAURI_INTERNALS__ = {
+      invoke: async (command: string, args: unknown) => {
+        if (!['desktop_file_download', 'desktop_file_save'].includes(command))
+          throw new Error(`Неожиданный IPC: ${command}`);
+        win.nativeFileCalls.push({ command, args });
+        return {
+          downloaded: true,
+          path: 'C:\\Downloads\\SEP Chat\\photo.heic',
+          fileName: 'photo.heic',
+          mimeType: 'image/heic'
+        };
+      }
+    };
+  });
+  await openFixture(page);
+  await page.route('**/media/object/photo.heic*', route =>
+    route.fulfill({ contentType: 'image/webp', body: WEBP_BODY })
+  );
+  await page.evaluate(async () => {
+    const { registerNativeFileBridge } = await import(
+      '/src/services/native-file-bridge.ts'
+    );
+    registerNativeFileBridge();
+    (window as any).sliderDownloadFixture.unmount();
+    const fixture = await import('/e2e/fixtures/slider-download-harness.ts');
+    (window as any).sliderDownloadFixture =
+      await fixture.mountSliderDownloadFixture([
+        {
+          path: `${location.origin}/api/media/object/photo.heic?preview=webp`,
+          downloadPath: `${location.origin}/api/media/object/photo.heic?downloadName=photo.heic`,
+          name: 'photo.heic'
+        }
+      ]);
+  });
+  await page
+    .locator('.slider-modal__sub-nav:last-child .slider-modal__side-button')
+    .first()
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).nativeFileCalls.length))
+    .toBe(1);
+  const download = await page.evaluate(
+    () => (window as any).nativeFileCalls[0]
+  );
+  expect(download.command).toBe('desktop_file_download');
+  expect(
+    new URL(download.args.options.url).searchParams.get('preview')
+  ).toBeNull();
+  expect(download.args.options.fileName).toBe('photo.heic');
+
+  await page.evaluate(async () => {
+    await (window as any).__CHAT_NATIVE_FILE__.downloadBase64({
+      base64Data: btoa('SEP Chat export'),
+      fileName: 'export.txt',
+      mimeType: 'text/plain'
+    });
+  });
+  const exported = await page.evaluate(
+    () => (window as any).nativeFileCalls[1]
+  );
+  expect(exported.command).toBe('desktop_file_save');
+  expect(exported.args.options).toEqual({
+    base64Data: Buffer.from('SEP Chat export').toString('base64'),
+    fileName: 'export.txt',
+    mimeType: 'text/plain'
+  });
+});
+
 for (const headersOnly of [false, true]) {
   test(`скачивание большого файла начинается ${headersOnly ? 'по заголовкам, до первого байта' : 'до получения всего тела ответа'}`, async ({
     page

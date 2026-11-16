@@ -438,7 +438,11 @@
           :data-testid="`${props.dataTestid}-MenuProfilePanel-Stickers`"
         />
 
-        <div v-if="isMobile" class="menu-profile__update">
+        <div
+          v-if="isMobile || isDesktopApp"
+          class="menu-profile__update"
+          :class="{ 'menu-profile__update--desktop': isDesktopApp }"
+        >
           <div
             class="menu-profile__wallpapers-trigger"
             :data-testid="`${props.dataTestid}-MenuProfilePanel-UpdateTrigger`"
@@ -515,6 +519,13 @@
                 <p class="menu-profile__update-title">
                   {{ profileUpdateTitle }}
                 </p>
+                <p
+                  v-if="isDesktopApp && currentAppVersion"
+                  class="menu-profile__update-description"
+                  data-testid="DesktopAppVersion"
+                >
+                  Версия {{ currentAppVersion }}
+                </p>
                 <p class="menu-profile__update-description">
                   {{ profileUpdateDescription }}
                 </p>
@@ -529,7 +540,12 @@
                 :data-testid="`${props.dataTestid}-MenuProfilePanel-UpdateAction`"
                 @click.stop="handleProfileUpdateClick"
               >
-                {{ updateActionLabel }}
+                {{
+                  isDesktopApp &&
+                  ['idle', 'latest', 'error'].includes(profileUpdateState)
+                    ? 'Проверить обновления'
+                    : updateActionLabel
+                }}
               </Button>
 
               <div
@@ -1074,6 +1090,10 @@ const {
   profileUpdateState,
   isUpdateActionDisabled,
   currentAppVersion,
+  isDesktopApp,
+  updateError,
+  availableAppVersion,
+  checkForUpdates,
   handleUpdateClick
 } = useMobileApp();
 
@@ -1089,7 +1109,9 @@ const currentStatusText = computed(() =>
 const shouldShowProfileUpdateAction = computed(
   () =>
     profileUpdateState.value === 'available' ||
-    profileUpdateState.value === 'downloaded'
+    profileUpdateState.value === 'downloaded' ||
+    profileUpdateState.value === 'error' ||
+    (isDesktopApp && ['idle', 'latest'].includes(profileUpdateState.value))
 );
 const profileUpdateStatusIconKind = computed<'download' | 'check' | null>(
   () => {
@@ -1117,8 +1139,13 @@ const profileUpdateTitle = computed(() => {
   }
 
   if (profileUpdateState.value === 'downloaded') {
-    return 'Установлено';
+    return isDesktopApp ? 'Обновление скачано' : 'Установлено';
   }
+
+  if (profileUpdateState.value === 'installing')
+    return 'Устанавливаем обновление';
+  if (profileUpdateState.value === 'error')
+    return 'Не удалось обновить приложение';
 
   if (profileUpdateState.value === 'latest') {
     return 'Установлена новейшая версия';
@@ -1131,6 +1158,7 @@ const profileUpdateTitle = computed(() => {
   return 'Проверить обновления';
 });
 const profileUpdateDescription = computed(() => {
+  if (updateError.value) return updateError.value;
   if (profileUpdateState.value === 'checking') {
     return 'Пожалуйста, подождите несколько секунд';
   }
@@ -1140,16 +1168,20 @@ const profileUpdateDescription = computed(() => {
   }
 
   if (profileUpdateState.value === 'downloaded') {
-    return 'Для начала работы перезагрузите приложение';
+    return isDesktopApp
+      ? 'Установите обновление и перезапустите приложение'
+      : 'Для начала работы перезагрузите приложение';
   }
 
   if (profileUpdateState.value === 'latest') {
+    if (isDesktopApp) return 'Сейчас у вас актуальная версия приложения';
     return currentAppVersion.value
       ? `Сейчас у вас актуальная версия приложения ${currentAppVersion.value}`
       : 'Сейчас у вас актуальная версия приложения';
   }
 
   if (profileUpdateState.value === 'available') {
+    if (isDesktopApp) return `Доступна версия ${availableAppVersion.value}`;
     return 'Обновите приложение, чтобы получить новые функции';
   }
 
@@ -1304,9 +1336,17 @@ const toggleCallBackgroundMenu = (): void => {
 
 const toggleProfileUpdateMenu = (): void => {
   isProfileUpdateMenuOpen.value = !isProfileUpdateMenuOpen.value;
+  if (isDesktopApp && isProfileUpdateMenuOpen.value) void checkForUpdates();
 };
 
 const handleProfileUpdateClick = async (): Promise<void> => {
+  if (
+    isDesktopApp &&
+    ['idle', 'latest', 'error'].includes(profileUpdateState.value)
+  ) {
+    await checkForUpdates();
+    return;
+  }
   await handleUpdateClick();
 };
 

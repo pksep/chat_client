@@ -25,12 +25,27 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico"
+      }
+    },
     "icon": [
       "../public/images/pwa-64x64.png",
       "../public/images/pwa-192x192.png",
       "../public/images/pwa-512x512.png",
-      "../public/images/favicon.ico"
+      "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IFNFUCBDaGF0IHVwZGF0ZXIgcHVibGljIGtleQpSV1JvSkJKRFp5L3R1cGdqWFU0TTc3NFVGM3krSWFUV1poUGNwQmEwWHNjQWs2S0RWb1I4eFphNwo=",
+      "endpoints": ["https://chat.pksep.ru/desktop/stable/latest.json"],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

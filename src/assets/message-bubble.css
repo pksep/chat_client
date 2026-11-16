@@ -1053,29 +1053,31 @@ div.message-content__loading-circle:nth-child(3) {
   animation-delay: 0.3s;
 }
 
-div.message-content__html>p,
-div.message-content__html>ol,
-div.message-content__html>ol>li>p,
-div.message-content__html>ul,
-div.message-content__html>ul>li>p {
+div.message-content__html > p,
+div.message-content__html :is(ul, ol),
+div.message-content__html li > p {
   max-width: 100ch;
   margin-block: 0;
   line-height: 17px;
 }
 
-div.message-content__html>ul {
-  list-style: disc;
-  display: contents !important;
+div.message-content__html :is(ul, ol) {
+  display: block;
+  padding-inline: 1.5em 0;
+  list-style-position: outside;
 }
 
-div.message-content__html>ol {
-  list-style: decimal;
-  display: contents !important;
+div.message-content__html ul {
+  list-style-type: disc;
 }
 
-div.message-content__html>ol>li,
-div.message-content__html>ul>li {
-  margin-left: 15px;
+div.message-content__html ol {
+  list-style-type: decimal;
+}
+
+div.message-content__html li {
+  display: list-item;
+  margin: 0;
 }
 
 .message__no-author {
@@ -1104,7 +1106,7 @@ div.message-content__html>ul>li {
   user-select: text;
 }
 
-.message-content--text .message-content__html>*:last-child {
+.message-content--text .message-content__html > :last-child:not(ul, ol) {
   display: inline;
   margin: 0;
 }

@@ -121,6 +121,7 @@
               <div
                 v-if="i === mediaFiles.length - 1 && !hasInlineCaption"
                 class="message-content__media-overlay-time"
+                data-message-context="message"
               >
                 <span>{{ props.time }}</span>
                 <ErrorIcon v-if="showErrorIcon" />

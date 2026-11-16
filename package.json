@@ -34,7 +34,7 @@
     "tauri": "tauri",
     "tauri:serve": "node ./scripts/ensure-tauri-dev-server.mjs",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "bun scripts/build-desktop.ts"
   },
   "exports": {
     ".": {
@@ -66,9 +66,11 @@
     "@pksep/reqi": "0.0.25",
     "@pksep/yui": "0.1.353",
     "@pksep/zod-shared-chat": "0.0.6",
-    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/api": "^2.12.0",
     "@tauri-apps/plugin-notification": "^2.3.3",
     "@tauri-apps/plugin-opener": "^2.5.4",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "@vitejs/plugin-basic-ssl": "^2.1.4",
     "dompurify": "^3.4.14",
     "fflate": "0.8.2",
@@ -92,7 +94,7 @@
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^12.0.2",
-    "@tauri-apps/cli": "^2.11.2",
+    "@tauri-apps/cli": "^2.12.0",
     "@types/eslint-scope": "3.7.7",
     "@types/qrcode": "1.5.6",
     "@typescript-eslint/eslint-plugin": "^7.18.0",

@@ -1,0 +1,17 @@
+{
+  "identifier": "ru.pksep.chat.fileqa",
+  "build": {
+    "beforeDevCommand": "",
+    "devUrl": "http://localhost:5173/e2e/fixtures/tauri-message-menu.html"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "SEP Chat: проверка меню файлов",
+        "width": 1200,
+        "height": 900
+      }
+    ]
+  }
+}

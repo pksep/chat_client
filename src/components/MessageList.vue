@@ -473,6 +473,7 @@ import {
   setSuspendIncomingMergeForTopic
 } from '../services/useChat';
 import { isAnyCallModalVisible } from '../services/useCallState';
+import { desktopBeforeInstall } from '../services/useDesktopUpdater';
 import {
   getIsAppActivelyVisible,
   subscribeToAppVisibilityChanges
@@ -4970,6 +4971,8 @@ onMounted(() => {
     focusMessageInput();
   }
 
+  desktopBeforeInstall.add(updateLocalStorageInputText);
+
   window.addEventListener('keydown', handleWindowKeydown, true);
   window.addEventListener('focus', handleWindowFocusRefresh);
   document.addEventListener('visibilitychange', handleVisibilityChangeRefresh);
@@ -4985,6 +4988,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   cancelInitialHistoryRecovery?.();
+  desktopBeforeInstall.delete(updateLocalStorageInputText);
   if (route.value?.id) {
     setSuspendIncomingMergeForTopic(route.value.id, false);
   }

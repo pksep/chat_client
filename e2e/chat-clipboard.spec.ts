@@ -1,5 +1,5 @@
 import { gzipSync } from 'node:zlib';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
   makeMessages,
   openFixture,
@@ -84,7 +84,25 @@ async function setup(page: Page, nativeClipboard = false) {
   await expect(
     page.locator('.ProseMirror[contenteditable="true"]')
   ).toBeVisible();
+  await expect(
+    page.getByText('Сообщений пока нет', { exact: true })
+  ).toBeVisible();
   return state;
+}
+
+async function openGeneralMenu(row: Locator) {
+  await row.scrollIntoViewIfNeeded();
+  await row.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    element.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.left + 10,
+        clientY: rect.bottom - 10
+      })
+    );
+  });
 }
 
 async function seed(page: Page, data: Record<string, unknown>) {
@@ -389,7 +407,7 @@ test('правый клик на подпись предлагает тольк�
   expect(await sentMessages(page)).toHaveLength(0);
 });
 
-test('сообщение с несколькими фото без подписи сохраняет одну кнопку копирования', async ({
+test('меню времени нескольких фото без подписи предлагает скачать всё без копирования одного фото', async ({
   page
 }) => {
   await setup(page);
@@ -404,25 +422,136 @@ test('сообщение с несколькими фото без подпис�
       ex: { width: 64, height: 64 }
     }))
   });
-  await row.evaluate(element => {
-    const rect = element.getBoundingClientRect();
-    element.dispatchEvent(
-      new MouseEvent('contextmenu', {
-        bubbles: true,
-        cancelable: true,
-        clientX: rect.left + 10,
-        clientY: rect.bottom - 10
-      })
-    );
-  });
+  await row
+    .locator('.message-content__media-overlay-time')
+    .click({ button: 'right' });
   await expect(page.getByRole('button', { name: /^Копировать/ })).toHaveCount(
-    1
+    0
   );
+  await expect(
+    page.getByRole('button', { name: 'Скачать всё', exact: true })
+  ).toBeVisible();
+  await page.locator('.ProseMirror[contenteditable="true"]').click();
+  await page
+    .locator('[data-message-media-id="photo-1"]')
+    .click({ button: 'right' });
+  await expect(
+    page.getByRole('button', { name: 'Скачать', exact: true })
+  ).toBeVisible();
   await page
     .getByRole('button', { name: 'Копировать фото', exact: true })
     .click();
-  expect((await readCopy(page)).media.id).toBe('photo-0');
+  expect((await readCopy(page)).media.id).toBe('photo-1');
 });
+
+for (const native of [false, true]) {
+  for (const type of ['FILE', 'IMAGE']) {
+    for (const caption of [false, true]) {
+      test(`${native ? 'Tauri' : 'Браузер'}: меню ${type}, ${caption ? 'с подписью' : 'без подписи'}, скачивает выбранное вложение или всё сообщение`, async ({
+        page
+      }) => {
+        await setup(page);
+        await page.evaluate(native => {
+          const win = window as any;
+          win.contextDownloads = [];
+          if (native) {
+            win.isTauri = true;
+            win.__TAURI_INTERNALS__ = {
+              metadata: {
+                currentWindow: { label: 'main' },
+                currentWebview: { label: 'main' }
+              },
+              transformCallback: () => 1,
+              invoke: async (command: string, args: any) => {
+                if (command === 'plugin:event|listen') return 1;
+                if (command === 'desktop_file_download')
+                  win.contextDownloads.push(args.options.fileName);
+                if (command.startsWith('desktop_file_'))
+                  return {
+                    downloaded: true,
+                    path: `C:\\Downloads\\${args.options.fileName}`,
+                    fileName: args.options.fileName,
+                    mimeType: 'application/octet-stream'
+                  };
+                return null;
+              }
+            };
+          } else {
+            document.addEventListener(
+              'click',
+              event => {
+                const link = event.target;
+                if (!(link instanceof HTMLAnchorElement) || !link.download)
+                  return;
+                event.preventDefault();
+                win.contextDownloads.push(link.download);
+              },
+              true
+            );
+          }
+        }, native);
+        const extension = type === 'IMAGE' ? 'png' : 'txt';
+        const names = [`first.${extension}`, `second.${extension}`];
+        const row = await seed(page, {
+          text: caption ? '<p>Подпись к нескольким вложениям</p>' : '',
+          media: names.map((originName, index) => ({
+            id: `context-${index}`,
+            path: originName,
+            originName,
+            size: png.length,
+            type,
+            ex: { width: 64, height: 64 }
+          }))
+        });
+        await row
+          .locator('[data-message-media-id="context-1"]')
+          .click({ button: 'right' });
+        await expect(
+          page.getByRole('button', { name: 'Скачать всё', exact: true })
+        ).toHaveCount(0);
+        await expect(
+          page.getByRole('button', {
+            name: type === 'IMAGE' ? 'Копировать фото' : 'Копировать файл',
+            exact: true
+          })
+        ).toBeVisible();
+        await page
+          .getByRole('button', { name: 'Скачать', exact: true })
+          .click();
+        await expect
+          .poll(() => page.evaluate(() => (window as any).contextDownloads))
+          .toEqual([names[1]]);
+
+        if (caption)
+          await row
+            .locator('.message-content__html')
+            .first()
+            .click({ button: 'right' });
+        else if (type === 'IMAGE')
+          await row
+            .locator('.message-content__media-overlay-time')
+            .click({ button: 'right' });
+        else await openGeneralMenu(row);
+        await expect(
+          page.getByRole('button', { name: /Копировать (файл|фото|видео)/ })
+        ).toHaveCount(0);
+        await expect(
+          page.getByRole('button', { name: 'Показать в папке', exact: true })
+        ).toHaveCount(0);
+        if (caption)
+          await expect(
+            page.getByRole('button', { name: 'Копировать текст', exact: true })
+          ).toBeVisible();
+        await page
+          .getByRole('button', { name: 'Скачать всё', exact: true })
+          .click();
+        await expect
+          .poll(() => page.evaluate(() => (window as any).contextDownloads))
+          .toEqual([names[1], ...names]);
+      });
+    }
+  }
+}
 
 test('вставка в другое поле и смена чата во время чтения буфера не отправляют вложение', async ({
   page

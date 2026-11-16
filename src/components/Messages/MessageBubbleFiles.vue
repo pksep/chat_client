@@ -42,7 +42,7 @@
           :data-testid="`${props.dataTestid}-Content`"
           role="button"
           tabindex="0"
-          :aria-label="`Открыть файл ${media.originName || ''}`"
+          :aria-label="`${getFileIconType(media) === 'download' ? 'Скачать' : 'Открыть'} файл ${media.originName || ''}`"
           @click="handleFileClick(media, i)"
           @keydown.enter.stop.prevent="handleFileClick(media, i)"
           @keydown.space.stop.prevent="handleFileClick(media, i)"
@@ -192,7 +192,14 @@
 
 <script setup lang="ts">
 import { ChatMessageSurface, ChatFileDetails } from '@pksep/yui';
-import { computed, nextTick, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onBeforeUnmount,
+  ref,
+  watch
+} from 'vue';
 import type { IMessageBubbleProps } from './interface/interface';
 import { MediaType } from '@pksep/zod-shared-chat';
 import MessageStatusIcons from './MessageStatusIcons.vue';
@@ -217,6 +224,7 @@ import type { IMedia } from '../interfaces/interfaces';
 import {
   getNativeFileDownloadState,
   isNativeFileDownloadSupported,
+  isNativeFileMediaSupported,
   refreshNativeFileDownloadStatus
 } from '../../services/useNativeFile';
 import { sanitizeMessageHtml } from '../../utils/sanitizeMessageHtml';
@@ -259,7 +267,7 @@ const getSliderDetectionValue = (media: IMedia): string =>
 
 const isSliderContentFile = (media: IMedia): boolean =>
   isSliderContentUrl(getSliderDetectionValue(media), {
-    includePdf: !isNativeFileDownloadSupported()
+    includePdf: !isNativeFileMediaSupported(media)
   });
 
 const syncMentions = async (): Promise<void> => {
@@ -309,6 +317,17 @@ watch(
 
 watch(nativeFileStatusIdentity, syncNativeFileStatuses, { immediate: true });
 
+const refreshFilesOnFocus = (): void => {
+  if (!isNativeFileDownloadSupported()) return;
+  docFiles.value
+    .filter(media => !media.isLoading && !media.uploadError && media.path)
+    .forEach(media => {
+      void refreshNativeFileDownloadStatus(media, true);
+    });
+};
+onMounted(() => window.addEventListener('focus', refreshFilesOnFocus));
+onBeforeUnmount(() => window.removeEventListener('focus', refreshFilesOnFocus));
+
 const showErrorIcon = computed(
   () => props.messageStatus === MessageStatus.NotDelivered
 );
@@ -322,7 +341,7 @@ const shouldShowFileLoading = (media: IMedia): boolean =>
 
 const shouldUseNativeFileState = (media: IMedia): boolean =>
   Boolean(
-    isNativeFileDownloadSupported() &&
+    isNativeFileMediaSupported(media) &&
       media.path &&
       !media.isLoading &&
       !media.uploadError &&
@@ -340,7 +359,7 @@ const isNativeFileBusy = (media: IMedia): boolean =>
   );
 
 const isFileIconLoaded = (media: IMedia): boolean =>
-  !shouldShowFileLoading(media) && !isNativeFileBusy(media);
+  !shouldShowFileLoading(media) && !isNativeFileDownloading(media);
 
 const getFileIconPercent = (media: IMedia): number | null => {
   if (isNativeFileDownloading(media)) {
@@ -380,7 +399,9 @@ const getFileIconType = (media: IMedia): 'file' | 'download' => {
     return 'file';
   }
 
-  return getNativeFileDownloadState(media).phase === 'downloaded'
+  const state = getNativeFileDownloadState(media);
+  return state.phase === 'downloaded' ||
+    (state.phase === 'opening' && !!state.localUri)
     ? 'file'
     : 'download';
 };

@@ -5,6 +5,13 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { MobilePlatformEnum } from '../components/interfaces/interfaces';
 import { afterStartupPaint } from '../utils/after-startup-paint';
 import {
+  desktopAppVersion,
+  desktopUpdater,
+  desktopUpdateVisible,
+  startDesktopUpdater,
+  stopDesktopUpdater
+} from '../services/useDesktopUpdater';
+import {
   RuStoreInstallStatus,
   RuStoreUpdateAvailability,
   completeRuStoreFlexibleUpdate,
@@ -43,12 +50,21 @@ export type MobileAppProfileUpdateState =
   | 'available'
   | 'downloading'
   | 'downloaded'
+  | 'installing'
+  | 'error'
   | 'latest';
 
 const mobilePlatform = ref<MobilePlatformEnum | null>(null);
 const isMobileApp = ref(false);
 const showDownloadModal = ref(false);
-const showUpdateBanner = ref(false);
+const legacyUpdateBanner = ref(false);
+const showUpdateBanner = computed({
+  get: () =>
+    isTauri() ? desktopUpdateVisible.value : legacyUpdateBanner.value,
+  set: value => {
+    legacyUpdateBanner.value = value;
+  }
+});
 const updateInstallStatus = ref(RuStoreInstallStatus.UNKNOWN);
 const updateDownloadPercent = ref<number | null>(null);
 const isUpdateFlowPending = ref(false);
@@ -321,6 +337,7 @@ export function useMobileApp() {
   };
 
   const loadCurrentAppInfo = async () => {
+    if (isTauri()) return;
     if (!Capacitor.isNativePlatform()) {
       currentAppVersion.value = '';
       return;
@@ -362,7 +379,7 @@ export function useMobileApp() {
   };
 
   const applyWebUpdateVersion = async (nextVersion: number | null) => {
-    if (Capacitor.isNativePlatform()) {
+    if (Capacitor.isNativePlatform() || isTauri()) {
       isWebUpdateBanner.value = false;
       return;
     }
@@ -399,6 +416,7 @@ export function useMobileApp() {
     if (pendingWebUpdate) return pendingWebUpdate;
     if (
       Capacitor.isNativePlatform() ||
+      isTauri() ||
       !navigator.onLine ||
       (!force &&
         (activeConsumers === 0 ||
@@ -425,7 +443,7 @@ export function useMobileApp() {
   };
 
   const initWebUpdateHandling = async (generation: number) => {
-    if (Capacitor.isNativePlatform()) {
+    if (Capacitor.isNativePlatform() || isTauri()) {
       isWebUpdateBanner.value = false;
       return;
     }
@@ -515,6 +533,10 @@ export function useMobileApp() {
     isCheckingForUpdates.value = true;
 
     try {
+      if (isTauri()) {
+        await startDesktopUpdater();
+        return;
+      }
       await loadCurrentAppInfo();
       await initWebUpdateHandling(generation);
       await initNativeUpdateHandling();
@@ -547,6 +569,10 @@ export function useMobileApp() {
   };
 
   const handleUpdateClick = async () => {
+    if (isTauri()) {
+      await desktopUpdater.act();
+      return;
+    }
     if (!isRuStoreUpdateSupported()) {
       persistCurrentWebUpdateVersion();
       markLiveKitPageReloadIntent();
@@ -671,6 +697,10 @@ export function useMobileApp() {
   };
 
   const checkForUpdates = async () => {
+    if (isTauri()) {
+      await desktopUpdater.check(true);
+      return;
+    }
     isCheckingForUpdates.value = true;
 
     try {
@@ -689,6 +719,16 @@ export function useMobileApp() {
   };
 
   const updateActionLabel = computed(() => {
+    if (isTauri()) {
+      const { phase, progress } = desktopUpdater.state.value;
+      if (phase === 'downloaded') return 'Установить и перезапустить';
+      if (phase === 'installing') return 'Устанавливаем…';
+      if (phase === 'downloading')
+        return progress === null ? 'Скачиваем…' : `${progress}%`;
+      if (phase === 'error') return 'Повторить';
+      if (phase === 'idle' || phase === 'latest') return 'Проверить обновления';
+      return 'Скачать обновление';
+    }
     if (!Capacitor.isNativePlatform()) {
       return 'Обновить';
     }
@@ -717,6 +757,11 @@ export function useMobileApp() {
   });
 
   const updateProgress = computed<number | null | undefined>(() => {
+    if (isTauri()) {
+      return desktopUpdater.state.value.phase === 'downloading'
+        ? desktopUpdater.state.value.progress
+        : undefined;
+    }
     if (
       !Capacitor.isNativePlatform() ||
       updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADED ||
@@ -736,16 +781,20 @@ export function useMobileApp() {
     return undefined;
   });
 
-  const isUpdateActionDisabled = computed(
-    () =>
-      Capacitor.isNativePlatform() &&
-      (isUpdateFlowPending.value ||
-        updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADING ||
-        updateInstallStatus.value === RuStoreInstallStatus.INSTALLING ||
-        updateInstallStatus.value === RuStoreInstallStatus.PENDING)
+  const isUpdateActionDisabled = computed(() =>
+    isTauri()
+      ? ['checking', 'downloading', 'installing'].includes(
+          desktopUpdater.state.value.phase
+        )
+      : Capacitor.isNativePlatform() &&
+        (isUpdateFlowPending.value ||
+          updateInstallStatus.value === RuStoreInstallStatus.DOWNLOADING ||
+          updateInstallStatus.value === RuStoreInstallStatus.INSTALLING ||
+          updateInstallStatus.value === RuStoreInstallStatus.PENDING)
   );
 
   const profileUpdateState = computed<MobileAppProfileUpdateState>(() => {
+    if (isTauri()) return desktopUpdater.state.value.phase;
     if (isCheckingForUpdates.value) {
       return 'checking';
     }
@@ -795,6 +844,7 @@ export function useMobileApp() {
     }
 
     detectPromise = null;
+    stopDesktopUpdater();
     webUpdateGeneration += 1;
     removeWebUpdateListeners?.();
     removeWebUpdateListeners = null;
@@ -809,9 +859,26 @@ export function useMobileApp() {
     updateProgress,
     profileUpdateState,
     isUpdateActionDisabled,
-    isCheckingForUpdates,
-    hasCheckedForUpdates,
-    currentAppVersion,
+    isCheckingForUpdates: computed(() =>
+      isTauri()
+        ? desktopUpdater.state.value.phase === 'checking'
+        : isCheckingForUpdates.value
+    ),
+    hasCheckedForUpdates: computed(() =>
+      isTauri()
+        ? !['idle', 'checking'].includes(desktopUpdater.state.value.phase)
+        : hasCheckedForUpdates.value
+    ),
+    currentAppVersion: computed(() =>
+      isTauri() ? desktopAppVersion.value : currentAppVersion.value
+    ),
+    isDesktopApp: isTauri(),
+    updateError: computed(() =>
+      isTauri() ? desktopUpdater.state.value.error : ''
+    ),
+    availableAppVersion: computed(() =>
+      isTauri() ? desktopUpdater.state.value.version : ''
+    ),
     handleInstall,
     handleUpdateClick,
     checkForUpdates

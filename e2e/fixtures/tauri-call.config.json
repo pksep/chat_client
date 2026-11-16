@@ -1,0 +1,17 @@
+{
+  "identifier": "ru.pksep.chat.desktopqa",
+  "build": {
+    "beforeDevCommand": "",
+    "devUrl": "http://localhost:5173/e2e/fixtures/tauri-call.html?run=native"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "SEP Chat: локальный звонок",
+        "width": 1200,
+        "height": 800
+      }
+    ]
+  }
+}

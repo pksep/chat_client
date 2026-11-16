@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+  <meta charset="UTF-8" />
+  <title>Проверка нативной сессии Tauri</title>
+  <style>
+    body {
+      font: 20px system-ui;
+      padding: 32px;
+    }
+    button {
+      display: block;
+      padding: 16px;
+      margin: 16px 0;
+    }
+    output {
+      display: block;
+      white-space: pre-wrap;
+    }
+  </style>
+  <h1>Проверка нативной сессии Tauri</h1>
+  <p>
+    Только локальный сервер и вымышленные данные. После первого шага
+    перезапустите приложение.
+  </p>
+  <button id="login">Создать тестовую сессию</button>
+  <button id="refresh">Проверить сохранённую сессию</button>
+  <button id="logout">Проверить выход</button>
+  <output id="result">Готово к проверке</output>
+  <script type="module">
+    import { fetchAuthWithCookies } from '/src/utils/auth-http.ts';
+    const api = 'http://127.0.0.1:5207/api/auth';
+    const result = document.querySelector('#result');
+    const run = async (path, data) => {
+      const response = await fetchAuthWithCookies(
+        `${api}/${path}`,
+        'POST',
+        data
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response;
+    };
+    const check = task => async () => {
+      try {
+        result.textContent = await task();
+      } catch (error) {
+        result.textContent = `Ошибка: ${String(error)}`;
+      }
+    };
+    document.querySelector('#login').onclick = check(async () => {
+      await run('credentials-login', {
+        identifier: 'fixture',
+        password: 'fixture'
+      });
+      await run('refresh');
+      return 'Вход и ротация cookie прошли. Закройте процесс, запустите снова и проверьте сохранённую сессию.';
+    });
+    document.querySelector('#refresh').onclick = check(async () => {
+      await run('refresh');
+      return 'Сохранённая сессия найдена. Refresh после перезапуска прошёл.';
+    });
+    document.querySelector('#logout').onclick = check(async () => {
+      await run('logout');
+      const response = await fetchAuthWithCookies(`${api}/refresh`, 'POST');
+      if (response.status !== 401)
+        throw new Error('Cookie осталась после выхода');
+      return 'Выход прошёл. Cookie удалена, повторный refresh отклонён: HTTP 401.';
+    });
+  </script>
+</html>

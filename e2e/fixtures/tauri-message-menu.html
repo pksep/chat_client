@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ru">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Локальная проверка меню вложений</title>
+  <style>
+    #qa {
+      padding: 12px;
+      background: #fff;
+      position: relative;
+      z-index: 100;
+    }
+    #qa button {
+      padding: 8px 16px;
+      margin-right: 12px;
+      border: 1px solid #aaa;
+    }
+    #qa p {
+      margin-bottom: 8px;
+    }
+    #app > div {
+      height: calc(100dvh - 160px) !important;
+    }
+  </style>
+  <div id="qa">
+    <p>Локальные вложения. Рабочие чаты и файлы не используются.</p>
+    <button id="files">Два файла</button>
+    <button id="images">Два фото</button>
+    <button id="caption">Переключить подпись</button>
+    <textarea
+      id="paste"
+      aria-label="Проверка вставки"
+      placeholder="Проверка вставки"
+    ></textarea>
+    <output id="result">Запуск…</output>
+  </div>
+  <div id="app"></div>
+  <script type="module" src="./tauri-message-menu.ts"></script>
+</html>

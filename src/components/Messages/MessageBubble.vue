@@ -168,6 +168,8 @@ import { isMessageSelectionModeForTopic } from '../../composables/useSelectedMes
 import {
   downloadNativeFile,
   handleNativeFileClick,
+  isNativeFileDownloadSupported,
+  isNativeFileMediaSupported,
   isNativePdfMedia,
   openNativeFile
 } from '../../services/useNativeFile';
@@ -328,7 +330,7 @@ const isSliderContentMedia = (media: IMedia) =>
   media.type === MediaType.Image ||
   media.type === MediaType.Video ||
   isSliderContentUrl(getSliderDetectionValue(media), {
-    includePdf: !isAndroidNativePlatform()
+    includePdf: !isNativeFileMediaSupported(media)
   });
 
 const buildSliderItem = (
@@ -387,12 +389,16 @@ const prepareInquiryMedias = async (medias: IMedia[]): Promise<boolean> => {
   return true;
 };
 
-const handleDownloadMessageMedia = async (): Promise<void> => {
-  const mediaFiles = props.media || [];
+const handleDownloadMessageMedia = async (mediaId?: string): Promise<void> => {
+  const mediaFiles = mediaId
+    ? (props.media || []).filter(media => media.id === mediaId)
+    : props.media || [];
+
+  if (!mediaFiles.length) return;
 
   if (!(await prepareInquiryMedias(mediaFiles))) return;
 
-  if (!isAndroidNativePlatform()) {
+  if (!mediaFiles.some(isNativeFileMediaSupported)) {
     await triggerBrowserDownloads(
       mediaFiles.map(media => ({
         url: getFullMediaPath(media, false),
@@ -430,7 +436,7 @@ const setSliderElement = async (
   if (
     selectedMedia.type === MediaType.File &&
     !isSliderContentMedia(selectedMedia) &&
-    isAndroidNativePlatform()
+    isNativeFileDownloadSupported()
   ) {
     if (await handleNativeFileClick(selectedMedia)) {
       return;
