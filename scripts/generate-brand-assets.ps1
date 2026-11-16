@@ -66,6 +66,21 @@ function Render-FigmaSvg {
 }
 
 function Generate-DesktopIcons {
+    # Упаковщик macOS принимает только 8-битные RGBA PNG; PWA-исходники могут быть 16-битными.
+    foreach ($icon in @(
+        @{ Name = '32x32.png'; Size = 32 },
+        @{ Name = '128x128.png'; Size = 128 },
+        @{ Name = '128x128@2x.png'; Size = 256 },
+        @{ Name = 'icon.png'; Size = 1024 }
+    )) {
+        $rendered = Join-Path $temporaryDirectory "desktop-$($icon.Name)"
+        Render-FigmaSvg $appIconAsset $icon.Size $rendered
+        & $magick $rendered -depth 8 -define png:color-type=6 $rendered
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Не удалось создать PNG-иконку приложения'
+        }
+        Copy-GeneratedAsset $rendered (Join-Path $projectRoot "src-tauri\icons\$($icon.Name)")
+    }
     # Tauri берёт первый слой ICO для окна и трея; Windows выбирает остальные размеры для ярлыков.
     $desktopParts = @()
     foreach ($size in @(256, 128, 96, 64, 48, 40, 32, 24, 20, 16)) {

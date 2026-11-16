@@ -33,9 +33,10 @@
       }
     },
     "icon": [
-      "../public/images/pwa-64x64.png",
-      "../public/images/pwa-192x192.png",
-      "../public/images/pwa-512x512.png",
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png",
       "icons/icon.ico"
     ]
   },
