@@ -110,7 +110,11 @@
               folder.name
             }}</span>
             <span class="chat-folders-panel__folder-count">
-              {{ folder.topicIds.length }}
+              {{
+                folder.scope === 'ai'
+                  ? folder.aiItems?.length || 0
+                  : folder.topicIds.length
+              }}
             </span>
           </button>
         </li>
@@ -172,6 +176,7 @@
       :filter="topicFilter"
       :filter-options="topicFilterOptions"
       :topics="filteredTopics"
+      :choices="filteredChoices"
       :selected-topic-ids="draftTopicIds"
       :can-submit="canSubmit"
       :is-saving="isSaving"
@@ -180,6 +185,7 @@
       @update:search="topicSearch = $event"
       @update:filter="topicFilter = $event"
       @toggle-topic="toggleTopic"
+      @toggle-choice="toggleChoice"
       @submit="saveEditor"
     />
   </Modal>
@@ -203,6 +209,7 @@
       :filter="topicFilter"
       :filter-options="topicFilterOptions"
       :topics="filteredTopics"
+      :choices="filteredChoices"
       :selected-topic-ids="draftTopicIds"
       :can-submit="canSubmit"
       :is-saving="isSaving"
@@ -212,6 +219,7 @@
       @update:search="topicSearch = $event"
       @update:filter="topicFilter = $event"
       @toggle-topic="toggleTopic"
+      @toggle-choice="toggleChoice"
       @submit="saveEditor"
     />
     <template #footer>
@@ -336,7 +344,11 @@
               @click="openEditEditor(detailsFolder)"
             >
               <MessageIcon />
-              Добавить чат
+              {{
+                props.scope === 'ai'
+                  ? 'Добавить чат или задачу'
+                  : 'Добавить чат'
+              }}
             </Button>
             <Button
               :type="ButtonTypeEnum.secondary"
@@ -352,12 +364,19 @@
       </div>
 
       <TopicList
+        v-if="props.scope !== 'ai'"
         class="chat-folder-details__topics"
         :folder-scope="props.scope"
         :topics="detailsTopics"
         show-last-online
         data-testid="ChatFolders-DetailsTopics"
         @unmount-topic="handleDetailsTopicSelect"
+      />
+      <ChatFolderChoiceList
+        v-else
+        class="chat-folder-details__topics"
+        :items="detailsChoices"
+        @select="handleDetailsChoiceSelect"
       />
     </aside>
   </Modal>
@@ -383,7 +402,8 @@ import {
   chatFolderIcons,
   type ChatFolder,
   type ChatFolderIcon,
-  type ChatFolderScope
+  type ChatFolderScope,
+  type AiFolderChoice
 } from '../../services/useChatSDK/chat-folder';
 import type { ChatsToolbarFilter } from '../../composables/useChatsToolbarState';
 import { useChatFolders } from '../../composables/useChatFolders';
@@ -405,6 +425,8 @@ import MobileModal from '../UI/MobileModal.vue';
 import MenuSectionHeading from '../UI/MenuSectionHeading.vue';
 import MessageIcon from '../UI/MessageIcon.vue';
 import ChatFolderEditorForm from './ChatFolderEditorForm.vue';
+import ChatFolderChoiceList from './ChatFolderChoiceList.vue';
+import { aiFolderItemKey, parseAiFolderItemKey } from '../../utils/ai-folder';
 import ChatFolderGlyph from './ChatFolderIcon.vue';
 import SkeletonBlock from '../UI/SkeletonBlock.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
@@ -427,6 +449,7 @@ const props = withDefaults(
     mobile?: boolean;
     selectedFolderId?: string | null;
     scope?: ChatFolderScope;
+    choices?: readonly AiFolderChoice[];
   }>(),
   { loading: false, mobile: false, selectedFolderId: null, scope: 'chats' }
 );
@@ -435,6 +458,7 @@ const emits = defineEmits<{
   (e: 'close'): void;
   (e: 'select-folder', folderId: string | null): void;
   (e: 'select-topic', topic: ITopic): void;
+  (e: 'select-choice', item: AiFolderChoice): void;
 }>();
 
 const {
@@ -457,7 +481,7 @@ const editingFolderId = ref<string | null>(null);
 const draftName = ref('');
 const draftTopicIds = ref<Set<string>>(new Set());
 const topicSearch = ref('');
-const topicFilter = ref<ChatsToolbarFilter>('all');
+const topicFilter = ref<ChatsToolbarFilter | 'tasks'>('all');
 const detailsFolderId = ref<string | null>(null);
 const detailsName = ref('');
 const isIconPickerOpen = ref(false);
@@ -481,8 +505,8 @@ onClickOutside(iconRowRef, () => {
   isIconPickerOpen.value = false;
 });
 
-const topicFilterOptions: Array<{
-  value: ChatsToolbarFilter;
+const chatFilterOptions: Array<{
+  value: ChatsToolbarFilter | 'tasks';
   label: string;
 }> = [
   { value: 'all', label: 'Все' },
@@ -490,6 +514,47 @@ const topicFilterOptions: Array<{
   { value: 'groups', label: 'Группы' },
   { value: 'bots', label: 'Боты' }
 ];
+
+const topicFilterOptions = computed(() =>
+  props.scope === 'ai'
+    ? [
+        { value: 'all' as const, label: 'Все' },
+        { value: 'chats' as const, label: 'Чаты' },
+        { value: 'tasks' as const, label: 'Задачи' }
+      ]
+    : chatFilterOptions
+);
+
+const filteredChoices = computed(() =>
+  props.choices?.filter(
+    item =>
+      (topicFilter.value === 'all' || item.kind === topicFilter.value) &&
+      `${item.title} ${item.description}`
+        .toLocaleLowerCase('ru-RU')
+        .includes(topicSearch.value.trim().toLocaleLowerCase('ru-RU'))
+  )
+);
+
+const detailsChoices = computed(() => {
+  const keys = new Set(
+    (detailsFolder.value?.aiItems ?? []).map(aiFolderItemKey)
+  );
+
+  return (props.choices ?? []).filter(item => keys.has(aiFolderItemKey(item)));
+});
+
+const toggleChoice = (item: AiFolderChoice): void => {
+  const key = aiFolderItemKey(item);
+  const next = new Set(draftTopicIds.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  draftTopicIds.value = next;
+};
+
+const handleDetailsChoiceSelect = (item: AiFolderChoice): void => {
+  closeDetails();
+  emits('select-choice', item);
+};
 
 const filteredFolders = computed(() => {
   const query = folderSearch.value.trim().toLocaleLowerCase();
@@ -520,7 +585,7 @@ const filteredTopics = computed(() => {
   const query = normalizeAtSearchQuery(topicSearch.value);
   const byType = getTopicsByChatsToolbarFilter(
     props.topics,
-    topicFilter.value,
+    topicFilter.value === 'tasks' ? 'all' : topicFilter.value,
     authUserId
   );
   return query
@@ -539,7 +604,11 @@ const detailsTopics = computed(() => {
 });
 
 const detailsChatsLabel = computed(() => {
-  const count = detailsFolder.value?.topicIds.length || 0;
+  const count =
+    props.scope === 'ai'
+      ? detailsFolder.value?.aiItems?.length || 0
+      : detailsFolder.value?.topicIds.length || 0;
+  if (props.scope === 'ai') return `${count} элементов`;
   const lastTwoDigits = count % 100;
   const lastDigit = count % 10;
   let word = 'чатов';
@@ -566,7 +635,11 @@ const deleteFolderDescription = computed(() =>
 
 const canSubmit = computed(() => {
   const nameLength = draftName.value.trim().length;
-  return nameLength > 0 && nameLength <= 15 && draftTopicIds.value.size > 0;
+  return (
+    nameLength > 0 &&
+    nameLength <= 15 &&
+    (props.scope === 'ai' || draftTopicIds.value.size > 0)
+  );
 });
 
 const editorTitle = computed(() =>
@@ -631,7 +704,11 @@ const openEditEditor = (folder: ChatFolder): void => {
   editingFolderId.value = folder.id;
   draftName.value =
     folder.id === detailsFolderId.value ? detailsName.value : folder.name;
-  draftTopicIds.value = new Set(folder.topicIds);
+  draftTopicIds.value = new Set(
+    props.scope === 'ai'
+      ? (folder.aiItems ?? []).map(aiFolderItemKey)
+      : folder.topicIds
+  );
   detailsFolderId.value = null;
   isIconPickerOpen.value = false;
   editorMode.value = 'edit';
@@ -655,11 +732,20 @@ const saveEditor = async (): Promise<void> => {
 
   try {
     if (editorMode.value === 'create') {
-      await createFolder(draftName.value, [...draftTopicIds.value]);
+      await createFolder(
+        draftName.value,
+        props.scope === 'ai' ? [] : [...draftTopicIds.value],
+        'folder',
+        props.scope === 'ai'
+          ? [...draftTopicIds.value].map(parseAiFolderItemKey)
+          : undefined
+      );
     } else if (editingFolderId.value) {
       await updateFolder(editingFolderId.value, {
         name: draftName.value,
-        topicIds: [...draftTopicIds.value]
+        ...(props.scope === 'ai'
+          ? { aiItems: [...draftTopicIds.value].map(parseAiFolderItemKey) }
+          : { topicIds: [...draftTopicIds.value] })
       });
     }
     closeEditor();

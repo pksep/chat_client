@@ -29,6 +29,28 @@ const apiWithAck = (handle: (command: string, payload: any) => unknown) => {
 };
 
 describe('API папок чатов', () => {
+  it('передаёт одну ссылку ИИ с подтверждением без замены содержимого папки', async () => {
+    const commands: { command: string; payload: unknown }[] = [];
+    const api = apiWithAck((command, payload) => {
+      commands.push({ command, payload });
+      return { success: true, data: folder };
+    });
+    await api.setChatFolderAiItem(
+      folder.id,
+      { type: 'session', id: 'opaque-id' },
+      true
+    );
+    assert.deepEqual(commands, [
+      {
+        command: 'setChatFolderAiItem',
+        payload: {
+          folderId: folder.id,
+          item: { type: 'session', id: 'opaque-id' },
+          included: true
+        }
+      }
+    ]);
+  });
   it('передаёт создание, изменение, порядок и удаление через сокет с подтверждением', async () => {
     const commands: { command: string; payload: unknown }[] = [];
     const api = apiWithAck((command, payload) => {

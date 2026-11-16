@@ -18,7 +18,9 @@
       />
     </label>
 
-    <div class="chat-folder-editor__label">Добавить чаты:</div>
+    <div class="chat-folder-editor__label">
+      {{ props.choices ? 'Добавить чаты и задачи:' : 'Добавить чаты:' }}
+    </div>
     <MenuSearch
       :model-value="props.search"
       class="chat-folder-editor__search"
@@ -36,6 +38,7 @@
     />
 
     <TopicList
+      v-if="!props.choices"
       class="chat-folder-editor__topics"
       :topics="props.topics"
       :selected-topic-ids="props.selectedTopicIds"
@@ -44,6 +47,13 @@
       show-last-online
       data-testid="ChatFolders-TopicList"
       @unmount-topic="emits('toggle-topic', $event)"
+    />
+    <ChatFolderChoiceList
+      v-else
+      class="chat-folder-editor__topics"
+      :items="props.choices"
+      :selected-keys="props.selectedTopicIds"
+      @select="emits('toggle-choice', $event)"
     />
 
     <footer v-if="props.showFooter" class="chat-folder-editor__footer">
@@ -61,9 +71,10 @@
   </section>
 </template>
 
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends string">
 import type { ITopic } from '../interfaces/interfaces';
-import type { ChatsToolbarFilter } from '../../composables/useChatsToolbarState';
+import type { AiFolderChoice } from '../../services/useChatSDK/chat-folder';
+import ChatFolderChoiceList from './ChatFolderChoiceList.vue';
 import TopicList from '../ContactList/TopicList.vue';
 import ChatsToolbarFilters from './ChatsToolbarFilters.vue';
 import { Button, ButtonTypeEnum, Input, SizesEnum } from '@pksep/yui';
@@ -73,8 +84,9 @@ const props = withDefaults(
   defineProps<{
     name: string;
     search: string;
-    filter: ChatsToolbarFilter;
-    filterOptions: Array<{ value: ChatsToolbarFilter; label: string }>;
+    filter: T;
+    filterOptions: Array<{ value: T; label: string }>;
+    choices?: readonly AiFolderChoice[];
     topics: ITopic[];
     selectedTopicIds: Set<string>;
     canSubmit: boolean;
@@ -89,7 +101,8 @@ const props = withDefaults(
 const emits = defineEmits<{
   (e: 'update:name', value: string): void;
   (e: 'update:search', value: string): void;
-  (e: 'update:filter', value: ChatsToolbarFilter): void;
+  (e: 'update:filter', value: T): void;
+  (e: 'toggle-choice', item: AiFolderChoice): void;
   (e: 'toggle-topic', topic: ITopic): void;
   (e: 'submit'): void;
 }>();

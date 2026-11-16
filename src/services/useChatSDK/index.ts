@@ -48,7 +48,8 @@ import {
   type ChatFolder,
   type ChatFolderScope,
   type CreateChatFolderPayload,
-  type SaveChatFolderPayload
+  type SaveChatFolderPayload,
+  type AiFolderItem
 } from './chat-folder';
 import {
   ChatMessage,
@@ -1511,6 +1512,14 @@ export class ChatSDK {
 
   async getChatFolders(): Promise<ChatFolder[]> {
     return this.chatFolder.getChatFolders();
+  }
+
+  async setChatFolderAiItem(
+    folderId: string,
+    item: AiFolderItem,
+    included: boolean
+  ): Promise<ChatFolder> {
+    return this.chatFolder.setChatFolderAiItem(folderId, item, included);
   }
 
   async syncChatFolders(): Promise<ChatFolder[]> {

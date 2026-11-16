@@ -72,7 +72,7 @@
           :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           role="menuitemcheckbox"
-          :aria-checked="folder.topicIds.includes(props.topicId)"
+          :aria-checked="isIncluded(folder)"
           :disabled="!!savingFolderId"
           :title="folder.name"
           :data-testid="`${props.dataTestid}-Folder-${folder.id}`"
@@ -83,7 +83,7 @@
             folder.name
           }}</span>
           <Icon
-            v-if="folder.topicIds.includes(props.topicId)"
+            v-if="isIncluded(folder)"
             class="topic-folder-context-menu__check"
             :name="IconNameEnum.checked"
             :width="20"
@@ -119,10 +119,16 @@ import { useResizeState } from '../../composables/useResizeState';
 import { showNotification } from '../../composables/useNotifications';
 import { authedUser } from '../../composables/useAuth';
 import { MAX_W_MD } from '../../utils/constants';
-import type { ChatFolderScope } from '../../services/useChatSDK/chat-folder';
+import type {
+  AiFolderItem,
+  ChatFolder,
+  ChatFolderScope
+} from '../../services/useChatSDK/chat-folder';
+import { folderContainsAiItem } from '../../utils/ai-folder';
 
 const props = defineProps<{
-  topicId: string;
+  topicId?: string;
+  aiItem?: AiFolderItem;
   scope: ChatFolderScope;
   position: { x: number; y: number };
   dataTestid: string;
@@ -133,11 +139,17 @@ const {
   folders: allFolders,
   loadFolders,
   addTopicToFolder,
-  removeTopicFromFolder
+  removeTopicFromFolder,
+  setAiItemInFolder
 } = useChatFolders(props.scope);
 const folders = computed(() =>
   allFolders.value.filter(folder => !folder.isSystem)
 );
+
+const isIncluded = (folder: ChatFolder): boolean =>
+  props.aiItem
+    ? folderContainsAiItem(folder, props.aiItem)
+    : folder.topicIds.includes(props.topicId ?? '');
 
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const panelId = `topic-folders-${useId()}`;
@@ -216,16 +228,20 @@ const moveFolderFocus = (event: KeyboardEvent, direction: number) => {
   items[(index + direction + items.length) % items.length]?.focus();
 };
 
-const selectFolder = async (folderId: string) => {
+const selectFolder = async (folderId: string): Promise<void> => {
   if (savingFolderId.value) return;
-  const isRemoving = !!folders.value
-    .find(folder => folder.id === folderId)
-    ?.topicIds.includes(props.topicId);
+  const folder = folders.value.find(item => item.id === folderId);
+  if (!folder) return;
+  const isRemoving = isIncluded(folder);
   cancelClose();
   savingFolderId.value = folderId;
   try {
-    if (isRemoving) await removeTopicFromFolder(folderId, props.topicId);
-    else await addTopicToFolder(folderId, props.topicId);
+    if (props.aiItem)
+      await setAiItemInFolder(folderId, props.aiItem, !isRemoving);
+    else if (props.topicId) {
+      if (isRemoving) await removeTopicFromFolder(folderId, props.topicId);
+      else await addTopicToFolder(folderId, props.topicId);
+    }
     if (mounted) emit('close');
   } catch (error) {
     if (mounted)

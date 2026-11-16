@@ -5,7 +5,8 @@ import type {
   ChatFolderChange,
   ChatFolderScope,
   CreateChatFolderPayload,
-  SaveChatFolderPayload
+  SaveChatFolderPayload,
+  AiFolderItem
 } from './chat-folder';
 
 export interface PtsMeta {
@@ -29,6 +30,7 @@ export enum WebSocketEventType {
   UPDATE_CHAT_FOLDER = 'updateChatFolder',
   DELETE_CHAT_FOLDER = 'deleteChatFolder',
   SET_CHAT_FOLDER_TOPIC = 'setChatFolderTopic',
+  SET_CHAT_FOLDER_AI_ITEM = 'setChatFolderAiItem',
   REORDER_CHAT_FOLDERS = 'reorderChatFolders',
   CHAT_FOLDER_CHANGED = 'chatFolderChanged',
   SYNC_STATE = 'syncState',
@@ -117,6 +119,11 @@ export interface WebSocketEventPayloads {
   [WebSocketEventType.REORDER_CHAT_FOLDERS]: {
     scope: ChatFolderScope;
     folderIds: string[];
+  };
+  [WebSocketEventType.SET_CHAT_FOLDER_AI_ITEM]: {
+    folderId: string;
+    item: AiFolderItem;
+    included: boolean;
   };
   [WebSocketEventType.CHAT_FOLDER_CHANGED]: ChatFolderChange;
   [WebSocketEventType.SYNC_STATE]: { pts?: string };

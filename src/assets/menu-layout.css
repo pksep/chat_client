@@ -208,6 +208,19 @@
     padding: var(--menu-section-safe-top) 0 84px;
   }
 
+  .mobile-list-container .ai-menu-panel.ai-menu-panel--with-folders {
+    grid-template-rows:
+      var(--menu-section-heading-height) 43px
+      calc(var(--menu-section-search-height) + 10px) 53px minmax(0, 1fr);
+  }
+
+  .mobile-list-container
+    .ai-menu-panel.ai-menu-panel--with-folders.ai-menu-panel--searching {
+    grid-template-rows:
+      var(--menu-section-heading-height) 43px
+      calc(var(--menu-section-search-height) + 10px) minmax(0, 1fr);
+  }
+
   .mobile-list-container .ai-menu-panel__search-shell {
     padding-inline: 16px;
   }

@@ -488,7 +488,7 @@ test('Настройки и системные папки доступны бе�
     page.locator('.chat-folder-rail__items [data-folder-id]')
   ).toHaveCount(0);
   await expect(page.locator('.chat-folder-rail__items > button')).toHaveCount(
-    8
+    9
   );
   await page.getByTestId('Clients-SystemFolder-site').tap();
   await expect(page.locator('.contact-list__li')).toHaveCount(1);

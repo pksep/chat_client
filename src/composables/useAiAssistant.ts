@@ -27,7 +27,8 @@ import {
 } from '../services/aiAutomations';
 import { getChatHistorySnapshot, saveMessages } from '../services/useChatDb';
 import { getAiErrorMessage } from '../services/aiErrorMessages';
-import { showErrorNotification } from './useNotifications';
+import { showErrorNotification, showNotification } from './useNotifications';
+import { useChatFolders } from './useChatFolders';
 import { afterStartupPaint } from '../utils/after-startup-paint';
 
 export type AiAssistantTab = 'chats' | 'tasks';
@@ -769,6 +770,21 @@ const createSession = (
     messages: []
   };
   persisted.sessions.unshift(session);
+  const folders = useChatFolders('ai');
+  if (folders.activeFolderId.value) {
+    void folders
+      .setAiItemInFolder(
+        folders.activeFolderId.value,
+        { type: 'session', id: session.id },
+        true
+      )
+      .catch((error: unknown): void => {
+        showNotification({
+          title: 'Не удалось добавить чат в папку',
+          description: error
+        });
+      });
+  }
   activeSessionId.value = session.id;
   inactiveSessionIds.delete(session.id);
   return session;
