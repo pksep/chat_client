@@ -16,6 +16,106 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
+for (const previewTiming of ['до открытия', 'во время загрузки']) {
+  test(`мобильная группа догружает новое сообщение из превью ${previewTiming}`, async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 600, height: 844 });
+    const state = await openFixture(page, { shell: true });
+    const rows = makeMessages('performance-0', 21);
+    await page.evaluate(
+      ({ rows, previewTiming }) => {
+        const fixture = (window as any).topicPerformance;
+        fixture.seed('performance-0', rows.slice(0, 20));
+        fixture.setTopics([
+          {
+            ...fixture.getSelectedTopic('performance-0'),
+            type: 'GROUP',
+            name: 'SEP:ERP test',
+            group: { id: 'performance-0', name: 'SEP:ERP test' },
+            lastMessage:
+              previewTiming === 'до открытия' ? rows.at(-1) : rows.at(-2)
+          }
+        ]);
+      },
+      { rows, previewTiming }
+    );
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => (release = resolve));
+    let requests = 0;
+    await page.route('**/messages/topic/performance-0?*', async route => {
+      const requestNumber = ++requests;
+      if (requestNumber === 1) await gate;
+      await route.fulfill({
+        json: requestNumber === 1 ? rows.slice(0, 20) : rows
+      });
+    });
+    try {
+      await openTopic(page, 0);
+      await expect.poll(() => requests).toBe(1);
+      if (previewTiming === 'во время загрузки') {
+        await page.evaluate(lastMessage => {
+          (window as any).topicPerformance.updateLocalLastMessageTopic(
+            'performance-0',
+            lastMessage
+          );
+        }, rows.at(-1));
+      }
+      // Даём проверке превью выполниться до завершения старого HTTP.
+      await page.waitForTimeout(200);
+      release();
+      await expect(message(page, 0, 20)).toBeInViewport();
+      expect(requests).toBe(2);
+      expect(state.errors).toEqual([]);
+    } finally {
+      release();
+    }
+  });
+}
+
+test('новое превью сдвигает заполненное мобильное окно к последнему сообщению', async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 600, height: 844 });
+  const state = await openFixture(page, { shell: true });
+  const rows = makeMessages('performance-0', 101);
+  await page.evaluate(
+    rows => {
+      const fixture = (window as any).topicPerformance;
+      fixture.seed('performance-0', rows);
+      fixture.setTopics([
+        {
+          ...fixture.getSelectedTopic('performance-0'),
+          lastMessage: rows.at(-1)
+        }
+      ]);
+    },
+    rows.slice(0, 100)
+  );
+  let fresh = false;
+  await page.route('**/messages/topic/performance-0?*', route => {
+    const limit = Number(
+      new URL(route.request().url()).searchParams.get('limit')
+    );
+    return route.fulfill({
+      json: (fresh ? rows : rows.slice(0, 100)).slice(-limit)
+    });
+  });
+  await openTopic(page, 0);
+  await expect(message(page, 0, 99)).toBeInViewport();
+  await expect(page.locator('[data-message-id]')).toHaveCount(72);
+  fresh = true;
+  await page.evaluate(lastMessage => {
+    (window as any).topicPerformance.updateLocalLastMessageTopic(
+      'performance-0',
+      lastMessage
+    );
+  }, rows.at(-1));
+  await expect(message(page, 0, 100)).toBeInViewport();
+  await expect(page.locator('[data-message-id]')).toHaveCount(72);
+  expect(state.errors).toEqual([]);
+});
+
 test('IndexedDB дополняет два новых сообщения из памяти до ответа HTTP', async ({
   page
 }) => {

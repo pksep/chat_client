@@ -63,7 +63,7 @@
           <template v-else>
             <ChatsToolbar
               :model-value="toolbarState.search"
-              :filter="toolbarState.filter"
+              :filter="toolbarState.selectedFilter"
               :filter-counts="filterCounts"
               :filter-muted-only="filterMutedOnly"
               class="mobile-list-container__toolbar"
@@ -73,10 +73,12 @@
               @create-chat="handleShowAccount(TopicType.DM)"
               @create-group="handleShowAccount(TopicType.Group)"
               @create-bot="handleShowBot"
+              @manage-folders="openFolderManager"
             >
               <template v-if="!isShareSelectionActive" #folders>
                 <ChatFolderRail
                   mobile
+                  tabs
                   :loading="isChatFoldersLoading"
                   :folders="chatFolders"
                   :topics="chatBadgeTopics"
@@ -86,7 +88,18 @@
                   :auth-user-id="authUserId"
                   @select="handleSelectFolder"
                   @manage="openFolderManager"
-                />
+                >
+                  <template #filters>
+                    <ChatsToolbarFilters
+                      :model-value="toolbarState.selectedFilter"
+                      :options="chatsToolbarFilterOptions"
+                      :counts="filterCounts"
+                      :muted-only="filterMutedOnly"
+                      :data-testid="`${props.dataTestid}-MobileList-ChatsToolbar`"
+                      @update:model-value="setFilter"
+                    />
+                  </template>
+                </ChatFolderRail>
               </template>
             </ChatsToolbar>
 
@@ -99,7 +112,7 @@
                 :show-checkbox="isShareSelectionActive"
                 :selected-topic-ids="selectedTopicIds"
                 :search-query="toolbarState.search"
-                :is-loading="isTopicsLoading"
+                :is-loading="isTopicsLoading || initialTopicListPending"
                 :message-results="
                   isShareSelectionActive ? [] : filteredMessageSearchResults
                 "
@@ -238,6 +251,7 @@ import type {
 import type { IUser } from '../interfaces/interfaces';
 import TopicList from './TopicList.vue';
 import ChatsToolbar from '../Menu/ChatsToolbar.vue';
+import ChatsToolbarFilters from '../Menu/ChatsToolbarFilters.vue';
 import { useTopics } from '../../composables/useTopics';
 import { useUrlWatcher } from '../../composables/navigation';
 import {
@@ -246,7 +260,10 @@ import {
   RouteTypes
 } from '../../composables/navigation/useUrlRouting';
 import { TopicType } from '../../services/useChatSDK/types';
-import { useChatsToolbarState } from '../../composables/useChatsToolbarState';
+import {
+  chatsToolbarFilterOptions,
+  useChatsToolbarState
+} from '../../composables/useChatsToolbarState';
 import {
   type ChatMenuSection,
   useChatMenu
@@ -306,6 +323,7 @@ const {
   getUnreadTopicList,
   loadRemainingTopics,
   hasMoreTopics,
+  initialTopicListPending,
   loading: isTopicsLoading
 } = useTopics();
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
@@ -315,7 +333,9 @@ const mountedSections = reactive(new Set<ChatMenuSection>(['chats']));
 const { isShareSelectionActive, selectedTopicIds, toggleShareTopic } =
   useShareSelection();
 const allTopics = computed(() =>
-  getTopicList().filter(topic => !isClientTopic(topic))
+  initialTopicListPending.value
+    ? []
+    : getTopicList().filter(topic => !isClientTopic(topic))
 );
 const chatBadgeTopics = computed(() =>
   getUnreadTopicList().filter(topic => !isClientTopic(topic))

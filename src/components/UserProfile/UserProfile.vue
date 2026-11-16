@@ -63,6 +63,7 @@
     >
       {{ formattedStatus }}
     </span>
+    <slot name="corner" />
   </div>
 </template>
 

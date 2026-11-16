@@ -3,7 +3,7 @@ import { createAndroidPerformanceServer } from './fixtures/android-performance-s
 import { SHORT_QR_LOGIN_ENABLED } from '../src/services/qr-login-settings';
 
 const trigger = (page: Page) =>
-  page.getByRole('button', { name: 'Вход по QR-коду' });
+  page.getByRole('button', { name: 'Авторизоваться через QR' });
 const popover = (page: Page) =>
   page.getByRole('dialog', { name: 'Вход по QR-коду' });
 const image = (page: Page) =>

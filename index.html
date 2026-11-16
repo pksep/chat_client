@@ -638,6 +638,10 @@
         border-radius: 50%;
       }
 
+      .startup-shell__folder-settings {
+        display: none;
+      }
+
       .startup-shell__divider {
         height: 1px;
         margin: 0 10px 10px;
@@ -709,6 +713,7 @@
 
       .startup-shell__title,
       .startup-shell__create,
+      .startup-shell__folder-settings,
       .startup-shell__avatar,
       .startup-shell__line,
       .startup-shell__subline,
@@ -1093,7 +1098,7 @@
 
         .startup-shell__content {
           display: grid;
-          grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+          grid-template-rows: auto auto auto minmax(0, 1fr) auto;
           min-height: 100dvh;
           padding: calc(10px + env(safe-area-inset-top, 0px)) 0 0;
           border-right: 0;
@@ -1102,14 +1107,7 @@
         }
 
         .startup-shell__folders {
-          position: static;
-          grid-row: 2;
-          width: 100%;
-          height: 72px;
-          min-height: 72px;
-          margin-top: 10px;
-          padding: 0;
-          flex-direction: row;
+          display: none;
         }
 
         .startup-shell__folders::after,
@@ -1165,6 +1163,15 @@
           min-height: 40px;
           padding: 10px 16px 5px;
           border-bottom: 1px solid var(--border-table);
+          gap: 10px;
+        }
+
+        .startup-shell__folder-settings {
+          display: block;
+          width: 22px;
+          height: 22px;
+          margin-left: auto;
+          border-radius: 6px;
         }
 
         .startup-shell__title {
@@ -1362,19 +1369,19 @@
         }
 
         .startup-shell__search {
-          grid-row: 3;
+          grid-row: 2;
           height: 40px;
           margin: 10px 16px 10px;
           border-radius: 8px;
         }
 
         .startup-shell__filters {
-          grid-row: 4;
+          grid-row: 3;
           padding-inline: 16px;
         }
 
         .startup-shell__list {
-          grid-row: 5;
+          grid-row: 4;
         }
 
         .startup-shell__chip {
@@ -1481,6 +1488,7 @@
       <div class="startup-shell__content">
         <div class="startup-shell__toolbar">
           <div class="startup-shell__title"></div>
+          <div class="startup-shell__folder-settings"></div>
           <div class="startup-shell__create"></div>
         </div>
         <div class="startup-shell__divider"></div>

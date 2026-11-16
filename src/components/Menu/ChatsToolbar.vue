@@ -21,6 +21,18 @@
       </h4>
 
       <Button
+        v-if="$slots.folders && !props.isCollapse"
+        class="chats-toolbar__folders-button"
+        :type="ButtonTypeEnum.secondary"
+        :size="SizesEnum.little"
+        aria-label="Открыть папки"
+        :data-testid="`${props.dataTestid}-ChatsToolbar-FoldersButton`"
+        @click="emits('manage-folders')"
+      >
+        <span class="chat-folder-rail__manage-icon" aria-hidden="true" />
+      </Button>
+
+      <Button
         v-if="props.showCreate"
         class="chats-toolbar__create-button"
         :type="ButtonTypeEnum.secondary"
@@ -79,10 +91,6 @@
 
     <Line :data-testid="`${props.dataTestid}-ChatsToolbar-Line`" />
 
-    <div v-if="$slots.folders" class="chats-toolbar__folders">
-      <slot name="folders" />
-    </div>
-
     <div class="chats-toolbar__controls">
       <MenuSearch
         v-if="!props.isCollapse"
@@ -92,7 +100,11 @@
         :data-testid="`${props.dataTestid}-ChatsToolbar-Search`"
       />
 
-      <template v-if="!props.isCollapse && props.showFilters">
+      <div v-if="$slots.folders" class="chats-toolbar__folders">
+        <slot name="folders" />
+      </div>
+
+      <template v-else-if="!props.isCollapse && props.showFilters">
         <slot name="filters">
           <ChatsToolbarFilters
             :model-value="props.filter"
@@ -124,7 +136,10 @@ import ContextMenu from '../ContactList/ContextMenu.vue';
 import BotIcon from '../UI/BotIcon.vue';
 import MessageIcon from '../UI/MessageIcon.vue';
 import GroupIcon from '../UI/GroupIcon.vue';
-import type { ChatsToolbarFilter } from '../../composables/useChatsToolbarState';
+import {
+  chatsToolbarFilterOptions,
+  type ChatsToolbarFilter
+} from '../../composables/useChatsToolbarState';
 import ConnectionStatus from '../UI/ConnectionStatus.vue';
 import ChatsToolbarFilters from './ChatsToolbarFilters.vue';
 import { getTopicsRefreshFailed } from '../../composables/useTopics';
@@ -143,7 +158,7 @@ const props = withDefaults(
     title?: string;
     showCreate?: boolean;
     showFilters?: boolean;
-    filter?: ChatsToolbarFilter;
+    filter?: ChatsToolbarFilter | null;
     filterCounts?: ChatsToolbarCounts;
     filterMutedOnly?: ChatsToolbarMutedOnly;
     isCollapse?: boolean;
@@ -178,6 +193,7 @@ const emits = defineEmits<{
   (e: 'create-chat'): void;
   (e: 'create-group'): void;
   (e: 'create-bot'): void;
+  (e: 'manage-folders'): void;
 }>();
 
 const isWaitingConnection = useDelayedConnectionStatus(
@@ -205,10 +221,5 @@ const handleCreateBot = () => {
   emits('create-bot');
 };
 
-const filterOptions: Array<{ value: ChatsToolbarFilter; label: string }> = [
-  { value: 'all', label: 'Все' },
-  { value: 'chats', label: 'Чаты' },
-  { value: 'groups', label: 'Группы' },
-  { value: 'bots', label: 'Боты' }
-];
+const filterOptions = chatsToolbarFilterOptions;
 </script>
