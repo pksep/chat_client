@@ -1,9 +1,20 @@
 {
+  "identifier": "ru.pksep.chat.sessionqa",
   "build": {
     "beforeDevCommand": "",
-    "devUrl": "http://localhost:5173/e2e/fixtures/tauri-auth.html"
+    "devUrl": "http://localhost:5211/e2e/fixtures/tauri-auth.html"
   },
   "app": {
+    "security": {
+      "capabilities": [
+        "default",
+        {
+          "identifier": "session-qa-exit",
+          "windows": ["main"],
+          "permissions": ["process:allow-exit"]
+        }
+      ]
+    },
     "windows": [
       {
         "label": "main",

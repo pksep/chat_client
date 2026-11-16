@@ -19,51 +19,89 @@
   </style>
   <h1>Проверка нативной сессии Tauri</h1>
   <p>
-    Только локальный сервер и вымышленные данные. После первого шага
-    перезапустите приложение.
+    Только локальный сервер и вымышленные данные. Токен живёт 10 секунд;
+    продление запускает настоящий таймер приложения.
   </p>
   <button id="login">Создать тестовую сессию</button>
   <button id="refresh">Проверить сохранённую сессию</button>
   <button id="logout">Проверить выход</button>
   <output id="result">Готово к проверке</output>
   <script type="module">
-    import { fetchAuthWithCookies } from '/src/utils/auth-http.ts';
-    const api = 'http://127.0.0.1:5207/api/auth';
-    const result = document.querySelector('#result');
-    const run = async (path, data) => {
-      const response = await fetchAuthWithCookies(
-        `${api}/${path}`,
-        'POST',
-        data
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = new URL(
+        input instanceof Request ? input.url : String(input),
+        location.href
       );
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response;
-    };
-    const check = task => async () => {
-      try {
-        result.textContent = await task();
-      } catch (error) {
-        result.textContent = `Ошибка: ${String(error)}`;
+      if (!['localhost', '127.0.0.1', 'ipc.localhost'].includes(url.hostname)) {
+        throw new Error('Внешняя сеть запрещена в проверке сессии');
       }
+      return originalFetch(input, init);
     };
-    document.querySelector('#login').onclick = check(async () => {
-      await run('credentials-login', {
+    const auth = await import('/src/composables/useAuth.ts');
+    const { getAuthToken, setAuthToken } = await import(
+      '/src/composables/useLogin.ts'
+    );
+    const { setConfig } = await import('/src/services/useConfig.ts');
+    const { fetchAuthWithCookies } = await import('/src/utils/auth-http.ts');
+    const api = 'http://127.0.0.1:5207/api/auth';
+    setConfig({
+      CHAT_API_DOMAIN: 'http://127.0.0.1:5207/api',
+      CHAT_ERP_URL: 'http://127.0.0.1:5207'
+    });
+    const result = document.querySelector('#result');
+    const snapshot = () => {
+      const session = auth.getChatAuthSession();
+      const timing = session
+        ? JSON.parse(atob(session.token.split('.')[1]))
+        : null;
+      return {
+        stored: !!session,
+        persistent: auth.isStoredChatSessionPersistent(),
+        generation: timing?.generation || 0,
+        expiresAt: timing ? timing.exp * 1000 : 0,
+        accessCookieMatches: !!session && getAuthToken() === session.token,
+        refreshCookieVisible: document.cookie.includes('chat_refresh_token='),
+        userMatches: !!session && auth.getAuthUser()?.id === session.user?.id
+      };
+    };
+    const login = async () => {
+      const session = await auth.loginWithCredentials({
         identifier: 'fixture',
         password: 'fixture'
       });
-      await run('refresh');
-      return 'Вход и ротация cookie прошли. Закройте процесс, запустите снова и проверьте сохранённую сессию.';
-    });
-    document.querySelector('#refresh').onclick = check(async () => {
-      await run('refresh');
-      return 'Сохранённая сессия найдена. Refresh после перезапуска прошёл.';
-    });
-    document.querySelector('#logout').onclick = check(async () => {
-      await run('logout');
-      const response = await fetchAuthWithCookies(`${api}/refresh`, 'POST');
-      if (response.status !== 401)
-        throw new Error('Cookie осталась после выхода');
-      return 'Выход прошёл. Cookie удалена, повторный refresh отклонён: HTTP 401.';
-    });
+      auth.setAuthUser(session.user);
+      auth.saveChatAuthSession(session, true);
+      return snapshot();
+    };
+    // Те же операции восстановления, которые выполняет ChatContainerRoot.
+    const storedSession = auth.getChatAuthSession();
+    if (storedSession) {
+      if (auth.isChatAccessTokenExpired(storedSession.token)) {
+        await auth.tryRefreshErpSession();
+      } else {
+        setAuthToken(storedSession.token);
+        auth.setAuthUser(storedSession.user);
+        auth.saveChatAuthSession(
+          storedSession,
+          auth.isStoredChatSessionPersistent()
+        );
+      }
+    }
+    window.nativeAuthQa = {
+      snapshot,
+      login,
+      logout: auth.logoutChatSession,
+      quit: async () => (await import('@tauri-apps/plugin-process')).exit(0),
+      refreshStatus: async () =>
+        (await fetchAuthWithCookies(`${api}/refresh`, 'POST')).status
+    };
+    document.querySelector('#login').onclick = login;
+    document.querySelector('#refresh').onclick = () =>
+      auth.tryRefreshErpSession();
+    document.querySelector('#logout').onclick = auth.logoutChatSession;
+    setInterval(() => {
+      result.textContent = JSON.stringify(snapshot(), null, 2);
+    }, 250);
   </script>
 </html>
