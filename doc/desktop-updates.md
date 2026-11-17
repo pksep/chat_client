@@ -81,7 +81,7 @@ push workflows. При отсутствии нового релиза повто
 каналами нет.
 
 После успешной сборки **всех** платформ создаётся общий manifest. Через
-существующие `DEV_SSH_HOST/USER/KEY/PORT` пакеты загружаются на deployment host,
+существующие `DEV_SSH_HOST/PORT` и `PROD_SSH_USER/KEY` пакеты загружаются на deployment host,
 `scripts/publish-desktop.sh` размещает их в Kubernetes PVC. Production namespace
 по умолчанию `erp`; можно явно задать `DESKTOP_KUBE_NAMESPACE` на deployment host.
 Он должен содержать deployment `ai-client`. Beta-манифест хранится там же,
@@ -104,6 +104,16 @@ Deployment, Service, ConfigMap, PVC, exec/cp в выбранном namespace.
 Первое включение: выпустить код веб-прокси и этот workflow, создать новый
 release tag. Сборка с `publish=false` даёт только CI artifacts; `publish=true`
 вручную или автоматический tag/release публикует обновление.
+
+При `publish=true` подписанные установщики также сохраняются в соответствующем
+GitHub Release: их можно скачать без входа и без ограничения срока хранения
+CI artifacts. Имя начинается с платформы; существующий файл с другой SHA-256
+не перезаписывается.
+
+Для повтора публикации без компиляции всех платформ укажите тот же `tag`,
+`publish=true` и `artifact_run_id` завершённого Desktop Builds для этого тега.
+Workflow проверяет коммит, успешность всех четырёх сборок и наличие artifacts,
+затем повторно проверяет криптографические подписи пакетов перед выкладкой.
 
 ## Сохранение работы
 

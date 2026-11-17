@@ -11,6 +11,10 @@ on:
         description: 'Publish signed packages to the desktop update server'
         default: false
         type: boolean
+      artifact_run_id:
+        description: 'Optional completed Desktop Builds run for this release; reuse its signed packages'
+        required: false
+        type: string
   push:
     tags: ['v*']
   # semantic-release uses GITHUB_TOKEN; its tags do not trigger push workflows.
@@ -21,6 +25,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 env:
   LEFTHOOK: 0
@@ -38,12 +43,15 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       channel: ${{ steps.release.outputs.channel }}
       publish: ${{ steps.release.outputs.publish }}
+      artifact_run_id: ${{ steps.release.outputs.artifact_run_id }}
+      artifact_ids: ${{ steps.release.outputs.artifact_ids }}
     steps:
       - uses: actions/github-script@v7
         id: release
         env:
           INPUT_TAG: ${{ inputs.tag }}
           INPUT_PUBLISH: ${{ inputs.publish }}
+          INPUT_ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
         with:
           script: |
             let tag;
@@ -58,7 +66,29 @@ jobs:
               tag = context.eventName === 'push' ? context.ref.replace('refs/tags/', '') : process.env.INPUT_TAG;
             }
             if (!/^v\d+\.\d+\.\d+(-beta\.\d+)?$/.test(tag)) throw new Error('Invalid desktop release tag');
-            await github.rest.git.getRef({ ...context.repo, ref: `tags/${tag}` });
+            const { data: ref } = await github.rest.git.getRef({ ...context.repo, ref: `tags/${tag}` });
+            const artifactRunId = process.env.INPUT_ARTIFACT_RUN_ID?.trim();
+            if (artifactRunId) {
+              if (!/^\d+$/.test(artifactRunId)) throw new Error('Invalid artifact run ID');
+              const { data: source } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: artifactRunId });
+              if (source.status !== 'completed' || source.path !== '.github/workflows/desktop-builds.yml' || source.head_sha !== ref.object.sha) {
+                throw new Error('Packages must come from a completed Desktop Builds run at this release tag');
+              }
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, { ...context.repo, run_id: artifactRunId });
+              const buildNames = ['Build Windows x64', 'Build Linux x64', 'Build macOS Apple Silicon', 'Build macOS Intel'];
+              if (!buildNames.every(name => jobs.some(job => job.name === name && job.conclusion === 'success'))) {
+                throw new Error('All four platform builds must have succeeded');
+              }
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, { ...context.repo, run_id: artifactRunId });
+              const names = ['desktop-windows-x86_64', 'desktop-linux-x86_64', 'desktop-darwin-aarch64', 'desktop-darwin-x86_64'];
+              const packages = names.map(name => {
+                const matches = artifacts.filter(artifact => artifact.name === name && !artifact.expired);
+                if (matches.length !== 1) throw new Error(`Missing or ambiguous artifact: ${name}`);
+                return matches[0].id;
+              });
+              core.setOutput('artifact_run_id', artifactRunId);
+              core.setOutput('artifact_ids', packages.join(','));
+            }
             core.setOutput('tag', tag);
             core.setOutput('version', tag.slice(1));
             core.setOutput('channel', tag.includes('-beta.') ? 'beta' : 'stable');
@@ -66,7 +96,7 @@ jobs:
 
   build-tauri:
     needs: prepare
-    if: needs.prepare.outputs.tag != ''
+    if: needs.prepare.outputs.tag != '' && needs.prepare.outputs.artifact_run_id == ''
     name: Build ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -133,7 +163,11 @@ jobs:
 
   publish:
     needs: [prepare, build-tauri]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.tag != '' && (needs.build-tauri.result == 'success' || (needs.build-tauri.result == 'skipped' && needs.prepare.outputs.artifact_run_id != '')) }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -144,10 +178,24 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: desktop-*
+          artifact-ids: ${{ needs.prepare.outputs.artifact_ids }}
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.prepare.outputs.artifact_run_id || github.run_id }}
           merge-multiple: true
           path: desktop-upload/packages
       - name: Create complete update manifest
+        env:
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: |
+          bun -e '
+            import { readdir, readFile } from "node:fs/promises";
+            import { updaterFileFor, verifyDesktopArtifact } from "./scripts/desktop-release.ts";
+            for (const target of ["windows-x86_64", "linux-x86_64", "darwin-aarch64", "darwin-x86_64"]) {
+              const directory = `desktop-upload/packages/${target}`;
+              const file = `${directory}/${updaterFileFor(target, await readdir(directory))}`;
+              await verifyDesktopArtifact(file, await readFile(`${file}.sig`, "utf8"), process.env.TAURI_UPDATER_PUBKEY);
+            }
+          '
           bun scripts/desktop-release.ts manifest desktop-upload/packages desktop-upload/publish '${{ needs.prepare.outputs.version }}'
           mkdir -p desktop-upload/deploy desktop-upload/scripts
           cp deploy/desktop-updates.yaml desktop-upload/deploy/
@@ -157,6 +205,33 @@ jobs:
           name: desktop-release-${{ needs.prepare.outputs.version }}
           path: desktop-upload/
           retention-days: 30
+      - name: Attach signed installers to the GitHub release
+        if: needs.prepare.outputs.publish == 'true'
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        with:
+          script: |
+            const { readFile, readdir } = require('node:fs/promises');
+            const { createHash } = require('node:crypto');
+            const { data: release } = await github.rest.repos.getReleaseByTag({ ...context.repo, tag: process.env.RELEASE_TAG });
+            const existing = await github.paginate(github.rest.repos.listReleaseAssets, { ...context.repo, release_id: release.id });
+            for (const target of ['windows-x86_64', 'linux-x86_64', 'darwin-aarch64', 'darwin-x86_64']) {
+              const directory = `desktop-upload/packages/${target}`;
+              for (const file of await readdir(directory)) {
+                const name = `${target}-${file}`.replace(/\s+/g, '-');
+                const data = await readFile(`${directory}/${file}`);
+                const digest = `sha256:${createHash('sha256').update(data).digest('hex')}`;
+                const asset = existing.find(asset => asset.name === name);
+                if (asset) {
+                  if (asset.digest !== digest) throw new Error(`Different release asset already exists: ${name}`);
+                  core.info(`Already published: ${name}`);
+                  continue;
+                }
+                await github.rest.repos.uploadReleaseAsset({ ...context.repo, release_id: release.id, name, data });
+                core.info(`Published: ${name}`);
+              }
+            }
       - name: Upload to existing deployment host
         if: needs.prepare.outputs.publish == 'true'
         uses: appleboy/scp-action@v0.1.7
