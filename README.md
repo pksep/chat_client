@@ -1,6 +1,13 @@
 # Chat Core
 
-## Desktop (Tauri, Windows)
+## Desktop (Tauri, Windows / macOS / Linux)
+
+Готовые установщики: [GitHub Releases](https://github.com/pksep/chat_client/releases/latest).
+Для Windows используйте `windows-x86_64-*-setup.exe`, для macOS — DMG под
+Apple Silicon (`darwin-aarch64`) или Intel (`darwin-x86_64`). Для встроенного
+обновления Linux используйте AppImage; DEB/RPM обновляются пакетным менеджером.
+Новые версии скачиваются с публичного GitHub и проверяются подписью Tauri.
+Репозиторий должен оставаться публичным для доступа клиентов к обновлениям.
 
 Для разработки нужны Bun, Rust с MSVC toolchain, Visual Studio C++ Build Tools
 и Microsoft Edge WebView2 Runtime.
@@ -30,7 +37,7 @@ exe с `--autostart` и сохраняет отключение автозапу
 Для первого установщика, передаваемого вручную, используйте явный режим
 `--bootstrap --bundles nsis` с `DESKTOP_VERSION`; последующие автоматические
 обновления публикуются подписанными через Desktop Builds.
-Подробности каналов, сервера и первого запуска: [обновления desktop](doc/desktop-updates.md).
+Подробности каналов GitHub и первого запуска: [обновления desktop](doc/desktop-updates.md).
 
 Это основной клиент чата для проекта SEP. Это современное кроссплатформенное приложение для чата, созданное с использованием Vue.js и Capacitor, что позволяет ему работать в вебе, на iOS и Android из единой кодовой базы.
 

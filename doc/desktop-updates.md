@@ -125,6 +125,14 @@ localStorage сохраняются в том же профиле Tauri; уст�
 
 ## Проверки
 
+17 ноября 2026 первый релиз с каналом GitHub `1.49.2` успешно собран для всех
+четырёх платформ и [опубликован CI](https://github.com/pksep/chat_client/actions/runs/44077344317).
+Публичный `desktop-stable/latest.json` и ссылки пакетов проверены без авторизации.
+Windows EXE повторно скачан с GitHub: SHA-256
+`c5a110003c184dc47b9b31ccaa8b01dc6256e4dc2cbd8bc62bfcad5a3c440794`,
+подпись Minisign проверена существующим публичным ключом Tauri. Временные
+архивы CI после проверки удалены; установщики и подписи сохранены в релизе.
+
 ```sh
 bun test ./test/desktopUpdater.test.ts ./test/desktopRelease.test.ts
 bun x playwright test e2e/tauri-updater.spec.ts --project=chromium-desktop
