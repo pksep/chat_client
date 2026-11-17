@@ -14,7 +14,9 @@ import {
 } from '../utils/media-url';
 
 export const isInquiryFile = (path: string): boolean =>
-  /^manager-private\/[0-9a-f-]{36}$/i.test(path);
+  /^(?:manager-private\/[0-9a-f-]{36}|ai-input\/[0-9a-f-]{36}(?:\/preview)?)$/i.test(
+    path
+  );
 const inquiryObjectUrls = shallowReactive(new Map<string, string>());
 const pendingInquiryRequests = new Map<string, Promise<string | null>>();
 let inquiryScope = '';
@@ -67,7 +69,10 @@ const loadInquiryFile = (path: string): Promise<string | null> => {
   const base = getConfig().CHAT_API_DOMAIN.replace(/\/+$/, '');
   const request = (async (): Promise<string | null> => {
     try {
-      const response = await fetch(`${base}/media/object/${path}`, {
+      const endpoint = path.startsWith('ai-input/')
+        ? `media/ai-attachments/files/${path.slice('ai-input/'.length)}`
+        : `media/object/${path}`;
+      const response = await fetch(`${base}/${endpoint}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
         redirect: 'error',

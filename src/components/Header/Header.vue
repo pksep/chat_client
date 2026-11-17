@@ -44,9 +44,12 @@
         />
       </Button>
 
-      <div
+      <button
         v-if="route.type === 'ai'"
+        type="button"
         class="chat__header-profile chat__header-ai-assistant"
+        aria-label="Информация об ИИ-чате"
+        @click="openAiInfo(aiAssistantSessionId)"
         :data-testid="`${props.dataTestid}-Header-AIAssistant`"
       >
         <span
@@ -72,7 +75,7 @@
             <span class="user-profile__title-text">{{ aiAssistantTitle }}</span>
           </h3>
         </Tooltip>
-      </div>
+      </button>
 
       <div
         v-else-if="isCallTopicRoute"
@@ -544,6 +547,7 @@ import AiAvatar from '../AI/AiAvatar.vue';
 import CreateTaskIcon from '../AI/CreateTaskIcon.vue';
 import MenuSearch from '../UI/MenuSearch.vue';
 import { useAiAssistant } from '../../composables/useAiAssistant';
+import { useAiConversationInfo } from '../../composables/useAiConversationInfo';
 import {
   useMenuInfo,
   type IMenuInfoInformation
@@ -651,6 +655,8 @@ const {
   showVoiceCall: showAiVoiceCall,
   deleteSession: deleteAiAssistantSession
 } = useAiAssistant();
+
+const { open: openAiInfo } = useAiConversationInfo();
 
 const { getSelectedTopic } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
@@ -1758,6 +1764,15 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.chat__header-ai-assistant {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 .chat__header-client-call {
   display: flex;
   border: 0;

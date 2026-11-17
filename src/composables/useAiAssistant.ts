@@ -30,6 +30,11 @@ import { getAiErrorMessage } from '../services/aiErrorMessages';
 import { showErrorNotification, showNotification } from './useNotifications';
 import { useChatFolders } from './useChatFolders';
 import { afterStartupPaint } from '../utils/after-startup-paint';
+import {
+  fetchAiConversationInfo,
+  type AiConversationInfo
+} from '../services/aiConversationInfo';
+import { playMessageNotificationSound } from '../services/notification-sound';
 
 export type AiAssistantTab = 'chats' | 'tasks';
 export type AiAssistantView = 'chat' | 'tasks';
@@ -40,6 +45,7 @@ export type AiAssistantActivityStatus = 'running' | 'success' | 'attention';
 
 export interface AiAssistantMessage {
   id: string;
+  nativeId?: string;
   role: AiMessageRole;
   text: string;
   time: string;
@@ -60,6 +66,7 @@ export interface AiAssistantSession {
   description: string;
   time: string;
   pinned?: boolean;
+  muted?: boolean;
   messages: AiAssistantMessage[];
 }
 
@@ -357,6 +364,15 @@ const setActivityStatus = (
   if (activity.status === status && activity.description === description)
     return;
 
+  if (
+    activity.status === 'running' &&
+    status !== 'running' &&
+    activity.isBackground &&
+    !getSession(activity.sessionId)?.muted
+  ) {
+    void playMessageNotificationSound();
+  }
+
   activity.status = status;
   activity.description = description;
   activity.updatedAt = Date.now();
@@ -485,6 +501,7 @@ const syncSession = (sessionId: string, runtime: MastraRuntime): void => {
     return [
       {
         id,
+        nativeId: message.id,
         role: message.role,
         text: message.actionTask
           ? actionTaskSummary(message.actionTask)
@@ -581,6 +598,12 @@ const ensureRuntime = async (sessionId: string): Promise<MastraRuntime> => {
         { deep: true, immediate: true }
       );
       runtimeWatchers.set(sessionId, stop);
+
+      void fetchAiConversationInfo(sessionId)
+        .then(applyConversationInfo)
+        .catch((): void => {
+          // Новый диалог ещё не создан на сервере. Его сообщения сохраняются штатным протоколом.
+        });
 
       return runtime;
     })
@@ -697,6 +720,35 @@ const beginSessionActivity = (session: AiAssistantSession): void => {
     updatedAt: Date.now(),
     isBackground: inactiveSessionIds.has(session.id)
   };
+};
+
+const applyConversationInfo = (info: AiConversationInfo): void => {
+  let session = getSession(info.threadId);
+  if (!session) {
+    session = {
+      id: info.threadId,
+      title: info.title || 'СЭПи',
+      description: '',
+      time: '',
+      messages: []
+    };
+    persisted.sessions.unshift(session);
+  }
+  if (info.title) session.title = info.title;
+  session.muted = info.muted;
+  persist();
+};
+
+const pendingMessageNavigation = ref<{
+  sessionId: string;
+  messageId: string;
+} | null>(null);
+
+const requestMessageNavigation = (
+  sessionId: string,
+  messageId: string
+): void => {
+  pendingMessageNavigation.value = { sessionId, messageId };
 };
 
 const startNewSession = (): void => {
@@ -1209,6 +1261,9 @@ export const useAiAssistant = () => {
     startNewSession,
     startNewTask,
     selectSession,
+    applyConversationInfo,
+    pendingMessageNavigation,
+    requestMessageNavigation,
     selectTaskSession,
     selectTask,
     setTab,

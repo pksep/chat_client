@@ -715,6 +715,7 @@ const {
   activeView,
   activeSessionId,
   activeSession,
+  pendingMessageNavigation,
   isThinking,
   preparationStatus,
   conversationError,
@@ -1300,6 +1301,20 @@ const navigateToAiMessage = async (
   return true;
 };
 
+watch(
+  [pendingMessageNavigation, () => activeSession.value?.messages],
+  async (): Promise<void> => {
+    const target = pendingMessageNavigation.value;
+    if (!target || target.sessionId !== activeSessionId.value) return;
+    const message = activeSession.value?.messages.find(
+      item => item.nativeId === target.messageId
+    );
+    if (message && (await navigateToAiMessage(message.id)))
+      pendingMessageNavigation.value = null;
+  },
+  { immediate: true }
+);
+
 /** Переходит к показанному закрепу и подготавливает следующий закреп для навигации. */
 const handlePinnedMessageClick = (): void => {
   const message = currentPinnedMessage.value;
@@ -1509,9 +1524,29 @@ const formatForwardDraft = (messages: AiAssistantMessage[]): string =>
   ].join('\n\n');
 
 /** Переносит выбранные AI-сообщения в редактор указанного обычного чата. */
-const handleForwardTopic = (topic: ITopic): void => {
+const handleForwardTopic = async (topic: ITopic): Promise<void> => {
   if (forwardMessages.value.length === 0) return;
-  openMessageDraft(topic, formatForwardDraft(forwardMessages.value));
+  if (!activeSessionId.value) return;
+  const threadId = activeSessionId.value;
+  const messages = [...forwardMessages.value];
+  try {
+    const { fetchAiConversationInfo } = await import(
+      '../../services/aiConversationInfo'
+    );
+    const info = await fetchAiConversationInfo(threadId);
+    if (!forwardModalOpen.value || activeSessionId.value !== threadId) return;
+    openMessageDraft(topic, formatForwardDraft(messages), {
+      threadId: info.threadId,
+      ownerId: info.ownerId,
+      organizationId: info.organizationId,
+      title: info.title || activeSession.value?.title || 'СЭПи'
+    });
+  } catch {
+    showErrorNotification(
+      'Не удалось проверить исходный ИИ-диалог. Повторите пересылку позже.'
+    );
+    return;
+  }
   closeForwardModal();
   clearMessageSelection();
 };
