@@ -48,7 +48,7 @@ jobs:
           script: |
             let tag;
             if (context.eventName === 'workflow_run') {
-              const { data: release } = await github.repos.getLatestRelease(context.repo);
+              const { data: release } = await github.rest.repos.getLatestRelease(context.repo);
               if (Date.parse(release.published_at) < Date.parse(context.payload.workflow_run.run_started_at)) {
                 core.info('No new release in this run');
                 return;
@@ -58,7 +58,7 @@ jobs:
               tag = context.eventName === 'push' ? context.ref.replace('refs/tags/', '') : process.env.INPUT_TAG;
             }
             if (!/^v\d+\.\d+\.\d+(-beta\.\d+)?$/.test(tag)) throw new Error('Invalid desktop release tag');
-            await github.git.getRef({ ...context.repo, ref: `tags/${tag}` });
+            await github.rest.git.getRef({ ...context.repo, ref: `tags/${tag}` });
             core.setOutput('tag', tag);
             core.setOutput('version', tag.slice(1));
             core.setOutput('channel', tag.includes('-beta.') ? 'beta' : 'stable');

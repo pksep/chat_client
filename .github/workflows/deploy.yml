@@ -1,6 +1,7 @@
 name: Remote Dispath Deploy
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -12,6 +13,7 @@ jobs:
       app_name: "ai-client"
       deploy_env: "PROD"
     secrets:
+      ALLOW_REPOS: chat_client
       DEV_SSH_HOST: ${{ secrets.DEV_SSH_HOST }}
       DEV_SSH_USER: ${{ secrets.DEV_SSH_USER }}
       DEV_SSH_KEY: ${{ secrets.DEV_SSH_KEY }}
