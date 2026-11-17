@@ -16,6 +16,7 @@ import {
 } from './useNotificationNavigation';
 import {
   clearAllTauriNotifications,
+  clearTauriCallNotification,
   initTauriNotifications,
   isTauriRuntime
 } from './useTauriNotifications';
@@ -274,7 +275,7 @@ const getNotificationInteractionKey = (data: NativeNotificationData) =>
   data['rustore.message_id'] ||
   data['google.message_id'] ||
   data.messageId ||
-  `${data.topicId || 'unknown'}|${data.url || data.link || ''}|${data.action || ''}`;
+  `${data.topicId || 'unknown'}|${data.roomId || ''}|${data.url || data.link || ''}|${data.action || ''}`;
 
 const shouldHandleNotificationInteraction = (data: NativeNotificationData) => {
   const key = getNotificationInteractionKey(data);
@@ -321,18 +322,30 @@ const handleNotificationInteraction = (
   data: NativeNotificationData = {},
   actionId?: string | null
 ) => {
-  const normalizedData = normalizeNativeNotificationData(data);
+  const normalizedData = normalizeNativeNotificationData({
+    ...data,
+    action: actionId || data.action
+  });
 
   if (!shouldHandleNotificationInteraction(normalizedData)) {
     return true;
   }
 
-  const normalizedActionId = actionId?.toLowerCase();
+  const normalizedActionId = (
+    actionId ||
+    (normalizedData.type === 'incoming_call'
+      ? normalizedData.action
+      : undefined)
+  )?.toLowerCase();
 
   if (
     normalizedActionId?.includes('accept') ||
     normalizedActionId?.includes('answer')
   ) {
+    void clearTauriCallNotification(
+      normalizedData.topicId,
+      normalizedData.roomId
+    );
     void handleNativeCallActionLazy(
       'accept',
       normalizedData.roomId,
@@ -346,6 +359,10 @@ const handleNotificationInteraction = (
     normalizedActionId?.includes('reject') ||
     normalizedActionId?.includes('end')
   ) {
+    void clearTauriCallNotification(
+      normalizedData.topicId,
+      normalizedData.roomId
+    );
     void handleNativeCallActionLazy(
       'decline',
       normalizedData.roomId,

@@ -45,6 +45,7 @@ const TAURI_NOTIFICATION_CLICK_EVENT = 'sep-chat://notification-click';
 let permissionGrantedCache: boolean | null = null;
 let isActionListenerBound = false;
 const activeMessageNotificationIdsByTopic = new Map<string, string>();
+const activeCallNotificationRoomsByTopic = new Map<string, string | null>();
 
 export const isTauriRuntime = (): boolean => {
   try {
@@ -412,13 +413,14 @@ export const showTauriIncomingCallNotification = async ({
 
   const resolvedTopicType = normalizeTopicType(topicType || topic?.type);
   const isGroupTopic = resolvedTopicType === 'GROUP';
-  const callerTitle = caller?.initials || 'Incoming call';
+  const callerTitle = caller?.initials || 'Неизвестный абонент';
   const topicTitle = isGroupTopic ? getTopicTitle(topic) : '';
 
+  activeCallNotificationRoomsByTopic.set(targetTopicId, roomId || null);
   return showTauriNotification({
     id: getTauriCallNotificationId(targetTopicId),
-    title: topicTitle ? `Call: ${topicTitle}` : 'Incoming call',
-    body: topicTitle ? callerTitle : `From ${callerTitle}`,
+    title: topicTitle ? `Входящий звонок: ${topicTitle}` : 'Входящий звонок',
+    body: callerTitle,
     group: targetTopicId,
     extra: {
       callerId: caller?.id,
@@ -435,6 +437,28 @@ export const showTauriIncomingCallNotification = async ({
   });
 };
 
+export const clearTauriCallNotification = async (
+  topicId?: string | null,
+  roomId?: string | null
+): Promise<void> => {
+  if (!topicId || !isTauriRuntime()) return;
+  const activeRoom = activeCallNotificationRoomsByTopic.get(topicId);
+  if (roomId && activeRoom && roomId !== activeRoom) return;
+  activeCallNotificationRoomsByTopic.delete(topicId);
+  try {
+    if (isWindowsEnvironment()) {
+      await invoke('clear_windows_topic_notifications', {
+        topicId,
+        callsOnly: true
+      });
+    } else {
+      await removeActive([{ id: getTauriCallNotificationId(topicId) }]);
+    }
+  } catch (error) {
+    console.warn('Не удалось убрать уведомление о звонке:', error);
+  }
+};
+
 export const clearTauriTopicNotifications = async (
   topicId?: string | null
 ): Promise<void> => {
@@ -444,6 +468,7 @@ export const clearTauriTopicNotifications = async (
 
   try {
     activeMessageNotificationIdsByTopic.delete(topicId);
+    activeCallNotificationRoomsByTopic.delete(topicId);
     if (isWindowsEnvironment()) {
       await invoke<boolean>('clear_windows_topic_notifications', {
         topicId
@@ -466,6 +491,7 @@ export const clearAllTauriNotifications = async (): Promise<void> => {
 
   try {
     activeMessageNotificationIdsByTopic.clear();
+    activeCallNotificationRoomsByTopic.clear();
     if (isWindowsEnvironment()) {
       await invoke<boolean>('clear_all_windows_notifications');
     } else {

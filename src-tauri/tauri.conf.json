@@ -42,6 +42,9 @@
     ]
   },
   "plugins": {
+    "deep-link": {
+      "desktop": { "schemes": ["sepchat"] }
+    },
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IFNFUCBDaGF0IHVwZGF0ZXIgcHVibGljIGtleQpSV1JvSkJKRFp5L3R1cGdqWFU0TTc3NFVGM3krSWFUV1poUGNwQmEwWHNjQWs2S0RWb1I4eFphNwo=",
       "endpoints": ["https://github.com/pksep/chat_client/releases/download/desktop-stable/latest.json"],

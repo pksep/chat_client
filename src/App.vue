@@ -37,6 +37,7 @@
   />
 
   <NotificationStack />
+  <DesktopCallInvitePrompt />
 </template>
 <script lang="ts" setup>
 import {
@@ -49,6 +50,9 @@ import {
 } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import NotificationStack from './components/UI/NotificationStack.vue';
+import DesktopCallInvitePrompt from './components/Menu/DesktopCallInvitePrompt.vue';
+import { initDesktopCallLinks } from './services/useDesktopCallLinks';
+import { ensureTauriWindowStateTracking } from './services/useAppVisibility';
 import { IChatContainerConfig } from './components/interfaces/interfaces';
 import ChatContainerRoot from './ChatContainerRoot.vue';
 import { useIosInstallPrompt } from './composables/useIosInstallPrompt';
@@ -106,6 +110,7 @@ const getStoredOrganizations = (): IStoredOrganization[] => {
 };
 const themeStore = useThemeStore();
 themeStore.initTheme();
+ensureTauriWindowStateTracking();
 
 // В Android оба модуля читаются из локального APK. Начинаем их разбор под
 // нативным логотипом, пока параллельно восстанавливаются сессия и свежие темы.
@@ -708,6 +713,7 @@ const submitCredentialsLogin = async () => {
 };
 
 onMounted(async () => {
+  await initDesktopCallLinks();
   void initShareIntentHandling();
   localStorage.removeItem('chat_runtime_config_url');
 

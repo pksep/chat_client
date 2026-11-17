@@ -1,5 +1,6 @@
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { isTauri } from '@tauri-apps/api/core';
 import { MessageTypeEnum } from '@pksep/yui';
 import { showNotification } from '../composables/useNotifications';
 import { parseGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
@@ -73,10 +74,10 @@ const handleCallActionPayload = async (payload?: CallActionPayload | null) => {
   await handleNativeAction(action, payload?.roomId, payload?.topicId);
 };
 
-const handleAppUrlOpen = async ({ url }: { url: string }) => {
+export const handleAppUrlOpen = async ({ url }: { url: string }) => {
   try {
     const invite = parseGroupCallInviteUrl(url, {
-      allowTrustedNativeOrigin: Capacitor.isNativePlatform()
+      allowTrustedNativeOrigin: Capacitor.isNativePlatform() || isTauri()
     });
 
     if (invite) {
@@ -113,7 +114,7 @@ export const flushPendingGroupCallInviteUrl = async (): Promise<boolean> => {
       () => getChatSDK()?.isConnected() === true,
       async url => {
         const invite = parseGroupCallInviteUrl(url, {
-          allowTrustedNativeOrigin: Capacitor.isNativePlatform()
+          allowTrustedNativeOrigin: Capacitor.isNativePlatform() || isTauri()
         });
         const sdk = getChatSDK();
 

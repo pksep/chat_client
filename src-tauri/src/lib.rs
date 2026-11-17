@@ -5,6 +5,7 @@ mod desktop_auth;
 #[cfg(windows)]
 mod desktop_autostart;
 mod desktop_files;
+mod desktop_notifications;
 #[cfg(windows)]
 mod desktop_vpn;
 
@@ -23,6 +24,8 @@ use tauri::{
 
 #[cfg(desktop)]
 use tauri_plugin_autostart::MacosLauncher;
+#[cfg(desktop)]
+use tauri_plugin_deep_link::DeepLinkExt;
 
 #[cfg(all(desktop, not(windows)))]
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
@@ -54,6 +57,7 @@ const WINDOW_STATE_EVENT: &str = "sep-chat://window-state";
 #[derive(Default)]
 struct AppLifecycleState {
     is_quitting: AtomicBool,
+    is_hidden: AtomicBool,
 }
 
 #[cfg(desktop)]
@@ -83,23 +87,22 @@ fn emit_window_state<R: Runtime>(app: &AppHandle<R>, payload: WindowStatePayload
 #[cfg(desktop)]
 fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {
+        app.state::<AppLifecycleState>()
+            .is_hidden
+            .store(false, Ordering::SeqCst);
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
-        emit_window_state(
-            app,
-            WindowStatePayload {
-                focused: true,
-                minimized: false,
-                visible: true,
-            },
-        );
+        emit_window_state(app, desktop_window_state(window));
     }
 }
 
 #[cfg(desktop)]
 fn hide_window<R: Runtime>(window: &WebviewWindow<R>) {
-    let _ = window.hide();
+    window
+        .state::<AppLifecycleState>()
+        .is_hidden
+        .store(true, Ordering::SeqCst);
     emit_window_state(
         &window.app_handle(),
         WindowStatePayload {
@@ -108,6 +111,31 @@ fn hide_window<R: Runtime>(window: &WebviewWindow<R>) {
             visible: false,
         },
     );
+    let _ = window.hide();
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn desktop_window_state<R: Runtime>(window: WebviewWindow<R>) -> WindowStatePayload {
+    let visible = !window
+        .state::<AppLifecycleState>()
+        .is_hidden
+        .load(Ordering::SeqCst)
+        && window.is_visible().unwrap_or(false);
+    WindowStatePayload {
+        focused: visible && window.is_focused().unwrap_or(false),
+        minimized: window.is_minimized().unwrap_or(false),
+        visible,
+    }
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn desktop_get_open_urls<R: Runtime>(app: AppHandle<R>) -> Result<Option<Vec<String>>, String> {
+    app.deep_link()
+        .get_current()
+        .map(|urls| urls.map(|urls| urls.into_iter().map(|url| url.to_string()).collect()))
+        .map_err(|error| error.to_string())
 }
 
 #[cfg(desktop)]
@@ -127,16 +155,6 @@ fn handle_notification_activation<R: Runtime>(app: &AppHandle<R>, payload: Strin
     store_pending_notification_target(app, payload.clone());
     show_main_window(app);
     let _ = app.emit(NOTIFICATION_CLICK_EVENT, payload);
-}
-
-#[cfg(windows)]
-fn escape_xml(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
 }
 
 #[cfg(windows)]
@@ -174,24 +192,13 @@ fn show_windows_notification<R: Runtime>(
 ) -> Result<bool, String> {
     let payload_for_handler = payload.clone();
     let app_for_handler = app.clone();
-    let escaped_title = escape_xml(&title);
-    let escaped_body = body
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| format!(r#"<text id="2">{}</text>"#, escape_xml(&value)))
-        .unwrap_or_default();
-    let escaped_payload = escape_xml(&payload);
     let toast_xml = XmlDocument::new().map_err(|error| error.to_string())?;
 
     toast_xml
-        .LoadXml(&HSTRING::from(format!(
-            r#"<toast duration="short" launch="{escaped_payload}">
-                <visual>
-                    <binding template="ToastGeneric">
-                        <text id="1">{escaped_title}</text>
-                        {escaped_body}
-                    </binding>
-                </visual>
-            </toast>"#
+        .LoadXml(&HSTRING::from(desktop_notifications::build_toast_xml(
+            &title,
+            body.as_deref(),
+            &payload,
         )))
         .map_err(|error| error.to_string())?;
 
@@ -248,6 +255,7 @@ fn clear_windows_topic_notifications<R: Runtime>(
     app: AppHandle<R>,
     topic_id: String,
     messages_only: Option<bool>,
+    calls_only: Option<bool>,
 ) -> Result<bool, String> {
     if topic_id.trim().is_empty() {
         return Ok(false);
@@ -259,7 +267,11 @@ fn clear_windows_topic_notifications<R: Runtime>(
 
     let tags = windows_topic_notification_tags(&topic_id);
     let count = if messages_only.unwrap_or(false) { 1 } else { 2 };
-    for tag in tags.iter().take(count) {
+    for tag in tags
+        .iter()
+        .skip(if calls_only.unwrap_or(false) { 1 } else { 0 })
+        .take(count)
+    {
         history
             .RemoveGroupedTagWithId(&HSTRING::from(tag), &group, &app_id)
             .map_err(|error| error.to_string())?;
@@ -274,6 +286,7 @@ fn clear_windows_topic_notifications<R: Runtime>(
     _app: AppHandle<R>,
     _topic_id: String,
     _messages_only: Option<bool>,
+    _calls_only: Option<bool>,
 ) -> Result<bool, String> {
     Ok(false)
 }
@@ -446,11 +459,13 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init());
     #[cfg(desktop)]
-    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _| {
-        if !args.iter().any(|arg| arg == AUTOSTART_ARG) {
-            show_main_window(app);
-        }
-    }));
+    let builder = builder
+        .plugin(tauri_plugin_single_instance::init(|app, args, _| {
+            if !args.iter().any(|arg| arg == AUTOSTART_ARG) {
+                show_main_window(app);
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init());
 
     builder
         .plugin(tauri_plugin_dialog::init())
@@ -476,6 +491,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_telemetry_os,
+            desktop_window_state,
+            desktop_get_open_urls,
             show_windows_notification,
             clear_windows_topic_notifications,
             clear_all_windows_notifications,
@@ -495,11 +512,34 @@ pub fn run() {
         ])
         .setup(|app| {
             #[cfg(desktop)]
-            setup_desktop(app)?;
+            {
+                setup_desktop(app)?;
+                let app_handle = app.handle().clone();
+                app.deep_link()
+                    .on_open_url(move |_| show_main_window(&app_handle));
+                #[cfg(any(windows, target_os = "linux"))]
+                if !cfg!(debug_assertions) {
+                    if let Err(error) = app.deep_link().register_all() {
+                        eprintln!("Не удалось зарегистрировать ссылки SEP Chat: {error}");
+                    }
+                }
+            }
 
             Ok(())
         })
         .on_window_event(|window, event| {
+            #[cfg(desktop)]
+            if let WindowEvent::Focused(focused) = event {
+                if let Some(webview_window) = window.app_handle().get_webview_window("main") {
+                    if *focused && webview_window.is_visible().unwrap_or(false) {
+                        window
+                            .state::<AppLifecycleState>()
+                            .is_hidden
+                            .store(false, Ordering::SeqCst);
+                    }
+                    emit_window_state(window.app_handle(), desktop_window_state(webview_window));
+                }
+            }
             #[cfg(desktop)]
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let is_quitting = window
