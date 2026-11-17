@@ -438,7 +438,16 @@
           :data-testid="`${props.dataTestid}-MenuProfilePanel-Stickers`"
         />
 
-        <div v-if="isMobile" class="menu-profile__update">
+        <MenuDesktopAppUpdate
+          v-if="isDesktopApp"
+          :state="desktopUpdater.state.value"
+          :version="currentAppVersion"
+          :data-testid="props.dataTestid"
+          @check="checkForUpdates"
+          @update="handleUpdateClick"
+        />
+
+        <div v-else-if="isMobile" class="menu-profile__update">
           <div
             class="menu-profile__wallpapers-trigger"
             :data-testid="`${props.dataTestid}-MenuProfilePanel-UpdateTrigger`"
@@ -931,6 +940,7 @@ import ConfirmModal from '../UI/ConfirmModal.vue';
 import ContextMenu from '../ContactList/ContextMenu.vue';
 import FileIcon from '../UI/FileIcon.vue';
 import { useMobileApp } from '../../composables/useMobileApp';
+import { desktopUpdater } from '../../services/useDesktopUpdater';
 import { useThemeStore } from '../../stores/theme';
 import {
   isStatusPresetDesignPreview,
@@ -939,6 +949,7 @@ import {
 import ChatsToolbar from './ChatsToolbar.vue';
 import StickerPackSelect from './StickerPackSelect.vue';
 import ProfileQrLogin from './ProfileQrLogin.vue';
+import MenuDesktopAppUpdate from './MenuDesktopAppUpdate.vue';
 
 const CallBackgroundPreviewModal = defineAsyncComponent(
   () => import('../CallModal/CallBackgroundPreviewModal.vue')
@@ -1074,6 +1085,8 @@ const {
   profileUpdateState,
   isUpdateActionDisabled,
   currentAppVersion,
+  isDesktopApp,
+  checkForUpdates,
   handleUpdateClick
 } = useMobileApp();
 
@@ -1089,7 +1102,8 @@ const currentStatusText = computed(() =>
 const shouldShowProfileUpdateAction = computed(
   () =>
     profileUpdateState.value === 'available' ||
-    profileUpdateState.value === 'downloaded'
+    profileUpdateState.value === 'downloaded' ||
+    profileUpdateState.value === 'error'
 );
 const profileUpdateStatusIconKind = computed<'download' | 'check' | null>(
   () => {
@@ -1119,6 +1133,11 @@ const profileUpdateTitle = computed(() => {
   if (profileUpdateState.value === 'downloaded') {
     return 'Установлено';
   }
+
+  if (profileUpdateState.value === 'installing')
+    return 'Устанавливаем обновление';
+  if (profileUpdateState.value === 'error')
+    return 'Не удалось обновить приложение';
 
   if (profileUpdateState.value === 'latest') {
     return 'Установлена новейшая версия';

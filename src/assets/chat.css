@@ -44,6 +44,19 @@ p.chat__nothing-paragraph {
   grid-row: 4;
 }
 
+.chat__input .editor-component .tiptap {
+  line-height: 1.25;
+}
+
+.chat__input .editor-component .tiptap p {
+  line-height: inherit;
+}
+
+.chat__input .editor-component .tiptap :is(ul, ol) {
+  margin-block: 0;
+  padding-inline: 1.5em 0;
+}
+
 .link {
   color: var(--text-link);
 }

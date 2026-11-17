@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+  <meta charset="utf-8" />
+  <title>Проверка звонка Tauri</title>
+  <style>
+    body {
+      font: 20px system-ui;
+      padding: 24px;
+    }
+    video,
+    canvas {
+      width: 320px;
+      background: #e7edf6;
+    }
+    output {
+      display: block;
+      white-space: pre-wrap;
+    }
+  </style>
+  <h1>Локальный звонок через LiveKit</h1>
+  <p>
+    Синтетические видео и звук. Физические устройства и рабочие чаты не
+    используются.
+  </p>
+  <canvas id="source" width="320" height="180"></canvas>
+  <video id="remote" autoplay muted playsinline></video>
+  <output id="result">Подключение…</output>
+  <script type="module" src="./tauri-call.ts"></script>
+</html>

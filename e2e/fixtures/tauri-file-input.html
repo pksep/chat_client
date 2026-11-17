@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h, ref } from 'vue';
+      import MessageListInput from '../../src/components/Messages/MessageListInput.vue';
+      import {
+        initializeChat,
+        getChatSDK,
+        uploadFile
+      } from '../../src/services/useChat';
+      import { ChatSDK } from '../../src/services/useChatSDK';
+      import { setConfig } from '../../src/services/useConfig';
+      import * as nativeFiles from '../../src/services/useNativeFile';
+      import * as tauriUploads from '../../src/services/tauri-upload-files';
+      import { emitTo } from '@tauri-apps/api/event';
+      import '@pksep/yui/styles';
+      import '../../src/assets/globals.css';
+      import '../../src/assets/chat-container.css';
+      window.attachments = [];
+      window.nativeFiles = nativeFiles;
+      window.tauriUploads = tauriUploads;
+      window.emitNativeDrop = paths =>
+        emitTo({ kind: 'Webview', label: 'main' }, 'tauri://drag-drop', {
+          paths,
+          position: { x: 200, y: 200 }
+        });
+      window.uploadFile = uploadFile;
+      setConfig({ CHAT_PATH_TO_FILE_CDN: 'https://files.test/media/object' });
+      ChatSDK.prototype.connect = () => new Promise(() => {});
+      await initializeChat({
+        userId: 'drop-test',
+        token: 'fixture',
+        apiUrl: location.origin,
+        wsUrl: 'ws://127.0.0.1:65530'
+      });
+      getChatSDK().uploadFile = async file => ({
+        objectName: `uploaded/${file.name}`,
+        thumbnailObjectName: null
+      });
+      const capture = async files => {
+        for (const file of files || []) {
+          const result = await uploadFile(file);
+          window.attachments.push({
+            name: file.name,
+            size: file.size,
+            text: await file.text(),
+            path: result.path
+          });
+        }
+      };
+      const topicId = ref('drop-topic');
+      window.changeTopic = () => (topicId.value = 'another-topic');
+      createApp({
+        render: () =>
+          h('div', { class: 'chat', style: 'padding:20px' }, [
+            h(MessageListInput, {
+              topicId: topicId.value,
+              dataTestid: 'Drop',
+              modelValue: '',
+              editMessage: null,
+              replyMessage: null,
+              forwardMessages: [],
+              onAttachFile: capture,
+              onSend: payload =>
+                capture([
+                  ...(payload.files || []),
+                  ...(payload.mediaFiles || [])
+                ])
+            })
+          ])
+      }).mount('#app');
+    </script>
+  </body>
+</html>

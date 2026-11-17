@@ -1,6 +1,12 @@
 use serde::Serialize;
-use std::{path::Path, process::Command, time::UNIX_EPOCH};
+use std::process::Command;
 use tauri::{Manager, WindowEvent};
+mod desktop_auth;
+#[cfg(windows)]
+mod desktop_autostart;
+mod desktop_files;
+#[cfg(windows)]
+mod desktop_vpn;
 
 #[cfg(desktop)]
 use std::sync::{
@@ -16,7 +22,10 @@ use tauri::{
 };
 
 #[cfg(desktop)]
-use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartExt};
+use tauri_plugin_autostart::MacosLauncher;
+
+#[cfg(all(desktop, not(windows)))]
+use tauri_plugin_autostart::ManagerExt as AutostartExt;
 
 #[cfg(windows)]
 use windows::{
@@ -61,27 +70,9 @@ struct WindowStatePayload {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct DroppedFilePayload {
-    name: String,
-    mime_type: String,
-    last_modified: Option<u128>,
-    bytes: Vec<u8>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
 struct VpnStatusPayload {
     is_active: bool,
     adapter_names: Vec<String>,
-}
-
-#[cfg(windows)]
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "PascalCase")]
-struct WindowsNetworkAdapter {
-    name: Option<String>,
-    description: Option<String>,
-    network_interface_type: Option<serde_json::Value>,
 }
 
 #[cfg(desktop)]
@@ -256,6 +247,7 @@ fn show_windows_notification<R: Runtime>(
 fn clear_windows_topic_notifications<R: Runtime>(
     app: AppHandle<R>,
     topic_id: String,
+    messages_only: Option<bool>,
 ) -> Result<bool, String> {
     if topic_id.trim().is_empty() {
         return Ok(false);
@@ -265,7 +257,9 @@ fn clear_windows_topic_notifications<R: Runtime>(
     let group = HSTRING::from(topic_id.clone());
     let history = ToastNotificationManager::History().map_err(|error| error.to_string())?;
 
-    for tag in windows_topic_notification_tags(&topic_id) {
+    let tags = windows_topic_notification_tags(&topic_id);
+    let count = if messages_only.unwrap_or(false) { 1 } else { 2 };
+    for tag in tags.iter().take(count) {
         history
             .RemoveGroupedTagWithId(&HSTRING::from(tag), &group, &app_id)
             .map_err(|error| error.to_string())?;
@@ -279,7 +273,23 @@ fn clear_windows_topic_notifications<R: Runtime>(
 fn clear_windows_topic_notifications<R: Runtime>(
     _app: AppHandle<R>,
     _topic_id: String,
+    _messages_only: Option<bool>,
 ) -> Result<bool, String> {
+    Ok(false)
+}
+
+#[cfg(windows)]
+#[tauri::command]
+fn clear_all_windows_notifications<R: Runtime>(app: AppHandle<R>) -> Result<bool, String> {
+    ToastNotificationManager::History()
+        .and_then(|history| history.ClearWithId(&HSTRING::from(app.config().identifier.clone())))
+        .map_err(|error| error.to_string())?;
+    Ok(true)
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn clear_all_windows_notifications<R: Runtime>(_app: AppHandle<R>) -> Result<bool, String> {
     Ok(false)
 }
 
@@ -297,173 +307,10 @@ fn consume_pending_notification_target() -> Option<String> {
     None
 }
 
-fn guess_mime_type(path: &Path) -> String {
-    let extension = path
-        .extension()
-        .and_then(|value| value.to_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-
-    match extension.as_str() {
-        "jpg" | "jpeg" => "image/jpeg",
-        "png" => "image/png",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        "bmp" => "image/bmp",
-        "svg" => "image/svg+xml",
-        "heic" => "image/heic",
-        "heif" => "image/heif",
-        "mp4" => "video/mp4",
-        "mov" => "video/quicktime",
-        "webm" => "video/webm",
-        "avi" => "video/x-msvideo",
-        "mkv" => "video/x-matroska",
-        "pdf" => "application/pdf",
-        "txt" => "text/plain",
-        "csv" => "text/csv",
-        "json" => "application/json",
-        "zip" => "application/zip",
-        "doc" => "application/msword",
-        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "xls" => "application/vnd.ms-excel",
-        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        _ => "",
-    }
-    .to_string()
-}
-
-#[tauri::command]
-fn read_dropped_file(path: String) -> Result<DroppedFilePayload, String> {
-    let file_path = Path::new(&path);
-    let metadata = std::fs::metadata(file_path).map_err(|error| error.to_string())?;
-
-    if !metadata.is_file() {
-        return Err("Dropped path is not a file".to_string());
-    }
-
-    let bytes = std::fs::read(file_path).map_err(|error| error.to_string())?;
-    let name = file_path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or("dropped-file")
-        .to_string();
-    let last_modified = metadata
-        .modified()
-        .ok()
-        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
-        .map(|duration| duration.as_millis());
-
-    Ok(DroppedFilePayload {
-        name,
-        mime_type: guess_mime_type(file_path),
-        last_modified,
-        bytes,
-    })
-}
-
-#[cfg(windows)]
-fn adapter_interface_type_matches_vpn(interface_type: &Option<serde_json::Value>) -> bool {
-    match interface_type {
-        Some(serde_json::Value::Number(value)) => value
-            .as_u64()
-            .map(|number| number == 23 || number == 131)
-            .unwrap_or(false),
-        Some(serde_json::Value::String(value)) => {
-            let normalized = value.to_ascii_lowercase();
-            normalized.contains("ppp") || normalized.contains("tunnel")
-        }
-        _ => false,
-    }
-}
-
-#[cfg(windows)]
-fn adapter_text_matches_vpn(adapter: &WindowsNetworkAdapter) -> bool {
-    const VPN_MARKERS: &[&str] = &[
-        "vpn",
-        "wireguard",
-        "openvpn",
-        "tailscale",
-        "zerotier",
-        "anyconnect",
-        "fortinet",
-        "forticlient",
-        "globalprotect",
-        "nordvpn",
-        "protonvpn",
-        "surfshark",
-        "expressvpn",
-        "outline",
-        "cloudflare warp",
-        "warp",
-        "checkpoint",
-        "watchguard",
-        "softether",
-        "l2tp",
-        "pptp",
-        "sstp",
-        "ikev2",
-        "tun",
-        "tap",
-    ];
-
-    let searchable = format!(
-        "{} {}",
-        adapter.name.as_deref().unwrap_or_default(),
-        adapter.description.as_deref().unwrap_or_default()
-    )
-    .to_ascii_lowercase();
-
-    VPN_MARKERS.iter().any(|marker| searchable.contains(marker))
-}
-
-#[cfg(windows)]
-fn parse_windows_network_adapters(output: &str) -> Vec<WindowsNetworkAdapter> {
-    let trimmed = output.trim();
-
-    if trimmed.is_empty() {
-        return Vec::new();
-    }
-
-    if let Ok(adapters) = serde_json::from_str::<Vec<WindowsNetworkAdapter>>(trimmed) {
-        return adapters;
-    }
-
-    serde_json::from_str::<WindowsNetworkAdapter>(trimmed)
-        .map(|adapter| vec![adapter])
-        .unwrap_or_default()
-}
-
 #[cfg(windows)]
 #[tauri::command]
 fn get_vpn_status() -> Result<VpnStatusPayload, String> {
-    let output = Command::new("powershell.exe")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "[System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces() | Where-Object { $_.OperationalStatus -eq 'Up' } | Select-Object Name,Description,NetworkInterfaceType | ConvertTo-Json -Compress",
-        ])
-        .output()
-        .map_err(|error| error.to_string())?;
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let adapter_names = parse_windows_network_adapters(&stdout)
-        .into_iter()
-        .filter(|adapter| {
-            adapter_interface_type_matches_vpn(&adapter.network_interface_type)
-                || adapter_text_matches_vpn(adapter)
-        })
-        .map(|adapter| {
-            adapter
-                .name
-                .or(adapter.description)
-                .unwrap_or_else(|| "VPN".to_string())
-        })
-        .collect::<Vec<_>>();
+    let adapter_names = desktop_vpn::adapter_names()?;
 
     Ok(VpnStatusPayload {
         is_active: !adapter_names.is_empty(),
@@ -520,8 +367,17 @@ fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
         Some(vec![AUTOSTART_ARG]),
     ))?;
 
-    let autostart_manager = app.autolaunch();
-    let _ = autostart_manager.enable();
+    // Dev-сборка не должна заменять установленный exe в автозапуске.
+    if !cfg!(debug_assertions) {
+        #[cfg(windows)]
+        if let Err(error) = desktop_autostart::register() {
+            eprintln!("Не удалось обновить автозапуск SEP Chat: {error}");
+        }
+        #[cfg(not(windows))]
+        if let Err(error) = app.autolaunch().enable() {
+            eprintln!("Не удалось обновить автозапуск SEP Chat: {error}");
+        }
+    }
 
     let tray_menu = MenuBuilder::new(app)
         .text(TRAY_SHOW_ID, "Open SEP Chat")
@@ -579,7 +435,20 @@ fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(desktop)]
+    let builder = builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _| {
+        if !args.iter().any(|arg| arg == AUTOSTART_ARG) {
+            show_main_window(app);
+        }
+    }));
+
+    builder
+        .plugin(tauri_plugin_dialog::init())
         .manage({
             #[cfg(desktop)]
             {
@@ -603,8 +472,18 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             show_windows_notification,
             clear_windows_topic_notifications,
+            clear_all_windows_notifications,
             consume_pending_notification_target,
-            read_dropped_file,
+            desktop_files::read_dropped_file,
+            desktop_files::desktop_file_read_info,
+            desktop_files::desktop_file_pick,
+            desktop_files::desktop_file_register_source,
+            desktop_files::desktop_file_status,
+            desktop_files::desktop_file_download,
+            desktop_files::desktop_file_save,
+            desktop_files::desktop_file_open,
+            desktop_files::desktop_update_prepare,
+            desktop_auth::desktop_auth_request,
             get_vpn_status,
             open_vpn_settings
         ])

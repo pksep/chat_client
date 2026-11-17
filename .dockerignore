@@ -1,4 +1,10 @@
 node_modules/
+.git/
+.codex/
+.codex-*/
+src-tauri/target/
+test-results*/
+playwright-report/
 local-packages/
 build/
 dev-dist/

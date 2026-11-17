@@ -136,6 +136,28 @@ describe('Android file click', () => {
     expect(launched?.payload.statusCheckMs).toBeNumber();
   });
 
+  test('keeps the known file state while a background check is pending', async () => {
+    const file = pdf();
+    getFileStatus.mockResolvedValue(local);
+    await refreshNativeFileDownloadStatus(file);
+    const knownState = getNativeFileDownloadState(file);
+    let resolve!: (value: typeof local) => void;
+    getFileStatus.mockImplementationOnce(
+      () =>
+        new Promise(done => {
+          resolve = done;
+        })
+    );
+    const checking = refreshNativeFileDownloadStatus(file, true);
+    expect(getNativeFileDownloadState(file)).toBe(knownState);
+    resolve(local);
+    await checking;
+    expect(getNativeFileDownloadState(file)).toBe(knownState);
+    getFileStatus.mockResolvedValue({ ...local, downloaded: false });
+    await refreshNativeFileDownloadStatus(file, true);
+    expect(getNativeFileDownloadState(file).phase).toBe('not-downloaded');
+  });
+
   test('shows opening and coalesces repeated taps until native handoff completes', async () => {
     const file = pdf();
     getFileStatus.mockResolvedValue(local);

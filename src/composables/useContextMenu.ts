@@ -39,7 +39,8 @@ export const useContextMenu = () => {
     else if (!isOpen.value[id]) clearOpeningClickGuard();
     event.preventDefault();
     contextMediaId.value =
-      event.target instanceof Element
+      event.target instanceof Element &&
+      !event.target.closest('[data-message-context="message"]')
         ? event.target
             .closest('[data-message-media-id]')
             ?.getAttribute('data-message-media-id') || null

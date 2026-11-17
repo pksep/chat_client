@@ -9,20 +9,24 @@
     <script type="module">
       import { createApp, h } from 'vue';
       import MessageBubbleFiles from '../../src/components/Messages/MessageBubbleFiles.vue';
-      import { handleNativeFileClick } from '../../src/services/useNativeFile';
+      import {
+        handleNativeFileClick,
+        canShowNativeFileInFolder,
+        showNativeFileInFolder
+      } from '../../src/services/useNativeFile';
       import { setConfig } from '../../src/services/useConfig';
       import '@pksep/yui/styles';
       import '../../src/assets/message-bubble.css';
       setConfig({ CHAT_PATH_TO_FILE_CDN: location.origin });
       window.fileDoubleClicks = 0;
+      const params = new URLSearchParams(location.search);
       const media = {
         id: 'pdf',
         type: 'FILE',
         path: 'already-downloaded.pdf',
         originName: 'Документ.pdf',
-        size: 43951
+        size: params.has('string-size') ? '43951' : 43951
       };
-      const params = new URLSearchParams(location.search);
       const files = params.has('multiple')
         ? [
             media,
@@ -35,6 +39,10 @@
           ]
         : [media];
       window.fileTargets = [];
+      window.nativeFiles = {
+        canShowNativeFileInFolder,
+        showNativeFileInFolder
+      };
       window.fileReplyClicks = 0;
       createApp({
         render: () =>

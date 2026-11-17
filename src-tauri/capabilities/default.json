@@ -6,10 +6,15 @@
   "permissions": [
     "core:default",
     "core:tray:default",
+    "core:window:allow-show",
+    "core:window:allow-unminimize",
+    "core:window:allow-set-focus",
     "core:window:allow-set-badge-count",
     "core:window:allow-set-icon",
     "core:window:allow-set-overlay-icon",
     "notification:default",
-    "opener:default"
+    "opener:default",
+    "updater:default",
+    "process:allow-restart"
   ]
 }

@@ -98,6 +98,7 @@ import { useShareSelection } from './composables/useShareSelection';
 import { isGroupCallInviteUrl } from './utils/groupCallInviteUrl';
 import { installNotoEmojiFontFaces } from './composables/useEmojiStyle';
 import { isIosWeb } from './utils/ios-pwa-viewport';
+import { isTauri } from '@tauri-apps/api/core';
 import { initBrowserMediaDownloads } from './utils/browser-media-downloads';
 import {
   importAnyChatBackgroundSnapshot,
@@ -816,7 +817,8 @@ const runAppInitialization = async () => {
         const locationReady = initTelemetryLocation().catch(error => {
           console.warn('Не удалось инициализировать геолокацию:', error);
         });
-        if (!isIosWeb()) await locationReady;
+        // Ответ на геолокацию не должен блокировать desktop-уведомления.
+        if (!isIosWeb() && !isTauri()) await locationReady;
         return initPushNotifications();
       })
       .catch(error => {

@@ -210,11 +210,20 @@ export const initTauriNotifications = async (
       onNotificationAction(parseNotificationPayload(event.payload));
     });
 
-    await onAction(notification => {
-      onNotificationAction(
-        (notification.extra || {}) as TauriNotificationExtra
-      );
-    });
+    // Windows использует собственный toast callback. API действий плагина
+    // реализован только на мобильных платформах и не должен срывать запуск.
+    if (!isWindowsEnvironment()) {
+      await onAction(notification => {
+        onNotificationAction(
+          (notification.extra || {}) as TauriNotificationExtra
+        );
+      }).catch(error => {
+        console.warn(
+          'Действия уведомлений недоступны на этой платформе:',
+          error
+        );
+      });
+    }
 
     const pendingPayload = await invoke<string | null>(
       'consume_pending_notification_target'
@@ -366,18 +375,17 @@ export const clearTauriMessageNotification = async (
   }
 
   try {
-    await removeActive([
-      { id: getTauriMessageNotificationId(resolvedTopicId) }
-    ]);
-    activeMessageNotificationIdsByTopic.delete(resolvedTopicId);
-
     if (isWindowsEnvironment()) {
       await invoke<boolean>('clear_windows_topic_notifications', {
-        topicId: resolvedTopicId
-      }).catch(error => {
-        console.warn('Failed to clear Windows native notification:', error);
+        topicId: resolvedTopicId,
+        messagesOnly: true
       });
+    } else {
+      await removeActive([
+        { id: getTauriMessageNotificationId(resolvedTopicId) }
+      ]);
     }
+    activeMessageNotificationIdsByTopic.delete(resolvedTopicId);
   } catch (error) {
     console.warn('Failed to clear Tauri message notification:', error);
   }
@@ -436,17 +444,15 @@ export const clearTauriTopicNotifications = async (
 
   try {
     activeMessageNotificationIdsByTopic.delete(topicId);
-    await removeActive([
-      { id: getTauriMessageNotificationId(topicId) },
-      { id: getTauriCallNotificationId(topicId) }
-    ]);
-
     if (isWindowsEnvironment()) {
       await invoke<boolean>('clear_windows_topic_notifications', {
         topicId
-      }).catch(error => {
-        console.warn('Failed to clear Windows native notifications:', error);
       });
+    } else {
+      await removeActive([
+        { id: getTauriMessageNotificationId(topicId) },
+        { id: getTauriCallNotificationId(topicId) }
+      ]);
     }
   } catch (error) {
     console.warn('Failed to clear Tauri notifications for topic:', error);
@@ -460,7 +466,11 @@ export const clearAllTauriNotifications = async (): Promise<void> => {
 
   try {
     activeMessageNotificationIdsByTopic.clear();
-    await removeAllActive();
+    if (isWindowsEnvironment()) {
+      await invoke<boolean>('clear_all_windows_notifications');
+    } else {
+      await removeAllActive();
+    }
   } catch (error) {
     console.warn('Failed to clear Tauri notifications:', error);
   }

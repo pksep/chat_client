@@ -1,102 +1,89 @@
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import type { UnlistenFn } from '@tauri-apps/api/event';
-
-interface TauriDroppedFilePayload {
-  bytes: number[];
-  lastModified?: number | null;
-  mimeType?: string;
-  name: string;
-}
+import { readTauriFiles } from './tauri-upload-files';
+import { showErrorNotification } from '../composables/useNotifications';
 
 interface BindTauriFileDropOptions {
   getTargetElement: () => HTMLElement | null;
-  onDragStateChange?: (isDragging: boolean) => void;
-  onFilesDropped: (files: File[]) => void;
+  getContextKey: () => string;
+  onDragStateChange: (isDragging: boolean) => void;
+  onReadStateChange: (isReading: boolean) => void;
+  onFilesDropped: (files: File[]) => void | Promise<void>;
 }
-
-const isTauriRuntime = (): boolean => {
-  try {
-    return isTauri();
-  } catch {
-    return false;
-  }
-};
-
-const getFallbackFileName = (path: string): string => {
-  const parts = path.split(/[\\/]/).filter(Boolean);
-
-  return parts[parts.length - 1] || `dropped-file-${Date.now()}`;
-};
-
-const readDroppedFile = async (path: string): Promise<File | null> => {
-  try {
-    const payload = await invoke<TauriDroppedFilePayload>('read_dropped_file', {
-      path
-    });
-    const bytes = new Uint8Array(payload.bytes);
-
-    return new File([bytes], payload.name || getFallbackFileName(path), {
-      type: payload.mimeType || '',
-      lastModified: payload.lastModified || Date.now()
-    });
-  } catch (error) {
-    console.warn('Failed to read Tauri dropped file:', error);
-    return null;
-  }
-};
-
-const resolveDroppedFiles = async (paths: string[]): Promise<File[]> => {
-  const files = await Promise.all(paths.map(readDroppedFile));
-
-  return files.filter((file): file is File => !!file);
-};
-
-const isElementVisible = (element: HTMLElement): boolean => {
-  const rect = element.getBoundingClientRect();
-
-  return rect.width > 0 && rect.height > 0;
-};
 
 export const bindTauriFileDrop = async ({
   getTargetElement,
+  getContextKey,
   onDragStateChange,
+  onReadStateChange,
   onFilesDropped
 }: BindTauriFileDropOptions): Promise<UnlistenFn | null> => {
-  if (!isTauriRuntime()) {
-    return null;
-  }
-
-  return getCurrentWebview().onDragDropEvent(async event => {
-    const payload = event.payload;
-    const targetElement = getTargetElement();
-
-    if (!targetElement || !isElementVisible(targetElement)) {
-      onDragStateChange?.(false);
-      return;
+  if (!isTauri()) return null;
+  let disposed = false;
+  let lastDrop: { native: boolean; at: number } | undefined;
+  let pendingReads = 0;
+  const visibleTarget = () => {
+    const element = getTargetElement();
+    const rect = element?.getBoundingClientRect();
+    return element && rect && rect.width > 0 && rect.height > 0
+      ? element
+      : null;
+  };
+  const acceptDrop = (native: boolean) => {
+    const at = performance.now();
+    if (lastDrop && lastDrop.native !== native && at - lastDrop.at < 500)
+      return false;
+    lastDrop = { native, at };
+    return true;
+  };
+  const handlePaths = async (paths: string[]) => {
+    const target = visibleTarget();
+    if (!target || disposed || !paths.length || !acceptDrop(true)) return;
+    const context = getContextKey();
+    pendingReads++;
+    onReadStateChange(true);
+    try {
+      const files = await readTauriFiles(paths);
+      if (
+        !disposed &&
+        visibleTarget() === target &&
+        getContextKey() === context &&
+        files.length
+      )
+        await onFilesDropped(files);
+    } finally {
+      pendingReads--;
+      if (!disposed) onReadStateChange(pendingReads > 0);
     }
-
-    if (payload.type === 'enter' || payload.type === 'over') {
-      onDragStateChange?.(true);
+  };
+  // Внутри WebView бывают и обычные HTML drop (например, из другого окна
+  // браузера). Tauri перехватываем отдельно, браузерный DropZone не меняем.
+  const handleHtmlDrop = (event: DragEvent) => {
+    if (disposed || !visibleTarget() || !event.dataTransfer?.files.length)
       return;
-    }
-
-    if (payload.type === 'leave') {
-      onDragStateChange?.(false);
-      return;
-    }
-
-    if (payload.type !== 'drop' || !payload.paths.length) {
-      onDragStateChange?.(false);
-      return;
-    }
-
-    onDragStateChange?.(false);
-
-    const files = await resolveDroppedFiles(payload.paths);
-
-    if (files.length) {
-      onFilesDropped(files);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    onDragStateChange(false);
+    if (acceptDrop(false))
+      void onFilesDropped(Array.from(event.dataTransfer.files));
+  };
+  const unlisten = await getCurrentWebview().onDragDropEvent(event => {
+    if (disposed) return;
+    const { payload } = event;
+    if (!visibleTarget() || payload.type === 'leave') {
+      onDragStateChange(false);
+    } else if (payload.type === 'enter' || payload.type === 'over') {
+      onDragStateChange(true);
+    } else if (payload.type === 'drop') {
+      onDragStateChange(false);
+      void handlePaths(payload.paths).catch(showErrorNotification);
     }
   });
+  window.addEventListener('drop', handleHtmlDrop, true);
+  return () => {
+    disposed = true;
+    window.removeEventListener('drop', handleHtmlDrop, true);
+    unlisten();
+  };
 };

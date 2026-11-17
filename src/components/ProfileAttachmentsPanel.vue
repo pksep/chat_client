@@ -180,6 +180,17 @@
         @unmount-close="closeAttachmentContextMenu"
       >
         <Button
+          v-if="canShowNativeFileInFolder(contextMenuItem.media)"
+          :type="ButtonTypeEnum.popover"
+          :size="SizesEnum.small"
+          :data-testid="`${props.dataTestid}-ShowInFolderButton`"
+          @click.stop="handleShowInFolder"
+        >
+          <Icon :name="IconNameEnum.folder" />
+          Показать в папке
+        </Button>
+
+        <Button
           :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           :data-testid="`${props.dataTestid}-ShowInChatButton`"
@@ -264,9 +275,12 @@ import { deleteMessageChat, getChatSDK } from '../services/useChat';
 import { getClientMessageById } from '../services/useMessages';
 import {
   downloadNativeFile,
+  canShowNativeFileInFolder,
+  showNativeFileInFolder,
   getNativeFileDownloadState,
   handleNativeFileClick,
   isNativeFileDownloadSupported,
+  isNativeFileMediaSupported,
   isNativePdfMedia,
   openNativeFile,
   refreshNativeFileDownloadStatus
@@ -433,8 +447,16 @@ const showAttachmentContextMenu = (
     attachmentsRootRef.value?.closest('dialog')
   );
   contextMenuItem.value = item;
+  if (isNativeFileDownloadSupported())
+    void refreshNativeFileDownloadStatus(item.media, true);
   contextMenuPosition.value = position;
   isContextMenuOpen.value = true;
+};
+
+const handleShowInFolder = async (): Promise<void> => {
+  const media = contextMenuItem.value?.media;
+  closeAttachmentContextMenu();
+  if (media) await showNativeFileInFolder(media);
 };
 
 const openAttachmentContextMenu = (
@@ -1160,6 +1182,7 @@ onMounted(() => {
   );
   setupScrollingMonth();
   setupLoadMoreObserver();
+  window.addEventListener('focus', refreshFileStatusesOnFocus);
 });
 
 onBeforeUnmount(() => {
@@ -1169,6 +1192,7 @@ onBeforeUnmount(() => {
   loadMoreObserver?.disconnect();
   loadMoreObserver = null;
   removeBackHandler(closeSlider);
+  window.removeEventListener('focus', refreshFileStatusesOnFocus);
 });
 
 const closeSlider = (): void => {
@@ -1186,12 +1210,12 @@ const isSliderContentMedia = (media: IMedia): boolean =>
   media.type === MediaType.Image ||
   media.type === MediaType.Video ||
   isSliderContentUrl(getSliderDetectionValue(media), {
-    includePdf: !isAndroidNativePlatform()
+    includePdf: !isNativeFileMediaSupported(media)
   });
 
 const shouldUseNativeFileState = (media: IMedia): boolean =>
   Boolean(
-    isNativeFileDownloadSupported() &&
+    isNativeFileMediaSupported(media) &&
       media.path &&
       !media.isLoading &&
       !media.uploadError &&
@@ -1218,7 +1242,9 @@ const getFileIconType = (media: IMedia): 'file' | 'download' => {
     return 'file';
   }
 
-  return getNativeFileDownloadState(media).phase === 'downloaded'
+  const state = getNativeFileDownloadState(media);
+  return state.phase === 'downloaded' ||
+    (state.phase === 'opening' && !!state.localUri)
     ? 'file'
     : 'download';
 };
@@ -1238,6 +1264,15 @@ const syncNativeFileStatuses = (): void => {
 };
 
 watch(nativeFileStatusIdentity, syncNativeFileStatuses, { immediate: true });
+
+const refreshFileStatusesOnFocus = (): void => {
+  if (!isNativeFileDownloadSupported()) return;
+  fileItems.value
+    .filter(({ media }) => shouldUseNativeFileState(media))
+    .forEach(({ media }) => {
+      void refreshNativeFileDownloadStatus(media, true);
+    });
+};
 
 const buildSliderItem = (initialMedia: IMedia) =>
   createLiveSliderItem(() => {
@@ -1295,7 +1330,7 @@ const openSlider = async (
   if (
     selectedMedia.type === MediaType.File &&
     !isSliderContentMedia(selectedMedia) &&
-    isAndroidNativePlatform()
+    isNativeFileDownloadSupported()
   ) {
     if (await handleNativeFileClick(selectedMedia)) {
       return;
