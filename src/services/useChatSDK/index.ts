@@ -71,6 +71,8 @@ import {
 } from '../../composables/useAuth';
 import { getAuthUser } from '../../composables/useAuth';
 import { getConfig } from '../useConfig';
+import { getMessageIdDiagnostic } from '../../utils/message-range-diagnostic';
+import { recordMessageTelemetry } from '../message-telemetry';
 import { getVideoThumbnail } from '../../utils/mediaPreview';
 import type { MediaPreviewDimensions } from '../../utils/mediaPreview';
 import {
@@ -145,11 +147,54 @@ export class ChatSDK {
   private readonly deliveryQueue = createMessageDeliveryQueue({
     getUserId: () => getAuthUser()?.id,
     isConnected: () => !!this.socket?.connected,
-    send: (topicId, messageIds) =>
-      this.ws.sendWebSocketEventWithAck(WebSocketEventType.DELIVER_MESSAGE, {
-        topicId,
-        messageIds
-      })
+    onQueued: (topicId, messageIds, pendingCount) => {
+      recordMessageTelemetry({
+        name: 'chat.delivery_receipt.queued',
+        level: this.socket?.connected ? 'info' : 'warn',
+        entityType: 'topic',
+        entityId: topicId,
+        payload: {
+          topicId,
+          ...getMessageIdDiagnostic(messageIds),
+          pendingCount,
+          socketConnected: !!this.socket?.connected
+        }
+      });
+    },
+    send: async (topicId, messageIds) => {
+      const traceId = createTelemetryTraceId('delivery');
+      const startedAt = Date.now();
+      const record = (stage: string, confirmed: boolean) =>
+        recordMessageTelemetry({
+          name: `chat.delivery_receipt.${stage}`,
+          level: stage === 'failed' ? 'warn' : 'info',
+          traceId,
+          entityType: 'topic',
+          entityId: topicId,
+          payload: {
+            topicId,
+            ...getMessageIdDiagnostic(messageIds),
+            elapsedMs: Date.now() - startedAt,
+            socketConnected: !!this.socket?.connected,
+            serverConfirmed: confirmed
+          }
+        });
+      record('emitted', false);
+      try {
+        const result = await this.ws.sendWebSocketEventWithAck<
+          WebSocketEventType.DELIVER_MESSAGE,
+          { success: boolean }
+        >(WebSocketEventType.DELIVER_MESSAGE, {
+          topicId,
+          messageIds
+        });
+        record(result?.success ? 'confirmed' : 'failed', !!result?.success);
+        return result;
+      } catch (error) {
+        record('failed', false);
+        throw error;
+      }
+    }
   });
   private apiUrl: string;
   private wsUrl: string;

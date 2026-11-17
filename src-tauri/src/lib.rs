@@ -433,6 +433,11 @@ fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     Ok(())
 }
 
+#[tauri::command]
+fn get_telemetry_os() -> &'static str {
+    std::env::consts::OS
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
@@ -470,6 +475,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            get_telemetry_os,
             show_windows_notification,
             clear_windows_topic_notifications,
             clear_all_windows_notifications,

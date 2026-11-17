@@ -7,6 +7,11 @@ export const createMessageDeliveryQueue = (options: {
     topicId: string,
     messageIds: string[]
   ) => Promise<{ success: boolean }>;
+  onQueued?: (
+    topicId: string,
+    messageIds: string[],
+    pendingCount: number
+  ) => void;
 }) => {
   const pending = new Map<string, Set<string>>();
   const confirmed = new Set<string>();
@@ -52,6 +57,7 @@ export const createMessageDeliveryQueue = (options: {
       if (disposed) return;
       const userId = options.getUserId();
       if (!userId) return;
+      const added = new Map<string, string[]>();
       messages.filter(Boolean).forEach(message => {
         const state = message.deliveryState;
         if (
@@ -64,9 +70,17 @@ export const createMessageDeliveryQueue = (options: {
         )
           return;
         const ids = pending.get(message.topicId) || new Set<string>();
+        if (!ids.has(message.id)) {
+          const topicAdded = added.get(message.topicId) || [];
+          topicAdded.push(message.id);
+          added.set(message.topicId, topicAdded);
+        }
         ids.add(message.id);
         pending.set(message.topicId, ids);
       });
+      added.forEach((ids, topicId) =>
+        options.onQueued?.(topicId, ids, pending.get(topicId)?.size || 0)
+      );
       schedule();
     },
     resume() {
