@@ -256,7 +256,7 @@ jobs:
             } catch (error) {
               if (error.status !== 404) throw error;
               ({ data: release } = await github.rest.repos.createRelease({
-                ...context.repo, tag_name: tag, target_commitish: context.sha,
+                ...context.repo, tag_name: tag, target_commitish: context.payload.repository.default_branch,
                 name: `Desktop updater feed (${channel})`, prerelease: true, make_latest: 'false',
                 body: 'Служебный канал обновлений Tauri. Установщики находятся в релизах vX.Y.Z.'
               }));
