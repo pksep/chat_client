@@ -66,12 +66,16 @@ jobs:
               tag = context.eventName === 'push' ? context.ref.replace('refs/tags/', '') : process.env.INPUT_TAG;
             }
             if (!/^v\d+\.\d+\.\d+(-beta\.\d+)?$/.test(tag)) throw new Error('Invalid desktop release tag');
-            const { data: ref } = await github.rest.git.getRef({ ...context.repo, ref: `tags/${tag}` });
+            const { data: commit } = await github.rest.repos.getCommit({ ...context.repo, ref: tag });
+            if (context.eventName === 'workflow_run' && commit.sha !== context.payload.workflow_run.head_sha && !commit.parents.some(parent => parent.sha === context.payload.workflow_run.head_sha)) {
+              core.info('Latest release belongs to a different workflow run');
+              return;
+            }
             const artifactRunId = process.env.INPUT_ARTIFACT_RUN_ID?.trim();
             if (artifactRunId) {
               if (!/^\d+$/.test(artifactRunId)) throw new Error('Invalid artifact run ID');
               const { data: source } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: artifactRunId });
-              if (source.status !== 'completed' || source.path !== '.github/workflows/desktop-builds.yml' || source.head_sha !== ref.object.sha) {
+              if (source.status !== 'completed' || source.path !== '.github/workflows/desktop-builds.yml' || source.head_sha !== commit.sha) {
                 throw new Error('Packages must come from a completed Desktop Builds run at this release tag');
               }
               const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, { ...context.repo, run_id: artifactRunId });
