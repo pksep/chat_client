@@ -1,3 +1,20 @@
+# [1.49.0](https://github.com/pksep/chat_client/compare/v1.48.6...v1.49.0) (2026-11-17)
+
+
+### Bug Fixes
+
+* align Tauri file drop and updater profile ([be28100](https://github.com/pksep/chat_client/commit/be28100b7e8a9fe279b516110cb24134462aaf67))
+* handle desktop file drops and retain upload source paths ([3ed0134](https://github.com/pksep/chat_client/commit/3ed0134c295921fa06c53893874f039191870154))
+* match Android profile update layout without jumps ([1cfb79f](https://github.com/pksep/chat_client/commit/1cfb79f14947dc4ee9542e8278fe3c3bdc22a15e))
+* use retina density for the macOS 1024px icon ([d919bbd](https://github.com/pksep/chat_client/commit/d919bbd48ed01c73ff3f832d6ceac382c96743e1))
+* use RGBA8 desktop icons for macOS packaging ([4eada7b](https://github.com/pksep/chat_client/commit/4eada7ba0865a24cd0923ad0322b7a37aaf71561))
+
+
+### Features
+
+* enable short QR login in profile ([78cc8b9](https://github.com/pksep/chat_client/commit/78cc8b99044b04e4e7299a9b2115a7c9ee583d9c))
+* integrate native Tauri files and signed desktop updates ([830385f](https://github.com/pksep/chat_client/commit/830385ff137fa110e7641f4d4d3ff6f52be2a87e))
+
 ## [1.48.6](https://github.com/pksep/chat_client/compare/v1.48.5...v1.48.6) (2026-11-13)
 
 
