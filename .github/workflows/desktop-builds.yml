@@ -78,7 +78,7 @@ jobs:
               if (source.status !== 'completed' || source.path !== '.github/workflows/desktop-builds.yml' || source.head_sha !== commit.sha) {
                 throw new Error('Packages must come from a completed Desktop Builds run at this release tag');
               }
-              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, { ...context.repo, run_id: artifactRunId });
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, { ...context.repo, run_id: artifactRunId, filter: 'all' });
               const buildNames = ['Build Windows x64', 'Build Linux x64', 'Build macOS Apple Silicon', 'Build macOS Intel'];
               if (!buildNames.every(name => jobs.some(job => job.name === name && job.conclusion === 'success'))) {
                 throw new Error('All four platform builds must have succeeded');
@@ -205,6 +205,7 @@ jobs:
         with:
           name: desktop-release-${{ needs.prepare.outputs.version }}
           path: desktop-upload/
+          overwrite: true
           retention-days: 30
       - name: Attach signed installers to the GitHub release
         if: needs.prepare.outputs.publish == 'true'
