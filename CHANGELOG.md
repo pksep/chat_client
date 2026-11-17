@@ -1,3 +1,10 @@
+## [1.49.2](https://github.com/pksep/chat_client/compare/v1.49.1...v1.49.2) (2026-11-17)
+
+
+### Bug Fixes
+
+* distribute desktop updates through GitHub Releases ([15628a5](https://github.com/pksep/chat_client/commit/15628a5fe05aa1f9fc40b02ac6a92c42bb6f15c3))
+
 ## [1.49.1](https://github.com/pksep/chat_client/compare/v1.49.0...v1.49.1) (2026-11-17)
 
 
