@@ -19,6 +19,12 @@ export const releaseVersion = (value: string) => {
 export const releaseChannel = (version: string) =>
   releaseVersion(version).includes('-beta.') ? 'beta' : 'stable';
 
+export const desktopUpdateEndpoint = (channel: 'stable' | 'beta'): string =>
+  `https://github.com/pksep/chat_client/releases/download/desktop-${channel}/latest.json`;
+
+export const desktopReleaseAssetName = (target: string, file: string): string =>
+  `${target}-${path.basename(file)}`.replace(/\s+/g, '-');
+
 export const normalizeUpdaterPublicKey = (input: string) => {
   const trimmed = input.trim();
   const decoded = Buffer.from(trimmed, 'base64');
@@ -58,7 +64,7 @@ export async function writeDesktopConfig(output: string, version: string) {
         plugins: {
           updater: {
             pubkey,
-            endpoints: [`https://chat.pksep.ru/desktop/${channel}/latest.json`],
+            endpoints: [desktopUpdateEndpoint(channel)],
             windows: { installMode: 'passive' }
           }
         }
@@ -197,7 +203,7 @@ export async function createDesktopManifest(
     if (!decoded.startsWith('untrusted comment:'))
       throw new Error(`Некорректная подпись ${target}`);
     platforms[target] = {
-      url: `https://chat.pksep.ru/desktop/releases/${version}/${target}/${encodeURIComponent(file)}`,
+      url: `https://github.com/pksep/chat_client/releases/download/v${version}/${encodeURIComponent(desktopReleaseAssetName(target, file))}`,
       signature
     };
     for (const name of names) {

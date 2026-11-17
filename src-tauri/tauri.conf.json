@@ -44,7 +44,7 @@
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IFNFUCBDaGF0IHVwZGF0ZXIgcHVibGljIGtleQpSV1JvSkJKRFp5L3R1cGdqWFU0TTc3NFVGM3krSWFUV1poUGNwQmEwWHNjQWs2S0RWb1I4eFphNwo=",
-      "endpoints": ["https://chat.pksep.ru/desktop/stable/latest.json"],
+      "endpoints": ["https://github.com/pksep/chat_client/releases/download/desktop-stable/latest.json"],
       "windows": {
         "installMode": "passive"
       }

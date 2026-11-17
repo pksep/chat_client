@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       publish:
-        description: 'Publish signed packages to the desktop update server'
+        description: 'Publish signed packages and the update feed to GitHub Releases'
         default: false
         type: boolean
       artifact_run_id:
@@ -197,9 +197,6 @@ jobs:
             }
           '
           bun scripts/desktop-release.ts manifest desktop-upload/packages desktop-upload/publish '${{ needs.prepare.outputs.version }}'
-          mkdir -p desktop-upload/deploy desktop-upload/scripts
-          cp deploy/desktop-updates.yaml desktop-upload/deploy/
-          cp scripts/publish-desktop.sh desktop-upload/scripts/
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-release-${{ needs.prepare.outputs.version }}
@@ -232,29 +229,43 @@ jobs:
                 core.info(`Published: ${name}`);
               }
             }
-      - name: Upload to existing deployment host
+      - name: Publish the GitHub update feed after all installers
         if: needs.prepare.outputs.publish == 'true'
-        uses: appleboy/scp-action@v0.1.7
+        uses: actions/github-script@v7
+        env:
+          RELEASE_CHANNEL: ${{ needs.prepare.outputs.channel }}
         with:
-          host: ${{ secrets.DEV_SSH_HOST }}
-          username: ${{ secrets.PROD_SSH_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
-          port: ${{ secrets.DEV_SSH_PORT }}
-          source: desktop-upload
-          target: ~/sep-chat-desktop-upload/${{ github.run_id }}-${{ github.run_attempt }}
-      - name: Publish all platforms atomically
-        if: needs.prepare.outputs.publish == 'true'
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.DEV_SSH_HOST }}
-          username: ${{ secrets.PROD_SSH_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
-          port: ${{ secrets.DEV_SSH_PORT }}
-          command_timeout: 15m
           script: |
-            set -eu
-            source_dir="$HOME/sep-chat-desktop-upload/${{ github.run_id }}-${{ github.run_attempt }}/desktop-upload"
-            bash "$source_dir/scripts/publish-desktop.sh" '${{ needs.prepare.outputs.version }}' '${{ needs.prepare.outputs.channel }}' "$source_dir"
+            const { readFile } = require('node:fs/promises');
+            const { createHash } = require('node:crypto');
+            const channel = process.env.RELEASE_CHANNEL;
+            const tag = `desktop-${channel}`;
+            const data = await readFile(`desktop-upload/publish/${channel}/latest.json`);
+            const manifest = JSON.parse(data);
+            for (const platform of Object.values(manifest.platforms)) {
+              const response = await fetch(platform.url, { method: 'HEAD' });
+              if (!response.ok) throw new Error(`Download HTTP ${response.status}: ${platform.url}`);
+            }
+            let release;
+            try {
+              ({ data: release } = await github.rest.repos.getReleaseByTag({ ...context.repo, tag }));
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              ({ data: release } = await github.rest.repos.createRelease({
+                ...context.repo, tag_name: tag, target_commitish: context.sha,
+                name: `Desktop updater feed (${channel})`, prerelease: true, make_latest: 'false',
+                body: 'Служебный канал обновлений Tauri. Установщики находятся в релизах vX.Y.Z.'
+              }));
+            }
+            const assets = await github.paginate(github.rest.repos.listReleaseAssets, { ...context.repo, release_id: release.id });
+            const previous = assets.find(asset => asset.name === 'latest.json');
+            const digest = `sha256:${createHash('sha256').update(data).digest('hex')}`;
+            if (previous?.digest === digest) {
+              core.info('Update feed is already published');
+              return;
+            }
+            if (previous) await github.rest.repos.deleteReleaseAsset({ ...context.repo, asset_id: previous.id });
+            await github.rest.repos.uploadReleaseAsset({ ...context.repo, release_id: release.id, name: 'latest.json', data });
       - name: Verify public manifest and download URLs
         if: needs.prepare.outputs.publish == 'true'
         env:
@@ -262,7 +273,7 @@ jobs:
           RELEASE_CHANNEL: ${{ needs.prepare.outputs.channel }}
         run: |
           bun -e '
-            const url = `https://chat.pksep.ru/desktop/${process.env.RELEASE_CHANNEL}/latest.json`;
+            const url = `https://github.com/pksep/chat_client/releases/download/desktop-${process.env.RELEASE_CHANNEL}/latest.json?verify=${Date.now()}`;
             const response = await fetch(url, { cache: "no-store" });
             if (!response.ok) throw new Error(`Manifest HTTP ${response.status}`);
             const manifest = await response.json();

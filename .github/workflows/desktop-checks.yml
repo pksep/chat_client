@@ -15,7 +15,6 @@ on:
       - 'bun.lock'
       - 'scripts/build-desktop.ts'
       - 'scripts/desktop-release.ts'
-      - 'scripts/publish-desktop.sh'
       - 'deploy/**'
       - 'nginx.conf'
       - 'Dockerfile'

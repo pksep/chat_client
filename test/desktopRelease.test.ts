@@ -10,6 +10,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
   createDesktopManifest,
+  desktopReleaseAssetName,
+  desktopUpdateEndpoint,
   releaseVersion,
   updaterFileFor,
   verifyDesktopArtifact
@@ -43,6 +45,15 @@ test('иконки Tauri совместимы с ICNS: RGBA8 и корректн
 test('версии, prerelease и выбор правильного пакета для обновлений', () => {
   expect(releaseVersion('v1.48.7')).toBe('1.48.7');
   expect(releaseVersion('v1.49.0-beta.1')).toBe('1.49.0-beta.1');
+  expect(desktopUpdateEndpoint('stable')).toBe(
+    'https://github.com/pksep/chat_client/releases/download/desktop-stable/latest.json'
+  );
+  expect(desktopUpdateEndpoint('beta')).toBe(
+    'https://github.com/pksep/chat_client/releases/download/desktop-beta/latest.json'
+  );
+  expect(desktopReleaseAssetName('darwin-aarch64', 'SEP Chat.app.tar.gz')).toBe(
+    'darwin-aarch64-SEP-Chat.app.tar.gz'
+  );
   for (const invalid of ['main', '../1.2.3', 'v1.2.3;rm', '1.2'])
     expect(() => releaseVersion(invalid)).toThrow();
   expect(
@@ -133,7 +144,10 @@ test('манифест публикуется только при наличии
     const manifest = await createDesktopManifest(packages, directory, '1.48.7');
     expect(Object.keys(manifest.platforms)).toHaveLength(4);
     expect(manifest.platforms['windows-x86_64'].url).toBe(
-      'https://chat.pksep.ru/desktop/releases/1.48.7/windows-x86_64/Chat-setup.exe'
+      'https://github.com/pksep/chat_client/releases/download/v1.48.7/windows-x86_64-Chat-setup.exe'
+    );
+    expect(manifest.platforms['darwin-aarch64'].url).not.toBe(
+      manifest.platforms['darwin-x86_64'].url
     );
   } finally {
     await rm(directory, { recursive: true, force: true });
