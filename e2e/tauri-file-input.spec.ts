@@ -157,13 +157,17 @@ const setupTauri = async (page: Page) => {
         return null;
       }
     };
-    win.nativeDrop = (type: string, paths: string[]) => {
+    win.nativeDrop = (
+      type: string,
+      paths: string[],
+      position = { x: 200, y: 200 }
+    ) => {
       const event = `tauri://drag-${type}`;
       for (const listener of listeners.filter(item => item.event === event))
         callbacks.get(listener.handler)?.({
           event,
           id: listener.id,
-          payload: { paths, position: { x: 200, y: 200 } }
+          payload: { paths, position }
         });
     };
     win.nativeReady = () =>
@@ -363,4 +367,184 @@ test('браузер сохраняет filechooser и отправку чере
   await expect
     .poll(() => page.evaluate(() => (window as any).attachments[1]?.text))
     .toBe('browser drop');
+});
+
+const installMedia = async (page: Page) => {
+  await page.evaluate(async () => {
+    const win = window as any;
+    win.localFiles['C:\\Pictures\\photo.PNG'] = {
+      name: 'photo.PNG',
+      mimeType: 'image/png',
+      bytes: Array.from(
+        atob(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+        ),
+        char => char.charCodeAt(0)
+      )
+    };
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 32;
+    const stream = canvas.captureStream(10);
+    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = event => chunks.push(event.data);
+    const done = new Promise(resolve => (recorder.onstop = resolve));
+    recorder.start();
+    canvas.getContext('2d')!.fillRect(0, 0, 32, 32);
+    await new Promise(resolve => setTimeout(resolve, 250));
+    recorder.stop();
+    await done;
+    stream.getTracks().forEach(track => track.stop());
+    win.localFiles['C:\\Videos\\clip.webm'] = {
+      name: 'clip.webm',
+      mimeType: 'video/webm',
+      bytes: Array.from(new Uint8Array(await new Blob(chunks).arrayBuffer()))
+    };
+  });
+};
+
+const nativePosition = async (page: Page, mode: 'file' | 'media') => {
+  const zone = page.locator(`[data-drop-mode="${mode}"]`);
+  await expect(zone).toBeVisible();
+  return zone.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    return {
+      x: (rect.left + rect.width / 2) * window.devicePixelRatio,
+      y: (rect.top + rect.height / 2) * window.devicePixelRatio
+    };
+  });
+};
+
+test.describe('выбор формата native drop при масштабе Windows 200%', () => {
+  test.use({ deviceScaleFactor: 2 });
+
+  for (const name of ['photo.PNG', 'clip.webm']) {
+    for (const mode of ['file', 'media'] as const) {
+      test(`${name}: выбранная зона ${mode} сохраняет формат отправки`, async ({
+        page
+      }) => {
+        await setupTauri(page);
+        await openFixture(page);
+        await installMedia(page);
+        const path =
+          name === 'photo.PNG'
+            ? 'C:\\Pictures\\photo.PNG'
+            : 'C:\\Videos\\clip.webm';
+        await expect
+          .poll(() => page.evaluate(() => (window as any).nativeReady()))
+          .toBe(true);
+        await page.evaluate(
+          path => (window as any).nativeDrop('enter', [path]),
+          path
+        );
+        await expect(page.locator('[data-drop-mode]')).toHaveCount(2);
+        await expect(page.locator('.drag-overlay')).toHaveCount(0);
+        const position = await nativePosition(page, mode);
+        await page.evaluate(
+          ({ path, position }) => {
+            (window as any).nativeDrop('over', [path], position);
+          },
+          { path, position }
+        );
+        await expect(page.locator(`[data-drop-mode="${mode}"]`)).toHaveClass(
+          /--active/
+        );
+        await page.evaluate(
+          ({ path, position }) => {
+            (window as any).nativeDrop('drop', [path], position);
+          },
+          { path, position }
+        );
+        await sendPreview(page);
+        await expect
+          .poll(() => page.evaluate(() => (window as any).attachments.length))
+          .toBe(1);
+        expect(
+          await page.evaluate(() => (window as any).attachments[0].kind)
+        ).toBe(mode);
+        expect(
+          await page.evaluate(() => (window as any).attachments[0].name)
+        ).toBe(name);
+      });
+    }
+  }
+});
+
+test('переход Tauri проходит через промежуточную прозрачность при входе и выходе', async ({
+  page
+}) => {
+  await setupTauri(page);
+  await openFixture(page);
+  await expect
+    .poll(() => page.evaluate(() => (window as any).nativeReady()))
+    .toBe(true);
+  const sample = async (type: 'enter' | 'leave') =>
+    page.evaluate(async type => {
+      const values: number[] = [];
+      (window as any).nativeDrop(type, ['C:\\Pictures\\photo.PNG']);
+      for (let frame = 0; frame < 30; frame++) {
+        await new Promise(requestAnimationFrame);
+        const overlay = document.querySelector('.chat__input-tauri-dropzone');
+        if (overlay) values.push(Number(getComputedStyle(overlay).opacity));
+      }
+      return values;
+    }, type);
+  const enter = await sample('enter');
+  expect(enter.some(value => value > 0 && value < 1)).toBe(true);
+  await expect(page.locator('[data-drop-mode]')).toHaveCount(2);
+  await page.screenshot({ path: 'doc/images/tauri-drop-zones.png' });
+  const leave = await sample('leave');
+  expect(leave.some(value => value > 0 && value < 1)).toBe(true);
+  await expect(page.getByTestId('Drop-MessageList-TauriDropzone')).toHaveCount(
+    0
+  );
+});
+
+test('HTML drop в Tauri выбирает нижнюю зону, а смешанные файлы не теряются', async ({
+  page
+}) => {
+  await setupTauri(page);
+  await openFixture(page);
+  await installMedia(page);
+  const transfer = await page.evaluateHandle(() => {
+    const transfer = new DataTransfer();
+    const file = (window as any).localFiles['C:\\Pictures\\photo.PNG'];
+    transfer.items.add(
+      new File([new Uint8Array(file.bytes)], file.name, { type: file.mimeType })
+    );
+    transfer.items.add(
+      new File(['document'], 'notes.txt', { type: 'text/plain' })
+    );
+    return transfer;
+  });
+  await page
+    .locator('body')
+    .dispatchEvent('dragenter', {
+      dataTransfer: transfer,
+      clientX: 100,
+      clientY: 100
+    });
+  await expect(page.locator('[data-drop-mode]')).toHaveCount(2);
+  const rect = await page.locator('[data-drop-mode="media"]').boundingBox();
+  await page
+    .locator('body')
+    .dispatchEvent('drop', {
+      dataTransfer: transfer,
+      clientX: rect!.x + rect!.width / 2,
+      clientY: rect!.y + rect!.height / 2
+    });
+  await sendPreview(page);
+  await expect
+    .poll(() => page.evaluate(() => (window as any).attachments.length))
+    .toBe(2);
+  expect(
+    await page.evaluate(() =>
+      (window as any).attachments.map((file: any) => file.name).sort()
+    )
+  ).toEqual(['notes.txt', 'photo.PNG']);
+  expect(
+    await page.evaluate(() =>
+      (window as any).attachments.map((file: any) => file.kind).sort()
+    )
+  ).toEqual(['file', 'media']);
 });

@@ -24,11 +24,12 @@
       window.attachments = [];
       window.nativeFiles = nativeFiles;
       window.tauriUploads = tauriUploads;
-      window.emitNativeDrop = paths =>
-        emitTo({ kind: 'Webview', label: 'main' }, 'tauri://drag-drop', {
+      window.emitNativeDrag = (type, paths, position) =>
+        emitTo({ kind: 'Webview', label: 'main' }, `tauri://drag-${type}`, {
           paths,
-          position: { x: 200, y: 200 }
+          position: position || { x: 200, y: 200 }
         });
+      window.emitNativeDrop = paths => window.emitNativeDrag('drop', paths);
       window.uploadFile = uploadFile;
       setConfig({ CHAT_PATH_TO_FILE_CDN: 'https://files.test/media/object' });
       ChatSDK.prototype.connect = () => new Promise(() => {});
@@ -42,12 +43,13 @@
         objectName: `uploaded/${file.name}`,
         thumbnailObjectName: null
       });
-      const capture = async files => {
+      const capture = async (files, onlyMedia = false) => {
         for (const file of files || []) {
           const result = await uploadFile(file);
           window.attachments.push({
             name: file.name,
             size: file.size,
+            kind: onlyMedia ? 'media' : 'file',
             text: await file.text(),
             path: result.path
           });
@@ -66,11 +68,10 @@
               replyMessage: null,
               forwardMessages: [],
               onAttachFile: capture,
-              onSend: payload =>
-                capture([
-                  ...(payload.files || []),
-                  ...(payload.mediaFiles || [])
-                ])
+              onSend: async payload => {
+                await capture(payload.files, false);
+                await capture(payload.mediaFiles, true);
+              }
             })
           ])
       }).mount('#app');

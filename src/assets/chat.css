@@ -1091,6 +1091,8 @@ p.chat__nothing-paragraph {
   inset: 0;
   z-index: 9999;
   display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 10px;
   padding: 10px;
   background-color: #4a83e01a;
   backdrop-filter: blur(20px);
@@ -1101,10 +1103,42 @@ p.chat__nothing-paragraph {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 4px dashed var(--primary-color);
+  border: 4px dashed var(--text-brand);
   border-radius: 24px;
-  color: var(--chat-secondary);
-  background-color: rgb(255 255 255 / 55%);
+  color: var(--text-secondary);
+  background-color: #77a6ff1a;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.chat__input-tauri-dropzone__zone--full {
+  grid-row: span 2;
+}
+
+.chat__input-tauri-dropzone__zone--active {
+  background-color: #77a6ff33;
+}
+
+.chat-tauri-drag-enter-active,
+.chat-tauri-drag-leave-active {
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+}
+
+.chat-tauri-drag-enter-from,
+.chat-tauri-drag-leave-to {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-tauri-drag-enter-active,
+  .chat-tauri-drag-leave-active,
+  .chat__input-tauri-dropzone__zone {
+    transition: none;
+  }
 }
 
 .chat__input-tauri-dropzone__title {

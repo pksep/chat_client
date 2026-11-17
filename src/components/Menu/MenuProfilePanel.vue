@@ -434,10 +434,6 @@
           </div>
         </div>
 
-        <StickerPackSelect
-          :data-testid="`${props.dataTestid}-MenuProfilePanel-Stickers`"
-        />
-
         <MenuDesktopAppUpdate
           v-if="isDesktopApp"
           :state="desktopUpdater.state.value"
@@ -584,6 +580,10 @@
             </div>
           </div>
         </div>
+
+        <StickerPackSelect
+          :data-testid="`${props.dataTestid}-MenuProfilePanel-Stickers`"
+        />
 
         <div class="menu-profile__actions">
           <Button

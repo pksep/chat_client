@@ -185,17 +185,50 @@
       @select="emit('sendSticker', $event)"
     />
     <Teleport to="body">
-      <div
-        v-if="isTauriFileDragging || isTauriFileReading"
-        class="chat__input-tauri-dropzone"
-        :data-testid="`${props.dataTestid}-MessageList-TauriDropzone`"
-      >
-        <div class="chat__input-tauri-dropzone__zone">
-          <div class="chat__input-tauri-dropzone__title">
-            {{ isTauriFileReading ? 'Подготовка файлов…' : 'Загрузить файл' }}
+      <Transition name="chat-tauri-drag">
+        <div
+          v-if="tauriFileDragState.dragging || isTauriFileReading"
+          class="chat__input-tauri-dropzone"
+          :aria-busy="isTauriFileReading"
+          :data-testid="`${props.dataTestid}-MessageList-TauriDropzone`"
+        >
+          <div
+            class="chat__input-tauri-dropzone__zone"
+            :class="{
+              'chat__input-tauri-dropzone__zone--full':
+                !tauriFileDragState.hasMedia,
+              'chat__input-tauri-dropzone__zone--active':
+                tauriFileDragState.dragging && !isTauriMediaDropActive
+            }"
+            data-drop-mode="file"
+          >
+            <div class="chat__input-tauri-dropzone__title" role="status">
+              {{
+                isTauriFileReading && !isTauriMediaDropActive
+                  ? 'Подготовка файлов…'
+                  : 'Загрузить файл'
+              }}
+            </div>
+          </div>
+          <div
+            v-if="tauriFileDragState.hasMedia"
+            ref="tauriMediaDropZoneRef"
+            class="chat__input-tauri-dropzone__zone"
+            :class="{
+              'chat__input-tauri-dropzone__zone--active': isTauriMediaDropActive
+            }"
+            data-drop-mode="media"
+          >
+            <div class="chat__input-tauri-dropzone__title">
+              {{
+                isTauriFileReading && isTauriMediaDropActive
+                  ? 'Подготовка файлов…'
+                  : 'Загрузить фото/видео'
+              }}
+            </div>
           </div>
         </div>
-      </div>
+      </Transition>
     </Teleport>
   </div>
 </template>
@@ -248,7 +281,10 @@ import {
   getHasWebsocketConnection,
   sendTypingStatus
 } from '../../services/useChat';
-import { bindTauriFileDrop } from '../../services/useTauriDroppedFiles';
+import {
+  bindTauriFileDrop,
+  type TauriFileDragState
+} from '../../services/useTauriDroppedFiles';
 import { Capacitor } from '@capacitor/core';
 import { Clipboard } from '@capacitor/clipboard';
 import {
@@ -542,7 +578,30 @@ const composerKeyboard = useComposerKeyboard(inputContainerRef);
 useIosPwaFilePicker(inputContainerRef, (files, onlyMedia) => {
   return contentEditorRef.value?.emitAttachFiles(files, onlyMedia);
 });
-const isTauriFileDragging = ref(false);
+const tauriFileDragState = ref<TauriFileDragState>({
+  dragging: false,
+  hasMedia: false,
+  position: null
+});
+const tauriMediaDropZoneRef = useTemplateRef<HTMLElement>(
+  'tauriMediaDropZoneRef'
+);
+const isTauriMediaDrop = (position: { x: number; y: number }) => {
+  const rect = tauriMediaDropZoneRef.value?.getBoundingClientRect();
+  return !!(
+    rect &&
+    position.x >= rect.left &&
+    position.x <= rect.right &&
+    position.y >= rect.top &&
+    position.y <= rect.bottom
+  );
+};
+const isTauriMediaDropActive = computed(
+  () =>
+    tauriFileDragState.value.hasMedia &&
+    !!tauriFileDragState.value.position &&
+    isTauriMediaDrop(tauriFileDragState.value.position)
+);
 const isTauriFileReading = ref(false);
 const isEditorReady = ref(false);
 let shouldFocusEditorWhenReady = false;
@@ -778,7 +837,7 @@ const handleTauriFilesDropped = (
   files: File[],
   onlyMedia = files.every(isMediaFile)
 ): void => {
-  isTauriFileDragging.value = false;
+  tauriFileDragState.value = { ...tauriFileDragState.value, dragging: false };
 
   if (!files.length || !props.allowAttachFile) {
     return;
@@ -938,8 +997,9 @@ onMounted(() => {
     getTargetElement: () =>
       props.allowAttachFile ? inputContainerRef.value : null,
     getContextKey: () => `${props.topicId || ''}:${composerDraftKey.value}`,
-    onDragStateChange: isDragging => {
-      isTauriFileDragging.value = isDragging;
+    isMediaDrop: isTauriMediaDrop,
+    onDragStateChange: state => {
+      tauriFileDragState.value = state;
     },
     onReadStateChange: isReading => {
       isTauriFileReading.value = isReading;
