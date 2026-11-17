@@ -1,3 +1,10 @@
+## [1.50.1](https://github.com/pksep/chat_client/compare/v1.50.0...v1.50.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* open desktop call links and restore tray notifications ([d309a6f](https://github.com/pksep/chat_client/commit/d309a6f12b3f033a58c487094d81b797cbd9df88))
+
 # [1.50.0](https://github.com/pksep/chat_client/compare/v1.49.2...v1.50.0) (2026-11-17)
 
 
