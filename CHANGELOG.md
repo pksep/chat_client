@@ -1,3 +1,10 @@
+## [1.49.1](https://github.com/pksep/chat_client/compare/v1.49.0...v1.49.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* restore web and desktop release workflows ([1a58533](https://github.com/pksep/chat_client/commit/1a585331b683d57733a235fae40943fa787100c4))
+
 # [1.49.0](https://github.com/pksep/chat_client/compare/v1.48.6...v1.49.0) (2026-11-17)
 
 
