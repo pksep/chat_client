@@ -171,7 +171,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: read
+      actions: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -287,3 +287,24 @@ jobs:
               if (!result.ok) throw new Error(`Download HTTP ${result.status}`);
             }
           '
+      - name: Remove temporary artifacts after verified publication
+        if: needs.prepare.outputs.publish == 'true'
+        uses: actions/github-script@v7
+        env:
+          SOURCE_RUN_ID: ${{ needs.prepare.outputs.artifact_run_id }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        with:
+          script: |
+            const names = new Set([
+              'desktop-windows-x86_64', 'desktop-linux-x86_64',
+              'desktop-darwin-aarch64', 'desktop-darwin-x86_64',
+              `desktop-release-${process.env.RELEASE_VERSION}`
+            ]);
+            const runs = new Set([String(context.runId), process.env.SOURCE_RUN_ID].filter(Boolean));
+            for (const run_id of runs) {
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, { ...context.repo, run_id });
+              for (const artifact of artifacts.filter(artifact => names.has(artifact.name))) {
+                await github.rest.actions.deleteArtifact({ ...context.repo, artifact_id: artifact.id });
+                core.info(`Removed temporary artifact: ${artifact.name}`);
+              }
+            }
