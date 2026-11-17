@@ -1,3 +1,10 @@
+# [1.50.0](https://github.com/pksep/chat_client/compare/v1.49.2...v1.50.0) (2026-11-17)
+
+
+### Features
+
+* add message receipt diagnostics and client runtime context ([6d7a462](https://github.com/pksep/chat_client/commit/6d7a462d464c3f9e59575c9dc111c9de7f46d8c8))
+
 ## [1.49.2](https://github.com/pksep/chat_client/compare/v1.49.1...v1.49.2) (2026-11-17)
 
 
