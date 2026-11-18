@@ -1,3 +1,10 @@
+## [1.53.2](https://github.com/pksep/chat_client/compare/v1.53.1...v1.53.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* keep chat and bot dialogs within the desktop content area ([6a151a4](https://github.com/pksep/chat_client/commit/6a151a4f1a853cbc3c2f93ed10f58aaed248a256))
+
 ## [1.53.1](https://github.com/pksep/chat_client/compare/v1.53.0...v1.53.1) (2026-11-18)
 
 
