@@ -9,18 +9,35 @@ html.chat-desktop-custom-chrome {
   --app-viewport-height: calc(100dvh - var(--desktop-titlebar-height));
   --default-height: var(--app-viewport-height);
   --notification-viewport-top: var(--desktop-titlebar-height);
+  height: 100%;
+  overflow: hidden;
 }
 
 .chat-desktop-custom-chrome body {
+  box-sizing: border-box;
+  height: 100dvh;
+  min-height: 0;
   padding-top: var(--desktop-titlebar-height);
+  overflow: hidden;
+}
+
+.chat-desktop-custom-chrome #app {
+  height: var(--app-viewport-height);
+  min-height: 0;
 }
 
 .chat-desktop-custom-chrome .call-modal {
   top: var(--desktop-titlebar-height);
 }
 
-.chat-desktop-custom-chrome .app-startup-shell {
+.chat-desktop-custom-chrome .app-startup-shell,
+.chat-desktop-custom-chrome .startup-shell {
   top: var(--desktop-titlebar-height);
   height: var(--app-viewport-height);
   min-height: var(--app-viewport-height);
+}
+
+.chat-desktop-custom-chrome .app-startup-shell__content,
+.chat-desktop-custom-chrome .startup-shell__content {
+  min-height: 0;
 }

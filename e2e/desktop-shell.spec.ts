@@ -9,86 +9,138 @@ async function openShell(
     decorated: boolean;
     theme: string;
     screenPermission?: boolean;
+    fullApp?: boolean;
   } = { tauri: true, decorated: false, theme: 'light' }
 ) {
-  await page.addInitScript(({ tauri, decorated, screenPermission }) => {
-    const win = window as any;
-    win.shellCalls = [];
-    win.shellCaptureCalls = [];
-    win.shellScreenPermission = screenPermission !== false;
-    win.shellSources = [
-      { id: 'screen:1', name: 'Экран 1', kind: 'screen' },
-      { id: 'screen:2', name: 'Экран 2', kind: 'screen' },
-      { id: 'window:3', name: 'Редактор', kind: 'window' },
-      { id: 'window:4', name: 'Таблица', kind: 'window' }
-    ];
-    win.shellState = { maximized: false, fullscreen: false, decorated };
-    const callbacks = new Map<number, (event: unknown) => void>();
-    const handlers = new Map<string, number>();
-    win.emitShellEvent = (event: string, payload: unknown) =>
-      callbacks.get(handlers.get(event)!)?.({ event, payload });
-    if (tauri) {
-      win.isTauri = true;
-      win.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: () => {} };
-      win.__TAURI_INTERNALS__ = {
-        metadata: {
-          currentWindow: { label: 'main' },
-          currentWebview: { label: 'main' }
-        },
-        transformCallback: (callback: (event: unknown) => void) => {
-          const id = callbacks.size + 1;
-          callbacks.set(id, callback);
-          return id;
-        },
-        invoke: async (command: string, args: any) => {
-          win.shellCalls.push({ command, args });
-          if (command === 'plugin:event|listen') {
-            handlers.set(args.event, args.handler);
-            return args.handler;
+  await page.addInitScript(
+    ({ tauri, decorated, screenPermission, fullApp }) => {
+      const win = window as any;
+      win.shellCalls = [];
+      win.shellCaptureCalls = [];
+      win.shellScreenPermission = screenPermission !== false;
+      win.shellSources = [
+        { id: 'screen:1', name: 'Экран 1', kind: 'screen' },
+        { id: 'screen:2', name: 'Экран 2', kind: 'screen' },
+        { id: 'window:3', name: 'Редактор', kind: 'window' },
+        { id: 'window:4', name: 'Таблица', kind: 'window' }
+      ];
+      win.shellState = { maximized: false, fullscreen: false, decorated };
+      if (fullApp) {
+        const url = 'http://127.0.0.1:65530';
+        localStorage.setItem(
+          'chat_runtime_organizations',
+          JSON.stringify([
+            {
+              url,
+              config: {
+                CHAT_API_DOMAIN: url,
+                CHAT_WS_DOMAIN: 'ws://127.0.0.1:65530',
+                CHAT_MASTRA_URL: 'http://127.0.0.1:4111'
+              }
+            }
+          ])
+        );
+        localStorage.setItem('chat_runtime_last_organization', url);
+        localStorage.setItem(
+          'chat_auth_session',
+          JSON.stringify({
+            token: 'desktop-layout-test',
+            user: { id: 'desktop-layout-test-user' }
+          })
+        );
+        sessionStorage.setItem('menu-collapse', 'false');
+      }
+      const callbacks = new Map<number, (event: unknown) => void>();
+      const handlers = new Map<string, number[]>();
+      win.emitShellEvent = (event: string, payload: unknown) =>
+        handlers
+          .get(event)
+          ?.forEach(id => callbacks.get(id)?.({ event, payload }));
+      if (tauri) {
+        win.isTauri = true;
+        win.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: () => {} };
+        win.__TAURI_INTERNALS__ = {
+          metadata: {
+            currentWindow: { label: 'main' },
+            currentWebview: { label: 'main' }
+          },
+          transformCallback: (callback: (event: unknown) => void) => {
+            const id = callbacks.size + 1;
+            callbacks.set(id, callback);
+            return id;
+          },
+          invoke: async (command: string, args: any) => {
+            win.shellCalls.push({ command, args });
+            if (command === 'plugin:event|listen') {
+              handlers.set(args.event, [
+                ...(handlers.get(args.event) || []),
+                args.handler
+              ]);
+              return args.handler;
+            }
+            if (command === 'plugin:window|is_decorated')
+              return win.shellState.decorated;
+            if (command === 'plugin:window|is_fullscreen')
+              return win.shellState.fullscreen;
+            if (command === 'plugin:window|is_maximized')
+              return win.shellState.maximized;
+            if (command === 'plugin:window|is_focused') return true;
+            if (command === 'plugin:window|toggle_maximize')
+              win.shellState.maximized = !win.shellState.maximized;
+            if (command === 'desktop_media_permissions_available') return true;
+            if (command === 'desktop_screen_capture_available')
+              return {
+                supported: true,
+                permissionGranted: win.shellScreenPermission
+              };
+            if (command === 'desktop_screen_capture_sources')
+              return win.shellSources;
+            if (command === 'desktop_screen_capture_permission') return true;
+            if (command === 'desktop_screen_capture_start') {
+              win.shellCaptureActive = true;
+              const buffer = new ArrayBuffer(24);
+              new DataView(buffer).setUint32(0, 2, true);
+              new DataView(buffer).setUint32(4, 2, true);
+              new Uint8Array(buffer, 8).fill(255);
+              setTimeout(() => args.onFrame.onmessage(buffer), 30);
+              return 'capture-test';
+            }
+            if (command === 'desktop_screen_capture_stop')
+              win.shellCaptureActive = false;
+            return null;
           }
-          if (command === 'plugin:window|is_decorated')
-            return win.shellState.decorated;
-          if (command === 'plugin:window|is_fullscreen')
-            return win.shellState.fullscreen;
-          if (command === 'plugin:window|is_maximized')
-            return win.shellState.maximized;
-          if (command === 'plugin:window|is_focused') return true;
-          if (command === 'plugin:window|toggle_maximize')
-            win.shellState.maximized = !win.shellState.maximized;
-          if (command === 'desktop_media_permissions_available') return true;
-          if (command === 'desktop_screen_capture_available')
-            return {
-              supported: true,
-              permissionGranted: win.shellScreenPermission
-            };
-          if (command === 'desktop_screen_capture_sources')
-            return win.shellSources;
-          if (command === 'desktop_screen_capture_permission') return true;
-          if (command === 'desktop_screen_capture_start') {
-            win.shellCaptureActive = true;
-            const buffer = new ArrayBuffer(24);
-            new DataView(buffer).setUint32(0, 2, true);
-            new DataView(buffer).setUint32(4, 2, true);
-            new Uint8Array(buffer, 8).fill(255);
-            setTimeout(() => args.onFrame.onmessage(buffer), 30);
-            return 'capture-test';
-          }
-          if (command === 'desktop_screen_capture_stop')
-            win.shellCaptureActive = false;
-          return null;
-        }
+        };
+      }
+      if (!navigator.mediaDevices)
+        Object.defineProperty(navigator, 'mediaDevices', {
+          value: {},
+          configurable: true
+        });
+      navigator.mediaDevices.getUserMedia = async constraints => {
+        win.shellCaptureCalls.push(constraints);
+        return { getTracks: () => [] } as unknown as MediaStream;
       };
-    }
-    if (!navigator.mediaDevices)
-      Object.defineProperty(navigator, 'mediaDevices', {
-        value: {},
-        configurable: true
-      });
-    navigator.mediaDevices.getUserMedia = async constraints => {
-      win.shellCaptureCalls.push(constraints);
-      return { getTracks: () => [] } as unknown as MediaStream;
-    };
-  }, options);
+    },
+    options
+  );
+  if (options.fullApp) {
+    await page.route('**/manager/access', route =>
+      route.fulfill({ json: { allowed: false } })
+    );
+    await page.route('**/users/me/access', route =>
+      route.fulfill({
+        json: {
+          userId: 'desktop-layout-test-user',
+          effective: { client: false, ai: false },
+          access: { client: false, ai: false }
+        }
+      })
+    );
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('.menu')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('DesktopTitleBar')).toBeVisible();
+    return;
+  }
   await page.goto(`/e2e/fixtures/desktop-shell.html?theme=${options.theme}`, {
     waitUntil: 'domcontentloaded'
   });
@@ -98,6 +150,67 @@ async function openShell(
     )
     .toBe(true);
 }
+
+test('Tauri: окно целиком помещается под шапкой, сворачивание списка доступно', async ({
+  page
+}) => {
+  await openShell(page, {
+    tauri: true,
+    decorated: false,
+    theme: 'light',
+    fullApp: true
+  });
+  const collapse = page.locator('.chats-toolbar__collapse');
+  const checkLayout = async (titlebarHeight: number) => {
+    const geometry = await page.evaluate(() => {
+      const box = (selector: string) => {
+        const { top, bottom, height } = document
+          .querySelector(selector)!
+          .getBoundingClientRect();
+        return { top, bottom, height };
+      };
+      return {
+        viewport: innerHeight,
+        scrollHeight: document.scrollingElement!.scrollHeight,
+        body: box('body'),
+        root: box('#app'),
+        content: box('.chat-container'),
+        collapse: box('.chats-toolbar__collapse')
+      };
+    });
+    expect(geometry.scrollHeight, JSON.stringify(geometry)).toBeLessThanOrEqual(
+      geometry.viewport
+    );
+    expect(geometry.content.bottom).toBeLessThanOrEqual(geometry.viewport);
+    expect(geometry.content.top).toBe(titlebarHeight);
+    expect(geometry.collapse.top).toBe(titlebarHeight + 20);
+  };
+  for (const viewport of [
+    { width: 960, height: 640 },
+    { width: 1280, height: 800 }
+  ]) {
+    await page.setViewportSize(viewport);
+    await checkLayout(36);
+    await collapse.click();
+    await expect(page.locator('.menu')).toHaveClass(/menu--collapse/);
+    await checkLayout(36);
+    await collapse.click();
+    await expect(page.locator('.menu')).not.toHaveClass(/menu--collapse/);
+  }
+  for (const fullscreen of [true, false]) {
+    await page.evaluate(fullscreen => {
+      (window as any).shellState.fullscreen = fullscreen;
+      (window as any).emitShellEvent('tauri://resize', {
+        width: innerWidth,
+        height: innerHeight
+      });
+    }, fullscreen);
+    await expect(page.getByTestId('DesktopTitleBar')).toHaveCount(
+      fullscreen ? 0 : 1
+    );
+    await checkLayout(fullscreen ? 0 : 36);
+  }
+});
 
 test('Шапка Tauri: управление окном и отступы без полосы прокрутки', async ({
   page
