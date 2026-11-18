@@ -1,3 +1,10 @@
+## [1.51.1](https://github.com/pksep/chat_client/compare/v1.51.0...v1.51.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* import macOS capture delegate traits ([6b3bfa4](https://github.com/pksep/chat_client/commit/6b3bfa49f5d38e49b02af51da60cfe91738aa7a4))
+
 # [1.51.0](https://github.com/pksep/chat_client/compare/v1.50.3...v1.51.0) (2026-11-18)
 
 
