@@ -34,6 +34,11 @@ async function openProfile(page: Page, mode = 'available', theme = 'light') {
             throw new Error('invalid signature');
           return 2;
         }
+        if (
+          command === 'plugin:updater|install' &&
+          win.updateMode === 'install-error'
+        )
+          throw new Error('test installer failure');
         return null;
       }
     };
@@ -99,7 +104,7 @@ test('Профиль Tauri: версия, скачивание и отдельн
   await expect
     .poll(() =>
       page.evaluate(() =>
-        (window as any).updateCalls.includes('plugin:process|restart')
+        (window as any).updateCalls.includes('desktop_restart')
       )
     )
     .toBe(true);
@@ -111,6 +116,39 @@ test('Профиль Tauri: версия, скачивание и отдельн
         ).length
     )
   ).toBe(1);
+});
+
+test('Боковая кнопка Tauri показывает ошибку установки и позволяет повторить', async ({
+  page
+}) => {
+  await openProfile(page, 'install-error');
+  await page.evaluate(() =>
+    (window as any).profileQrFixture.showUpdateBanner()
+  );
+  const button = page.locator('.menu-update-button');
+  await button.click();
+  await expect(button).toHaveText('Перезапустить чат');
+  await button.click();
+  await expect(page.locator('.menu-update__error')).toHaveText(
+    'Не удалось установить обновление. Повторите установку.'
+  );
+  await expect(page.locator('.menu-update__error')).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      (window as any).updateCalls.includes('desktop_restart')
+    )
+  ).toBe(false);
+  await page.evaluate(() => {
+    (window as any).updateMode = 'available';
+  });
+  await button.click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).updateCalls.includes('desktop_restart')
+      )
+    )
+    .toBe(true);
 });
 
 for (const theme of ['light', 'dark']) {

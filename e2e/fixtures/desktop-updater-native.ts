@@ -1,6 +1,7 @@
 import { getVersion } from '@tauri-apps/api/app';
+import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { check } from '@tauri-apps/plugin-updater';
-import { relaunch } from '@tauri-apps/plugin-process';
 import { createDesktopUpdater } from '../../src/services/desktop-updater';
 
 const report = async (stage: string, data = {}) => {
@@ -16,11 +17,39 @@ const report = async (stage: string, data = {}) => {
 try {
   const version = await getVersion();
   if (version === '1.6.101') {
+    const next = await check();
+    const repeatUpdate = !!next;
+    await next?.close();
+    if (repeatUpdate)
+      throw new Error('Установленная версия снова предлагает обновление');
     await report('restarted', {
       version,
       draft: localStorage.getItem('qa-draft'),
-      session: localStorage.getItem('qa-session')
+      session: localStorage.getItem('qa-session'),
+      repeatUpdate
     });
+    if (/mac/i.test(navigator.platform)) {
+      await getCurrentWindow().show();
+      await getCurrentWindow().close();
+      await new Promise(resolve => setTimeout(resolve, 200));
+      const hidden = await invoke<{ visible: boolean }>('desktop_window_state');
+      if (hidden.visible) throw new Error('Окно не скрылось в трей');
+      await report('closed-to-tray', { hidden });
+      const deadline = Date.now() + 20_000;
+      let restored = false;
+      while (Date.now() < deadline && !restored) {
+        const state = await invoke<{ visible: boolean; minimized: boolean }>(
+          'desktop_window_state'
+        );
+        restored = state.visible && !state.minimized;
+        if (!restored) await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      if (!restored)
+        throw new Error('Повторное открытие macOS не вернуло окно');
+      await report('reopened', { restored });
+      const { exit } = await import('@tauri-apps/plugin-process');
+      await exit(0);
+    }
   } else {
     const bad = await check();
     if (!bad || bad.version !== '1.6.101')
@@ -44,7 +73,7 @@ try {
         );
         localStorage.setItem('qa-session', 'synthetic-session');
       },
-      relaunch
+      relaunch: () => invoke('desktop_restart')
     });
     await updater.check();
     await updater.act();

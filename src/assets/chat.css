@@ -1031,6 +1031,20 @@ p.chat__nothing-paragraph {
   padding: 3.5px;
 }
 
+body.chat-tauri-macos-runtime
+  dialog.attach-modal-container:not(.attach-modal-container--image-editor) {
+  display: block;
+  height: fit-content;
+  min-height: 0;
+}
+
+body.chat-tauri-macos-runtime
+  .attach-modal-container:not(.attach-modal-container--image-editor)
+  > .modal-yui-kit__modal-content {
+  display: block;
+  height: auto;
+}
+
 .attach-modal-container > .attach-modal__emoji-picker-overlay {
   position: absolute !important;
   z-index: 1001;

@@ -139,6 +139,15 @@ fn desktop_get_open_urls<R: Runtime>(app: AppHandle<R>) -> Result<Option<Vec<Str
 }
 
 #[cfg(desktop)]
+#[tauri::command]
+fn desktop_restart<R: Runtime>(app: AppHandle<R>) {
+    app.state::<AppLifecycleState>()
+        .is_quitting
+        .store(true, Ordering::SeqCst);
+    app.request_restart();
+}
+
+#[cfg(desktop)]
 fn launched_from_autostart() -> bool {
     std::env::args().any(|arg| arg == AUTOSTART_ARG)
 }
@@ -493,6 +502,7 @@ pub fn run() {
             get_telemetry_os,
             desktop_window_state,
             desktop_get_open_urls,
+            desktop_restart,
             show_windows_notification,
             clear_windows_topic_notifications,
             clear_all_windows_notifications,
@@ -558,6 +568,12 @@ pub fn run() {
         })
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("Не удалось создать приложение Tauri")
+        .run(|_app, _event| {
+            #[cfg(target_os = "macos")]
+            if matches!(_event, tauri::RunEvent::Reopen { .. }) {
+                show_main_window(_app);
+            }
+        });
 }

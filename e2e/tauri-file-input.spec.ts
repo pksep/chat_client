@@ -470,6 +470,77 @@ test.describe('выбор формата native drop при масштабе Win
   }
 });
 
+test.describe('native drop на Mac Retina', () => {
+  test.use({ deviceScaleFactor: 2 });
+
+  for (const mode of ['file', 'media'] as const) {
+    test(`Cocoa points: фото отправляется в выбранном формате ${mode}`, async ({
+      page
+    }) => {
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, 'platform', { value: 'MacIntel' });
+        Object.defineProperty(navigator, 'userAgentData', { value: undefined });
+      });
+      await setupTauri(page);
+      await openFixture(page);
+      await installMedia(page);
+      await expect
+        .poll(() => page.evaluate(() => (window as any).nativeReady()))
+        .toBe(true);
+      await page.evaluate(() =>
+        (window as any).nativeDrop('enter', ['C:\\Pictures\\photo.PNG'])
+      );
+      const position = await page
+        .locator(`[data-drop-mode="${mode}"]`)
+        .evaluate(element => {
+          const rect = element.getBoundingClientRect();
+          return {
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2
+          };
+        });
+      await page.evaluate(position => {
+        (window as any).nativeDrop(
+          'drop',
+          ['C:\\Pictures\\photo.PNG'],
+          position
+        );
+      }, position);
+      await sendPreview(page);
+      await expect
+        .poll(() => page.evaluate(() => (window as any).attachments[0]?.kind))
+        .toBe(mode);
+    });
+  }
+
+  test('HTML dragover без MIME не скрывает распознанную native зону фото', async ({
+    page
+  }) => {
+    await setupTauri(page);
+    await openFixture(page);
+    await expect
+      .poll(() => page.evaluate(() => (window as any).nativeReady()))
+      .toBe(true);
+    await page.evaluate(() =>
+      (window as any).nativeDrop('enter', ['C:\\Pictures\\photo.PNG'])
+    );
+    await expect(page.locator('[data-drop-mode]')).toHaveCount(2);
+    await page.evaluate(() => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(['local'], 'unknown', { type: '' }));
+      Object.defineProperty(transfer, 'files', { value: [] });
+      window.dispatchEvent(
+        new DragEvent('dragover', {
+          dataTransfer: transfer,
+          bubbles: true,
+          cancelable: true
+        })
+      );
+    });
+    await expect(page.locator('[data-drop-mode]')).toHaveCount(2);
+  });
+});
+
 test('переход Tauri проходит через промежуточную прозрачность при входе и выходе', async ({
   page
 }) => {
@@ -517,22 +588,18 @@ test('HTML drop в Tauri выбирает нижнюю зону, а смешан
     );
     return transfer;
   });
-  await page
-    .locator('body')
-    .dispatchEvent('dragenter', {
-      dataTransfer: transfer,
-      clientX: 100,
-      clientY: 100
-    });
+  await page.locator('body').dispatchEvent('dragenter', {
+    dataTransfer: transfer,
+    clientX: 100,
+    clientY: 100
+  });
   await expect(page.locator('[data-drop-mode]')).toHaveCount(2);
   const rect = await page.locator('[data-drop-mode="media"]').boundingBox();
-  await page
-    .locator('body')
-    .dispatchEvent('drop', {
-      dataTransfer: transfer,
-      clientX: rect!.x + rect!.width / 2,
-      clientY: rect!.y + rect!.height / 2
-    });
+  await page.locator('body').dispatchEvent('drop', {
+    dataTransfer: transfer,
+    clientX: rect!.x + rect!.width / 2,
+    clientY: rect!.y + rect!.height / 2
+  });
   await sendPreview(page);
   await expect
     .poll(() => page.evaluate(() => (window as any).attachments.length))

@@ -41,6 +41,11 @@ export default defineConfig({
       use: { ...devices['Pixel 5'] }
     },
     {
+      name: 'webkit-desktop',
+      testMatch: 'macos-desktop.spec.ts',
+      use: { ...devices['Desktop Safari'] }
+    },
+    {
       name: 'webkit-iphone-pwa',
       testMatch: [
         'ios-pwa.spec.ts',

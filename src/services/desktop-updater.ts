@@ -29,6 +29,10 @@ export interface DesktopUpdateDependencies {
   blockingReason: () => string;
   prepareToInstall: () => Promise<void>;
   relaunch: () => Promise<void>;
+  onFailure?: (
+    stage: 'check' | 'download' | 'install' | 'restart',
+    error: unknown
+  ) => void;
 }
 
 export interface DesktopUpdateState {
@@ -74,7 +78,8 @@ export function createDesktopUpdater(deps: DesktopUpdateDependencies) {
         version: next?.version ?? '',
         notes: next?.body ?? ''
       });
-    } catch {
+    } catch (error) {
+      deps.onFailure?.('check', error);
       patch({
         phase: 'error',
         error: DESKTOP_UPDATE_MESSAGES.checkFailed
@@ -118,7 +123,8 @@ export function createDesktopUpdater(deps: DesktopUpdateDependencies) {
       });
       downloaded = true;
       patch({ phase: 'downloaded', progress: null });
-    } catch {
+    } catch (error) {
+      deps.onFailure?.('download', error);
       await release();
       patch({
         phase: 'error',
@@ -149,7 +155,8 @@ export function createDesktopUpdater(deps: DesktopUpdateDependencies) {
       }
       // Windows сам завершает приложение и запускает установщик.
       await deps.relaunch();
-    } catch {
+    } catch (error) {
+      deps.onFailure?.(installed ? 'restart' : 'install', error);
       patch({
         phase: 'downloaded',
         error: installed

@@ -15,6 +15,8 @@ on:
       - 'bun.lock'
       - 'scripts/build-desktop.ts'
       - 'scripts/desktop-release.ts'
+      - 'scripts/test-desktop-updater-macos-native.ts'
+      - 'e2e/fixtures/desktop-updater-native.ts'
       - 'deploy/**'
       - 'nginx.conf'
       - 'Dockerfile'
@@ -83,6 +85,9 @@ jobs:
       # Проверяем упаковку всех платформ до релиза; ключей подписи и публикации нет.
       - name: Build preview installer
         run: bun run tauri:build -- --bootstrap ${{ matrix.args }}
+      - name: Verify native macOS update, relaunch and Dock reopen
+        if: runner.os == 'macOS'
+        run: bun scripts/test-desktop-updater-macos-native.ts
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-preview-${{ matrix.platform }}

@@ -52,11 +52,17 @@ export const bindTauriFileDrop = async ({
   const htmlHasMedia = (transfer: DataTransfer) =>
     Array.from(transfer.items).some(
       item => item.kind === 'file' && /^(image|video)\//i.test(item.type)
-    );
-  const logicalPosition = (position: { x: number; y: number }) => ({
-    x: position.x / window.devicePixelRatio,
-    y: position.y / window.devicePixelRatio
-  });
+    ) || nativeHasMedia(Array.from(transfer.files).map(file => file.name));
+  const logicalPosition = (position: { x: number; y: number }) => {
+    const platform =
+      (navigator as Navigator & { userAgentData?: { platform?: string } })
+        .userAgentData?.platform ||
+      navigator.platform ||
+      navigator.userAgent;
+    // Wry 0.57 передаёт координаты Cocoa в points, а Windows — в физических px.
+    const scale = /mac/i.test(platform) ? 1 : window.devicePixelRatio || 1;
+    return { x: position.x / scale, y: position.y / scale };
+  };
   const visibleTarget = () => {
     const element = getTargetElement();
     const rect = element?.getBoundingClientRect();
@@ -100,7 +106,9 @@ export const bindTauriFileDrop = async ({
     event.stopImmediatePropagation();
     updateDragState({
       dragging: true,
-      hasMedia: htmlHasMedia(event.dataTransfer!),
+      hasMedia:
+        (dragState.dragging && dragState.hasMedia) ||
+        htmlHasMedia(event.dataTransfer!),
       position: { x: event.clientX, y: event.clientY }
     });
   };
@@ -110,7 +118,7 @@ export const bindTauriFileDrop = async ({
     event.preventDefault();
     event.stopImmediatePropagation();
     const onlyMedia =
-      htmlHasMedia(event.dataTransfer) &&
+      (dragState.hasMedia || htmlHasMedia(event.dataTransfer)) &&
       isMediaDrop({ x: event.clientX, y: event.clientY });
     updateDragState({ dragging: false });
     if (acceptDrop(false))

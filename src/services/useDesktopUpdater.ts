@@ -4,6 +4,7 @@ import { computed, nextTick, ref } from 'vue';
 import { createDesktopUpdater } from './desktop-updater';
 import { DESKTOP_UPDATE_MESSAGES } from './desktop-update-messages';
 import { hasActiveWebUpdateOperations } from './web-update-activity';
+import { getTelemetryErrorPayload, recordTelemetryEvent } from './useTelemetry';
 import {
   activeCallTopicId,
   isAnyCallDialing,
@@ -66,8 +67,20 @@ export const desktopUpdater = createDesktopUpdater({
     await invoke('desktop_update_prepare');
   },
   relaunch: async () => {
-    const { relaunch } = await import('@tauri-apps/plugin-process');
-    await relaunch();
+    await invoke('desktop_restart');
+  },
+  onFailure: (stage, error) => {
+    recordTelemetryEvent({
+      category: 'app',
+      name: `app.update.desktop.${stage}_failed`,
+      level: 'error',
+      entityType: 'app_update',
+      payload: {
+        currentVersion: desktopAppVersion.value,
+        targetVersion: desktopUpdater.state.value.version,
+        ...getTelemetryErrorPayload(error)
+      }
+    });
   }
 });
 
