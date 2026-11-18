@@ -23,7 +23,10 @@ export const desktopUpdateEndpoint = (channel: 'stable' | 'beta'): string =>
   `https://github.com/pksep/chat_client/releases/download/desktop-${channel}/latest.json`;
 
 export const desktopReleaseAssetName = (target: string, file: string): string =>
-  `${target}-${path.basename(file)}`.replace(/\s+/g, '-');
+  `${target}-${path.basename(file).replaceAll('СЭП Чат', 'SEP Chat')}`.replace(
+    /\s+/g,
+    '-'
+  );
 
 export const normalizeUpdaterPublicKey = (input: string) => {
   const trimmed = input.trim();
@@ -187,6 +190,7 @@ export async function createDesktopManifest(
   const channel = releaseChannel(version);
   const platforms: Record<string, { url: string; signature: string }> = {};
   const checksums: Record<string, string> = {};
+  const assetNames: Record<string, string> = {};
   for (const target of [
     'windows-x86_64',
     'linux-x86_64',
@@ -207,6 +211,7 @@ export async function createDesktopManifest(
       signature
     };
     for (const name of names) {
+      assetNames[`${target}/${name}`] = desktopReleaseAssetName(target, name);
       checksums[`${target}/${name}`] = createHash('sha256')
         .update(await readFile(path.join(directory, name)))
         .digest('hex');
@@ -214,7 +219,7 @@ export async function createDesktopManifest(
   }
   const manifest = {
     version,
-    notes: process.env.DESKTOP_RELEASE_NOTES || `SEP Chat ${version}`,
+    notes: process.env.DESKTOP_RELEASE_NOTES || `СЭП Чат ${version}`,
     pub_date: new Date().toISOString(),
     platforms
   };
@@ -226,6 +231,10 @@ export async function createDesktopManifest(
   await writeFile(
     path.join(output, 'checksums.json'),
     JSON.stringify(checksums, null, 2)
+  );
+  await writeFile(
+    path.join(output, 'asset-names.json'),
+    JSON.stringify(assetNames, null, 2)
   );
   return manifest;
 }

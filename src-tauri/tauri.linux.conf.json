@@ -1,0 +1,9 @@
+{
+  "productName": "SEP Chat",
+  "bundle": {
+    "linux": {
+      "deb": { "desktopTemplate": "linux/main.desktop" },
+      "rpm": { "desktopTemplate": "linux/main.desktop" }
+    }
+  }
+}

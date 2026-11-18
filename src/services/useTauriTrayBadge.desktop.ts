@@ -53,21 +53,21 @@ const loadBaseTrayIconImage = (): Promise<HTMLImageElement> => {
 
 const getUnreadLabel = (count: number): string => {
   if (count <= 0) {
-    return 'SEP Chat';
+    return 'СЭП Чат';
   }
 
   const lastTwoDigits = count % 100;
   const lastDigit = count % 10;
 
   if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
-    return `SEP Chat: ${count} непрочитанных`;
+    return `СЭП Чат: ${count} непрочитанных`;
   }
 
   if (lastDigit === 1) {
-    return `SEP Chat: ${count} непрочитанное`;
+    return `СЭП Чат: ${count} непрочитанное`;
   }
 
-  return `SEP Chat: ${count} непрочитанных`;
+  return `СЭП Чат: ${count} непрочитанных`;
 };
 
 const getBadgeText = (count: number): string => {

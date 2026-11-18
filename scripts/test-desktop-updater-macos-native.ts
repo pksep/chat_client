@@ -90,11 +90,12 @@ try {
   );
   const identifier = `ru.pksep.chat.updaterqa.${path.basename(root).replaceAll('-', '')}`;
   for (const version of ['1.6.100', '1.6.101']) {
+    const productName = version === '1.6.100' ? 'SEP Chat Updater QA' : 'СЭП Чат Updater QA';
     const config = path.join(root, `config-${version}.json`);
     await writeFile(
       config,
       JSON.stringify({
-        productName: 'SEP Chat Updater QA',
+        productName,
         identifier,
         version,
         build: { beforeBuildCommand: '', frontendDist: frontend },
@@ -153,11 +154,11 @@ try {
       await cp(path.join(bundle, appName), installed, { recursive: true });
     } else {
       await copyFile(
-        path.join(bundle, `${appName}.tar.gz`),
+        path.join(bundle, `${productName}.app.tar.gz`),
         path.join(root, 'update.tar.gz')
       );
       await copyFile(
-        path.join(bundle, `${appName}.tar.gz.sig`),
+        path.join(bundle, `${productName}.app.tar.gz.sig`),
         path.join(root, 'update.tar.gz.sig')
       );
     }

@@ -15,7 +15,7 @@ const config = (apkUrl = latestApk) => ({
 const trigger = (page: Page) =>
   page.getByRole('button', { name: 'Скачать Android-приложение' });
 const dialog = (page: Page) =>
-  page.getByRole('dialog', { name: 'SEP Chat для Android' });
+  page.getByRole('dialog', { name: 'СЭП Чат для Android' });
 
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/**', route => route.fulfill({ json: [] }));
@@ -47,7 +47,7 @@ for (const theme of ['light', 'dark']) {
     await trigger(page).click();
     await expect(dialog(page)).toBeVisible();
     const image = page.getByRole('img', {
-      name: 'QR-код для скачивания SEP Chat на Android'
+      name: 'QR-код для скачивания СЭП Чат на Android'
     });
     await expect(image).toBeVisible();
     expect(

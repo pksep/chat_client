@@ -148,7 +148,7 @@ const ensureTauriNotificationPermission = async (): Promise<boolean> => {
 };
 
 const getTopicTitle = (topic?: ITopic | null): string =>
-  topic?.name || topic?.user?.initials || 'SEP Chat';
+  topic?.name || topic?.user?.initials || 'СЭП Чат';
 
 const getSenderTitle = (sender?: IUser | null): string =>
   sender?.initials || 'New message';

@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/workflows/desktop-*.yml'
       - '.github/scripts/macos-distribution.mjs'
+      - '.github/scripts/check-linux-media.sh'
+      - '.github/scripts/linux-media-probe.c'
       - 'src-tauri/**'
       - 'src/services/*desktop*'
       - 'src/services/useDesktopUpdater.ts'
@@ -73,7 +75,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libxdo-dev libasound2-dev librsvg2-dev patchelf clang libclang-dev cmake pkg-config
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libxdo-dev libasound2-dev librsvg2-dev patchelf clang libclang-dev cmake pkg-config gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-nice gstreamer1.0-pulseaudio gstreamer1.0-tools
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.3.14'
@@ -89,10 +91,19 @@ jobs:
         run: bun test ./test/desktopUpdater.test.ts ./test/desktopRelease.test.ts ./test/macosDistribution.test.ts
       # Проверяем упаковку всех платформ до релиза; ключей подписи и публикации нет.
       - name: Build preview installer
+        env:
+          GSTREAMER_INCLUDE_BAD_PLUGINS: '1'
         run: bun run tauri:build -- --bootstrap ${{ matrix.args }}
       - name: Verify native macOS update, relaunch and Dock reopen
         if: runner.os == 'macOS'
         run: bun scripts/test-desktop-updater-macos-native.ts
+      - name: Verify AppImage media plugins
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mapfile -d '' packages < <(find src-tauri/target/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' -print0)
+          test "${#packages[@]}" -eq 1
+          bash .github/scripts/check-linux-media.sh "${packages[0]}"
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-preview-${{ matrix.platform }}

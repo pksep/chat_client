@@ -3,10 +3,10 @@
 <plist version="1.0">
   <dict>
     <key>NSCameraUsageDescription</key>
-    <string>SEP Chat использует камеру для видеозвонков.</string>
+    <string>СЭП Чат использует камеру для видеозвонков.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>SEP Chat использует микрофон для голосовых и видеозвонков.</string>
+    <string>СЭП Чат использует микрофон для голосовых и видеозвонков.</string>
     <key>NSScreenCaptureUsageDescription</key>
-    <string>SEP Chat передаёт выбранный экран или окно участникам звонка только после вашего подтверждения.</string>
+    <string>СЭП Чат передаёт выбранный экран или окно участникам звонка только после вашего подтверждения.</string>
   </dict>
 </plist>

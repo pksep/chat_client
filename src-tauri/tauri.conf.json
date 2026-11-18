@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SEP Chat",
+  "productName": "СЭП Чат",
   "version": "1.6.0",
   "identifier": "ru.pksep.chat",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "SEP Chat",
+        "title": "СЭП Чат",
         "decorations": false,
         "width": 1200,
         "height": 800,
@@ -28,6 +28,9 @@
     "active": true,
     "createUpdaterArtifacts": true,
     "targets": "all",
+    "linux": {
+      "appimage": { "bundleMediaFramework": true }
+    },
     "macOS": {
       "minimumSystemVersion": "12.3",
       "hardenedRuntime": true,
@@ -35,8 +38,10 @@
       "infoPlist": "Info.plist"
     },
     "windows": {
+      "wix": { "upgradeCode": "6e8ba11b-f460-543e-874f-1c95c1aa6705" },
       "nsis": {
-        "installerIcon": "icons/icon.ico"
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "windows/brand-migration.nsh"
       }
     },
     "icon": [
@@ -54,7 +59,9 @@
     },
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IFNFUCBDaGF0IHVwZGF0ZXIgcHVibGljIGtleQpSV1JvSkJKRFp5L3R1cGdqWFU0TTc3NFVGM3krSWFUV1poUGNwQmEwWHNjQWs2S0RWb1I4eFphNwo=",
-      "endpoints": ["https://github.com/pksep/chat_client/releases/download/desktop-stable/latest.json"],
+      "endpoints": [
+        "https://github.com/pksep/chat_client/releases/download/desktop-stable/latest.json"
+      ],
       "windows": {
         "installMode": "passive"
       }

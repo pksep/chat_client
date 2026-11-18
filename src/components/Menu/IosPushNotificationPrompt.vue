@@ -77,7 +77,7 @@ const description = computed(() => {
     case 'unsupported':
       return 'Для уведомлений нужна iOS 16.4 или новее. Откройте чат с экрана «Домой».';
     case 'denied':
-      return 'Разрешите уведомления для SEP:Chat в настройках iPhone → Уведомления.';
+      return 'Разрешите уведомления для СЭП Чат в настройках iPhone → Уведомления.';
     case 'registering':
       return 'Включаем уведомления…';
     case 'error':

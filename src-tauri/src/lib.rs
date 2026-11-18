@@ -397,18 +397,18 @@ fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     if !cfg!(debug_assertions) {
         #[cfg(windows)]
         if let Err(error) = desktop_autostart::register() {
-            eprintln!("Не удалось обновить автозапуск SEP Chat: {error}");
+            eprintln!("Не удалось обновить автозапуск СЭП Чат: {error}");
         }
         #[cfg(not(windows))]
         if let Err(error) = app.autolaunch().enable() {
-            eprintln!("Не удалось обновить автозапуск SEP Chat: {error}");
+            eprintln!("Не удалось обновить автозапуск СЭП Чат: {error}");
         }
     }
 
     let tray_menu = MenuBuilder::new(app)
-        .text(TRAY_SHOW_ID, "Open SEP Chat")
+        .text(TRAY_SHOW_ID, "Открыть СЭП Чат")
         .separator()
-        .text(TRAY_QUIT_ID, "Quit")
+        .text(TRAY_QUIT_ID, "Выйти")
         .build()?;
 
     let mut tray_builder = TrayIconBuilder::with_id("sep-chat-tray")
@@ -556,7 +556,7 @@ pub fn run() {
                 #[cfg(any(windows, target_os = "linux"))]
                 if !cfg!(debug_assertions) {
                     if let Err(error) = app.deep_link().register_all() {
-                        eprintln!("Не удалось зарегистрировать ссылки SEP Chat: {error}");
+                        eprintln!("Не удалось зарегистрировать ссылки СЭП Чат: {error}");
                     }
                 }
             }

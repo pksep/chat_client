@@ -74,7 +74,7 @@ export const initDesktopCallLinks = (): Promise<void> => {
     }
   })().catch(error => {
     initialization = null;
-    console.warn('Не удалось настроить открытие ссылок SEP Chat:', error);
+    console.warn('Не удалось настроить открытие ссылок СЭП Чат:', error);
   });
   return initialization;
 };

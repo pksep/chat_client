@@ -9,7 +9,7 @@
   >
     <div class="desktop-titlebar__brand">
       <ChatIcon />
-      <span>SEP Chat</span>
+      <span>СЭП Чат</span>
     </div>
     <div class="desktop-titlebar__space" aria-hidden="true" />
     <div

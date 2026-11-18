@@ -32,7 +32,7 @@
             :src="download.qrImageUrl"
             width="232"
             height="232"
-            alt="QR-код для скачивания SEP Chat на Android"
+            alt="QR-код для скачивания СЭП Чат на Android"
             crossorigin="anonymous"
             referrerpolicy="no-referrer"
             @error="imageFailed = true"
@@ -43,7 +43,7 @@
             <button type="button" @click="load">Попробовать снова</button>
           </div>
         </div>
-        <h3 :id="`${dialogId}-title`">SEP Chat для Android</h3>
+        <h3 :id="`${dialogId}-title`">СЭП Чат для Android</h3>
         <p class="profile-android__description">
           Отсканируйте QR-код камерой телефона, чтобы скачать последнюю APK.
         </p>

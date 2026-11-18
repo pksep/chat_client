@@ -42,7 +42,7 @@ export const showWebSocketMessageNotification = async ({
       return;
     const isGroup = String(topic.type).toUpperCase() === 'GROUP';
     const senderName = sender?.initials || message.senderUser?.initials;
-    const topicName = topic.name || topic.user?.initials || 'SEP Chat';
+    const topicName = topic.name || topic.user?.initials || 'СЭП Чат';
     const body =
       getStickerMessagePreview(message.ex, message.text) ||
       stripHtml(message.text || '') ||

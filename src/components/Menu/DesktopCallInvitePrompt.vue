@@ -8,10 +8,10 @@
         class="desktop-call-invite__dialog"
         data-testid="DesktopCallInvitePrompt"
       >
-        <h2 id="desktop-call-invite-title">Открыть звонок в SEP Chat?</h2>
+        <h2 id="desktop-call-invite-title">Открыть звонок в СЭП Чат?</h2>
         <p>В приложении удобнее звонить и получать уведомления.</p>
         <a :href="pendingDesktopCallInvite" class="desktop-call-invite__open">
-          Открыть SEP Chat
+          Открыть СЭП Чат
         </a>
         <button type="button" @click="continueCallInviteInBrowser">
           Продолжить в браузере

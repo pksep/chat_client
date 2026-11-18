@@ -18,7 +18,7 @@ test('ссылка из адресной строки предлагает пр�
     path: testInfo.outputPath('desktop-call-invite.png')
   });
   await expect(
-    prompt.getByRole('link', { name: 'Открыть SEP Chat', exact: true })
+    prompt.getByRole('link', { name: 'Открыть СЭП Чат', exact: true })
   ).toHaveAttribute(
     'href',
     'sepchat://invite?callRoom=shared-room&callInvite=signed%2Btoken&organization=https%3A%2F%2Fexample.invalid'

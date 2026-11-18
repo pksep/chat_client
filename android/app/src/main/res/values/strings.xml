@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">SEP:Chat</string>
-    <string name="title_activity_main">SEP:Chat</string>
+    <string name="app_name">СЭП Чат</string>
+    <string name="title_activity_main">СЭП Чат</string>
     <string name="package_name">sep.pksep.app</string>
     <string name="custom_url_scheme">sep.pksep.app</string>
     <string name="incoming_call_label">Incoming call</string>

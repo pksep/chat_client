@@ -54,6 +54,9 @@ test('версии, prerelease и выбор правильного пакета
   expect(desktopReleaseAssetName('darwin-aarch64', 'SEP Chat.app.tar.gz')).toBe(
     'darwin-aarch64-SEP-Chat.app.tar.gz'
   );
+  expect(desktopReleaseAssetName('darwin-aarch64', 'СЭП Чат.app.tar.gz')).toBe(
+    'darwin-aarch64-SEP-Chat.app.tar.gz'
+  );
   for (const invalid of ['main', '../1.2.3', 'v1.2.3;rm', '1.2'])
     expect(() => releaseVersion(invalid)).toThrow();
   expect(

@@ -173,8 +173,12 @@ async function verify(platform) {
   if (!/^\d+\.\d+\.\d+(?:-beta\.\d+)?$/.test(version || ''))
     throw new Error('Не задан DESKTOP_VERSION');
   const bundle = path.resolve('src-tauri/target', target, 'release/bundle');
-  const app = path.join(bundle, 'macos/SEP Chat.app');
-  const archive = path.join(bundle, 'macos/SEP Chat.app.tar.gz');
+  const { productName } = JSON.parse(
+    await readFile('src-tauri/tauri.conf.json', 'utf8')
+  );
+  const appName = `${productName}.app`;
+  const app = path.join(bundle, 'macos', appName);
+  const archive = `${app}.tar.gz`;
   const dmgs = (await readdir(path.join(bundle, 'dmg'))).filter(name =>
     name.endsWith('.dmg')
   );
@@ -235,7 +239,7 @@ async function verify(platform) {
     const extracted = path.join(root, 'updater');
     await mkdir(extracted);
     await run('tar', ['-xzf', archive, '-C', extracted]);
-    await checkApp(path.join(extracted, 'SEP Chat.app'));
+    await checkApp(path.join(extracted, appName));
     await run('codesign', ['--verify', '--strict', '--verbose=2', dmg]);
     verifySigningDetails(
       await run('codesign', ['--display', '--verbose=4', dmg]),
@@ -291,7 +295,7 @@ async function verify(platform) {
       dmg
     ]);
     isMounted = true;
-    await checkApp(path.join(mounted, 'SEP Chat.app'));
+    await checkApp(path.join(mounted, appName));
     await mkdir('test-results', { recursive: true });
     await writeFile(
       `test-results/apple-distribution-${platform}.json`,
