@@ -1,3 +1,10 @@
+## [1.53.1](https://github.com/pksep/chat_client/compare/v1.53.0...v1.53.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* preserve macOS storage name and encode Cyrillic MSI branding ([3e71734](https://github.com/pksep/chat_client/commit/3e7173431f5e260dfe9e618c1e05827dc482d624))
+
 # [1.53.0](https://github.com/pksep/chat_client/compare/v1.52.2...v1.53.0) (2026-11-18)
 
 
