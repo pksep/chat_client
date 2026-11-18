@@ -1,3 +1,10 @@
+## [1.51.2](https://github.com/pksep/chat_client/compare/v1.51.1...v1.51.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* **android:** открывать ссылки чата из ручной APK ([#497](https://github.com/pksep/chat_client/issues/497)) ([a824f79](https://github.com/pksep/chat_client/commit/a824f79cada07ebbd11091473384411ef6e299b3))
+
 ## [1.51.1](https://github.com/pksep/chat_client/compare/v1.51.0...v1.51.1) (2026-11-18)
 
 
