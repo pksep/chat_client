@@ -12,6 +12,8 @@ import { NATIVE_STARTUP_READY_EVENT } from './utils/nativeStartup';
 import { createPinia } from 'pinia';
 import { initIosPwaViewport } from './utils/ios-pwa-viewport';
 import { suppressDefaultDesktopContextMenu } from './utils/desktop-context-menu';
+import { installDesktopMediaPermissions } from './services/desktop-media-permissions';
+import { initDesktopScreenCapture } from './services/desktop-screen-capture';
 
 performance.mark('chat-startup:modules-ready');
 const disposeIosPwaViewport = initIosPwaViewport();
@@ -200,6 +202,9 @@ const mountApp = async (): Promise<void> => {
   performance.mark('chat-startup:notification-ready');
   registerNativeFileBridge();
   applyRuntimeBodyClasses();
+  const disposeDesktopMediaPermissions = await installDesktopMediaPermissions();
+  import.meta.hot?.dispose(disposeDesktopMediaPermissions);
+  await initDesktopScreenCapture();
   installNotoEmojiFontFaces({
     preferSystemFont: Capacitor.getPlatform() === 'android'
   });

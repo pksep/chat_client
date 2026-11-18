@@ -42,7 +42,7 @@ export default defineConfig({
     },
     {
       name: 'webkit-desktop',
-      testMatch: 'macos-desktop.spec.ts',
+      testMatch: ['macos-desktop.spec.ts', 'desktop-shell.spec.ts'],
       use: { ...devices['Desktop Safari'] }
     },
     {

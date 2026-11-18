@@ -5,7 +5,11 @@ mod desktop_auth;
 #[cfg(windows)]
 mod desktop_autostart;
 mod desktop_files;
+#[cfg(desktop)]
+mod desktop_media_permissions;
 mod desktop_notifications;
+#[cfg(desktop)]
+mod desktop_screen_capture;
 #[cfg(windows)]
 mod desktop_vpn;
 
@@ -466,7 +470,10 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init());
+        .plugin(tauri_plugin_process::init())
+        .manage(desktop_media_permissions::DesktopMediaPermissions::default())
+        .manage(desktop_screen_capture::DesktopScreenCapture::default())
+        .on_permission_request(desktop_media_permissions::handle_request);
     #[cfg(desktop)]
     let builder = builder
         .plugin(tauri_plugin_single_instance::init(|app, args, _| {
@@ -477,6 +484,16 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init());
 
     builder
+        .on_page_load(|webview, payload| {
+            #[cfg(desktop)]
+            if webview.label() == "main"
+                && matches!(payload.event(), tauri::webview::PageLoadEvent::Started)
+            {
+                webview
+                    .state::<desktop_screen_capture::DesktopScreenCapture>()
+                    .stop_all();
+            }
+        })
         .plugin(tauri_plugin_dialog::init())
         .manage({
             #[cfg(desktop)]
@@ -503,6 +520,15 @@ pub fn run() {
             desktop_window_state,
             desktop_get_open_urls,
             desktop_restart,
+            desktop_media_permissions::desktop_media_permissions_available,
+            desktop_media_permissions::desktop_grant_media_permissions,
+            desktop_screen_capture::desktop_screen_capture_available,
+            desktop_screen_capture::desktop_screen_capture_active,
+            desktop_screen_capture::desktop_screen_capture_permission,
+            desktop_screen_capture::desktop_screen_capture_sources,
+            desktop_screen_capture::desktop_screen_capture_start,
+            desktop_screen_capture::desktop_screen_capture_stop,
+            desktop_screen_capture::desktop_screen_capture_ack,
             show_windows_notification,
             clear_windows_topic_notifications,
             clear_all_windows_notifications,

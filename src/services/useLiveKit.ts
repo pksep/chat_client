@@ -60,6 +60,10 @@ import {
 } from '../utils/groupCallInviteUrl';
 import { isTauri as isTauriRuntime } from '@tauri-apps/api/core';
 import { pendingDesktopCallInvite } from './useDesktopCallLinks';
+import {
+  prepareDesktopScreenCapture,
+  stopDesktopScreenCapture
+} from './desktop-screen-capture';
 import { mergeRemoteParticipantsDuringReconnect } from './call-reconnect-participants';
 import { createCallConnectionDiagnostics } from './call-connection-diagnostics';
 import { createCallWebRtcDiagnostics } from './call-webrtc-diagnostics';
@@ -7409,9 +7413,13 @@ const toggleScreenShareInternal = async (
       }
     } else {
       if (nextScreenShareState) {
-        const tracks = await activeRoom.localParticipant.createScreenTracks(
-          SCREEN_SHARE_CAPTURE_DEFAULTS
-        );
+        const desktopCapture = prepareDesktopScreenCapture();
+        const tracks = desktopCapture
+          ? [new LocalVideoTrack(await desktopCapture)]
+          : await activeRoom.localParticipant.createScreenTracks(
+              SCREEN_SHARE_CAPTURE_DEFAULTS
+            );
+        if (desktopCapture) tracks[0].source = Track.Source.ScreenShare;
         if (
           activeRoom !== room ||
           operationAttemptId !== screenShareRecoveryAttemptId ||
@@ -7551,6 +7559,7 @@ export const sendCallReaction = async (reaction: CallReaction) => {
 
 export const leaveCall = () => {
   isExplicitHangupInProgress = true;
+  stopDesktopScreenCapture();
   const activeRoomId = roomId.value;
   const activeTopicId = topicId.value;
   const activeCaller = user.value;
@@ -8030,6 +8039,7 @@ const sendActiveCallPageUnloadHangup = (
 
   pageUnloadHangupRoomId = targetRoomId;
   isExplicitHangupInProgress = true;
+  stopDesktopScreenCapture();
   clearPersistedActiveCallSession(targetRoomId);
 
   const sdk = getChatSDK();

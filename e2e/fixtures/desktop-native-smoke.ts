@@ -22,6 +22,11 @@ const assert = (value: unknown, message: string) => {
 };
 
 try {
+  if (new URLSearchParams(location.search).has('shell')) {
+    const { verifyNativeShell } = await import('./desktop-shell-native');
+    const fixture = await (await fetch(`${api}/fixture`)).json();
+    await verifyNativeShell(fixture.captureSourceTitle, report);
+  }
   assert(isTauri(), 'Проверка требует настоящего Tauri');
   ensureTauriWindowStateTracking();
   await syncTauriWindowState();

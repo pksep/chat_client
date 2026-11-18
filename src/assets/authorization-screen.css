@@ -1,7 +1,7 @@
 main.authorization-screen {
   --authorization-padding: 55px;
   --authorization-toolbar-height: 0px;
-  min-height: 100dvh;
+  min-height: var(--app-viewport-height, 100dvh);
   display: grid;
   grid-template-rows: 1fr;
   padding: var(--authorization-padding);
@@ -13,7 +13,7 @@ section.authorization-screen__block {
   display: grid;
   justify-items: center;
   align-content: center;
-  min-height: calc(100dvh - 2 * var(--authorization-padding));
+  min-height: calc(var(--app-viewport-height, 100dvh) - 2 * var(--authorization-padding));
   padding: 44px;
   border-radius: 25px;
   background: var(--surface-main-modal);

@@ -13,6 +13,7 @@
     "windows": [
       {
         "title": "SEP Chat",
+        "decorations": false,
         "width": 1200,
         "height": 800,
         "minWidth": 420,
@@ -28,6 +29,7 @@
     "createUpdaterArtifacts": true,
     "targets": "all",
     "macOS": {
+      "minimumSystemVersion": "12.3",
       "infoPlist": "Info.plist"
     },
     "windows": {

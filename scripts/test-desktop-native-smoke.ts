@@ -7,7 +7,7 @@ if (process.platform !== 'win32')
   throw new Error('Нативный smoke предназначен для Windows WebView2');
 
 const root = path.resolve(
-  'test-results',
+  'test-results-native',
   `desktop-native-smoke-${randomUUID()}`
 );
 const profile = path.join(root, 'profile');
@@ -16,10 +16,13 @@ const fileName = `sep-native-smoke-${randomUUID()}.txt`;
 const body = Buffer.from('Локальная проверка SEP Chat\n', 'utf8');
 const origin = 'http://127.0.0.1:5178';
 const reports: Array<Record<string, unknown>> = [];
+const isShellCheck = process.argv.includes('--shell');
+const captureSourceTitle = `SEP Capture QA ${randomUUID()}`;
+let captureSourceBrowser: ChildProcess | null = null;
 const removeOwnedDirectory = async (directory: string) => {
   if (
     path.dirname(directory) !== root ||
-    path.dirname(root) !== path.resolve('test-results')
+    path.dirname(root) !== path.resolve('test-results-native')
   )
     throw new Error('Недопустимый путь профиля smoke');
   await rm(directory, {
@@ -54,7 +57,7 @@ await writeFile(
     identifier: 'ru.pksep.chat.lifecycleqa',
     build: {
       beforeDevCommand: '',
-      devUrl: `${origin}/e2e/fixtures/desktop-native-smoke.html${process.argv.includes('--media') ? '?media=1' : ''}`
+      devUrl: `${origin}/e2e/fixtures/desktop-native-smoke.html${isShellCheck ? '?shell=1' : process.argv.includes('--media') ? '?media=1' : ''}`
     },
     app: {
       appDirectoriesOverride: profile,
@@ -62,6 +65,10 @@ await writeFile(
         {
           label: 'main',
           title: 'SEP Chat: локальный smoke',
+          decorations: false,
+          additionalBrowserArgs: isShellCheck
+            ? '--use-fake-device-for-media-stream'
+            : undefined,
           visible: false,
           focus: false
         }
@@ -99,6 +106,7 @@ const api = Bun.serve({
       return Response.json(
         {
           path: source,
+          captureSourceTitle,
           size: body.length,
           fileName,
           sha256: createHash('sha256').update(body).digest('hex')
@@ -174,6 +182,33 @@ try {
     if (!serverReady) await new Promise(resolve => setTimeout(resolve, 250));
   }
   if (!serverReady) throw new Error('Тестовый Vite не запустился');
+  if (isShellCheck) {
+    captureSourceBrowser = spawn(
+      'node',
+      [
+        'scripts/desktop-shell-source.mjs',
+        `${origin}/e2e/fixtures/desktop-capture-source.html?title=${encodeURIComponent(captureSourceTitle)}`
+      ],
+      { windowsHide: true, stdio: ['ignore', 'pipe', 'inherit'] }
+    );
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error('Не открылось синтетическое окно захвата')),
+        45_000
+      );
+      captureSourceBrowser!.stdout!.on('data', chunk => {
+        if (String(chunk).includes('SOURCE_READY')) {
+          clearTimeout(timer);
+          resolve();
+        }
+      });
+      captureSourceBrowser!.once('error', reject);
+      captureSourceBrowser!.once('exit', code => {
+        clearTimeout(timer);
+        reject(new Error(`Окно захвата завершилось: ${code}`));
+      });
+    });
+  }
   child = spawn(
     process.execPath,
     ['run', 'tauri', 'dev', '--no-watch', '--config', config],
@@ -189,7 +224,7 @@ try {
 } finally {
   clearTimeout(timeout);
   // Только дерево процесса, запущенного этим стендом; основной SEP Chat не затрагивается.
-  for (const taskChild of [child, vite]) {
+  for (const taskChild of [child, vite, captureSourceBrowser]) {
     if (!taskChild || taskChild.exitCode !== null || !taskChild.pid) continue;
     await new Promise(resolve => setTimeout(resolve, 1000));
     if (taskChild.exitCode === null) {

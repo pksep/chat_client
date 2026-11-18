@@ -1,4 +1,7 @@
 <template>
+  <DesktopTitleBar />
+  <DesktopMediaPermissionDialog />
+  <DesktopScreenSharePicker />
   <ChatContainerRoot
     v-if="config && !isCredentialsStep"
     :config="config"
@@ -51,6 +54,9 @@ import {
 import { Capacitor } from '@capacitor/core';
 import NotificationStack from './components/UI/NotificationStack.vue';
 import DesktopCallInvitePrompt from './components/Menu/DesktopCallInvitePrompt.vue';
+import DesktopTitleBar from './components/Desktop/DesktopTitleBar.vue';
+import DesktopMediaPermissionDialog from './components/Desktop/DesktopMediaPermissionDialog.vue';
+import DesktopScreenSharePicker from './components/Desktop/DesktopScreenSharePicker.vue';
 import { initDesktopCallLinks } from './services/useDesktopCallLinks';
 import { ensureTauriWindowStateTracking } from './services/useAppVisibility';
 import { IChatContainerConfig } from './components/interfaces/interfaces';
@@ -840,12 +846,12 @@ onBeforeUnmount(() => {
 <style scoped>
 .app-startup-shell {
   position: fixed;
-  inset: 0;
+  inset: var(--desktop-content-top, 0px) 0 0;
   z-index: 2600;
   display: grid;
   grid-template-columns: 345px minmax(0, 1fr);
-  height: 100dvh;
-  min-height: 100dvh;
+  height: var(--app-viewport-height, 100dvh);
+  min-height: var(--app-viewport-height, 100dvh);
   background: #f8f9fd;
   color: #111827;
   font-family:

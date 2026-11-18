@@ -1,0 +1,26 @@
+:root {
+  --desktop-titlebar-height: 36px;
+  --desktop-content-top: 0px;
+  --app-viewport-height: 100dvh;
+}
+
+html.chat-desktop-custom-chrome {
+  --desktop-content-top: var(--desktop-titlebar-height);
+  --app-viewport-height: calc(100dvh - var(--desktop-titlebar-height));
+  --default-height: var(--app-viewport-height);
+  --notification-viewport-top: var(--desktop-titlebar-height);
+}
+
+.chat-desktop-custom-chrome body {
+  padding-top: var(--desktop-titlebar-height);
+}
+
+.chat-desktop-custom-chrome .call-modal {
+  top: var(--desktop-titlebar-height);
+}
+
+.chat-desktop-custom-chrome .app-startup-shell {
+  top: var(--desktop-titlebar-height);
+  height: var(--app-viewport-height);
+  min-height: var(--app-viewport-height);
+}

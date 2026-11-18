@@ -6,5 +6,7 @@
     <string>SEP Chat использует камеру для видеозвонков.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>SEP Chat использует микрофон для голосовых и видеозвонков.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>SEP Chat передаёт выбранный экран или окно участникам звонка только после вашего подтверждения.</string>
   </dict>
 </plist>

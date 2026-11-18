@@ -35,6 +35,10 @@ path = "tests/desktop_vpn.rs"
 name = "desktop_notifications"
 path = "tests/desktop_notifications.rs"
 
+[[test]]
+name = "desktop_screen_capture"
+path = "tests/desktop_screen_capture.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -61,6 +65,11 @@ tauri-plugin-updater = "2.14.1"
 tauri-plugin-process = "2"
 
 [target.'cfg(windows)'.dependencies]
+windows-capture = "=1.5.0"
 tauri-winrt-notification = "0.7.2"
 winreg = "0.55"
 windows = { version = "0.61", features = ["Data_Xml_Dom", "Foundation", "UI_Notifications", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cidre = { version = "=0.10.1", default-features = false, features = ["async", "av", "sc", "dispatch", "macos_12_3"] }
+futures = "0.3"
