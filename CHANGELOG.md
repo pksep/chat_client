@@ -1,3 +1,10 @@
+## [1.52.2](https://github.com/pksep/chat_client/compare/v1.52.1...v1.52.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* fit desktop content and sidebar toggle below titlebar ([20836ba](https://github.com/pksep/chat_client/commit/20836babc65eab371ef4b75d9f856d2d82acacf8))
+
 ## [1.52.1](https://github.com/pksep/chat_client/compare/v1.52.0...v1.52.1) (2026-11-18)
 
 
