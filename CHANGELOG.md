@@ -1,3 +1,10 @@
+# [1.53.0](https://github.com/pksep/chat_client/compare/v1.52.2...v1.53.0) (2026-11-18)
+
+
+### Features
+
+* rename app to Russian brand and isolate Linux media plugins ([49fd0f9](https://github.com/pksep/chat_client/commit/49fd0f904b51b6a2d52bccf7e0af3edfd55c9b9f))
+
 ## [1.52.2](https://github.com/pksep/chat_client/compare/v1.52.1...v1.52.2) (2026-11-18)
 
 
