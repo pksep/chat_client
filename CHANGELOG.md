@@ -1,3 +1,10 @@
+## [1.50.3](https://github.com/pksep/chat_client/compare/v1.50.2...v1.50.3) (2026-11-18)
+
+
+### Bug Fixes
+
+* restore macOS window lifecycle and media drop zones ([e7a00f0](https://github.com/pksep/chat_client/commit/e7a00f05555ec40b84736ede5117adec055a829d))
+
 ## [1.50.2](https://github.com/pksep/chat_client/compare/v1.50.1...v1.50.2) (2026-11-18)
 
 
