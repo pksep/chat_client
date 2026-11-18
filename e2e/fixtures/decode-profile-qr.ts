@@ -1,14 +1,20 @@
-export const decodeProfileQr = async (): Promise<string> => {
+export const decodeProfileQr = async (
+  selector = '.profile-qr-login__code img'
+): Promise<string> => {
   const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import(
     'html5-qrcode'
   );
-  const image = document.querySelector<HTMLImageElement>(
-    '.profile-qr-login__code img'
-  )!;
-  const bytes = Uint8Array.from(atob(image.src.split(',')[1]), char =>
-    char.charCodeAt(0)
-  );
-  const blob = new Blob([bytes], { type: 'image/png' });
+  const image = document.querySelector<HTMLImageElement>(selector)!;
+  const blob = image.src.startsWith('data:')
+    ? new Blob(
+        [
+          Uint8Array.from(atob(image.src.split(',')[1]), char =>
+            char.charCodeAt(0)
+          )
+        ],
+        { type: 'image/png' }
+      )
+    : await (await fetch(image.src)).blob();
   const container = document.createElement('div');
   container.id = 'qr-decoder';
   document.body.append(container);

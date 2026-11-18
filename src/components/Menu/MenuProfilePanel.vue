@@ -63,6 +63,11 @@
           :data-testid="`${props.dataTestid}-MenuProfilePanel-QrLogin`"
         />
 
+        <ProfileAndroidDownload
+          v-if="props.isActive"
+          :data-testid="`${props.dataTestid}-MenuProfilePanel-AndroidDownload`"
+        />
+
         <div class="menu-profile__row">
           <span
             class="menu-profile__row-value"
@@ -949,6 +954,7 @@ import {
 import ChatsToolbar from './ChatsToolbar.vue';
 import StickerPackSelect from './StickerPackSelect.vue';
 import ProfileQrLogin from './ProfileQrLogin.vue';
+import ProfileAndroidDownload from './ProfileAndroidDownload.vue';
 import MenuDesktopAppUpdate from './MenuDesktopAppUpdate.vue';
 
 const CallBackgroundPreviewModal = defineAsyncComponent(
