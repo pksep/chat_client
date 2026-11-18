@@ -1,3 +1,10 @@
+## [1.51.3](https://github.com/pksep/chat_client/compare/v1.51.2...v1.51.3) (2026-11-18)
+
+
+### Bug Fixes
+
+* refresh desktop updates when opening profile check ([67c8515](https://github.com/pksep/chat_client/commit/67c8515c995665849befc0ac2a1ca14e10ce6ce1))
+
 ## [1.51.2](https://github.com/pksep/chat_client/compare/v1.51.1...v1.51.2) (2026-11-18)
 
 
