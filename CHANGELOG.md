@@ -1,3 +1,10 @@
+# [1.51.0](https://github.com/pksep/chat_client/compare/v1.50.3...v1.51.0) (2026-11-18)
+
+
+### Features
+
+* add branded Tauri chrome and screen sharing ([a899ab5](https://github.com/pksep/chat_client/commit/a899ab589aa304939546db35da4a28b4dfde14c2))
+
 ## [1.50.3](https://github.com/pksep/chat_client/compare/v1.50.2...v1.50.3) (2026-11-18)
 
 
