@@ -6,7 +6,7 @@
       :aria-expanded="isExpanded"
       :aria-controls="menuId"
       :data-testid="`${props.dataTestid}-MenuProfilePanel-UpdateTrigger`"
-      @click="isExpanded = !isExpanded"
+      @click="toggleExpanded"
     >
       <span class="menu-profile__wallpapers-trigger-title">
         Проверить обновления
@@ -142,6 +142,14 @@ const props = defineProps<{
 const emit = defineEmits<{ check: []; update: [] }>();
 const isExpanded = ref(false);
 const menuId = useId();
+const toggleExpanded = () => {
+  isExpanded.value = !isExpanded.value;
+  if (
+    isExpanded.value &&
+    ['idle', 'latest', 'error'].includes(props.state.phase)
+  )
+    emit('check');
+};
 const isBusy = computed(() =>
   ['checking', 'downloading', 'installing'].includes(props.state.phase)
 );

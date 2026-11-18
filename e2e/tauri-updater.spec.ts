@@ -338,7 +338,7 @@ test('Профиль Tauri: ошибка проверки и повтор', asyn
   );
 });
 
-test('Профиль Tauri: раскрытие показывает сохранённое состояние без новой проверки', async ({
+test('Профиль Tauri: повторное раскрытие находит релиз после проверки при запуске', async ({
   page
 }) => {
   await openProfile(page, 'latest');
@@ -355,15 +355,63 @@ test('Профиль Tauri: раскрытие показывает сохран
   const checks = await countChecks();
   expect(checks).toBeGreaterThan(0);
   const trigger = page.getByTestId('Fixture-MenuProfilePanel-UpdateTrigger');
-  for (let i = 0; i < 3; i += 1) {
-    await trigger.click();
-    await expect(
-      page.getByTestId('Fixture-MenuProfilePanel-UpdateMenu')
-    ).toHaveCount(0);
-    await trigger.click();
-    await expect(page.getByTestId('DesktopAppVersion')).toBeVisible();
-    expect(await countChecks()).toBe(checks);
-  }
+  await trigger.click();
+  await expect(
+    page.getByTestId('Fixture-MenuProfilePanel-UpdateMenu')
+  ).toHaveCount(0);
+  expect(await countChecks()).toBe(checks);
+  await page.evaluate(() => {
+    (window as any).updateMode = 'available';
+  });
+  await trigger.click();
+  await expect(
+    page.getByTestId('Fixture-MenuProfilePanel-UpdateAction')
+  ).toHaveAccessibleName('Скачать обновление до версии 1.6.9');
+  expect(await countChecks()).toBe(checks + 1);
+  expect(
+    await page.evaluate(() =>
+      (window as any).updateCalls.some((command: string) =>
+        [
+          'plugin:updater|download',
+          'plugin:updater|install',
+          'desktop_restart'
+        ].includes(command)
+      )
+    )
+  ).toBe(false);
+});
+
+test('Профиль Tauri: раскрытие сохраняет найденное и скачанное обновление', async ({
+  page
+}) => {
+  await openProfile(page);
+  const trigger = page.getByTestId('Fixture-MenuProfilePanel-UpdateTrigger');
+  const action = page.getByTestId('Fixture-MenuProfilePanel-UpdateAction');
+  const countChecks = () =>
+    page.evaluate(
+      () =>
+        (window as any).updateCalls.filter(
+          (command: string) => command === 'plugin:updater|check'
+        ).length
+    );
+  const checks = await countChecks();
+  await trigger.click();
+  await trigger.click();
+  await expect(action).toHaveAccessibleName(
+    'Скачать обновление до версии 1.6.9'
+  );
+  expect(await countChecks()).toBe(checks);
+  await action.click();
+  await expect(action).toHaveAccessibleName('Установить и перезапустить');
+  await trigger.click();
+  await trigger.click();
+  await expect(action).toHaveAccessibleName('Установить и перезапустить');
+  expect(await countChecks()).toBe(checks);
+  expect(
+    await page.evaluate(() =>
+      (window as any).updateCalls.includes('plugin:updater|install')
+    )
+  ).toBe(false);
 });
 
 test('Профиль Tauri: повреждённый пакет не становится готовым к установке', async ({
