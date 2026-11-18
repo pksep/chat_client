@@ -1,3 +1,10 @@
+## [1.52.1](https://github.com/pksep/chat_client/compare/v1.52.0...v1.52.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* keep desktop updates visible and refresh automatically ([c2edb56](https://github.com/pksep/chat_client/commit/c2edb56eeb70428f57a25b3aba19c466aff20a0b))
+
 # [1.52.0](https://github.com/pksep/chat_client/compare/v1.51.3...v1.52.0) (2026-11-18)
 
 
