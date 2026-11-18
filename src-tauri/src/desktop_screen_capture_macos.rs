@@ -1,5 +1,5 @@
 use super::{rgba_packet, CaptureSource};
-use cidre::sc::{StreamDelegateImpl, StreamOutputImpl};
+use cidre::sc::{StreamDelegate, StreamDelegateImpl, StreamOutput, StreamOutputImpl};
 use cidre::{arc, cm, cv, define_obj_type, dispatch, ns, objc, sc};
 use futures::executor::block_on;
 use std::{
