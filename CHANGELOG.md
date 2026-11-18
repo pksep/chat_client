@@ -1,3 +1,10 @@
+## [1.53.3](https://github.com/pksep/chat_client/compare/v1.53.2...v1.53.3) (2026-11-18)
+
+
+### Bug Fixes
+
+* keep native badges updating when tray sync fails ([b29a4e0](https://github.com/pksep/chat_client/commit/b29a4e0d4e05be9072676a6f98cbef3e8bb1a449))
+
 ## [1.53.2](https://github.com/pksep/chat_client/compare/v1.53.1...v1.53.2) (2026-11-18)
 
 
