@@ -721,6 +721,7 @@ export function useMobileApp() {
   const updateActionLabel = computed(() => {
     if (isTauri()) {
       const { phase, progress } = desktopUpdater.state.value;
+      if (phase === 'checking') return 'Проверяем…';
       if (phase === 'downloaded') return 'Установить и перезапустить';
       if (phase === 'installing') return 'Устанавливаем…';
       if (phase === 'downloading')

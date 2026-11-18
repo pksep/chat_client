@@ -19,6 +19,10 @@ async function openProfile(page: Page, mode = 'available', theme = 'light') {
         win.updateCalls.push(command);
         if (command === 'plugin:app|version') return '1.6.8';
         if (command === 'plugin:updater|check') {
+          if (win.pauseUpdateCheck)
+            await new Promise(resolve => {
+              win.resumeUpdateCheck = resolve;
+            });
           if (win.updateMode === 'error') throw new Error('offline');
           if (win.updateMode === 'latest') return null;
           return {
@@ -232,11 +236,8 @@ for (const theme of ['light', 'dark']) {
             const phase = phases[index];
             await page.evaluate(
               async ({ phase, progress }) => {
-                const updaterPath = '/src/services/useDesktopUpdater.ts';
                 const messagePath = '/src/services/desktop-update-messages.ts';
-                const { desktopUpdater } = await import(
-                  /* @vite-ignore */ updaterPath
-                );
+                const { desktopUpdater } = (window as any).profileQrFixture;
                 const { DESKTOP_UPDATE_MESSAGES } = await import(
                   /* @vite-ignore */ messagePath
                 );
@@ -407,6 +408,126 @@ test('Профиль Tauri: раскрытие сохраняет найденн
   await trigger.click();
   await expect(action).toHaveAccessibleName('Установить и перезапустить');
   expect(await countChecks()).toBe(checks);
+  expect(
+    await page.evaluate(() =>
+      (window as any).updateCalls.includes('plugin:updater|install')
+    )
+  ).toBe(false);
+});
+
+for (const trigger of ['timer', 'focus', 'online', 'visibility', 'retry']) {
+  test(`Tauri: кнопка появляется без перезапуска приложения (${trigger})`, async ({
+    page
+  }) => {
+    await page.clock.install();
+    await openProfile(page, trigger === 'retry' ? 'error' : 'latest');
+    await page.evaluate(() => {
+      (window as any).profileQrFixture.showUpdateBanner();
+      (window as any).updateMode = 'available';
+    });
+    const button = page.locator('.menu-update-button');
+    await expect(button).toHaveCount(0);
+    if (trigger === 'online' || trigger === 'visibility') {
+      await page.evaluate(trigger => {
+        if (trigger === 'online')
+          Object.defineProperty(navigator, 'onLine', {
+            configurable: true,
+            value: false
+          });
+        else
+          Object.defineProperty(document, 'visibilityState', {
+            configurable: true,
+            value: 'hidden'
+          });
+      }, trigger);
+      await page.clock.fastForward(5 * 60 * 1000);
+      await expect(button).toHaveCount(0);
+      await page.evaluate(trigger => {
+        if (trigger === 'online') {
+          Object.defineProperty(navigator, 'onLine', {
+            configurable: true,
+            value: true
+          });
+          window.dispatchEvent(new Event('online'));
+        } else {
+          Object.defineProperty(document, 'visibilityState', {
+            configurable: true,
+            value: 'visible'
+          });
+          document.dispatchEvent(new Event('visibilitychange'));
+        }
+      }, trigger);
+    } else {
+      await page.clock.fastForward(
+        trigger === 'timer' ? 5 * 60 * 1000 : 60 * 1000
+      );
+      if (trigger === 'focus') {
+        await expect(button).toHaveCount(0);
+        await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+      }
+    }
+    await expect(button).toBeVisible();
+    await expect(button).toHaveText('Скачать обновление');
+    expect(
+      await page.evaluate(() =>
+        (window as any).updateCalls.some((command: string) =>
+          [
+            'plugin:updater|download',
+            'plugin:updater|install',
+            'desktop_restart'
+          ].includes(command)
+        )
+      )
+    ).toBe(false);
+  });
+}
+
+test('Tauri: найденная версия остаётся видимой при проверке и сетевой ошибке', async ({
+  page
+}) => {
+  await openProfile(page);
+  await page.evaluate(async () => {
+    const win = window as any;
+    win.profileQrFixture.showUpdateBanner();
+    win.pauseUpdateCheck = true;
+    win.updateMode = 'error';
+    void win.profileQrFixture.desktopUpdater.check(true);
+  });
+  const button = page.locator('.menu-update-button');
+  await expect(button).toBeVisible();
+  await expect(button).toHaveText('Проверяем…');
+  await expect(button).toBeDisabled();
+  await page.evaluate(() => {
+    (window as any).pauseUpdateCheck = false;
+    (window as any).resumeUpdateCheck();
+  });
+  await expect(button).toBeVisible();
+  await expect(button).toHaveText('Повторить');
+  await expect(button).toBeEnabled();
+  await expect(page.locator('.menu-update__error')).toContainText(
+    'Не удалось проверить обновления'
+  );
+});
+
+test('Tauri: ошибка загрузки сохраняет кнопку и позволяет скачать повторно', async ({
+  page
+}) => {
+  await openProfile(page, 'bad-signature');
+  await page.evaluate(() =>
+    (window as any).profileQrFixture.showUpdateBanner()
+  );
+  const button = page.locator('.menu-update-button');
+  await button.click();
+  await expect(button).toBeVisible();
+  await expect(button).toHaveText('Повторить');
+  await expect(page.locator('.menu-update__error')).toContainText(
+    'Не удалось скачать или проверить подпись'
+  );
+  await page.evaluate(() => {
+    (window as any).updateMode = 'available';
+  });
+  await button.click();
+  await expect(button).toHaveText('Перезапустить чат');
   expect(
     await page.evaluate(() =>
       (window as any).updateCalls.includes('plugin:updater|install')

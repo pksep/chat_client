@@ -112,6 +112,50 @@ describe('Обновления desktop', () => {
     await f.updater.check(true);
     expect(f.updater.state.value.phase).toBe('available');
   });
+  test('временный пустой ответ не отменяет найденное обновление', async () => {
+    const f = fixture();
+    await f.updater.check();
+    f.latest();
+    await f.updater.check(true);
+    expect(f.updater.state.value).toMatchObject({
+      phase: 'available',
+      version: '1.6.1'
+    });
+    expect(f.calls.close).toBe(0);
+    await f.updater.act();
+    expect(f.updater.state.value.phase).toBe('downloaded');
+    expect(f.calls.download).toBe(1);
+  });
+  test('после сбоя загрузки пустой ответ не выдаётся за актуальную версию', async () => {
+    const f = fixture();
+    f.resource.download = async () => {
+      throw new Error('network');
+    };
+    await f.updater.act();
+    f.latest();
+    await f.updater.check(true);
+    expect(f.updater.state.value).toMatchObject({
+      phase: 'error',
+      version: '1.6.1'
+    });
+    expect(f.updater.state.value.error).toContain('временно недоступно');
+    expect(f.calls.install).toBe(0);
+  });
+  test('фоновые проверки восстанавливаются после ошибки найденного обновления', async () => {
+    const f = fixture();
+    await f.updater.check();
+    f.failCheck(true);
+    await f.updater.check(true);
+    expect(f.updater.state.value).toMatchObject({
+      phase: 'error',
+      version: '1.6.1'
+    });
+    f.failCheck(false);
+    await f.updater.check();
+    expect(f.updater.state.value.phase).toBe('available');
+    expect(f.calls.check).toBe(3);
+    expect(f.calls.install).toBe(0);
+  });
   test('повреждённая подпись освобождает пакет и запрещает установку', async () => {
     const f = fixture();
     f.resource.download = async () => {

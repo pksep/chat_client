@@ -48,7 +48,10 @@ const blockingReason = () => {
 export const desktopUpdater = createDesktopUpdater({
   check: async () => {
     const { check } = await import('@tauri-apps/plugin-updater');
-    const update = await check({ timeout: 20_000 });
+    const update = await check({
+      timeout: 20_000,
+      headers: { 'Cache-Control': 'no-cache' }
+    });
     if (!update) return null;
     return {
       version: update.version,
@@ -84,29 +87,39 @@ export const desktopUpdater = createDesktopUpdater({
   }
 });
 
-export const desktopUpdateVisible = computed(() =>
-  ['available', 'downloading', 'downloaded', 'installing'].includes(
-    desktopUpdater.state.value.phase
-  )
+export const desktopUpdateVisible = computed(
+  () =>
+    ['available', 'downloading', 'downloaded', 'installing'].includes(
+      desktopUpdater.state.value.phase
+    ) ||
+    (Boolean(desktopUpdater.state.value.version) &&
+      ['checking', 'error'].includes(desktopUpdater.state.value.phase))
 );
 
 let consumers = 0;
 let timer: ReturnType<typeof setInterval> | null = null;
-let lastCheck = 0;
-const interval = 60 * 60 * 1000;
-const checkWhenActive = () => {
+let lastCheck: number | null = null;
+const interval = 5 * 60 * 1000;
+const retryInterval = 60 * 1000;
+const checkWhenActive = (minimumInterval = interval) => {
+  const delay =
+    desktopUpdater.state.value.phase === 'error'
+      ? retryInterval
+      : minimumInterval;
   if (
     !consumers ||
     !navigator.onLine ||
     document.visibilityState !== 'visible' ||
-    Date.now() - lastCheck < interval
+    (lastCheck !== null && Date.now() - lastCheck < delay)
   )
     return;
   lastCheck = Date.now();
   void desktopUpdater.check();
 };
+const checkOnTimer = () => checkWhenActive();
+const checkOnResume = () => checkWhenActive(retryInterval);
 const checkWhenOnline = () => {
-  lastCheck = 0;
+  lastCheck = null;
   checkWhenActive();
 };
 
@@ -115,9 +128,9 @@ export const startDesktopUpdater = async () => {
   consumers += 1;
   if (consumers > 1) return;
   window.addEventListener('online', checkWhenOnline);
-  window.addEventListener('focus', checkWhenActive);
-  document.addEventListener('visibilitychange', checkWhenActive);
-  timer = setInterval(checkWhenActive, interval);
+  window.addEventListener('focus', checkOnResume);
+  document.addEventListener('visibilitychange', checkOnResume);
+  timer = setInterval(checkOnTimer, retryInterval);
   try {
     desktopAppVersion.value = await getVersion();
   } catch {
@@ -132,7 +145,8 @@ export const stopDesktopUpdater = () => {
   if (consumers) return;
   if (timer) clearInterval(timer);
   timer = null;
+  lastCheck = null;
   window.removeEventListener('online', checkWhenOnline);
-  window.removeEventListener('focus', checkWhenActive);
-  document.removeEventListener('visibilitychange', checkWhenActive);
+  window.removeEventListener('focus', checkOnResume);
+  document.removeEventListener('visibilitychange', checkOnResume);
 };

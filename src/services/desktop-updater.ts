@@ -71,6 +71,14 @@ export function createDesktopUpdater(deps: DesktopUpdateDependencies) {
     patch({ phase: 'checking', error: '', progress: null });
     try {
       const next = await deps.check();
+      // Старый ответ CDN не отменяет уже найденный релиз в работающем приложении.
+      if (!next && state.value.version) {
+        patch({
+          phase: update ? 'available' : 'error',
+          error: update ? '' : DESKTOP_UPDATE_MESSAGES.temporarilyUnavailable
+        });
+        return;
+      }
       await release();
       update = next;
       patch({
@@ -99,7 +107,8 @@ export function createDesktopUpdater(deps: DesktopUpdateDependencies) {
     if (downloaded || state.value.phase === 'installing') {
       return pending ?? Promise.resolve();
     }
-    if (!manual && update) return Promise.resolve();
+    if (!manual && update && state.value.phase !== 'error')
+      return Promise.resolve();
     return run(findUpdate);
   };
 

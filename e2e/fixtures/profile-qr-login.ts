@@ -3,6 +3,7 @@ import { createPinia } from 'pinia';
 import { useThemeStore } from '../../src/stores/theme';
 import MenuProfilePanel from '../../src/components/Menu/MenuProfilePanel.vue';
 import MenuUpdateButton from '../../src/components/Menu/MenuUpdateButton.vue';
+import { desktopUpdater } from '../../src/services/useDesktopUpdater';
 import {
   saveChatAuthSession,
   setAuthUser
@@ -40,6 +41,7 @@ const isActive = ref(true);
 
 Object.assign(window, {
   profileQrFixture: {
+    desktopUpdater,
     setToken,
     collapse: () => (isCollapse.value = true),
     leave: () => (isActive.value = false),
