@@ -90,7 +90,8 @@ try {
   );
   const identifier = `ru.pksep.chat.updaterqa.${path.basename(root).replaceAll('-', '')}`;
   for (const version of ['1.6.100', '1.6.101']) {
-    const productName = version === '1.6.100' ? 'SEP Chat Updater QA' : 'СЭП Чат Updater QA';
+    const productName =
+      version === '1.6.100' ? 'SEP Chat Updater QA' : 'СЭП Чат Updater QA';
     const config = path.join(root, `config-${version}.json`);
     await writeFile(
       config,
@@ -115,7 +116,11 @@ try {
             ]
           }
         },
-        bundle: { targets: ['app'], createUpdaterArtifacts: true },
+        bundle: {
+          targets: ['app'],
+          createUpdaterArtifacts: true,
+          macOS: { bundleName: 'SEP Chat Updater QA' }
+        },
         plugins: {
           'deep-link': { desktop: { schemes: ['sepchat-updater-qa'] } },
           updater: {

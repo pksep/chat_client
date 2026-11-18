@@ -32,13 +32,17 @@
       "appimage": { "bundleMediaFramework": true }
     },
     "macOS": {
+      "bundleName": "SEP Chat",
       "minimumSystemVersion": "12.3",
       "hardenedRuntime": true,
       "entitlements": "Entitlements.plist",
       "infoPlist": "Info.plist"
     },
     "windows": {
-      "wix": { "upgradeCode": "6e8ba11b-f460-543e-874f-1c95c1aa6705" },
+      "wix": {
+        "language": "ru-RU",
+        "upgradeCode": "6e8ba11b-f460-543e-874f-1c95c1aa6705"
+      },
       "nsis": {
         "installerIcon": "icons/icon.ico",
         "installerHooks": "windows/brand-migration.nsh"
