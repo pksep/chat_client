@@ -6,6 +6,7 @@ import '../../src/assets/chat-container.css';
 import ContactSelector from '../../src/components/NewChat/ContactSelector.vue';
 import NewGroupModal from '../../src/components/NewChat/NewGroupModal.vue';
 import NewContactModal from '../../src/components/NewChat/NewContactModal.vue';
+import NewBotModal from '../../src/components/NewChat/NewBotModal.vue';
 import NewChatMobileModal from '../../src/components/NewChat/NewChatMobileModal.vue';
 import TopicSelector from '../../src/components/TopicSelector.vue';
 import MobileModal from '../../src/components/UI/MobileModal.vue';
@@ -141,7 +142,26 @@ createApp({
         ]);
       }
       if (mode === 'contact') {
-        return h(NewContactModal, { open: true });
+        return h(NewContactModal, {
+          open: groupOpen.value,
+          onUnmountClose: () => (groupOpen.value = false)
+        });
+      }
+      if (mode === 'bot') {
+        return h(NewBotModal, {
+          open: groupOpen.value,
+          onUnmountClose: () => (groupOpen.value = false)
+        });
+      }
+      if (mode === 'bot-mobile' || mode === 'contact-mobile') {
+        return h(
+          mode === 'bot-mobile' ? NewBotMobileModal : NewChatMobileModal,
+          {
+            open: groupOpen.value,
+            isAddOne: true,
+            onUnmountClose: () => (groupOpen.value = false)
+          }
+        );
       }
       if (mode === 'forward') {
         return h(

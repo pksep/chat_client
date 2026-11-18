@@ -30,6 +30,73 @@ html.chat-desktop-custom-chrome {
   top: var(--desktop-titlebar-height);
 }
 
+.chat-desktop-custom-chrome dialog.mobile__modal.modal-yui-kit_bottom {
+  --mobile-modal-rows: auto minmax(0, 1fr);
+  box-sizing: border-box;
+  top: var(--desktop-content-top);
+  bottom: 0;
+  height: var(--app-viewport-height) !important;
+  max-height: var(--app-viewport-height);
+}
+
+.chat-desktop-custom-chrome dialog.mobile__modal--divider.modal-yui-kit_bottom {
+  --mobile-modal-rows: auto auto minmax(0, 1fr);
+}
+
+.chat-desktop-custom-chrome dialog.mobile__modal--footer.modal-yui-kit_bottom {
+  --mobile-modal-rows: auto minmax(0, 1fr) auto;
+}
+
+.chat-desktop-custom-chrome dialog.mobile__modal--divider.mobile__modal--footer.modal-yui-kit_bottom {
+  --mobile-modal-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.chat-desktop-custom-chrome dialog.mobile__modal.modal-yui-kit_bottom > .modal-yui-kit__modal-content {
+  box-sizing: border-box;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  grid-template-rows: var(--mobile-modal-rows);
+}
+
+.chat-desktop-custom-chrome dialog.mobile__modal.modal-yui-kit_bottom .mobile__modal-content {
+  min-height: 0;
+  overflow: auto;
+}
+
+.chat-desktop-custom-chrome dialog.new-bot-mobile .mobile__modal-content {
+  height: auto;
+}
+
+.chat-desktop-custom-chrome .new-bot-mobile .new-bot-mobile__body {
+  height: 100%;
+  min-height: 0;
+}
+
+.chat-desktop-custom-chrome .new-bot-mobile .bot-editor--mobile {
+  min-height: 0;
+  overflow: auto;
+}
+
+.chat-desktop-custom-chrome dialog.modal__new-contact .contact-selector {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.chat-desktop-custom-chrome dialog.modal__new-contact .contact-selector__list {
+  max-height: none;
+  margin-bottom: 0;
+  padding-bottom: 16px;
+}
+
+.chat-desktop-custom-chrome dialog.modal__new-contact .contact-selector__empty {
+  min-height: 0;
+  margin-bottom: 0;
+}
+
 .chat-desktop-custom-chrome .app-startup-shell,
 .chat-desktop-custom-chrome .startup-shell {
   top: var(--desktop-titlebar-height);

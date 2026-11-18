@@ -228,6 +228,21 @@ jobs:
       - name: Verify native macOS update, relaunch and Dock reopen
         if: runner.os == 'macOS'
         run: bun scripts/test-desktop-updater-macos-native.ts
+      - name: Verify macOS dialog layout in WebKit
+        if: runner.os == 'macOS'
+        run: |
+          bunx playwright install webkit
+          bunx playwright test e2e/creation-modal-desktop.spec.ts e2e/forward-modal-desktop.spec.ts --project=webkit-desktop --workers=1 --reporter=line
+      - uses: actions/upload-artifact@v4
+        if: always() && runner.os == 'macOS'
+        with:
+          name: dialog-layout-${{ matrix.platform }}
+          path: |
+            test-results/**/creation-modal.png
+            test-results/**/forward-modal.png
+            test-results/**/error-context.md
+          if-no-files-found: ignore
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         if: always() && runner.os == 'macOS'
         with:

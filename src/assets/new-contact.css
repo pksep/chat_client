@@ -146,6 +146,65 @@ button.primary-yui-kit.contact-selector__add {
   justify-self: end;
 }
 
+@media (width > 768px) {
+  dialog:is(.new-contact, .new-bot).modal-yui-kit_center {
+    --creation-modal-max-height: calc(var(--app-viewport-height, 100dvh) - 24px);
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    top: var(--desktop-content-top, 0px);
+    bottom: 0;
+    max-height: var(--creation-modal-max-height);
+    max-width: calc(100vw - 24px);
+    overflow: hidden;
+  }
+
+  dialog:is(.new-contact, .new-bot) > .modal-yui-kit__modal-content {
+    box-sizing: border-box;
+    min-height: 0;
+    max-height: var(--creation-modal-max-height);
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  dialog.new-contact .contact-selector {
+    display: grid;
+    min-height: 0;
+    min-width: 0;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  dialog.new-contact .contact-selector:has(> .contact-selector__add) {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+  }
+
+  dialog.new-contact .contact-selector:has(> .contact-selector__badges) {
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+  }
+
+  dialog.new-contact .contact-selector:has(> .contact-selector__badges):has(> .contact-selector__add) {
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  }
+
+  dialog.new-contact .contact-selector__empty {
+    min-height: 0;
+    height: 300px;
+    max-height: 100%;
+    box-sizing: border-box;
+    overflow-y: auto;
+  }
+
+  dialog.new-bot .bot-editor {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  dialog.new-bot .bot-editor > * {
+    flex-shrink: 0;
+  }
+}
+
 @media (width <=768px) {
   dialog.message-forward-modal.modal-yui-kit_bottom {
     border-radius: 0 !important;
