@@ -45,13 +45,24 @@ jobs:
       publish: ${{ steps.release.outputs.publish }}
       artifact_run_id: ${{ steps.release.outputs.artifact_run_id }}
       artifact_ids: ${{ steps.release.outputs.artifact_ids }}
+      apple_signed: ${{ steps.release.outputs.apple_signed }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
       - uses: actions/github-script@v7
         id: release
         env:
           INPUT_TAG: ${{ inputs.tag }}
           INPUT_PUBLISH: ${{ inputs.publish }}
           INPUT_ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
+          MACOS_NOTARIZATION_REQUIRED: ${{ vars.MACOS_NOTARIZATION_REQUIRED }}
+          APPLE_CERTIFICATE_PRESENT: ${{ secrets.APPLE_CERTIFICATE != '' }}
+          APPLE_CERTIFICATE_PASSWORD_PRESENT: ${{ secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
+          APPLE_SIGNING_IDENTITY_PRESENT: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
+          APPLE_API_ISSUER_PRESENT: ${{ secrets.APPLE_API_ISSUER != '' }}
+          APPLE_API_KEY_PRESENT: ${{ secrets.APPLE_API_KEY != '' }}
+          APPLE_API_PRIVATE_KEY_PRESENT: ${{ secrets.APPLE_API_PRIVATE_KEY != '' }}
         with:
           script: |
             let tag;
@@ -71,6 +82,13 @@ jobs:
               core.info('Latest release belongs to a different workflow run');
               return;
             }
+            const { pathToFileURL } = require('node:url');
+            const { resolve } = require('node:path');
+            const { appleSecrets, appleSigningMode, requireVerifiedMacJobs } = await import(pathToFileURL(resolve('.github/scripts/macos-distribution.mjs')).href);
+            const present = appleSecrets.filter(name => process.env[`${name}_PRESENT`] === 'true');
+            const appleSigned = appleSigningMode(present, process.env.MACOS_NOTARIZATION_REQUIRED === 'true') === 'notarized';
+            core.setOutput('apple_signed', appleSigned);
+            if (!appleSigned) core.notice('Apple Developer ID не настроен: macOS-пакеты требуют ручного разрешения Gatekeeper. Инструкция: doc/macos-distribution.md');
             const artifactRunId = process.env.INPUT_ARTIFACT_RUN_ID?.trim();
             if (artifactRunId) {
               if (!/^\d+$/.test(artifactRunId)) throw new Error('Invalid artifact run ID');
@@ -83,6 +101,7 @@ jobs:
               if (!buildNames.every(name => jobs.some(job => job.name === name && job.conclusion === 'success'))) {
                 throw new Error('All four platform builds must have succeeded');
               }
+              if (appleSigned) requireVerifiedMacJobs(jobs);
               const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, { ...context.repo, run_id: artifactRunId });
               const names = ['desktop-windows-x86_64', 'desktop-linux-x86_64', 'desktop-darwin-aarch64', 'desktop-darwin-x86_64'];
               const packages = names.map(name => {
@@ -147,13 +166,53 @@ jobs:
         with:
           workspaces: src-tauri
       - run: bun install --frozen-lockfile
-      - name: Build signed release
+      - name: Prepare Apple notarization credentials
+        id: apple_signing
+        if: runner.os == 'macOS' && needs.prepare.outputs.apple_signed == 'true'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        run: bun .github/scripts/macos-distribution.mjs prepare
+      - name: Build release and sign updater packages
+        if: runner.os != 'macOS' || needs.prepare.outputs.apple_signed != 'true'
         env:
           DESKTOP_VERSION: ${{ needs.prepare.outputs.version }}
           TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: bun run tauri:build -- ${{ matrix.args }}
+      - name: Build Apple signed and notarized release
+        if: runner.os == 'macOS' && needs.prepare.outputs.apple_signed == 'true'
+        env:
+          DESKTOP_VERSION: ${{ needs.prepare.outputs.version }}
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_PATH: ${{ steps.apple_signing.outputs.key_file }}
+        run: bun run tauri:build -- ${{ matrix.args }}
+      - name: Verify Apple signatures, notarization and Gatekeeper
+        if: runner.os == 'macOS' && needs.prepare.outputs.apple_signed == 'true'
+        env:
+          DESKTOP_VERSION: ${{ needs.prepare.outputs.version }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_PATH: ${{ steps.apple_signing.outputs.key_file }}
+        run: bun .github/scripts/macos-distribution.mjs verify ${{ matrix.platform }}
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'macOS' && needs.prepare.outputs.apple_signed == 'true'
+        with:
+          name: apple-distribution-${{ matrix.platform }}
+          path: test-results/apple-distribution-${{ matrix.platform }}.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Collect packages and signatures
         env:
           TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
@@ -175,6 +234,11 @@ jobs:
           path: test-results/macos-updater-*.json
           if-no-files-found: ignore
           retention-days: 7
+      - name: Clean Apple signing material
+        if: always() && runner.os == 'macOS' && steps.apple_signing.outputs.key_dir != ''
+        env:
+          SIGNING_DIRECTORY: ${{ steps.apple_signing.outputs.key_dir }}
+        run: bun .github/scripts/macos-distribution.mjs cleanup
 
   publish:
     needs: [prepare, build-tauri]
@@ -198,6 +262,26 @@ jobs:
           run-id: ${{ needs.prepare.outputs.artifact_run_id || github.run_id }}
           merge-multiple: true
           path: desktop-upload/packages
+      - uses: actions/download-artifact@v4
+        if: needs.prepare.outputs.apple_signed == 'true'
+        with:
+          pattern: apple-distribution-*
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.prepare.outputs.artifact_run_id || github.run_id }}
+          merge-multiple: true
+          path: desktop-upload/apple-reports
+      - name: Require Apple distribution verification
+        if: needs.prepare.outputs.apple_signed == 'true'
+        env:
+          DESKTOP_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          bun -e '
+            import { verifyDistributionReport } from "./.github/scripts/macos-distribution.mjs";
+            for (const platform of ["darwin-aarch64", "darwin-x86_64"]) {
+              const report = await Bun.file(`desktop-upload/apple-reports/apple-distribution-${platform}.json`).json();
+              verifyDistributionReport(report, platform, process.env.DESKTOP_VERSION);
+            }
+          '
       - name: Create complete update manifest
         env:
           TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}

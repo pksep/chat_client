@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/desktop-*.yml'
+      - '.github/scripts/macos-distribution.mjs'
       - 'src-tauri/**'
       - 'src/services/*desktop*'
       - 'src/services/useDesktopUpdater.ts'
@@ -85,7 +86,7 @@ jobs:
           workspaces: src-tauri
       - run: bun install --frozen-lockfile
       - name: Verify update logic
-        run: bun test ./test/desktopUpdater.test.ts ./test/desktopRelease.test.ts
+        run: bun test ./test/desktopUpdater.test.ts ./test/desktopRelease.test.ts ./test/macosDistribution.test.ts
       # Проверяем упаковку всех платформ до релиза; ключей подписи и публикации нет.
       - name: Build preview installer
         run: bun run tauri:build -- --bootstrap ${{ matrix.args }}

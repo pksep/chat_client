@@ -30,6 +30,8 @@
     "targets": "all",
     "macOS": {
       "minimumSystemVersion": "12.3",
+      "hardenedRuntime": true,
+      "entitlements": "Entitlements.plist",
       "infoPlist": "Info.plist"
     },
     "windows": {
