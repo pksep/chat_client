@@ -5,7 +5,8 @@
       "namespace": "android_app",
       "package_name": "sep.pksep.app",
       "sha256_cert_fingerprints": [
-        "3A:57:40:A9:63:3E:85:B9:95:E1:ED:82:EF:02:C8:15:C9:FA:B1:02:FE:35:56:81:F5:B9:C5:72:3A:B7:C1:3D"
+        "3A:57:40:A9:63:3E:85:B9:95:E1:ED:82:EF:02:C8:15:C9:FA:B1:02:FE:35:56:81:F5:B9:C5:72:3A:B7:C1:3D",
+        "8F:61:4E:D7:F2:FF:FB:53:61:86:FB:CA:45:22:C5:E9:8B:78:E0:9C:DB:A9:F3:81:C6:10:CE:3D:E1:79:64:F3"
       ]
     }
   }
