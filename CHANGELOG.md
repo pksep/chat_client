@@ -1,3 +1,10 @@
+# [1.52.0](https://github.com/pksep/chat_client/compare/v1.51.3...v1.52.0) (2026-11-18)
+
+
+### Features
+
+* **profile:** скачивание Android через настраиваемый QR ([#498](https://github.com/pksep/chat_client/issues/498)) ([93d2c2c](https://github.com/pksep/chat_client/commit/93d2c2c60b482ded7aba1f63fc50b4a1ee246646))
+
 ## [1.51.3](https://github.com/pksep/chat_client/compare/v1.51.2...v1.51.3) (2026-11-18)
 
 
