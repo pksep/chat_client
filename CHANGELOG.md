@@ -1,3 +1,10 @@
+## [1.50.2](https://github.com/pksep/chat_client/compare/v1.50.1...v1.50.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* scope recording notifications to the active call ([c63b9cf](https://github.com/pksep/chat_client/commit/c63b9cfc902cddb1e7648e35f4063906d1bb9a8f))
+
 ## [1.50.1](https://github.com/pksep/chat_client/compare/v1.50.0...v1.50.1) (2026-11-17)
 
 
