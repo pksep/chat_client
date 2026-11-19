@@ -81,9 +81,6 @@ try {
     entrypoints: ['e2e/fixtures/desktop-updater-native.ts'],
     outdir: frontend,
     target: 'browser',
-    define: {
-      __QA_STORAGE_SETTLE_MS__: process.env.QA_STORAGE_SETTLE_MS || '0'
-    },
     minify: true
   });
   if (!build.success) throw new Error('Не собран интерфейс проверки');

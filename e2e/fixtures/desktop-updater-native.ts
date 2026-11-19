@@ -4,8 +4,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { check } from '@tauri-apps/plugin-updater';
 import { createDesktopUpdater } from '../../src/services/desktop-updater';
+import { settleDesktopUpdateStorage } from '../../src/services/desktop-storage-settle';
 
-declare const __QA_STORAGE_SETTLE_MS__: number;
 const storageState = () => ({
   origin: location.origin,
   href: location.href,
@@ -30,7 +30,9 @@ try {
     identifier: await getIdentifier(),
     name: await getName(),
     dataDir: await appDataDir(),
-    ...storageState()
+    origin: location.origin,
+    href: location.href,
+    ...(version === '1.6.101' ? storageState() : {})
   });
   if (version === '1.6.101') {
     const next = await check();
@@ -89,13 +91,7 @@ try {
         );
         localStorage.setItem('qa-session', 'synthetic-session');
         void report('prepared', storageState());
-        if (
-          typeof __QA_STORAGE_SETTLE_MS__ !== 'undefined' &&
-          __QA_STORAGE_SETTLE_MS__ > 0
-        )
-          await new Promise(resolve =>
-            setTimeout(resolve, __QA_STORAGE_SETTLE_MS__)
-          );
+        await settleDesktopUpdateStorage();
       },
       relaunch: () => invoke('desktop_restart')
     });

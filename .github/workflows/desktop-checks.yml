@@ -9,6 +9,7 @@ on:
       - '.github/scripts/linux-media-probe.c'
       - 'src-tauri/**'
       - 'src/services/*desktop*'
+      - 'src/services/desktop-storage-settle.ts'
       - 'src/services/useDesktopUpdater.ts'
       - 'src/composables/useMobileApp.ts'
       - 'src/components/Menu/*Update*.vue'

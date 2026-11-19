@@ -3,6 +3,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { computed, nextTick, ref } from 'vue';
 import { createDesktopUpdater } from './desktop-updater';
 import { DESKTOP_UPDATE_MESSAGES } from './desktop-update-messages';
+import { settleDesktopUpdateStorage } from './desktop-storage-settle';
 import { hasActiveWebUpdateOperations } from './web-update-activity';
 import { getTelemetryErrorPayload, recordTelemetryEvent } from './useTelemetry';
 import {
@@ -66,6 +67,7 @@ export const desktopUpdater = createDesktopUpdater({
   prepareToInstall: async () => {
     await nextTick();
     for (const save of desktopBeforeInstall) await save();
+    await settleDesktopUpdateStorage();
     // Нативные передачи могут продолжаться после закрытия их UI.
     await invoke('desktop_update_prepare');
   },
