@@ -1,3 +1,10 @@
+## [1.53.5](https://github.com/pksep/chat_client/compare/v1.53.4...v1.53.5) (2026-11-19)
+
+
+### Bug Fixes
+
+* resolve short Windows paths before migrating shortcuts ([7ff77b4](https://github.com/pksep/chat_client/commit/7ff77b4e59dc4620245d2088f534862ffca4604b))
+
 ## [1.53.4](https://github.com/pksep/chat_client/compare/v1.53.3...v1.53.4) (2026-11-19)
 
 
