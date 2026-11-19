@@ -49,7 +49,7 @@ try {
     if (result) {
       const reason = await readFile(
         path.join(directory, 'failure.txt'),
-        'utf8'
+        'utf16le'
       ).catch(() => 'Нет отчёта установщика');
       throw new Error(`Проверка ярлыков не пройдена: ${reason}`);
     }

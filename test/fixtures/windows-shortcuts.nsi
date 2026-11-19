@@ -26,7 +26,7 @@ Var MenuPath
 
 !macro QA_FAIL message
   FileOpen $R0 "$EXEDIR\failure.txt" w
-  FileWrite $R0 "${message}"
+  FileWriteUTF16LE $R0 "${message}"
   FileClose $R0
   DeleteRegKey SHCTX "${MANUPRODUCTKEY}"
   SetErrorLevel 1
@@ -59,6 +59,7 @@ Var MenuPath
   SetOutPath $INSTDIR
   FileOpen $R0 "$INSTDIR\sep-chat.exe" w
   FileClose $R0
+  !insertmacro NSIS_HOOK_PREINSTALL
   CreateDirectory "$INSTDIR\desktop"
   CreateDirectory "$INSTDIR\programs\SEP Chat"
   StrCpy $AppStartMenuFolder ""
