@@ -198,6 +198,9 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY_PATH: ${{ steps.apple_signing.outputs.key_file }}
         run: bun run tauri:build -- ${{ matrix.args }}
+      - name: Verify Windows shortcut migration and recovery
+        if: runner.os == 'Windows'
+        run: bun scripts/test-windows-shortcuts.ts
       - name: Verify Apple signatures, notarization and Gatekeeper
         if: runner.os == 'macOS' && needs.prepare.outputs.apple_signed == 'true'
         env:
