@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/desktop-*.yml'
       - '.github/scripts/macos-distribution.mjs'
+      - '.github/scripts/macos-cache-key.sh'
       - '.github/scripts/check-linux-media.sh'
       - '.github/scripts/linux-media-probe.c'
       - 'src-tauri/**'
@@ -86,9 +87,14 @@ jobs:
       - name: Add Rust target
         if: matrix.rust_target != ''
         run: rustup target add ${{ matrix.rust_target }}
+      - name: Identify macOS SDK for the Rust cache
+        if: runner.os == 'macOS'
+        id: macos_toolchain
+        run: bash .github/scripts/macos-cache-key.sh
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          prefix-key: ${{ runner.os == 'macOS' && format('v1-rust-{0}', steps.macos_toolchain.outputs.key) || 'v0-rust' }}
       - run: bun install --frozen-lockfile
       - name: Verify update logic
         run: bun test ./test/desktopUpdater.test.ts ./test/desktopRelease.test.ts ./test/macosDistribution.test.ts

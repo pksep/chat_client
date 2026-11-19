@@ -169,9 +169,14 @@ jobs:
       - name: Add Rust target
         if: matrix.rust_target != ''
         run: rustup target add ${{ matrix.rust_target }}
+      - name: Identify macOS SDK for the Rust cache
+        if: runner.os == 'macOS'
+        id: macos_toolchain
+        run: bash .github/scripts/macos-cache-key.sh
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          prefix-key: ${{ runner.os == 'macOS' && format('v1-rust-{0}', steps.macos_toolchain.outputs.key) || 'v0-rust' }}
       - run: bun install --frozen-lockfile
       - name: Prepare Apple notarization credentials
         id: apple_signing
