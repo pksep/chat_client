@@ -1,8 +1,17 @@
-import { getVersion } from '@tauri-apps/api/app';
+import { getIdentifier, getName, getVersion } from '@tauri-apps/api/app';
+import { appDataDir } from '@tauri-apps/api/path';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { check } from '@tauri-apps/plugin-updater';
 import { createDesktopUpdater } from '../../src/services/desktop-updater';
+
+declare const __QA_STORAGE_SETTLE_MS__: number;
+const storageState = () => ({
+  origin: location.origin,
+  href: location.href,
+  draft: localStorage.getItem('qa-draft'),
+  session: localStorage.getItem('qa-session')
+});
 
 const report = async (stage: string, data = {}) => {
   document.body.textContent = stage;
@@ -16,6 +25,13 @@ const report = async (stage: string, data = {}) => {
 
 try {
   const version = await getVersion();
+  await report('started', {
+    version,
+    identifier: await getIdentifier(),
+    name: await getName(),
+    dataDir: await appDataDir(),
+    ...storageState()
+  });
   if (version === '1.6.101') {
     const next = await check();
     const repeatUpdate = !!next;
@@ -72,6 +88,14 @@ try {
           'Несохранённый текст перед обновлением'
         );
         localStorage.setItem('qa-session', 'synthetic-session');
+        void report('prepared', storageState());
+        if (
+          typeof __QA_STORAGE_SETTLE_MS__ !== 'undefined' &&
+          __QA_STORAGE_SETTLE_MS__ > 0
+        )
+          await new Promise(resolve =>
+            setTimeout(resolve, __QA_STORAGE_SETTLE_MS__)
+          );
       },
       relaunch: () => invoke('desktop_restart')
     });
