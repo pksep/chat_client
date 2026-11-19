@@ -421,6 +421,10 @@ for (const trigger of ['timer', 'focus', 'online', 'visibility', 'retry']) {
   }) => {
     await page.clock.install();
     await openProfile(page, trigger === 'retry' ? 'error' : 'latest');
+    if (trigger === 'retry')
+      await expect(
+        page.getByTestId('Fixture-MenuProfilePanel-UpdateAction')
+      ).toHaveText('Проверить');
     await page.evaluate(() => {
       (window as any).profileQrFixture.showUpdateBanner();
       (window as any).updateMode = 'available';
