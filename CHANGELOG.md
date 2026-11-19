@@ -1,3 +1,10 @@
+## [1.53.6](https://github.com/pksep/chat_client/compare/v1.53.5...v1.53.6) (2026-11-19)
+
+
+### Bug Fixes
+
+* let macOS persist chat state before desktop updates ([aefe518](https://github.com/pksep/chat_client/commit/aefe5183a0737a0b5b226cb25bcf0c5b2b31f49f))
+
 ## [1.53.5](https://github.com/pksep/chat_client/compare/v1.53.4...v1.53.5) (2026-11-19)
 
 
