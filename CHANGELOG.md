@@ -1,3 +1,10 @@
+## [1.53.4](https://github.com/pksep/chat_client/compare/v1.53.3...v1.53.4) (2026-11-19)
+
+
+### Bug Fixes
+
+* restore Windows shortcuts after the application rename ([1aff819](https://github.com/pksep/chat_client/commit/1aff81919f5f546dc7c0937c3c7cd70937acf467))
+
 ## [1.53.3](https://github.com/pksep/chat_client/compare/v1.53.2...v1.53.3) (2026-11-18)
 
 
