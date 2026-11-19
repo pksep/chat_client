@@ -15,6 +15,13 @@ on:
         description: 'Optional completed Desktop Builds run for this release; reuse its signed packages'
         required: false
         type: string
+      macos_arm_runner:
+        description: 'Apple Silicon runner; macOS 15 can be used when the latest image is queued'
+        default: macos-latest
+        type: choice
+        options:
+          - macos-latest
+          - macos-15
   push:
     tags: ['v*']
   # semantic-release uses GITHUB_TOKEN; its tags do not trigger push workflows.
@@ -137,7 +144,7 @@ jobs:
             rust_target: ''
             platform: linux-x86_64
           - label: macOS Apple Silicon
-            os: macos-latest
+            os: ${{ inputs.macos_arm_runner || 'macos-latest' }}
             args: '--target aarch64-apple-darwin --bundles app,dmg'
             rust_target: aarch64-apple-darwin
             platform: darwin-aarch64
