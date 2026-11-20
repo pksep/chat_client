@@ -10,6 +10,8 @@
     <script type="module">
       import { createApp, h } from 'vue';
       import MenuDesktopAppButton from '/src/components/Menu/MenuDesktopAppButton.vue';
+      import { configureBrowserAppInstall } from '/src/services/browser-app-install.ts';
+      configureBrowserAppInstall();
       import '/src/assets/chat-container.css';
       const query = new URLSearchParams(location.search);
       const collapsed = query.has('collapsed');

@@ -237,38 +237,8 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         skipWaiting: true
       },
       mode: mode === 'development' ? 'development' : 'production',
-      manifest: {
-        name: 'СЭП Чат',
-        short_name: 'СЭП Чат',
-        display: 'standalone',
-        description: 'Chatting application',
-        theme_color: '#ffffff',
-        background_color: '#f8f9fd',
-        icons: [
-          {
-            src: 'images/pwa-64x64.png?v=20260909-dark',
-            sizes: '64x64',
-            type: 'image/png'
-          },
-          {
-            src: 'images/pwa-192x192.png?v=20260909-dark',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'images/pwa-512x512.png?v=20260909-dark',
-            sizes: '512x512',
-            type: 'image/png'
-          },
-          {
-            src: 'images/maskable-icon-512x512.png?v=20260909-dark',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable'
-          }
-        ],
-        screenshots: []
-      },
+      // Manifest подключает browser-app-install только для iPhone/iPad.
+      manifest: false,
       devOptions: {
         enabled: mode !== 'development',
         type: 'module',

@@ -8,41 +8,27 @@
     :data-testid="`${props.dataTestid}-DesktopApp`"
   >
     <a
-      :href="DESKTOP_APP_OPEN_URL"
-      class="menu-native-app__open"
-      aria-label="Открыть в приложении"
-      title="Открыть в приложении"
-      :data-testid="`${props.dataTestid}-DesktopApp-Open`"
-    >
-      <Icon
-        :name="IconNameEnum.uploadCloud"
-        :width="18"
-        :height="18"
-        aria-hidden="true"
-      />
-      <span v-if="!props.isCollapse">Открыть в приложении</span>
-    </a>
-    <button
       ref="trigger"
-      type="button"
-      class="menu-native-app__download"
-      aria-label="Скачать приложение"
-      title="Скачать приложение"
-      aria-haspopup="dialog"
-      :aria-expanded="isOpen"
-      :aria-controls="dialogId"
-      :data-testid="`${props.dataTestid}-DesktopApp-Download`"
-      @click="toggle"
+      :href="showDownloads ? `#${dialogId}` : DESKTOP_APP_OPEN_URL"
+      role="button"
+      class="menu-native-app__open"
+      :aria-label="actionLabel"
+      :title="actionLabel"
+      :aria-haspopup="showDownloads ? 'dialog' : undefined"
+      :aria-expanded="showDownloads ? isOpen : undefined"
+      :aria-controls="showDownloads ? dialogId : undefined"
+      :data-testid="`${props.dataTestid}-DesktopApp-Action`"
+      @click="handleAction"
+      @keydown.space.prevent="trigger?.click()"
     >
       <Icon
-        v-if="props.isCollapse"
-        :name="IconNameEnum.download"
+        :name="showDownloads ? IconNameEnum.download : IconNameEnum.uploadCloud"
         :width="18"
         :height="18"
         aria-hidden="true"
       />
-      <span v-else>Скачать приложение</span>
-    </button>
+      <span v-if="!props.isCollapse">{{ actionLabel }}</span>
+    </a>
     <Teleport to="body">
       <section
         v-if="isOpen"
@@ -56,6 +42,9 @@
         tabindex="-1"
       >
         <h3 :id="`${dialogId}-title`">Скачать СЭП Чат</h3>
+        <p>
+          Если приложение не открылось, установите СЭП Чат для своей системы.
+        </p>
         <a
           v-for="item in downloads"
           :key="item.url"
@@ -88,6 +77,7 @@
 import { Capacitor } from '@capacitor/core';
 import { isTauri } from '@tauri-apps/api/core';
 import {
+  computed,
   nextTick,
   onMounted,
   onBeforeUnmount,
@@ -113,8 +103,17 @@ const isDesktopBrowser =
   !isTauri() && !Capacitor.isNativePlatform() && platform !== 'mobile';
 const downloads = desktopAppDownloadsFor(platform);
 const isOpen = ref(false);
+const showDownloads = ref(false);
+const actionLabel = computed(() =>
+  showDownloads.value ? 'Скачать приложение' : 'Открыть приложение'
+);
+let launchTimer: ReturnType<typeof setTimeout> | undefined;
+const clearLaunchTimer = () => {
+  clearTimeout(launchTimer);
+  launchTimer = undefined;
+};
 const dialogId = useId();
-const trigger = useTemplateRef<HTMLButtonElement>('trigger');
+const trigger = useTemplateRef<HTMLAnchorElement>('trigger');
 const panel = useTemplateRef<HTMLElement>('panel');
 const { floatingStyles } = useFloating(trigger, panel, {
   placement: 'top-start',
@@ -123,6 +122,7 @@ const { floatingStyles } = useFloating(trigger, panel, {
   whileElementsMounted: autoUpdate
 });
 const close = () => {
+  clearLaunchTimer();
   isOpen.value = false;
 };
 const closeAndFocus = () => {
@@ -136,6 +136,25 @@ const toggle = async () => {
     panel.value?.focus({ preventScroll: true });
   }
 };
+const handleAction = (event: MouseEvent) => {
+  if (showDownloads.value) {
+    event.preventDefault();
+    void toggle();
+    return;
+  }
+  clearLaunchTimer();
+  // Браузер не раскрывает наличие обработчика протокола. Предлагаем загрузку,
+  // если вкладка осталась активной; это не утверждение об отсутствии приложения.
+  launchTimer = setTimeout(() => {
+    launchTimer = undefined;
+    if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
+    showDownloads.value = true;
+    void toggle();
+  }, 2000);
+};
+const handleVisibility = () => {
+  if (document.visibilityState === 'hidden') clearLaunchTimer();
+};
 onClickOutside(panel, close, { ignore: [trigger] });
 onKeyStroke('Escape', event => {
   if (!isOpen.value) return;
@@ -144,12 +163,17 @@ onKeyStroke('Escape', event => {
 });
 const suppressPwaInstall = (event: Event) => event.preventDefault();
 onMounted(() => {
+  window.addEventListener('blur', clearLaunchTimer);
+  document.addEventListener('visibilitychange', handleVisibility);
   if (isDesktopBrowser)
     window.addEventListener('beforeinstallprompt', suppressPwaInstall);
 });
-onBeforeUnmount(() =>
-  window.removeEventListener('beforeinstallprompt', suppressPwaInstall)
-);
+onBeforeUnmount(() => {
+  clearLaunchTimer();
+  window.removeEventListener('beforeinstallprompt', suppressPwaInstall);
+  window.removeEventListener('blur', clearLaunchTimer);
+  document.removeEventListener('visibilitychange', handleVisibility);
+});
 </script>
 
 <style scoped>
@@ -159,35 +183,34 @@ onBeforeUnmount(() =>
   min-width: 0;
   padding: 6px 0;
 }
-.menu-native-app__open,
-.menu-native-app__download {
+.menu-native-app__open {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   box-sizing: border-box;
-  min-height: 32px;
-  padding: 6px;
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 12px;
   border: 0;
   border-radius: 5px;
-  background: transparent;
-  color: var(--text-primary);
+  background: var(--action-primary-bg);
+  color: var(--text-on-brand);
   font: inherit;
   font-size: 14px;
   line-height: 18px;
   text-decoration: none;
   cursor: pointer;
 }
-.menu-native-app__download {
-  min-height: 26px;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
 .menu-native-app--collapse {
   width: 40px;
 }
-.menu-native-app__open:hover,
-.menu-native-app__download:hover,
+.menu-native-app__open:hover {
+  filter: brightness(1.06);
+}
+.menu-native-app--collapse .menu-native-app__open {
+  padding: 10px;
+}
 .desktop-app-downloads a:hover {
   background: var(--action-secondary-hover-bg);
 }
@@ -216,6 +239,12 @@ onBeforeUnmount(() =>
 .desktop-app-downloads h3 {
   margin: 0 0 8px;
   font-size: 15px;
+}
+.desktop-app-downloads p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
 }
 .desktop-app-downloads a {
   display: flex;

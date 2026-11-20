@@ -2,6 +2,7 @@ import { createApp } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { isTauri } from '@tauri-apps/api/core';
 import App from './App.vue';
+import { configureBrowserAppInstall } from './services/browser-app-install';
 import './assets/chat-container.css';
 import { installNotoEmojiFontFaces } from './composables/useEmojiStyle';
 import { emojiDirective } from './directives/emoji';
@@ -17,6 +18,8 @@ import { initDesktopScreenCapture } from './services/desktop-screen-capture';
 
 performance.mark('chat-startup:modules-ready');
 const disposeIosPwaViewport = initIosPwaViewport();
+const disposeBrowserAppInstall = configureBrowserAppInstall();
+import.meta.hot?.dispose(disposeBrowserAppInstall);
 import.meta.hot?.dispose(disposeIosPwaViewport);
 const disposeDesktopContextMenu = suppressDefaultDesktopContextMenu();
 import.meta.hot?.dispose(disposeDesktopContextMenu);

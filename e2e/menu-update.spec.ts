@@ -3,19 +3,31 @@ import { expect, test, type Page } from './fixtures/ai-history';
 test.setTimeout(90_000);
 
 test('внизу списка чатов доступны Tauri и установщики вместо установки PWA', async ({
-  page
+  page,
+  isMobile
 }) => {
+  test.skip(isMobile, 'В мобильном браузере desktop-кнопка скрыта');
   await openMenu(page, 2);
-  const open = page.getByRole('link', { name: 'Открыть в приложении' });
+  const open = page.getByRole('button', { name: 'Открыть приложение' });
   await expect(open).toHaveAttribute('href', 'sepchat://open');
-  await page
-    .getByRole('button', { name: 'Скачать приложение', exact: true })
-    .click();
+  await page.evaluate(() =>
+    document.addEventListener(
+      'click',
+      event => {
+        if ((event.target as Element).closest('a[href^="sepchat:"]'))
+          event.preventDefault();
+      },
+      true
+    )
+  );
+  await open.click();
   await expect(
     page.getByRole('dialog', { name: 'Скачать СЭП Чат' }).getByRole('link')
   ).toHaveCount(4);
   await page.keyboard.press('Escape');
-  const box = (await open.boundingBox())!;
+  const box = (await page
+    .getByRole('button', { name: 'Скачать приложение', exact: true })
+    .boundingBox())!;
   const nav = (await page.locator('.menu-bottom-nav:visible').boundingBox())!;
   expect(box.y + box.height).toBeLessThanOrEqual(nav.y);
 });

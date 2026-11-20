@@ -1,4 +1,5 @@
 import { onMounted, ref } from 'vue';
+import { isIosWeb } from '../utils/ios-pwa-viewport';
 
 export function useIosInstallPrompt() {
   const isOpen = ref(false);
@@ -17,7 +18,10 @@ export function useIosInstallPrompt() {
   };
 
   onMounted(() => {
-    if (new URL(window.location.href).searchParams.has('installIOS')) {
+    if (
+      isIosWeb() &&
+      new URL(window.location.href).searchParams.has('installIOS')
+    ) {
       isOpen.value = true;
     }
   });

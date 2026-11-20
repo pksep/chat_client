@@ -1,4 +1,12 @@
 {
+  "id": "/",
+  "name": "СЭП Чат",
+  "short_name": "СЭП Чат",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#ffffff",
+  "background_color": "#f8f9fd",
   "icons": [
     {
       "src": "../icons/icon-48.webp?v=20260909-dark",
