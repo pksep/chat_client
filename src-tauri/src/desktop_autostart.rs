@@ -5,11 +5,16 @@ pub fn command(executable: &Path) -> String {
 }
 
 #[cfg(windows)]
-pub fn register() -> std::io::Result<()> {
+pub fn register(identifier: &str) -> std::io::Result<()> {
     use winreg::{
         enums::{HKEY_CURRENT_USER, KEY_SET_VALUE},
         RegKey,
     };
+
+    // QA-сборки не должны менять автозапуск установленного пользовательского чата.
+    if identifier != "ru.pksep.chat" {
+        return Ok(());
+    }
 
     let executable = std::env::current_exe()?;
     let key = RegKey::predef(HKEY_CURRENT_USER).open_subkey_with_flags(
@@ -22,6 +27,22 @@ pub fn register() -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
+    #[test]
+    fn qa_does_not_replace_production_autostart() {
+        use winreg::{enums::HKEY_CURRENT_USER, RegKey};
+
+        let read = || {
+            RegKey::predef(HKEY_CURRENT_USER)
+                .open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Run")
+                .ok()
+                .and_then(|key| key.get_value::<String, _>("SEP Chat").ok())
+        };
+        let before = read();
+        super::register("ru.pksep.chat.updaterqa").unwrap();
+        assert_eq!(read(), before);
+    }
+
     #[test]
     fn quotes_the_executable_before_the_argument() {
         assert_eq!(

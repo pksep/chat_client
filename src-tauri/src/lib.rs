@@ -396,7 +396,7 @@ fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     // Dev-сборка не должна заменять установленный exe в автозапуске.
     if !cfg!(debug_assertions) {
         #[cfg(windows)]
-        if let Err(error) = desktop_autostart::register() {
+        if let Err(error) = desktop_autostart::register(&app.config().identifier) {
             eprintln!("Не удалось обновить автозапуск СЭП Чат: {error}");
         }
         #[cfg(not(windows))]
