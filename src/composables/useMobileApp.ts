@@ -698,7 +698,7 @@ export function useMobileApp() {
 
   const checkForUpdates = async () => {
     if (isTauri()) {
-      await desktopUpdater.check(true);
+      await desktopUpdater.check();
       return;
     }
     isCheckingForUpdates.value = true;
@@ -722,7 +722,7 @@ export function useMobileApp() {
     if (isTauri()) {
       const { phase, progress } = desktopUpdater.state.value;
       if (phase === 'checking') return 'Проверяем…';
-      if (phase === 'downloaded') return 'Установить и перезапустить';
+      if (phase === 'downloaded') return 'Обновить';
       if (phase === 'installing') return 'Устанавливаем…';
       if (phase === 'downloading')
         return progress === null ? 'Скачиваем…' : `${progress}%`;

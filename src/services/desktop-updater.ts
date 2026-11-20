@@ -103,15 +103,6 @@ export function createDesktopUpdater(deps: DesktopUpdateDependencies) {
     return pending;
   };
 
-  const check = (manual = false): Promise<void> => {
-    if (downloaded || state.value.phase === 'installing') {
-      return pending ?? Promise.resolve();
-    }
-    if (!manual && update && state.value.phase !== 'error')
-      return Promise.resolve();
-    return run(findUpdate);
-  };
-
   const download = async () => {
     if (!update) return;
     let total = 0;
@@ -141,6 +132,16 @@ export function createDesktopUpdater(deps: DesktopUpdateDependencies) {
         error: DESKTOP_UPDATE_MESSAGES.downloadFailed
       });
     }
+  };
+
+  const check = (): Promise<void> => {
+    if (downloaded || state.value.phase === 'installing') {
+      return pending ?? Promise.resolve();
+    }
+    return run(async () => {
+      await findUpdate();
+      if (update && state.value.phase === 'available') await download();
+    });
   };
 
   const install = async () => {
@@ -175,15 +176,12 @@ export function createDesktopUpdater(deps: DesktopUpdateDependencies) {
     }
   };
 
-  const act = () =>
-    run(async () => {
-      if (downloaded && update) {
-        await install();
-        return;
-      }
-      if (!update) await findUpdate();
-      if (update) await download();
-    });
+  // Клик до готовности пакета только повторяет подготовку: он не даёт согласия
+  // на установку после завершения фоновой загрузки.
+  const act = () => {
+    if (!downloaded || !update) return check();
+    return run(install);
+  };
 
   return { state, check, act };
 }

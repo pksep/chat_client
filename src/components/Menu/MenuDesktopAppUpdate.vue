@@ -151,7 +151,9 @@ const toggleExpanded = () => {
     emit('check');
 };
 const isBusy = computed(() =>
-  ['checking', 'downloading', 'installing'].includes(props.state.phase)
+  ['checking', 'available', 'downloading', 'installing'].includes(
+    props.state.phase
+  )
 );
 const isIndeterminate = computed(
   () => props.state.phase !== 'downloading' || props.state.progress === null
@@ -168,16 +170,16 @@ const copies = computed<
     description: 'Пожалуйста, подождите несколько секунд'
   },
   available: {
-    title: 'Доступна новая версия',
-    description: 'Обновите приложение, чтобы получить новые функции'
+    title: 'Подготавливаем обновление',
+    description: 'Можно продолжать пользоваться чатом'
   },
   downloading: {
     title: 'Загружаем обновление',
-    description: 'Пожалуйста, не закрывайте приложение'
+    description: 'Можно продолжать пользоваться чатом'
   },
   downloaded: {
     title: 'Готово к установке',
-    description: 'Для установки перезагрузите приложение'
+    description: 'Нажмите «Обновить», чтобы установить и перезапустить чат'
   },
   installing: {
     title: 'Устанавливаем обновление',
@@ -195,18 +197,12 @@ const copies = computed<
 }));
 const copy = computed(() => copies.value[props.state.phase]);
 const actionLabel = computed(() =>
-  props.state.phase === 'available'
-    ? 'Обновить'
-    : props.state.phase === 'downloaded'
-      ? 'Перезагрузить'
-      : 'Проверить'
+  props.state.phase === 'downloaded' ? 'Обновить' : 'Проверить'
 );
 const actionDescription = computed(() =>
-  props.state.phase === 'available'
-    ? `Скачать обновление${props.state.version ? ` до версии ${props.state.version}` : ''}`
-    : props.state.phase === 'downloaded'
-      ? 'Установить и перезапустить'
-      : 'Проверить обновления'
+  props.state.phase === 'downloaded'
+    ? `Обновить${props.state.version ? ` до версии ${props.state.version}` : ''}`
+    : 'Проверить обновления'
 );
 const progressLabel = computed(() =>
   props.state.phase === 'checking'

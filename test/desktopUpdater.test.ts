@@ -84,16 +84,19 @@ describe('Обновления desktop', () => {
     await f.updater.check();
     expect(f.updater.state.value.phase).toBe('latest');
   });
-  test('скачивание проверено до готовности; установка отдельным кликом', async () => {
+  test('проверка сама скачивает пакет; один клик сохраняет черновики и устанавливает', async () => {
     const f = fixture();
     await f.updater.check();
     expect(f.updater.state.value).toMatchObject({
-      phase: 'available',
+      phase: 'downloaded',
       version: '1.6.1'
     });
-    await f.updater.act();
-    expect(f.updater.state.value.phase).toBe('downloaded');
-    expect(f.calls.install).toBe(0);
+    expect(f.calls).toMatchObject({
+      download: 1,
+      save: 0,
+      install: 0,
+      relaunch: 0
+    });
     await f.updater.act();
     expect(f.calls).toMatchObject({
       check: 1,
@@ -109,20 +112,20 @@ describe('Обновления desktop', () => {
     await f.updater.check();
     expect(f.updater.state.value.phase).toBe('error');
     f.failCheck(false);
-    await f.updater.check(true);
-    expect(f.updater.state.value.phase).toBe('available');
+    await f.updater.check();
+    expect(f.updater.state.value.phase).toBe('downloaded');
   });
-  test('временный пустой ответ не отменяет найденное обновление', async () => {
+  test('повторная проверка сохраняет готовый пакет без нового запроса', async () => {
     const f = fixture();
     await f.updater.check();
     f.latest();
-    await f.updater.check(true);
+    await f.updater.check();
     expect(f.updater.state.value).toMatchObject({
-      phase: 'available',
+      phase: 'downloaded',
       version: '1.6.1'
     });
     expect(f.calls.close).toBe(0);
-    await f.updater.act();
+    expect(f.calls.check).toBe(1);
     expect(f.updater.state.value.phase).toBe('downloaded');
     expect(f.calls.download).toBe(1);
   });
@@ -133,7 +136,7 @@ describe('Обновления desktop', () => {
     };
     await f.updater.act();
     f.latest();
-    await f.updater.check(true);
+    await f.updater.check();
     expect(f.updater.state.value).toMatchObject({
       phase: 'error',
       version: '1.6.1'
@@ -143,16 +146,21 @@ describe('Обновления desktop', () => {
   });
   test('фоновые проверки восстанавливаются после ошибки найденного обновления', async () => {
     const f = fixture();
+    const download = f.resource.download;
+    f.resource.download = async () => {
+      throw new Error('offline');
+    };
     await f.updater.check();
     f.failCheck(true);
-    await f.updater.check(true);
+    await f.updater.check();
     expect(f.updater.state.value).toMatchObject({
       phase: 'error',
       version: '1.6.1'
     });
     f.failCheck(false);
+    f.resource.download = download;
     await f.updater.check();
-    expect(f.updater.state.value.phase).toBe('available');
+    expect(f.updater.state.value.phase).toBe('downloaded');
     expect(f.calls.check).toBe(3);
     expect(f.calls.install).toBe(0);
   });
@@ -204,17 +212,64 @@ describe('Обновления desktop', () => {
       downloads++;
       await gate.promise;
     };
-    const first = f.updater.act();
+    const first = f.updater.check();
     await Promise.resolve();
     await Promise.resolve();
     const second = f.updater.act();
-    const third = f.updater.check(true);
+    const third = f.updater.check();
     gate.resolve();
     await Promise.all([first, second, third]);
-    await f.updater.check(true);
+    await f.updater.check();
     expect(downloads).toBe(1);
     expect(f.calls.check).toBe(1);
     expect(f.updater.state.value.phase).toBe('downloaded');
+    expect(f.calls.install).toBe(0);
+    expect(f.calls.relaunch).toBe(0);
+  });
+  test('Finished до проверки подписи не разрешает установку даже после раннего клика', async () => {
+    const f = fixture();
+    const gate = deferred();
+    const started = deferred();
+    f.resource.download = async onEvent => {
+      onEvent({ event: 'Finished' });
+      started.resolve();
+      await gate.promise;
+      throw new Error('invalid signature');
+    };
+    const background = f.updater.check();
+    await started.promise;
+    expect(f.updater.state.value.phase).toBe('downloading');
+    const earlyClick = f.updater.act();
+    gate.resolve();
+    await Promise.all([background, earlyClick]);
+    expect(f.updater.state.value.phase).toBe('error');
+    expect(f.calls).toMatchObject({
+      install: 0,
+      save: 0,
+      relaunch: 0,
+      close: 1
+    });
+  });
+  test('двойной клик готового обновления не дублирует установку и перезапуск', async () => {
+    const f = fixture();
+    await f.updater.check();
+    const gate = deferred();
+    f.resource.install = async () => {
+      f.calls.install++;
+      await gate.promise;
+    };
+    const first = f.updater.act();
+    const second = f.updater.act();
+    const check = f.updater.check();
+    gate.resolve();
+    await Promise.all([first, second, check]);
+    expect(f.calls).toMatchObject({
+      check: 1,
+      download: 1,
+      save: 1,
+      install: 1,
+      relaunch: 1
+    });
   });
   test('ошибка установщика допускает повтор', async () => {
     const f = fixture();

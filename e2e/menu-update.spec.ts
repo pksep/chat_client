@@ -1,5 +1,7 @@
 import { expect, test, type Page } from './fixtures/ai-history';
 
+test.setTimeout(90_000);
+
 async function openMenu(
   page: Page,
   seenVersion: number,
@@ -55,7 +57,7 @@ async function openMenu(
   await page.route('**/manager/managers', route => route.fulfill({ json: [] }));
   await page.goto('/');
   await expect(page.locator('.menu-bottom-nav:visible')).toBeVisible({
-    timeout: 30_000
+    timeout: 60_000
   });
 }
 

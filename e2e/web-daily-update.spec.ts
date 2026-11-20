@@ -358,12 +358,13 @@ test('Tauri сохраняет ручное обновление после см
   expect(await page.evaluate(() => (window as any).updateCalls)).not.toContain(
     'plugin:updater|install'
   );
-  await page.locator('.menu-update-button').click();
-  await expect(page.locator('.menu-update-button')).toHaveText(
-    'Перезапустить чат'
-  );
+  await expect(page.locator('.menu-update-button')).toHaveText('Обновить');
   const commands = await page.evaluate(() => (window as any).updateCalls);
   expect(commands).toContain('plugin:updater|download');
   expect(commands).not.toContain('plugin:updater|install');
+  await page.locator('.menu-update-button').click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).updateCalls))
+    .toContain('desktop_restart');
   expect(state.navigations).toBe(1);
 });
