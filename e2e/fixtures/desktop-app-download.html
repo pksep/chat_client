@@ -40,17 +40,16 @@
             ]
           )
       }).mount('#app');
-      document.addEventListener(
-        'click',
-        event => {
-          const link = event.target.closest('a');
-          if (link) {
+      document.addEventListener('click', event => {
+        const link = event.target.closest('a');
+        if (link && !event.defaultPrevented) {
+          if (!query.has('allow-navigation') || link.protocol === 'sepchat:')
             event.preventDefault();
-            window.selectedAppLink = link.href;
-          }
-        },
-        true
-      );
+          window.selectedAppLink = link.href;
+          (window.selectedAppLinks ??= []).push(link.href);
+          (window.selectedAppTargets ??= []).push(link.target);
+        }
+      });
     </script>
   </body>
 </html>

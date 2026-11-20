@@ -2,13 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 test.setTimeout(90_000);
 const fixture = '/e2e/fixtures/desktop-app-download.html';
-const base = 'https://chat-server-prod.pksep.ru/api/downloads/desktop/';
-const links = {
-  Windows: 'windows-x64',
-  'Mac Apple Silicon': 'macos-arm64',
-  'Mac Intel': 'macos-x64',
-  Linux: 'linux-x64'
-};
+const website = 'https://pksep.ru/chat/#contacts';
 const device = async (
   page: Page,
   platform: string,
@@ -74,7 +68,7 @@ test('desktop удаляет старую PWA-оболочку, сохраняя
   ]);
 });
 
-test('одна кнопка: переход в приложение не показывает отдельное скачивание', async ({
+test('одна кнопка сразу запускает чат; уход со страницы отменяет открытие сайта', async ({
   page
 }) => {
   await device(page, 'Win32');
@@ -84,15 +78,111 @@ test('одна кнопка: переход в приложение не пок�
   await expect(
     page.getByTestId('Fixture-DesktopApp').getByRole('button')
   ).toHaveCount(1);
+  await expect(action).toHaveAttribute('href', 'sepchat://open');
   await action.click();
-  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await expect(action).toHaveAttribute('aria-busy', 'true');
+  await expect(action).toContainText('Открываем приложение…');
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'hidden'
+    });
+    window.dispatchEvent(new Event('blur'));
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
   await page.clock.fastForward(10_000);
+  expect(await page.evaluate(() => (window as any).selectedAppLink)).toBe(
+    'sepchat://open'
+  );
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible'
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('focus'));
+  });
+  await page.clock.fastForward(3000);
   await expect(action).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Скачать приложение' })
-  ).toHaveCount(0);
+  await expect(action).toHaveAttribute('aria-busy', 'false');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
+
+test('ожидание видно сразу, повторные клики не запускают протокол и Escape отменяет ожидание', async ({
+  page
+}) => {
+  await device(page, 'Win32');
+  await page.clock.install();
+  await page.goto(fixture);
+  const action = page.getByRole('button', { name: 'Открыть приложение' });
+  const before = await action.boundingBox();
+  await action.click();
+  await expect(action).toHaveAttribute('aria-busy', 'true');
+  await expect(action).toHaveAttribute('aria-disabled', 'true');
+  await expect(action.getByRole('status')).toHaveText('Открываем приложение…');
+  await expect(action.locator('.menu-native-app__spinner')).toBeVisible();
+  expect(await action.boundingBox()).toEqual(before);
+  await action.dispatchEvent('click');
+  expect(await page.evaluate(() => (window as any).selectedAppLinks)).toEqual([
+    'sepchat://open'
+  ]);
+  await page.keyboard.press('Escape');
+  await expect(action).toHaveAttribute('aria-busy', 'false');
+  await expect(action).toHaveAttribute('aria-disabled', 'false');
+  await page.clock.fastForward(3000);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await action.click();
+  await page.clock.fastForward(2000);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).selectedAppLink)).toBe(
+    website
+  );
+  await expect(action).toHaveAttribute('aria-busy', 'false');
+  await expect(action.locator('.menu-native-app__spinner')).toHaveCount(0);
+});
+
+for (const promptDuration of [500, 10_000])
+  test(`после окна Windows без обработчика (${promptDuration} мс) открывается сайт в новой вкладке`, async ({
+    page
+  }) => {
+    await device(page, 'Win32');
+    await page.clock.install();
+    await page.goto(fixture);
+    const action = page.getByRole('button', { name: 'Открыть приложение' });
+    await action.focus();
+    await page.keyboard.press('Space');
+    expect(await page.evaluate(() => (window as any).selectedAppLink)).toBe(
+      'sepchat://open'
+    );
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'hasFocus', {
+        configurable: true,
+        value: () => false
+      });
+      window.dispatchEvent(new Event('blur'));
+    });
+    await page.clock.fastForward(promptDuration);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'hasFocus', {
+        configurable: true,
+        value: () => true
+      });
+      window.dispatchEvent(new Event('focus'));
+    });
+    await page.clock.fastForward(2000);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(await page.evaluate(() => (window as any).selectedAppLink)).toBe(
+      website
+    );
+    expect(
+      await page.evaluate(() => (window as any).selectedAppTargets)
+    ).toEqual(['', '_blank']);
+    await expect(action).toHaveAttribute('aria-busy', 'false');
+    await expect(
+      page.getByTestId('Fixture-DesktopApp').getByRole('button')
+    ).toHaveCount(1);
+  });
 
 for (const [platform, userAgent, touch, manifest] of [
   ['Win32', 'Windows', 0, false],
@@ -125,19 +215,12 @@ for (const [platform, userAgent, touch, manifest] of [
   });
 }
 
-for (const [platform, first] of [
-  ['Win32', 'Windows'],
-  ['MacIntel', 'Mac Apple Silicon'],
-  ['Linux x86_64', 'Linux']
-]) {
-  test(`native-установщики: ${platform}, выбор и отсутствие установки PWA`, async ({
+for (const platform of ['Win32', 'MacIntel', 'Linux x86_64']) {
+  test(`переход на сайт без выбора установщиков и установки PWA: ${platform}`, async ({
     page
   }) => {
     await device(page, platform);
     await page.goto(fixture);
-    await expect(
-      page.getByRole('button', { name: 'Открыть приложение' })
-    ).toHaveAttribute('href', 'sepchat://open');
     const prevented = await page.evaluate(() => {
       const event = new Event('beforeinstallprompt', { cancelable: true });
       (event as any).prompt = () => {
@@ -151,31 +234,51 @@ for (const [platform, first] of [
     expect(await page.evaluate(() => (window as any).selectedAppLink)).toBe(
       'sepchat://open'
     );
-    const panel = page.getByRole('dialog', { name: 'Скачать СЭП Чат' });
-    await expect(panel).toBeVisible();
-    await expect(panel.getByRole('link').first()).toHaveText(first);
-    for (const [label, path] of Object.entries(links)) {
-      await expect(
-        panel.getByRole('link', { name: label, exact: true })
-      ).toHaveAttribute('href', base + path);
-      await expect(
-        panel.getByRole('link', { name: label, exact: true })
-      ).toHaveAttribute('target', '_blank');
-    }
-    await panel.getByRole('link', { name: first, exact: true }).click();
-    await expect(panel).toBeHidden();
-    expect(await page.evaluate(() => (window as any).selectedAppLink)).toBe(
-      base + links[first]
-    );
+    await expect
+      .poll(() => page.evaluate(() => (window as any).selectedAppLink))
+      .toBe(website);
+    expect(
+      await page.evaluate(() => (window as any).selectedAppTargets)
+    ).toEqual(['', '_blank']);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 }
+
+test('сайт открывается отдельной вкладкой, исходный чат остаётся открытым', async ({
+  page,
+  context
+}) => {
+  await device(page, 'Win32');
+  await page.clock.install();
+  await context.route('https://pksep.ru/chat/', route =>
+    route.fulfill({
+      contentType: 'text/html; charset=utf-8',
+      body: '<meta charset="utf-8"><h1>Скачать СЭП Чат</h1>'
+    })
+  );
+  await page.goto(fixture + '?allow-navigation');
+  await page.getByRole('button', { name: 'Открыть приложение' }).click();
+  const opening = page.waitForEvent('popup');
+  await page.clock.fastForward(2000);
+  const popup = await opening;
+  await expect(popup).toHaveURL(website);
+  await expect(popup.getByRole('heading')).toHaveText('Скачать СЭП Чат');
+  expect(await popup.evaluate(() => window.opener === null)).toBe(true);
+  expect(page.url()).toContain(fixture);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Открыть приложение' })
+  ).toBeVisible();
+  await popup.close();
+});
 
 for (const theme of ['light', 'dark'])
   for (const collapsed of [false, true]) {
     test(`native-кнопки: ${theme}, свёрнутое меню ${collapsed}`, async ({
       page
     }, info) => {
-      await device(page, 'Win32');
+      await device(page, 'MacIntel');
+      await page.clock.install();
       await page.setViewportSize({ width: 280, height: 640 });
       await page.goto(
         `${fixture}?theme=${theme}${collapsed ? '&collapsed' : ''}`
@@ -185,19 +288,23 @@ for (const theme of ['light', 'dark'])
         page.getByRole('button', { name: 'Открыть приложение' })
       ).toBeVisible();
       await button.click();
-      const panel = page.getByRole('dialog');
-      await expect(panel).toBeFocused();
-      const box = (await panel.boundingBox())!;
+      await expect(button).toHaveAttribute('aria-busy', 'true');
+      await page.screenshot({
+        path: info.outputPath(`desktop-launch-${theme}-${collapsed}.png`),
+        animations: 'disabled'
+      });
+      await page.clock.fastForward(2000);
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      const box = (await button.boundingBox())!;
       expect(box.x).toBeGreaterThanOrEqual(0);
       expect(box.y).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(280);
       expect(box.y + box.height).toBeLessThanOrEqual(640);
       await page.screenshot({
-        path: info.outputPath(`desktop-download-${theme}-${collapsed}.png`)
+        path: info.outputPath(`desktop-idle-${theme}-${collapsed}.png`),
+        animations: 'disabled'
       });
-      await page.keyboard.press('Escape');
-      await expect(panel).toBeHidden();
-      await expect(button).toBeFocused();
+      await expect(button).toHaveAttribute('aria-busy', 'false');
     });
   }
 

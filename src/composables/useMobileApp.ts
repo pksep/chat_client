@@ -4,6 +4,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { MobilePlatformEnum } from '../components/interfaces/interfaces';
 import { afterStartupPaint } from '../utils/after-startup-paint';
+import { openAndroidApp } from '../utils/android-app-link';
 import {
   desktopAppVersion,
   desktopUpdater,
@@ -39,7 +40,6 @@ import {
   recordTelemetryEvent
 } from '../services/useTelemetry';
 
-const RUSTORE_APP_URL = 'https://www.rustore.ru/catalog/app/sep.pksep.app';
 const WEB_UPDATE_INFO_URL = '/web-update.json';
 const WEB_UPDATE_CHECK_INTERVAL_MS = 60_000;
 const WEB_UPDATE_VERSION_STORAGE_KEY = 'chat_web_seen_update_version';
@@ -550,7 +550,7 @@ export function useMobileApp() {
     if (!mobilePlatform.value) return;
 
     if (mobilePlatform.value === MobilePlatformEnum.ANDROID) {
-      window.location.href = RUSTORE_APP_URL;
+      openAndroidApp();
 
       return;
     }

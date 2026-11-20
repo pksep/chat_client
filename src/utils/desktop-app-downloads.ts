@@ -6,28 +6,7 @@ export type DesktopBrowserPlatform =
   | 'mobile';
 
 export const DESKTOP_APP_OPEN_URL = 'sepchat://open';
-export const DESKTOP_APP_DOWNLOADS = [
-  {
-    platform: 'windows',
-    label: 'Windows',
-    url: 'https://chat-server-prod.pksep.ru/api/downloads/desktop/windows-x64'
-  },
-  {
-    platform: 'macos',
-    label: 'Mac Apple Silicon',
-    url: 'https://chat-server-prod.pksep.ru/api/downloads/desktop/macos-arm64'
-  },
-  {
-    platform: 'macos',
-    label: 'Mac Intel',
-    url: 'https://chat-server-prod.pksep.ru/api/downloads/desktop/macos-x64'
-  },
-  {
-    platform: 'linux',
-    label: 'Linux',
-    url: 'https://chat-server-prod.pksep.ru/api/downloads/desktop/linux-x64'
-  }
-] as const;
+export const DESKTOP_APP_DOWNLOAD_PAGE_URL = 'https://pksep.ru/chat/#contacts';
 
 export const desktopBrowserPlatform = (
   device: Pick<Navigator, 'userAgent' | 'platform' | 'maxTouchPoints'>
@@ -44,8 +23,3 @@ export const desktopBrowserPlatform = (
     return 'linux';
   return 'unknown';
 };
-
-export const desktopAppDownloadsFor = (platform: DesktopBrowserPlatform) => [
-  ...DESKTOP_APP_DOWNLOADS.filter(item => item.platform === platform),
-  ...DESKTOP_APP_DOWNLOADS.filter(item => item.platform !== platform)
-];
