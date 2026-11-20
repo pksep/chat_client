@@ -1,3 +1,12 @@
+## [1.53.7](https://github.com/pksep/chat_client/compare/v1.53.6...v1.53.7) (2026-11-20)
+
+
+### Bug Fixes
+
+* clear stale organization when opening desktop call links [skip ci] ([98547e9](https://github.com/pksep/chat_client/commit/98547e963cdc2249feaf3aefe02a08cf70779788))
+* open call invitations through app choice on mobile ([#499](https://github.com/pksep/chat_client/issues/499)) ([880bb8f](https://github.com/pksep/chat_client/commit/880bb8fdcd5b1f02f9b258191b2a38aa5209cb18))
+* prepare desktop updates silently before installation [skip ci] ([d02adee](https://github.com/pksep/chat_client/commit/d02adeec4a5ce3720746f9233f20a793f0d311bd))
+
 ## [1.53.6](https://github.com/pksep/chat_client/compare/v1.53.5...v1.53.6) (2026-11-19)
 
 

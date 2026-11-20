@@ -3,7 +3,10 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import { isTauri } from '@tauri-apps/api/core';
 import { MessageTypeEnum } from '@pksep/yui';
 import { showNotification } from '../composables/useNotifications';
-import { parseGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
+import {
+  parseGroupCallInviteUrl,
+  parseDesktopGroupCallInviteUrl
+} from '../utils/groupCallInviteUrl';
 import { createGroupCallInviteQueue } from './groupCallInviteQueue';
 import { invitedGroupCall } from './useCallState';
 
@@ -76,6 +79,8 @@ const handleCallActionPayload = async (payload?: CallActionPayload | null) => {
 
 export const handleAppUrlOpen = async ({ url }: { url: string }) => {
   try {
+    if (Capacitor.isNativePlatform() || isTauri())
+      url = parseDesktopGroupCallInviteUrl(url) || url;
     const invite = parseGroupCallInviteUrl(url, {
       allowTrustedNativeOrigin: Capacitor.isNativePlatform() || isTauri()
     });
