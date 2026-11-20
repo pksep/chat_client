@@ -10,10 +10,6 @@
   overflow: hidden;
 }
 
-.menu:has(.menu__button-install-prompt) .contact-list {
-  max-height: calc(100vh - 210px);
-}
-
 .menu__start {
   display: grid;
   min-height: 0;
@@ -228,22 +224,6 @@
   grid-template-columns: 1fr;
   padding-inline: 10px;
   transform: none;
-}
-
-.menu__button-install-prompt {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  align-self: end;
-}
-
-.menu__button-install-prompt.ghost-yui-kit {
-  color: var(--text-secondary);
-  padding-block: 10px;
-
-  & svg.icon-yui-kit {
-    font-size: 16px !important;
-  }
 }
 
 @media screen and (width <=768px) {

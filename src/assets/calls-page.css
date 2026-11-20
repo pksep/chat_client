@@ -40,10 +40,6 @@
   }
 }
 
-.chat__menu:has(.menu__button-install-prompt) .calls-page__list {
-  max-height: calc(100vh - 240px);
-}
-
 .calls-page__item {
   position: relative;
   font: unset;

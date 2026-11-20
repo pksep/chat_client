@@ -2,6 +2,24 @@ import { expect, test, type Page } from './fixtures/ai-history';
 
 test.setTimeout(90_000);
 
+test('внизу списка чатов доступны Tauri и установщики вместо установки PWA', async ({
+  page
+}) => {
+  await openMenu(page, 2);
+  const open = page.getByRole('link', { name: 'Открыть в приложении' });
+  await expect(open).toHaveAttribute('href', 'sepchat://open');
+  await page
+    .getByRole('button', { name: 'Скачать приложение', exact: true })
+    .click();
+  await expect(
+    page.getByRole('dialog', { name: 'Скачать СЭП Чат' }).getByRole('link')
+  ).toHaveCount(4);
+  await page.keyboard.press('Escape');
+  const box = (await open.boundingBox())!;
+  const nav = (await page.locator('.menu-bottom-nav:visible').boundingBox())!;
+  expect(box.y + box.height).toBeLessThanOrEqual(nav.y);
+});
+
 async function openMenu(
   page: Page,
   seenVersion: number,

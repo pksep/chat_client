@@ -77,6 +77,10 @@ import type { UnlistenFn } from '@tauri-apps/api/event';
 import ChatIcon from '../UI/Icons/ChatIcon.vue';
 import { showErrorNotification } from '../../composables/useNotifications';
 import {
+  markTauriWindowInactive,
+  syncTauriWindowState
+} from '../../services/useAppVisibility';
+import {
   desktopScreenCaptureSource,
   stopDesktopScreenCapture
 } from '../../services/desktop-screen-capture';
@@ -122,9 +126,11 @@ const runWindowAction = async (
   action: 'minimize' | 'toggleMaximize' | 'close' | 'startDragging'
 ) => {
   try {
+    if (action === 'minimize' || action === 'close') markTauriWindowInactive();
     await getCurrentWindow()[action]();
     if (action === 'toggleMaximize') await refreshWindow();
   } catch {
+    void syncTauriWindowState();
     showErrorNotification(
       'Не удалось изменить состояние окна. Повторите действие.'
     );

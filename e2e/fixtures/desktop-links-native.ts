@@ -76,4 +76,21 @@ export const verifyNativeCallLinks = async (
     queuedBeforeLogin: true,
     shown
   });
+  await getCurrentWindow().close();
+  await report('native-app-open-ready', { passed: true });
+  let reopened = false;
+  const reopenDeadline = Date.now() + 20_000;
+  while (!reopened && Date.now() < reopenDeadline) {
+    const state = await invoke<{ visible: boolean; minimized: boolean }>(
+      'desktop_window_state'
+    );
+    reopened = state.visible && !state.minimized;
+    if (!reopened) await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  assert(reopened, 'Ссылка sepchat://open не вернула приложение из трея');
+  assert(
+    new URL(location.href).search === warm.search,
+    'Открытие приложения изменило приглашение'
+  );
+  await report('native-app-open', { passed: true, reopened });
 };

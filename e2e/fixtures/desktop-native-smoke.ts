@@ -55,6 +55,15 @@ try {
     'desktop_window_state'
   );
   assert(beforeClose.visible, 'Окно стенда не стало видимым');
+  await appWindow.minimize();
+  await syncTauriWindowState();
+  const minimized = await invoke<{ minimized: boolean }>(
+    'desktop_window_state'
+  );
+  assert(minimized.minimized, 'Системное окно не свернулось');
+  assert(!getIsAppActivelyVisible(), 'Свёрнутое окно считается активным');
+  await report('minimize', { passed: true, minimized });
+  await appWindow.unminimize();
   // Окно стенда закрывается штатным native событием, сохраняя процесс в трее.
   await appWindow.close();
   await new Promise(resolve => setTimeout(resolve, 200));

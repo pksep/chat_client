@@ -93,6 +93,7 @@ import {
 import {
   ensureTauriWindowStateTracking,
   getIsAppActivelyVisible,
+  syncTauriWindowState,
   subscribeToAppVisibilityChanges
 } from './useAppVisibility';
 import type { MediaPreviewDimensions } from '../utils/mediaPreview';
@@ -553,49 +554,66 @@ const setupChatListeners = (): void => {
     }
 
     if (!isDuplicateMessage && isIncomingFromAnotherUser) {
-      const isCurrentTopicActivelyVisible =
-        route.value.id === message.topicId && getIsAppActivelyVisible();
+      const updateIncomingNotifications = () => {
+        const isCurrentTopicActivelyVisible =
+          route.value.id === message.topicId && getIsAppActivelyVisible();
 
-      if (isCurrentTopicActivelyVisible) {
-        void clearTopicNotifications(message.topicId);
-      }
+        if (isCurrentTopicActivelyVisible) {
+          void clearTopicNotifications(message.topicId);
+        }
 
-      if (
-        !isCurrentTopicActivelyVisible &&
-        message.topicId === route.value.id &&
-        isTrackableUnreadIncomingMessage &&
-        totalUnreadCount.value === unreadCountBefore
-      ) {
-        incrementDisplayedUnreadCount(1);
-      }
+        if (
+          !isCurrentTopicActivelyVisible &&
+          message.topicId === route.value.id &&
+          isTrackableUnreadIncomingMessage &&
+          totalUnreadCount.value === unreadCountBefore
+        ) {
+          incrementDisplayedUnreadCount(1);
+        }
 
-      if (!opts?.silent) {
-        playNotificationSound(message.topicId, {
-          isMention: message.taggedUserIds?.includes(currentUserId.value || '')
-        });
-      }
+        if (!opts?.silent) {
+          playNotificationSound(message.topicId, {
+            isMention: message.taggedUserIds?.includes(
+              currentUserId.value || ''
+            )
+          });
+        }
 
-      if (
-        !opts?.silent &&
-        (!isTopicMuted(message.topicId) ||
-          message.taggedUserIds?.includes(currentUserId.value || '')) &&
-        !isCurrentTopicActivelyVisible
-      ) {
-        const topic = useTopics().getSelectedTopic(message.topicId) as any;
+        if (
+          !opts?.silent &&
+          (!isTopicMuted(message.topicId) ||
+            message.taggedUserIds?.includes(currentUserId.value || '')) &&
+          !isCurrentTopicActivelyVisible
+        ) {
+          const topic = useTopics().getSelectedTopic(message.topicId) as any;
 
-        void showTauriMessageNotification({
-          message,
-          sender: message.senderUser || getUserById(message.senderUserId),
-          topic
-        });
-        if (topic && isTrackableUnreadIncomingMessage) {
-          void showWebSocketMessageNotification({
+          void showTauriMessageNotification({
             message,
             sender: message.senderUser || getUserById(message.senderUserId),
             topic
           });
+          if (topic && isTrackableUnreadIncomingMessage) {
+            void showWebSocketMessageNotification({
+              message,
+              sender: message.senderUser || getUserById(message.senderUserId),
+              topic
+            });
+          }
         }
-      }
+      };
+      if (isTauriRuntime()) {
+        const receivingSDK = chatSDK;
+        const receivingUserId = currentUserId.value;
+        // WebView может сохранять focus до события minimize: не подавляем toast
+        // последнего чата по устаревшему снимку видимости.
+        void syncTauriWindowState().then(() => {
+          if (
+            chatSDK === receivingSDK &&
+            currentUserId.value === receivingUserId
+          )
+            updateIncomingNotifications();
+        });
+      } else updateIncomingNotifications();
     }
 
     updateLocalLastMessageTopic(message.topicId, message);

@@ -23,7 +23,7 @@ const origin = 'http://127.0.0.1:5178';
 const reports: Array<Record<string, unknown>> = [];
 const isShellCheck = process.argv.includes('--shell');
 const isLinksCheck = process.argv.includes('--links');
-let linkLaunch: ChildProcess | null = null;
+const linkLaunches: ChildProcess[] = [];
 const captureSourceTitle = `SEP Capture QA ${randomUUID()}`;
 let captureSourceBrowser: ChildProcess | null = null;
 const removeOwnedDirectory = async (directory: string) => {
@@ -154,14 +154,19 @@ const api = Bun.serve({
       );
       if (report.step === 'complete') finish(report.passed === true);
       if (report.step === 'failed') finish(false);
-      if (isLinksCheck && report.step === 'native-call-link-cold') {
-        linkLaunch = spawn(
+      const nextLink =
+        report.step === 'native-call-link-cold'
+          ? 'sepchat://invite?callRoom=native-warm-room&callInvite=native-warm-token'
+          : report.step === 'native-app-open-ready'
+            ? 'sepchat://open'
+            : null;
+      if (isLinksCheck && nextLink) {
+        const linkLaunch = spawn(
           path.resolve('src-tauri/target/debug/sep-chat.exe'),
-          [
-            'sepchat://invite?callRoom=native-warm-room&callInvite=native-warm-token'
-          ],
+          [nextLink],
           { windowsHide: true, stdio: 'ignore' }
         );
+        linkLaunches.push(linkLaunch);
         linkLaunch.once('error', () => finish(false));
       }
       return new Response(null, { status: 204, headers });
@@ -261,7 +266,12 @@ try {
 } finally {
   clearTimeout(timeout);
   // Только дерево процесса, запущенного этим стендом; основной SEP Chat не затрагивается.
-  for (const taskChild of [child, vite, captureSourceBrowser, linkLaunch]) {
+  for (const taskChild of [
+    child,
+    vite,
+    captureSourceBrowser,
+    ...linkLaunches
+  ]) {
     if (!taskChild || taskChild.exitCode !== null || !taskChild.pid) continue;
     await new Promise(resolve => setTimeout(resolve, 1000));
     if (taskChild.exitCode === null) {

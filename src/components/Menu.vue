@@ -143,20 +143,10 @@
       />
     </div>
 
-    <Button
-      v-if="canInstall && !isInstalled"
-      class="menu__button-install-prompt"
-      :type="ButtonTypeEnum.ghost"
-      :size="SizesEnum.small"
-      @click="handleInstall"
-      :data-testid="`${props.dataTestid}-Menu-InstallButton`"
-    >
-      <Icon
-        :name="IconNameEnum.uploadCloud"
-        :data-testid="`${props.dataTestid}-Menu-InstallIcon`"
-      />
-      <template v-if="!isCollapse"> Загрузить на устройство </template>
-    </Button>
+    <MenuDesktopAppButton
+      :is-collapse="isCollapse"
+      :data-testid="`${props.dataTestid}-Menu`"
+    />
 
     <MenuUpdateButton
       :is-collapse="isCollapse"
@@ -186,15 +176,9 @@ import {
 } from 'vue';
 import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
-import {
-  Icon,
-  Button,
-  ButtonTypeEnum,
-  IconNameEnum,
-  SizesEnum
-} from '@pksep/yui';
+import { Icon, IconNameEnum } from '@pksep/yui';
 import type { ITopic, IMenuEmits, IMenuProps } from './interfaces/interfaces';
-import { usePwaInstall } from '../composables/usePwaInstall';
+import MenuDesktopAppButton from './Menu/MenuDesktopAppButton.vue';
 import {
   navigateToGroup,
   navigateToDialogs,
@@ -262,7 +246,6 @@ const {
   loading: isTopicsLoading
 } = useTopics();
 const route = useUrlWatcher();
-const { canInstall, handleInstall, isInstalled } = usePwaInstall();
 const selectedContactId = computed(() => route.value?.id);
 const { state: toolbarState, setSearch, setFilter } = useChatsToolbarState();
 const { activeSection, setActiveSection } = useChatMenu();
