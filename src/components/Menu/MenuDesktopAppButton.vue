@@ -62,11 +62,13 @@ const isDesktopBrowser =
   desktopBrowserPlatform(navigator) !== 'mobile';
 const trigger = useTemplateRef<HTMLAnchorElement>('trigger');
 const launchPending = ref(false);
+let launchAttemptActive = false;
 let launchTimer: ReturnType<typeof setTimeout> | undefined;
 const clearLaunchAttempt = () => {
   clearTimeout(launchTimer);
   launchTimer = undefined;
   launchPending.value = false;
+  launchAttemptActive = false;
 };
 const openDownloadWebsite = () => {
   const link = document.createElement('a');
@@ -80,9 +82,10 @@ const openDownloadWebsite = () => {
 };
 const finishLaunchAttempt = () => {
   launchTimer = undefined;
+  launchPending.value = false;
   // Браузер не раскрывает наличие Tauri: продолжаем переход, если вкладка активна.
   if (
-    !launchPending.value ||
+    !launchAttemptActive ||
     document.visibilityState !== 'visible' ||
     !document.hasFocus()
   )
@@ -95,29 +98,36 @@ const handleAction = (event: MouseEvent) => {
     event.preventDefault();
     return;
   }
+  clearLaunchAttempt();
+  launchAttemptActive = true;
   launchPending.value = true;
   launchTimer = setTimeout(finishLaunchAttempt, 2000);
 };
 const handleFocus = () => {
   // Системное окно об отсутствии обработчика тоже забирает фокус.
   // После его закрытия продолжаем переход на страницу загрузки.
-  if (launchPending.value && launchTimer === undefined)
+  if (launchAttemptActive && launchTimer === undefined)
     launchTimer = setTimeout(finishLaunchAttempt, 300);
+};
+const handleBlur = () => {
+  launchPending.value = false;
 };
 const handleVisibility = () => {
   if (document.visibilityState === 'hidden') clearLaunchAttempt();
 };
 onClickOutside(trigger, clearLaunchAttempt);
 onKeyStroke('Escape', () => {
-  if (launchPending.value) clearLaunchAttempt();
+  if (launchAttemptActive) clearLaunchAttempt();
 });
 onMounted(() => {
   window.addEventListener('focus', handleFocus);
+  window.addEventListener('blur', handleBlur);
   document.addEventListener('visibilitychange', handleVisibility);
 });
 onBeforeUnmount(() => {
   clearLaunchAttempt();
   window.removeEventListener('focus', handleFocus);
+  window.removeEventListener('blur', handleBlur);
   document.removeEventListener('visibilitychange', handleVisibility);
 });
 </script>

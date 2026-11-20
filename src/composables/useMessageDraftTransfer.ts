@@ -13,7 +13,10 @@ export const clearPendingMessageDraft = (): void => {
 };
 
 /** Переносит внешний текст в редактор выбранного диалога или группы. */
-export const openMessageDraft = (topic: ITopic, text: string): void => {
+export const openMessageDraft = (
+  topic: Pick<ITopic, 'id' | 'type'>,
+  text: string
+): void => {
   const normalizedText = text.trim();
   if (!topic?.id || !normalizedText) {
     clearPendingMessageDraft();

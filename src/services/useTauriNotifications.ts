@@ -18,6 +18,8 @@ import type {
 import { stripHtml } from '../utils/stripHtml';
 import { getStickerMessagePreview } from '../utils/stickers';
 import { ensureStickerMessageMetadata } from './sticker-catalog';
+import { getNotificationAttachmentPreview } from '../utils/notification-attachments';
+import { getChatAuthSession } from '../utils/stored-chat-session';
 
 type TauriNotificationExtra = Record<string, unknown> & {
   callerId?: string | null;
@@ -151,22 +153,15 @@ const getTopicTitle = (topic?: ITopic | null): string =>
   topic?.name || topic?.user?.initials || 'СЭП Чат';
 
 const getSenderTitle = (sender?: IUser | null): string =>
-  sender?.initials || 'New message';
+  sender?.initials || 'Новое сообщение';
 
 const getMessagePreview = (message: IMessage): string => {
   const sticker = getStickerMessagePreview(message.ex, message.text);
   if (sticker) return sticker;
   const text = stripHtml(message.text || '');
 
-  if (text) {
-    return text;
-  }
-
-  if (message.media?.length) {
-    return 'Attachment';
-  }
-
-  return 'New message';
+  const attachments = getNotificationAttachmentPreview(message.media);
+  return [text, attachments].filter(Boolean).join('\n') || 'Новое сообщение';
 };
 
 const getMessageNotificationTitle = (
@@ -179,7 +174,7 @@ const getMessageNotificationTitle = (
   const topicTitle = getTopicTitle(topic);
 
   if (normalizeTopicType(topic?.type) === 'GROUP' && topicTitle) {
-    return `${senderTitle} in ${topicTitle}`;
+    return `${senderTitle} в ${topicTitle}`;
   }
 
   return senderTitle;
@@ -334,6 +329,8 @@ export const showTauriMessageNotification = async ({
       dialogsId: !isGroupTopic ? message.topicId : null,
       groupId: isGroupTopic ? message.topicId : null,
       messageId: message.id,
+      accountId: getChatAuthSession()?.user?.id,
+      replyClientId: crypto.randomUUID(),
       topicId: message.topicId,
       topicType: resolvedTopicType,
       type: 'new_message',

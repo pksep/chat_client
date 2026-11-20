@@ -141,6 +141,31 @@ test('ожидание видно сразу, повторные клики не
   await expect(action.locator('.menu-native-app__spinner')).toHaveCount(0);
 });
 
+test('переход в окно Tauri останавливает крутилку без скрытия вкладки браузера', async ({
+  page
+}) => {
+  await device(page, 'Win32');
+  await page.clock.install();
+  await page.goto(fixture);
+  const action = page.getByRole('button', { name: 'Открыть приложение' });
+  await action.click();
+  await expect(action).toHaveAttribute('aria-busy', 'true');
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hasFocus', {
+      configurable: true,
+      value: () => false
+    });
+    window.dispatchEvent(new Event('blur'));
+  });
+  await expect(action).toHaveAttribute('aria-busy', 'false');
+  await expect(action).toHaveAttribute('aria-disabled', 'false');
+  await expect(action.locator('.menu-native-app__spinner')).toHaveCount(0);
+  await page.clock.fastForward(10_000);
+  expect(await page.evaluate(() => (window as any).selectedAppLinks)).toEqual([
+    'sepchat://open'
+  ]);
+});
+
 for (const promptDuration of [500, 10_000])
   test(`после окна Windows без обработчика (${promptDuration} мс) открывается сайт в новой вкладке`, async ({
     page
