@@ -1,13 +1,43 @@
 [package]
 name = "sep-chat"
 version = "1.6.0"
-description = "SEP Chat desktop application"
+description = "СЭП Чат desktop application"
 authors = ["PKSEP"]
 edition = "2021"
 
 [lib]
 name = "sep_chat_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+test = false
+
+[[bin]]
+name = "sep-chat"
+path = "src/main.rs"
+test = false
+
+[[test]]
+name = "desktop_files"
+path = "tests/desktop_files.rs"
+
+[[test]]
+name = "desktop_auth"
+path = "tests/desktop_auth.rs"
+
+[[test]]
+name = "desktop_autostart"
+path = "tests/desktop_autostart.rs"
+
+[[test]]
+name = "desktop_vpn"
+path = "tests/desktop_vpn.rs"
+
+[[test]]
+name = "desktop_notifications"
+path = "tests/desktop_notifications.rs"
+
+[[test]]
+name = "desktop_screen_capture"
+path = "tests/desktop_screen_capture.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -18,10 +48,28 @@ serde_json = "1"
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "stream"] }
+sha2 = "0.10"
+base64 = "0.22"
+tokio = { version = "1", features = ["fs", "io-util", "sync"] }
+
+[dev-dependencies]
+tauri = { version = "2", features = ["test"] }
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+tauri-plugin-deep-link = "2"
+tauri-plugin-updater = "2.14.1"
+tauri-plugin-process = "2"
 
 [target.'cfg(windows)'.dependencies]
+windows-capture = "=1.5.0"
 tauri-winrt-notification = "0.7.2"
-windows = { version = "0.61", features = ["Data_Xml_Dom", "Foundation", "UI_Notifications"] }
+winreg = "0.55"
+windows = { version = "0.61", features = ["Data_Xml_Dom", "Foundation", "UI_Notifications", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cidre = { version = "=0.10.1", default-features = false, features = ["async", "av", "sc", "dispatch", "macos_12_3"] }
+futures = "0.3"

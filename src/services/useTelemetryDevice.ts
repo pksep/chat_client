@@ -3,6 +3,7 @@ import {
   registerPlugin,
   type PluginListenerHandle
 } from '@capacitor/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 
 type TelemetryDeviceInfo = Record<string, unknown>;
 
@@ -50,6 +51,54 @@ const TELEMETRY_INSTALLATION_ID_KEY = 'chat.telemetry.installationId';
 let cachedDeviceContext: TelemetryDeviceInfo | null = null;
 let isDeviceContextHydrating = false;
 
+const operatingSystems = [
+  'windows',
+  'linux',
+  'macos',
+  'android',
+  'ios'
+] as const;
+type OperatingSystem = (typeof operatingSystems)[number] | 'unknown';
+
+const parseOperatingSystem = (value: string): OperatingSystem => {
+  if (/android/i.test(value)) return 'android';
+  if (/iphone|ipad|ipod|\bios\b/i.test(value)) return 'ios';
+  if (/windows|win32|win64/i.test(value)) return 'windows';
+  if (/mac/i.test(value)) return 'macos';
+  if (/linux/i.test(value)) return 'linux';
+  return 'unknown';
+};
+
+const getRuntimeContext = () => {
+  const platform = Capacitor.getPlatform();
+  const runtime = isTauri()
+    ? 'tauri'
+    : Capacitor.isNativePlatform()
+      ? 'capacitor'
+      : 'browser';
+
+  if (runtime === 'capacitor' && ['android', 'ios'].includes(platform)) {
+    return { runtime, os: platform, osSource: 'capacitor' };
+  }
+
+  const nav = typeof navigator !== 'undefined' ? navigator : undefined;
+  const userAgentPlatform = (
+    nav as (Navigator & { userAgentData?: { platform?: string } }) | undefined
+  )?.userAgentData?.platform;
+  const clientHintOs = parseOperatingSystem(userAgentPlatform || '');
+  let os =
+    clientHintOs !== 'unknown'
+      ? clientHintOs
+      : parseOperatingSystem(`${nav?.userAgent || ''} ${nav?.platform || ''}`);
+  if (os === 'macos' && (nav?.maxTouchPoints || 0) > 1) os = 'ios';
+
+  return {
+    runtime,
+    os,
+    osSource: clientHintOs !== 'unknown' ? 'user_agent_data' : 'navigator'
+  };
+};
+
 const createUuid = (): string => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -93,6 +142,7 @@ const getBrowserDeviceContext = (): TelemetryDeviceInfo => {
     installationId: getTelemetryInstallationId(),
     platform: Capacitor.getPlatform(),
     isNative: Capacitor.isNativePlatform(),
+    ...getRuntimeContext(),
     language: nav?.language,
     languages: nav?.languages,
     hardwareConcurrency: nav?.hardwareConcurrency,
@@ -115,10 +165,17 @@ export const hydrateTelemetryDeviceContext = async (): Promise<void> => {
 
   try {
     const baseContext = getBrowserDeviceContext();
-    const nativeContext =
+    const nativeContext: TelemetryDeviceInfo =
       Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
         ? await TelemetryDevice.getDeviceInfo()
         : {};
+    if (baseContext.runtime === 'tauri') {
+      const nativeOs = await invoke<string>('get_telemetry_os');
+      if ((operatingSystems as readonly string[]).includes(nativeOs)) {
+        nativeContext.os = nativeOs;
+        nativeContext.osSource = 'tauri_native';
+      }
+    }
 
     cachedDeviceContext = {
       ...baseContext,

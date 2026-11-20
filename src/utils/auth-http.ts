@@ -1,4 +1,5 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import {
   CHAT_CONTENT_REQUEST_TIMEOUT_MS,
   withNetworkTimeout
@@ -17,6 +18,19 @@ export const fetchAuthWithCookies = async (
   };
 
   return withNetworkTimeout(async signal => {
+    if (isTauri()) {
+      // WebView2 хранит HttpOnly-cookie; нативный HTTP не теряет их из-за
+      // SameSite=Lax между локальным адресом Tauri и сервером организации.
+      const response = await invoke<{ status: number; body: string }>(
+        'desktop_auth_request',
+        { options: { url, method, headers, data } }
+      );
+      return new Response(
+        [204, 205, 304].includes(response.status) ? null : response.body,
+        { status: response.status }
+      );
+    }
+
     if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
       // Нативный HTTP хранит HttpOnly-cookie в CookieManager и отправляет их
       // независимо от SameSite-ограничений локального WebView.

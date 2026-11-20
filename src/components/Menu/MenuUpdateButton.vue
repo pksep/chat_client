@@ -44,6 +44,13 @@
       />
       <span v-if="!props.isCollapse">{{ actionLabel }}</span>
     </Button>
+    <p
+      v-if="updateError && !props.isCollapse"
+      class="menu-update__error"
+      role="alert"
+    >
+      {{ updateError }}
+    </p>
   </div>
 </template>
 
@@ -67,34 +74,53 @@ const {
   showUpdateBanner,
   updateActionLabel,
   updateProgress,
+  updateError,
   isUpdateActionDisabled,
   handleUpdateClick
 } = useMobileApp();
 
 const actionLabel = computed(() =>
-  updateActionLabel.value === 'Обновить' ||
-  updateActionLabel.value === 'Установить'
-    ? 'Обновить чат'
-    : updateActionLabel.value
+  updateActionLabel.value === 'Установить и перезапустить'
+    ? 'Перезапустить чат'
+    : updateActionLabel.value === 'Обновить' ||
+        updateActionLabel.value === 'Установить'
+      ? 'Обновить чат'
+      : updateActionLabel.value
 );
 const isUpdateDownloaded = computed(
   () =>
     updateActionLabel.value === 'Перезапустить' ||
+    updateActionLabel.value === 'Установить и перезапустить' ||
     updateActionLabel.value === 'Установлено'
 );
-const accessibleLabel = computed(() =>
-  updateProgress.value !== undefined
-    ? `Загружаем обновление: ${actionLabel.value}`
-    : actionLabel.value
+const accessibleLabel = computed(
+  () =>
+    updateError.value ||
+    (updateProgress.value !== undefined
+      ? `Загружаем обновление: ${actionLabel.value}`
+      : actionLabel.value)
 );
 </script>
 
 <style scoped>
 .menu-update {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
+  gap: 6px;
   min-width: 0;
   padding: 10px 0;
+}
+
+.menu-update__error {
+  width: 231px;
+  max-width: 100%;
+  margin: 0;
+  color: var(--text-error, #ef5350);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .menu-update-button.button-yui-kit {

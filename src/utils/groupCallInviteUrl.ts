@@ -1,3 +1,5 @@
+import { isTauri } from '@tauri-apps/api/core';
+
 const CALL_INVITE_PARAM = 'callInvite';
 const CALL_ROOM_PARAM = 'callRoom';
 const TRUSTED_CALL_INVITE_ORIGINS = new Set(['https://chat.pksep.ru']);
@@ -31,7 +33,55 @@ const isNativeClient = (): boolean => {
     }
   ).Capacitor;
 
-  return capacitor?.isNativePlatform?.() === true;
+  return isTauri() || capacitor?.isNativePlatform?.() === true;
+};
+
+export const buildPublicGroupCallInviteUrl = (
+  invite: GroupCallInviteParams
+): string => {
+  const url = new URL('https://chat.pksep.ru/');
+  url.searchParams.set(CALL_ROOM_PARAM, invite.roomId);
+  url.searchParams.set(CALL_INVITE_PARAM, invite.inviteToken);
+  if (invite.organization)
+    url.searchParams.set('organization', invite.organization);
+  return url.toString();
+};
+
+export const buildDesktopGroupCallInviteUrl = (
+  value: string
+): string | null => {
+  const invite = parseGroupCallInviteUrl(value, { allowTrustedOrigin: true });
+  if (!invite) return null;
+  const url = new URL('sepchat://invite');
+  url.search = new URL(buildPublicGroupCallInviteUrl(invite)).search;
+  return url.toString();
+};
+
+export const parseDesktopGroupCallInviteUrl = (
+  value: string
+): string | null => {
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== 'sepchat:' ||
+      url.hostname !== 'invite' ||
+      !['', '/'].includes(url.pathname) ||
+      url.username ||
+      url.password ||
+      url.port
+    )
+      return null;
+    const roomId = url.searchParams.get(CALL_ROOM_PARAM);
+    const inviteToken = url.searchParams.get(CALL_INVITE_PARAM);
+    if (!roomId || !inviteToken) return null;
+    return buildPublicGroupCallInviteUrl({
+      roomId,
+      inviteToken,
+      organization: url.searchParams.get('organization')
+    });
+  } catch {
+    return null;
+  }
 };
 
 export const parseGroupCallInviteUrl = (

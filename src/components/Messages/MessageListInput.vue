@@ -185,15 +185,50 @@
       @select="emit('sendSticker', $event)"
     />
     <Teleport to="body">
-      <div
-        v-if="isTauriFileDragging"
-        class="chat__input-tauri-dropzone"
-        :data-testid="`${props.dataTestid}-MessageList-TauriDropzone`"
-      >
-        <div class="chat__input-tauri-dropzone__zone">
-          <div class="chat__input-tauri-dropzone__title">Загрузить файл</div>
+      <Transition name="chat-tauri-drag">
+        <div
+          v-if="tauriFileDragState.dragging || isTauriFileReading"
+          class="chat__input-tauri-dropzone"
+          :aria-busy="isTauriFileReading"
+          :data-testid="`${props.dataTestid}-MessageList-TauriDropzone`"
+        >
+          <div
+            class="chat__input-tauri-dropzone__zone"
+            :class="{
+              'chat__input-tauri-dropzone__zone--full':
+                !tauriFileDragState.hasMedia,
+              'chat__input-tauri-dropzone__zone--active':
+                tauriFileDragState.dragging && !isTauriMediaDropActive
+            }"
+            data-drop-mode="file"
+          >
+            <div class="chat__input-tauri-dropzone__title" role="status">
+              {{
+                isTauriFileReading && !isTauriMediaDropActive
+                  ? 'Подготовка файлов…'
+                  : 'Загрузить файл'
+              }}
+            </div>
+          </div>
+          <div
+            v-if="tauriFileDragState.hasMedia"
+            ref="tauriMediaDropZoneRef"
+            class="chat__input-tauri-dropzone__zone"
+            :class="{
+              'chat__input-tauri-dropzone__zone--active': isTauriMediaDropActive
+            }"
+            data-drop-mode="media"
+          >
+            <div class="chat__input-tauri-dropzone__title">
+              {{
+                isTauriFileReading && isTauriMediaDropActive
+                  ? 'Подготовка файлов…'
+                  : 'Загрузить фото/видео'
+              }}
+            </div>
+          </div>
         </div>
-      </div>
+      </Transition>
     </Teleport>
   </div>
 </template>
@@ -222,6 +257,10 @@ import ForwardIcon from '../UI/ForwardIcon.vue';
 import SkeletonBlock from '../UI/SkeletonBlock.vue';
 import { stripHtml } from '../../utils/stripHtml';
 import { prepareEditorMentionHtml } from '../../utils/editor-mention-html';
+import {
+  trimEditorPasteHtml,
+  trimEditorPasteText
+} from '../../utils/editor-paste';
 import ChatStickerPicker from './ChatStickerPicker.vue';
 import { bindKeyboardMedia } from '../../services/useKeyboardMedia';
 import { bindChatClipboardPaste } from '../../services/useChatClipboard';
@@ -242,7 +281,10 @@ import {
   getHasWebsocketConnection,
   sendTypingStatus
 } from '../../services/useChat';
-import { bindTauriFileDrop } from '../../services/useTauriDroppedFiles';
+import {
+  bindTauriFileDrop,
+  type TauriFileDragState
+} from '../../services/useTauriDroppedFiles';
 import { Capacitor } from '@capacitor/core';
 import { Clipboard } from '@capacitor/clipboard';
 import {
@@ -259,7 +301,14 @@ import {
 import { useManagerRouteSubscription } from '../../composables/useManagerRoutes';
 import { useComposerKeyboard } from '../../composables/useComposerKeyboard';
 import { useIosPwaFilePicker } from '../../composables/useIosPwaFilePicker';
+import { useTauriFilePicker } from '../../composables/useTauriFilePicker';
+import { showErrorNotification } from '../../composables/useNotifications';
 import { getStickerReference } from '../../utils/stickers';
+import { DESKTOP_UPDATE_MESSAGES } from '../../services/desktop-update-messages';
+import {
+  desktopInstallBlockers,
+  hasDesktopAttachmentPreviews
+} from '../../services/useDesktopUpdater';
 
 interface Props {
   topicId?: string;
@@ -435,6 +484,7 @@ const slashConfig = {
 };
 
 const handleSend = (payload?: IContentEditorSendPayload) => {
+  attachmentDrafts.delete(composerDraftKey.value);
   void stopTyping();
 
   const tiptapEditor = contentEditorRef.value?.editor;
@@ -513,12 +563,46 @@ const botCommands = computed(() => {
 
 const contentEditorRef =
   useTemplateRef<typeof ContentEditor>('contentEditorRef');
+const attachmentDrafts = new Set<string>();
+const syncAttachmentDraft = (key = composerDraftKey.value) => {
+  if (hasDesktopAttachmentPreviews()) attachmentDrafts.add(key);
+  else attachmentDrafts.delete(key);
+};
+const blockUpdateForAttachments = () =>
+  attachmentDrafts.size ? DESKTOP_UPDATE_MESSAGES.otherDraftAttachments : '';
+watch(composerDraftKey, (_next, previous) => syncAttachmentDraft(previous), {
+  flush: 'sync'
+});
 const inputContainerRef = useTemplateRef<HTMLElement>('inputContainerRef');
 const composerKeyboard = useComposerKeyboard(inputContainerRef);
 useIosPwaFilePicker(inputContainerRef, (files, onlyMedia) => {
   return contentEditorRef.value?.emitAttachFiles(files, onlyMedia);
 });
-const isTauriFileDragging = ref(false);
+const tauriFileDragState = ref<TauriFileDragState>({
+  dragging: false,
+  hasMedia: false,
+  position: null
+});
+const tauriMediaDropZoneRef = useTemplateRef<HTMLElement>(
+  'tauriMediaDropZoneRef'
+);
+const isTauriMediaDrop = (position: { x: number; y: number }) => {
+  const rect = tauriMediaDropZoneRef.value?.getBoundingClientRect();
+  return !!(
+    rect &&
+    position.x >= rect.left &&
+    position.x <= rect.right &&
+    position.y >= rect.top &&
+    position.y <= rect.bottom
+  );
+};
+const isTauriMediaDropActive = computed(
+  () =>
+    tauriFileDragState.value.hasMedia &&
+    !!tauriFileDragState.value.position &&
+    isTauriMediaDrop(tauriFileDragState.value.position)
+);
+const isTauriFileReading = ref(false);
 const isEditorReady = ref(false);
 let shouldFocusEditorWhenReady = false;
 
@@ -526,14 +610,23 @@ const handleEditorMounted = async (): Promise<void> => {
   await nextTick();
   const editor = contentEditorRef.value?.editor;
   if (editor) {
+    // Композеру не нужен автоматически добавляемый пустой абзац после списка.
+    editor.unregisterPlugin('trailingNode');
     const editorProps = editor.options.editorProps;
     const transformHtml = editorProps.transformPastedHTML;
+    const transformText = editorProps.transformPastedText;
     editor.setOptions({
       editorProps: {
         ...editorProps,
         transformPastedHTML: (html, view) =>
           prepareEditorMentionHtml(
-            transformHtml ? transformHtml(html, view) : html
+            trimEditorPasteHtml(
+              transformHtml ? transformHtml(html, view) : html
+            )
+          ),
+        transformPastedText: (text, plain, view) =>
+          trimEditorPasteText(
+            transformText ? transformText(text, plain, view) : text
           )
       }
     });
@@ -703,10 +796,10 @@ const readClipboardText = async (): Promise<string> => {
   if (Capacitor.isNativePlatform()) {
     const { value } = await Clipboard.read();
 
-    return value || '';
+    return trimEditorPasteText(value || '');
   }
 
-  return (await navigator.clipboard?.readText?.()) || '';
+  return trimEditorPasteText((await navigator.clipboard?.readText?.()) || '');
 };
 
 const reportInputHeight = (): void => {
@@ -740,14 +833,16 @@ const reportInputHeight = (): void => {
   emit('heightChange', nextHeight);
 };
 
-const handleTauriFilesDropped = (files: File[]): void => {
-  isTauriFileDragging.value = false;
+const handleTauriFilesDropped = (
+  files: File[],
+  onlyMedia = files.every(isMediaFile)
+): void => {
+  tauriFileDragState.value = { ...tauriFileDragState.value, dragging: false };
 
   if (!files.length || !props.allowAttachFile) {
     return;
   }
 
-  const onlyMedia = files.every(isMediaFile);
   const editor = contentEditorRef.value as typeof contentEditorRef.value & {
     queueAttachFiles?: (files: FileList | File[], onlyMedia: boolean) => void;
   };
@@ -759,6 +854,13 @@ const handleTauriFilesDropped = (files: File[]): void => {
 
   emit('attachFile', toFileList(files), onlyMedia);
 };
+
+useTauriFilePicker(
+  inputContainerRef,
+  handleTauriFilesDropped,
+  () => props.allowAttachFile,
+  () => `${props.topicId || ''}:${composerDraftKey.value}`
+);
 
 defineExpose({
   openStickerPack: (pack: string) => stickerPickerRef.value?.openPack(pack),
@@ -827,6 +929,7 @@ watch(
     state.slashSearch = '';
     await nextTick();
     if (draftKey !== composerDraftKey.value || !inputContainerRef.value) return;
+    syncAttachmentDraft();
     reportInputHeight();
     emit('ready');
   },
@@ -846,6 +949,7 @@ watch(
 );
 
 onMounted(() => {
+  desktopInstallBlockers.add(blockUpdateForAttachments);
   chatClipboard = bindChatClipboardPaste({
     getTargetElement: () => inputContainerRef.value,
     getTopicId: () => props.topicId || route.value.id,
@@ -874,7 +978,10 @@ onMounted(() => {
   }
 
   if ('MutationObserver' in window && inputContainerRef.value) {
-    inputMutationObserver = new MutationObserver(reportInputHeight);
+    inputMutationObserver = new MutationObserver(() => {
+      reportInputHeight();
+      syncAttachmentDraft();
+    });
     inputMutationObserver.observe(inputContainerRef.value, {
       childList: true,
       subtree: true
@@ -889,16 +996,25 @@ onMounted(() => {
   void bindTauriFileDrop({
     getTargetElement: () =>
       props.allowAttachFile ? inputContainerRef.value : null,
-    onDragStateChange: isDragging => {
-      isTauriFileDragging.value = isDragging;
+    getContextKey: () => `${props.topicId || ''}:${composerDraftKey.value}`,
+    isMediaDrop: isTauriMediaDrop,
+    onDragStateChange: state => {
+      tauriFileDragState.value = state;
+    },
+    onReadStateChange: isReading => {
+      isTauriFileReading.value = isReading;
     },
     onFilesDropped: handleTauriFilesDropped
-  }).then(unlisten => {
-    unlistenTauriFileDrop = unlisten;
-  });
+  })
+    .then(unlisten => {
+      if (keyboardMediaDisposed) unlisten?.();
+      else unlistenTauriFileDrop = unlisten;
+    })
+    .catch(showErrorNotification);
 });
 
 onBeforeUnmount(() => {
+  desktopInstallBlockers.delete(blockUpdateForAttachments);
   keyboardMediaDisposed = true;
   inputResizeObserver?.disconnect();
   inputResizeObserver = null;

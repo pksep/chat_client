@@ -1,4 +1,4 @@
-param([switch] $AppIconsOnly, [switch] $AndroidThemeIconsOnly)
+﻿param([switch] $AppIconsOnly, [switch] $AndroidThemeIconsOnly, [switch] $DesktopIconsOnly)
 
 $ErrorActionPreference = 'Stop'
 
@@ -65,6 +65,39 @@ function Render-FigmaSvg {
         -resize "${Size}x${Size}" $Destination
 }
 
+function Generate-DesktopIcons {
+    # Упаковщик macOS принимает только 8-битные RGBA PNG; PWA-исходники могут быть 16-битными.
+    foreach ($icon in @(
+        @{ Name = '32x32.png'; Size = 32 },
+        @{ Name = '128x128.png'; Size = 128 },
+        @{ Name = '128x128@2x.png'; Size = 256 },
+        @{ Name = 'icon.png'; Size = 512 },
+        @{ Name = 'icon@2x.png'; Size = 1024 }
+    )) {
+        $rendered = Join-Path $temporaryDirectory "desktop-$($icon.Name)"
+        Render-FigmaSvg $appIconAsset $icon.Size $rendered
+        & $magick $rendered -depth 8 -strip -define png:exclude-chunks=date,time `
+            -define png:color-type=6 $rendered
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Не удалось создать PNG-иконку приложения'
+        }
+        Copy-GeneratedAsset $rendered (Join-Path $projectRoot "src-tauri\icons\$($icon.Name)")
+    }
+    # Tauri берёт первый слой ICO для окна и трея; Windows выбирает остальные размеры для ярлыков.
+    $desktopParts = @()
+    foreach ($size in @(256, 128, 96, 64, 48, 40, 32, 24, 20, 16)) {
+        $part = Join-Path $temporaryDirectory "desktop-$size.png"
+        Render-FigmaSvg $appIconAsset $size $part
+        $desktopParts += $part
+    }
+    $desktopIcon = Join-Path $temporaryDirectory 'desktop.ico'
+    & $magick $desktopParts -depth 8 $desktopIcon
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Не удалось создать иконку Windows'
+    }
+    Copy-GeneratedAsset $desktopIcon (Join-Path $projectRoot 'src-tauri\icons\icon.ico')
+}
+
 function Generate-AndroidThemeIcons {
     foreach ($density in @('ldpi', 'mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi')) {
         $mipmapDirectory = Join-Path $androidResources "mipmap-$density"
@@ -106,6 +139,10 @@ function Generate-AndroidThemeIcons {
 try {
     if ($AndroidThemeIconsOnly) {
         Generate-AndroidThemeIcons
+        return
+    }
+    Generate-DesktopIcons
+    if ($DesktopIconsOnly) {
         return
     }
     # Общие PNG, PWA и Android всегда строятся из одного тёмного SVG.

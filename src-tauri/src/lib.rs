@@ -1,6 +1,17 @@
 use serde::Serialize;
-use std::{path::Path, process::Command, time::UNIX_EPOCH};
+use std::process::Command;
 use tauri::{Manager, WindowEvent};
+mod desktop_auth;
+#[cfg(windows)]
+mod desktop_autostart;
+mod desktop_files;
+#[cfg(desktop)]
+mod desktop_media_permissions;
+mod desktop_notifications;
+#[cfg(desktop)]
+mod desktop_screen_capture;
+#[cfg(windows)]
+mod desktop_vpn;
 
 #[cfg(desktop)]
 use std::sync::{
@@ -16,7 +27,12 @@ use tauri::{
 };
 
 #[cfg(desktop)]
-use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartExt};
+use tauri_plugin_autostart::MacosLauncher;
+#[cfg(desktop)]
+use tauri_plugin_deep_link::DeepLinkExt;
+
+#[cfg(all(desktop, not(windows)))]
+use tauri_plugin_autostart::ManagerExt as AutostartExt;
 
 #[cfg(windows)]
 use windows::{
@@ -45,6 +61,7 @@ const WINDOW_STATE_EVENT: &str = "sep-chat://window-state";
 #[derive(Default)]
 struct AppLifecycleState {
     is_quitting: AtomicBool,
+    is_hidden: AtomicBool,
 }
 
 #[cfg(desktop)]
@@ -61,27 +78,9 @@ struct WindowStatePayload {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct DroppedFilePayload {
-    name: String,
-    mime_type: String,
-    last_modified: Option<u128>,
-    bytes: Vec<u8>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
 struct VpnStatusPayload {
     is_active: bool,
     adapter_names: Vec<String>,
-}
-
-#[cfg(windows)]
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "PascalCase")]
-struct WindowsNetworkAdapter {
-    name: Option<String>,
-    description: Option<String>,
-    network_interface_type: Option<serde_json::Value>,
 }
 
 #[cfg(desktop)]
@@ -92,23 +91,22 @@ fn emit_window_state<R: Runtime>(app: &AppHandle<R>, payload: WindowStatePayload
 #[cfg(desktop)]
 fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {
+        app.state::<AppLifecycleState>()
+            .is_hidden
+            .store(false, Ordering::SeqCst);
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
-        emit_window_state(
-            app,
-            WindowStatePayload {
-                focused: true,
-                minimized: false,
-                visible: true,
-            },
-        );
+        emit_window_state(app, desktop_window_state(window));
     }
 }
 
 #[cfg(desktop)]
 fn hide_window<R: Runtime>(window: &WebviewWindow<R>) {
-    let _ = window.hide();
+    window
+        .state::<AppLifecycleState>()
+        .is_hidden
+        .store(true, Ordering::SeqCst);
     emit_window_state(
         &window.app_handle(),
         WindowStatePayload {
@@ -117,6 +115,40 @@ fn hide_window<R: Runtime>(window: &WebviewWindow<R>) {
             visible: false,
         },
     );
+    let _ = window.hide();
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn desktop_window_state<R: Runtime>(window: WebviewWindow<R>) -> WindowStatePayload {
+    let visible = !window
+        .state::<AppLifecycleState>()
+        .is_hidden
+        .load(Ordering::SeqCst)
+        && window.is_visible().unwrap_or(false);
+    WindowStatePayload {
+        focused: visible && window.is_focused().unwrap_or(false),
+        minimized: window.is_minimized().unwrap_or(false),
+        visible,
+    }
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn desktop_get_open_urls<R: Runtime>(app: AppHandle<R>) -> Result<Option<Vec<String>>, String> {
+    app.deep_link()
+        .get_current()
+        .map(|urls| urls.map(|urls| urls.into_iter().map(|url| url.to_string()).collect()))
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn desktop_restart<R: Runtime>(app: AppHandle<R>) {
+    app.state::<AppLifecycleState>()
+        .is_quitting
+        .store(true, Ordering::SeqCst);
+    app.request_restart();
 }
 
 #[cfg(desktop)]
@@ -136,16 +168,6 @@ fn handle_notification_activation<R: Runtime>(app: &AppHandle<R>, payload: Strin
     store_pending_notification_target(app, payload.clone());
     show_main_window(app);
     let _ = app.emit(NOTIFICATION_CLICK_EVENT, payload);
-}
-
-#[cfg(windows)]
-fn escape_xml(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
 }
 
 #[cfg(windows)]
@@ -183,24 +205,13 @@ fn show_windows_notification<R: Runtime>(
 ) -> Result<bool, String> {
     let payload_for_handler = payload.clone();
     let app_for_handler = app.clone();
-    let escaped_title = escape_xml(&title);
-    let escaped_body = body
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| format!(r#"<text id="2">{}</text>"#, escape_xml(&value)))
-        .unwrap_or_default();
-    let escaped_payload = escape_xml(&payload);
     let toast_xml = XmlDocument::new().map_err(|error| error.to_string())?;
 
     toast_xml
-        .LoadXml(&HSTRING::from(format!(
-            r#"<toast duration="short" launch="{escaped_payload}">
-                <visual>
-                    <binding template="ToastGeneric">
-                        <text id="1">{escaped_title}</text>
-                        {escaped_body}
-                    </binding>
-                </visual>
-            </toast>"#
+        .LoadXml(&HSTRING::from(desktop_notifications::build_toast_xml(
+            &title,
+            body.as_deref(),
+            &payload,
         )))
         .map_err(|error| error.to_string())?;
 
@@ -256,6 +267,8 @@ fn show_windows_notification<R: Runtime>(
 fn clear_windows_topic_notifications<R: Runtime>(
     app: AppHandle<R>,
     topic_id: String,
+    messages_only: Option<bool>,
+    calls_only: Option<bool>,
 ) -> Result<bool, String> {
     if topic_id.trim().is_empty() {
         return Ok(false);
@@ -265,7 +278,13 @@ fn clear_windows_topic_notifications<R: Runtime>(
     let group = HSTRING::from(topic_id.clone());
     let history = ToastNotificationManager::History().map_err(|error| error.to_string())?;
 
-    for tag in windows_topic_notification_tags(&topic_id) {
+    let tags = windows_topic_notification_tags(&topic_id);
+    let count = if messages_only.unwrap_or(false) { 1 } else { 2 };
+    for tag in tags
+        .iter()
+        .skip(if calls_only.unwrap_or(false) { 1 } else { 0 })
+        .take(count)
+    {
         history
             .RemoveGroupedTagWithId(&HSTRING::from(tag), &group, &app_id)
             .map_err(|error| error.to_string())?;
@@ -279,7 +298,24 @@ fn clear_windows_topic_notifications<R: Runtime>(
 fn clear_windows_topic_notifications<R: Runtime>(
     _app: AppHandle<R>,
     _topic_id: String,
+    _messages_only: Option<bool>,
+    _calls_only: Option<bool>,
 ) -> Result<bool, String> {
+    Ok(false)
+}
+
+#[cfg(windows)]
+#[tauri::command]
+fn clear_all_windows_notifications<R: Runtime>(app: AppHandle<R>) -> Result<bool, String> {
+    ToastNotificationManager::History()
+        .and_then(|history| history.ClearWithId(&HSTRING::from(app.config().identifier.clone())))
+        .map_err(|error| error.to_string())?;
+    Ok(true)
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn clear_all_windows_notifications<R: Runtime>(_app: AppHandle<R>) -> Result<bool, String> {
     Ok(false)
 }
 
@@ -297,173 +333,10 @@ fn consume_pending_notification_target() -> Option<String> {
     None
 }
 
-fn guess_mime_type(path: &Path) -> String {
-    let extension = path
-        .extension()
-        .and_then(|value| value.to_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-
-    match extension.as_str() {
-        "jpg" | "jpeg" => "image/jpeg",
-        "png" => "image/png",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        "bmp" => "image/bmp",
-        "svg" => "image/svg+xml",
-        "heic" => "image/heic",
-        "heif" => "image/heif",
-        "mp4" => "video/mp4",
-        "mov" => "video/quicktime",
-        "webm" => "video/webm",
-        "avi" => "video/x-msvideo",
-        "mkv" => "video/x-matroska",
-        "pdf" => "application/pdf",
-        "txt" => "text/plain",
-        "csv" => "text/csv",
-        "json" => "application/json",
-        "zip" => "application/zip",
-        "doc" => "application/msword",
-        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "xls" => "application/vnd.ms-excel",
-        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        _ => "",
-    }
-    .to_string()
-}
-
-#[tauri::command]
-fn read_dropped_file(path: String) -> Result<DroppedFilePayload, String> {
-    let file_path = Path::new(&path);
-    let metadata = std::fs::metadata(file_path).map_err(|error| error.to_string())?;
-
-    if !metadata.is_file() {
-        return Err("Dropped path is not a file".to_string());
-    }
-
-    let bytes = std::fs::read(file_path).map_err(|error| error.to_string())?;
-    let name = file_path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or("dropped-file")
-        .to_string();
-    let last_modified = metadata
-        .modified()
-        .ok()
-        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
-        .map(|duration| duration.as_millis());
-
-    Ok(DroppedFilePayload {
-        name,
-        mime_type: guess_mime_type(file_path),
-        last_modified,
-        bytes,
-    })
-}
-
-#[cfg(windows)]
-fn adapter_interface_type_matches_vpn(interface_type: &Option<serde_json::Value>) -> bool {
-    match interface_type {
-        Some(serde_json::Value::Number(value)) => value
-            .as_u64()
-            .map(|number| number == 23 || number == 131)
-            .unwrap_or(false),
-        Some(serde_json::Value::String(value)) => {
-            let normalized = value.to_ascii_lowercase();
-            normalized.contains("ppp") || normalized.contains("tunnel")
-        }
-        _ => false,
-    }
-}
-
-#[cfg(windows)]
-fn adapter_text_matches_vpn(adapter: &WindowsNetworkAdapter) -> bool {
-    const VPN_MARKERS: &[&str] = &[
-        "vpn",
-        "wireguard",
-        "openvpn",
-        "tailscale",
-        "zerotier",
-        "anyconnect",
-        "fortinet",
-        "forticlient",
-        "globalprotect",
-        "nordvpn",
-        "protonvpn",
-        "surfshark",
-        "expressvpn",
-        "outline",
-        "cloudflare warp",
-        "warp",
-        "checkpoint",
-        "watchguard",
-        "softether",
-        "l2tp",
-        "pptp",
-        "sstp",
-        "ikev2",
-        "tun",
-        "tap",
-    ];
-
-    let searchable = format!(
-        "{} {}",
-        adapter.name.as_deref().unwrap_or_default(),
-        adapter.description.as_deref().unwrap_or_default()
-    )
-    .to_ascii_lowercase();
-
-    VPN_MARKERS.iter().any(|marker| searchable.contains(marker))
-}
-
-#[cfg(windows)]
-fn parse_windows_network_adapters(output: &str) -> Vec<WindowsNetworkAdapter> {
-    let trimmed = output.trim();
-
-    if trimmed.is_empty() {
-        return Vec::new();
-    }
-
-    if let Ok(adapters) = serde_json::from_str::<Vec<WindowsNetworkAdapter>>(trimmed) {
-        return adapters;
-    }
-
-    serde_json::from_str::<WindowsNetworkAdapter>(trimmed)
-        .map(|adapter| vec![adapter])
-        .unwrap_or_default()
-}
-
 #[cfg(windows)]
 #[tauri::command]
 fn get_vpn_status() -> Result<VpnStatusPayload, String> {
-    let output = Command::new("powershell.exe")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "[System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces() | Where-Object { $_.OperationalStatus -eq 'Up' } | Select-Object Name,Description,NetworkInterfaceType | ConvertTo-Json -Compress",
-        ])
-        .output()
-        .map_err(|error| error.to_string())?;
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let adapter_names = parse_windows_network_adapters(&stdout)
-        .into_iter()
-        .filter(|adapter| {
-            adapter_interface_type_matches_vpn(&adapter.network_interface_type)
-                || adapter_text_matches_vpn(adapter)
-        })
-        .map(|adapter| {
-            adapter
-                .name
-                .or(adapter.description)
-                .unwrap_or_else(|| "VPN".to_string())
-        })
-        .collect::<Vec<_>>();
+    let adapter_names = desktop_vpn::adapter_names()?;
 
     Ok(VpnStatusPayload {
         is_active: !adapter_names.is_empty(),
@@ -520,13 +393,22 @@ fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
         Some(vec![AUTOSTART_ARG]),
     ))?;
 
-    let autostart_manager = app.autolaunch();
-    let _ = autostart_manager.enable();
+    // Dev-сборка не должна заменять установленный exe в автозапуске.
+    if !cfg!(debug_assertions) {
+        #[cfg(windows)]
+        if let Err(error) = desktop_autostart::register() {
+            eprintln!("Не удалось обновить автозапуск СЭП Чат: {error}");
+        }
+        #[cfg(not(windows))]
+        if let Err(error) = app.autolaunch().enable() {
+            eprintln!("Не удалось обновить автозапуск СЭП Чат: {error}");
+        }
+    }
 
     let tray_menu = MenuBuilder::new(app)
-        .text(TRAY_SHOW_ID, "Open SEP Chat")
+        .text(TRAY_SHOW_ID, "Открыть СЭП Чат")
         .separator()
-        .text(TRAY_QUIT_ID, "Quit")
+        .text(TRAY_QUIT_ID, "Выйти")
         .build()?;
 
     let mut tray_builder = TrayIconBuilder::with_id("sep-chat-tray")
@@ -577,9 +459,42 @@ fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     Ok(())
 }
 
+#[tauri::command]
+fn get_telemetry_os() -> &'static str {
+    std::env::consts::OS
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(desktop)]
+    let builder = builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .manage(desktop_media_permissions::DesktopMediaPermissions::default())
+        .manage(desktop_screen_capture::DesktopScreenCapture::default())
+        .on_permission_request(desktop_media_permissions::handle_request);
+    #[cfg(desktop)]
+    let builder = builder
+        .plugin(tauri_plugin_single_instance::init(|app, args, _| {
+            if !args.iter().any(|arg| arg == AUTOSTART_ARG) {
+                show_main_window(app);
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init());
+
+    builder
+        .on_page_load(|webview, payload| {
+            #[cfg(desktop)]
+            if webview.label() == "main"
+                && matches!(payload.event(), tauri::webview::PageLoadEvent::Started)
+            {
+                webview
+                    .state::<desktop_screen_capture::DesktopScreenCapture>()
+                    .stop_all();
+            }
+        })
+        .plugin(tauri_plugin_dialog::init())
         .manage({
             #[cfg(desktop)]
             {
@@ -601,20 +516,66 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            get_telemetry_os,
+            desktop_window_state,
+            desktop_get_open_urls,
+            desktop_restart,
+            desktop_media_permissions::desktop_media_permissions_available,
+            desktop_media_permissions::desktop_grant_media_permissions,
+            desktop_screen_capture::desktop_screen_capture_available,
+            desktop_screen_capture::desktop_screen_capture_active,
+            desktop_screen_capture::desktop_screen_capture_permission,
+            desktop_screen_capture::desktop_screen_capture_sources,
+            desktop_screen_capture::desktop_screen_capture_start,
+            desktop_screen_capture::desktop_screen_capture_stop,
+            desktop_screen_capture::desktop_screen_capture_ack,
             show_windows_notification,
             clear_windows_topic_notifications,
+            clear_all_windows_notifications,
             consume_pending_notification_target,
-            read_dropped_file,
+            desktop_files::read_dropped_file,
+            desktop_files::desktop_file_read_info,
+            desktop_files::desktop_file_pick,
+            desktop_files::desktop_file_register_source,
+            desktop_files::desktop_file_status,
+            desktop_files::desktop_file_download,
+            desktop_files::desktop_file_save,
+            desktop_files::desktop_file_open,
+            desktop_files::desktop_update_prepare,
+            desktop_auth::desktop_auth_request,
             get_vpn_status,
             open_vpn_settings
         ])
         .setup(|app| {
             #[cfg(desktop)]
-            setup_desktop(app)?;
+            {
+                setup_desktop(app)?;
+                let app_handle = app.handle().clone();
+                app.deep_link()
+                    .on_open_url(move |_| show_main_window(&app_handle));
+                #[cfg(any(windows, target_os = "linux"))]
+                if !cfg!(debug_assertions) {
+                    if let Err(error) = app.deep_link().register_all() {
+                        eprintln!("Не удалось зарегистрировать ссылки СЭП Чат: {error}");
+                    }
+                }
+            }
 
             Ok(())
         })
         .on_window_event(|window, event| {
+            #[cfg(desktop)]
+            if let WindowEvent::Focused(focused) = event {
+                if let Some(webview_window) = window.app_handle().get_webview_window("main") {
+                    if *focused && webview_window.is_visible().unwrap_or(false) {
+                        window
+                            .state::<AppLifecycleState>()
+                            .is_hidden
+                            .store(false, Ordering::SeqCst);
+                    }
+                    emit_window_state(window.app_handle(), desktop_window_state(webview_window));
+                }
+            }
             #[cfg(desktop)]
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let is_quitting = window
@@ -633,6 +594,12 @@ pub fn run() {
         })
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("Не удалось создать приложение Tauri")
+        .run(|_app, _event| {
+            #[cfg(target_os = "macos")]
+            if matches!(_event, tauri::RunEvent::Reopen { .. }) {
+                show_main_window(_app);
+            }
+        });
 }

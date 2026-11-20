@@ -1,5 +1,13 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { createAndroidPerformanceServer } from './fixtures/android-performance-server';
+
+const continueInBrowser = async (page: Page, project: string) => {
+  if (project === 'chromium-desktop') {
+    await page
+      .getByRole('button', { name: 'Продолжить в браузере' })
+      .click({ timeout: 30_000 });
+  }
+};
 
 const countInvitePreviewRequests = (
   fixture: Awaited<ReturnType<typeof createAndroidPerformanceServer>>
@@ -34,6 +42,7 @@ test('обрабатывает приглашение на звонок сраз
     await page.goto(
       '/?callRoom=post-auth-room&callInvite=post-auth-signed-invite'
     );
+    await continueInBrowser(page, testInfo.project.name);
     await page.getByPlaceholder('Введите ссылку').fill(fixture.origin);
     await page.getByPlaceholder('Введите ссылку').press('Enter');
 
@@ -84,6 +93,7 @@ test('обрабатывает приглашение сразу для авто
     await page.goto(
       '/?callRoom=authorized-room&callInvite=authorized-signed-invite'
     );
+    await continueInBrowser(page, testInfo.project.name);
 
     await expect(page.getByTestId('AuthorizationScreen')).toBeHidden();
     await expect
@@ -127,6 +137,7 @@ test('не сбрасывает авторизацию при просрочен
     );
 
     await page.goto('/?callRoom=expired-room&callInvite=expired-signed-invite');
+    await continueInBrowser(page, testInfo.project.name);
 
     await expect
       .poll(() => countInvitePreviewRequests(fixture), { timeout: 30_000 })
@@ -195,7 +206,9 @@ test('не открывает авторизацию при клике по prod
     await expect
       .poll(() => countInvitePreviewRequests(fixture), { timeout: 30_000 })
       .toBe(1);
-    expect(new URL(page.url()).origin).toBe('http://localhost:5173');
+    expect(new URL(page.url()).origin).toBe(
+      new URL(testInfo.project.use.baseURL!).origin
+    );
     expect(context.pages()).toHaveLength(1);
   } finally {
     await fixture.close();

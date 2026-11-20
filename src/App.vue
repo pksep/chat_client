@@ -1,4 +1,7 @@
 <template>
+  <DesktopTitleBar />
+  <DesktopMediaPermissionDialog />
+  <DesktopScreenSharePicker />
   <ChatContainerRoot
     v-if="config && !isCredentialsStep"
     :config="config"
@@ -37,6 +40,7 @@
   />
 
   <NotificationStack />
+  <DesktopCallInvitePrompt />
 </template>
 <script lang="ts" setup>
 import {
@@ -49,6 +53,12 @@ import {
 } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import NotificationStack from './components/UI/NotificationStack.vue';
+import DesktopCallInvitePrompt from './components/Menu/DesktopCallInvitePrompt.vue';
+import DesktopTitleBar from './components/Desktop/DesktopTitleBar.vue';
+import DesktopMediaPermissionDialog from './components/Desktop/DesktopMediaPermissionDialog.vue';
+import DesktopScreenSharePicker from './components/Desktop/DesktopScreenSharePicker.vue';
+import { initDesktopCallLinks } from './services/useDesktopCallLinks';
+import { ensureTauriWindowStateTracking } from './services/useAppVisibility';
 import { IChatContainerConfig } from './components/interfaces/interfaces';
 import ChatContainerRoot from './ChatContainerRoot.vue';
 import { useIosInstallPrompt } from './composables/useIosInstallPrompt';
@@ -106,6 +116,7 @@ const getStoredOrganizations = (): IStoredOrganization[] => {
 };
 const themeStore = useThemeStore();
 themeStore.initTheme();
+ensureTauriWindowStateTracking();
 
 // В Android оба модуля читаются из локального APK. Начинаем их разбор под
 // нативным логотипом, пока параллельно восстанавливаются сессия и свежие темы.
@@ -708,6 +719,7 @@ const submitCredentialsLogin = async () => {
 };
 
 onMounted(async () => {
+  await initDesktopCallLinks();
   void initShareIntentHandling();
   localStorage.removeItem('chat_runtime_config_url');
 
@@ -834,12 +846,12 @@ onBeforeUnmount(() => {
 <style scoped>
 .app-startup-shell {
   position: fixed;
-  inset: 0;
+  inset: var(--desktop-content-top, 0px) 0 0;
   z-index: 2600;
   display: grid;
   grid-template-columns: 345px minmax(0, 1fr);
-  height: 100dvh;
-  min-height: 100dvh;
+  height: var(--app-viewport-height, 100dvh);
+  min-height: var(--app-viewport-height, 100dvh);
   background: #f8f9fd;
   color: #111827;
   font-family:

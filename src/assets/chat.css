@@ -44,6 +44,19 @@ p.chat__nothing-paragraph {
   grid-row: 4;
 }
 
+.chat__input .editor-component .tiptap {
+  line-height: 1.25;
+}
+
+.chat__input .editor-component .tiptap p {
+  line-height: inherit;
+}
+
+.chat__input .editor-component .tiptap :is(ul, ol) {
+  margin-block: 0;
+  padding-inline: 1.5em 0;
+}
+
 .link {
   color: var(--text-link);
 }
@@ -1018,6 +1031,20 @@ p.chat__nothing-paragraph {
   padding: 3.5px;
 }
 
+body.chat-tauri-macos-runtime
+  dialog.attach-modal-container:not(.attach-modal-container--image-editor) {
+  display: block;
+  height: fit-content;
+  min-height: 0;
+}
+
+body.chat-tauri-macos-runtime
+  .attach-modal-container:not(.attach-modal-container--image-editor)
+  > .modal-yui-kit__modal-content {
+  display: block;
+  height: auto;
+}
+
 .attach-modal-container > .attach-modal__emoji-picker-overlay {
   position: absolute !important;
   z-index: 1001;
@@ -1051,7 +1078,7 @@ p.chat__nothing-paragraph {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100dvh;
+  height: var(--default-height);
   position: absolute;
   top: 0;
   width: calc(100vw - var(--size-left-menu));
@@ -1078,6 +1105,8 @@ p.chat__nothing-paragraph {
   inset: 0;
   z-index: 9999;
   display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 10px;
   padding: 10px;
   background-color: #4a83e01a;
   backdrop-filter: blur(20px);
@@ -1088,10 +1117,42 @@ p.chat__nothing-paragraph {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 4px dashed var(--primary-color);
+  border: 4px dashed var(--text-brand);
   border-radius: 24px;
-  color: var(--chat-secondary);
-  background-color: rgb(255 255 255 / 55%);
+  color: var(--text-secondary);
+  background-color: #77a6ff1a;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.chat__input-tauri-dropzone__zone--full {
+  grid-row: span 2;
+}
+
+.chat__input-tauri-dropzone__zone--active {
+  background-color: #77a6ff33;
+}
+
+.chat-tauri-drag-enter-active,
+.chat-tauri-drag-leave-active {
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+}
+
+.chat-tauri-drag-enter-from,
+.chat-tauri-drag-leave-to {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-tauri-drag-enter-active,
+  .chat-tauri-drag-leave-active,
+  .chat__input-tauri-dropzone__zone {
+    transition: none;
+  }
 }
 
 .chat__input-tauri-dropzone__title {

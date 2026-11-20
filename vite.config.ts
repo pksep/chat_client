@@ -238,8 +238,8 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
       },
       mode: mode === 'development' ? 'development' : 'production',
       manifest: {
-        name: 'SEP:Chat',
-        short_name: 'SEP:Chat',
+        name: 'СЭП Чат',
+        short_name: 'СЭП Чат',
         display: 'standalone',
         description: 'Chatting application',
         theme_color: '#ffffff',
@@ -277,7 +277,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
     }) as PluginOption
     // Оставили на случай тестирования
     // basicSsl({
-    //   name: 'SEP:Chat'
+    //   name: 'СЭП Чат'
     // })
   ];
 

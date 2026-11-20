@@ -1,18 +1,34 @@
-name: Remote Dispath Deploy
+name: Deploy Web
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
 
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-web-production
+  cancel-in-progress: false
+
 jobs:
-  call-deploy:
-    uses: Denis112345/actions/.github/workflows/deploy-template.yml@main
-    with:
-      app_name: "ai-client"
-      deploy_env: "PROD"
-    secrets:
-      DEV_SSH_HOST: ${{ secrets.DEV_SSH_HOST }}
-      DEV_SSH_USER: ${{ secrets.DEV_SSH_USER }}
-      DEV_SSH_KEY: ${{ secrets.DEV_SSH_KEY }}
-      DEV_SSH_PORT: ${{ secrets.DEV_SSH_PORT }}
+  deploy:
+    if: github.repository == 'pksep/chat_client' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - name: Deploy main through the existing Kubernetes configuration
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEV_SSH_HOST }}
+          username: ${{ secrets.PROD_SSH_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: ${{ secrets.DEV_SSH_PORT }}
+          command_timeout: 30m
+          script: |
+            set -eu
+            cd "$HOME/sp-kuber/configs"
+            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+            env APP=ai-client BRANCH=main MODE=PROD bun utils.ts switch-branch

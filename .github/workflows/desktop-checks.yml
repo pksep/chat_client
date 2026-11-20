@@ -1,0 +1,127 @@
+name: Desktop Checks
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/desktop-*.yml'
+      - '.github/scripts/macos-distribution.mjs'
+      - '.github/scripts/macos-cache-key.sh'
+      - '.github/scripts/check-linux-media.sh'
+      - '.github/scripts/linux-media-probe.c'
+      - 'src-tauri/**'
+      - 'src/services/*desktop*'
+      - 'src/services/desktop-storage-settle.ts'
+      - 'src/services/useDesktopUpdater.ts'
+      - 'src/composables/useMobileApp.ts'
+      - 'src/components/Menu/*Update*.vue'
+      - 'src/components/Menu/MenuProfilePanel.vue'
+      - 'src/components/Desktop/**'
+      - 'src/assets/desktop-shell.css'
+      - 'src/assets/menu-navigation.css'
+      - 'package.json'
+      - 'bun.lock'
+      - 'scripts/build-desktop.ts'
+      - 'scripts/desktop-release.ts'
+      - 'scripts/test-desktop-updater-macos-native.ts'
+      - 'scripts/test-desktop-native-smoke.ts'
+      - 'scripts/test-windows-shortcuts.ts'
+      - 'test/fixtures/windows-shortcuts.nsi'
+      - 'scripts/desktop-shell-source.mjs'
+      - 'e2e/fixtures/desktop-updater-native.ts'
+      - 'deploy/**'
+      - 'nginx.conf'
+      - 'Dockerfile'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-checks-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  LEFTHOOK: 0
+  DESKTOP_VERSION: '0.0.0-beta.0'
+
+jobs:
+  build:
+    name: Package ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows x64
+            os: windows-latest
+            args: '--bundles nsis'
+            rust_target: ''
+            platform: windows-x86_64
+          - label: Linux x64
+            os: ubuntu-22.04
+            args: '--bundles appimage'
+            rust_target: ''
+            platform: linux-x86_64
+          - label: macOS Apple Silicon
+            os: macos-latest
+            args: '--target aarch64-apple-darwin --bundles app,dmg'
+            rust_target: aarch64-apple-darwin
+            platform: darwin-aarch64
+          - label: macOS Intel
+            os: macos-15-intel
+            args: '--target x86_64-apple-darwin --bundles app,dmg'
+            rust_target: x86_64-apple-darwin
+            platform: darwin-x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libxdo-dev libasound2-dev librsvg2-dev patchelf clang libclang-dev cmake pkg-config gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-nice gstreamer1.0-pulseaudio gstreamer1.0-tools
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Add Rust target
+        if: matrix.rust_target != ''
+        run: rustup target add ${{ matrix.rust_target }}
+      - name: Identify macOS SDK for the Rust cache
+        if: runner.os == 'macOS'
+        id: macos_toolchain
+        run: bash .github/scripts/macos-cache-key.sh
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          prefix-key: ${{ runner.os == 'macOS' && format('v1-rust-{0}', steps.macos_toolchain.outputs.key) || 'v0-rust' }}
+      - run: bun install --frozen-lockfile
+      - name: Verify update logic
+        run: bun test ./test/desktopUpdater.test.ts ./test/desktopRelease.test.ts ./test/macosDistribution.test.ts
+      # Проверяем упаковку всех платформ до релиза; ключей подписи и публикации нет.
+      - name: Build preview installer
+        env:
+          GSTREAMER_INCLUDE_BAD_PLUGINS: '1'
+        run: bun run tauri:build -- --bootstrap ${{ matrix.args }}
+      - name: Verify Windows shortcut migration and recovery
+        if: runner.os == 'Windows'
+        run: bun scripts/test-windows-shortcuts.ts
+      - name: Verify native macOS update, relaunch and Dock reopen
+        if: runner.os == 'macOS'
+        run: bun scripts/test-desktop-updater-macos-native.ts
+      - name: Verify AppImage media plugins
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mapfile -d '' packages < <(find src-tauri/target/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' -print0)
+          test "${#packages[@]}" -eq 1
+          bash .github/scripts/check-linux-media.sh "${packages[0]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-preview-${{ matrix.platform }}
+          path: |
+            src-tauri/target/**/release/bundle/nsis/*-setup.exe
+            src-tauri/target/**/release/bundle/appimage/*.AppImage
+            src-tauri/target/**/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 7

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>NSCameraUsageDescription</key>
+    <string>СЭП Чат использует камеру для видеозвонков.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>СЭП Чат использует микрофон для голосовых и видеозвонков.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>СЭП Чат передаёт выбранный экран или окно участникам звонка только после вашего подтверждения.</string>
+  </dict>
+</plist>

@@ -45,6 +45,7 @@ const TAURI_NOTIFICATION_CLICK_EVENT = 'sep-chat://notification-click';
 let permissionGrantedCache: boolean | null = null;
 let isActionListenerBound = false;
 const activeMessageNotificationIdsByTopic = new Map<string, string>();
+const activeCallNotificationRoomsByTopic = new Map<string, string | null>();
 
 export const isTauriRuntime = (): boolean => {
   try {
@@ -147,7 +148,7 @@ const ensureTauriNotificationPermission = async (): Promise<boolean> => {
 };
 
 const getTopicTitle = (topic?: ITopic | null): string =>
-  topic?.name || topic?.user?.initials || 'SEP Chat';
+  topic?.name || topic?.user?.initials || 'СЭП Чат';
 
 const getSenderTitle = (sender?: IUser | null): string =>
   sender?.initials || 'New message';
@@ -210,11 +211,20 @@ export const initTauriNotifications = async (
       onNotificationAction(parseNotificationPayload(event.payload));
     });
 
-    await onAction(notification => {
-      onNotificationAction(
-        (notification.extra || {}) as TauriNotificationExtra
-      );
-    });
+    // Windows использует собственный toast callback. API действий плагина
+    // реализован только на мобильных платформах и не должен срывать запуск.
+    if (!isWindowsEnvironment()) {
+      await onAction(notification => {
+        onNotificationAction(
+          (notification.extra || {}) as TauriNotificationExtra
+        );
+      }).catch(error => {
+        console.warn(
+          'Действия уведомлений недоступны на этой платформе:',
+          error
+        );
+      });
+    }
 
     const pendingPayload = await invoke<string | null>(
       'consume_pending_notification_target'
@@ -366,18 +376,17 @@ export const clearTauriMessageNotification = async (
   }
 
   try {
-    await removeActive([
-      { id: getTauriMessageNotificationId(resolvedTopicId) }
-    ]);
-    activeMessageNotificationIdsByTopic.delete(resolvedTopicId);
-
     if (isWindowsEnvironment()) {
       await invoke<boolean>('clear_windows_topic_notifications', {
-        topicId: resolvedTopicId
-      }).catch(error => {
-        console.warn('Failed to clear Windows native notification:', error);
+        topicId: resolvedTopicId,
+        messagesOnly: true
       });
+    } else {
+      await removeActive([
+        { id: getTauriMessageNotificationId(resolvedTopicId) }
+      ]);
     }
+    activeMessageNotificationIdsByTopic.delete(resolvedTopicId);
   } catch (error) {
     console.warn('Failed to clear Tauri message notification:', error);
   }
@@ -404,13 +413,14 @@ export const showTauriIncomingCallNotification = async ({
 
   const resolvedTopicType = normalizeTopicType(topicType || topic?.type);
   const isGroupTopic = resolvedTopicType === 'GROUP';
-  const callerTitle = caller?.initials || 'Incoming call';
+  const callerTitle = caller?.initials || 'Неизвестный абонент';
   const topicTitle = isGroupTopic ? getTopicTitle(topic) : '';
 
+  activeCallNotificationRoomsByTopic.set(targetTopicId, roomId || null);
   return showTauriNotification({
     id: getTauriCallNotificationId(targetTopicId),
-    title: topicTitle ? `Call: ${topicTitle}` : 'Incoming call',
-    body: topicTitle ? callerTitle : `From ${callerTitle}`,
+    title: topicTitle ? `Входящий звонок: ${topicTitle}` : 'Входящий звонок',
+    body: callerTitle,
     group: targetTopicId,
     extra: {
       callerId: caller?.id,
@@ -427,6 +437,28 @@ export const showTauriIncomingCallNotification = async ({
   });
 };
 
+export const clearTauriCallNotification = async (
+  topicId?: string | null,
+  roomId?: string | null
+): Promise<void> => {
+  if (!topicId || !isTauriRuntime()) return;
+  const activeRoom = activeCallNotificationRoomsByTopic.get(topicId);
+  if (roomId && activeRoom && roomId !== activeRoom) return;
+  activeCallNotificationRoomsByTopic.delete(topicId);
+  try {
+    if (isWindowsEnvironment()) {
+      await invoke('clear_windows_topic_notifications', {
+        topicId,
+        callsOnly: true
+      });
+    } else {
+      await removeActive([{ id: getTauriCallNotificationId(topicId) }]);
+    }
+  } catch (error) {
+    console.warn('Не удалось убрать уведомление о звонке:', error);
+  }
+};
+
 export const clearTauriTopicNotifications = async (
   topicId?: string | null
 ): Promise<void> => {
@@ -436,17 +468,16 @@ export const clearTauriTopicNotifications = async (
 
   try {
     activeMessageNotificationIdsByTopic.delete(topicId);
-    await removeActive([
-      { id: getTauriMessageNotificationId(topicId) },
-      { id: getTauriCallNotificationId(topicId) }
-    ]);
-
+    activeCallNotificationRoomsByTopic.delete(topicId);
     if (isWindowsEnvironment()) {
       await invoke<boolean>('clear_windows_topic_notifications', {
         topicId
-      }).catch(error => {
-        console.warn('Failed to clear Windows native notifications:', error);
       });
+    } else {
+      await removeActive([
+        { id: getTauriMessageNotificationId(topicId) },
+        { id: getTauriCallNotificationId(topicId) }
+      ]);
     }
   } catch (error) {
     console.warn('Failed to clear Tauri notifications for topic:', error);
@@ -460,7 +491,12 @@ export const clearAllTauriNotifications = async (): Promise<void> => {
 
   try {
     activeMessageNotificationIdsByTopic.clear();
-    await removeAllActive();
+    activeCallNotificationRoomsByTopic.clear();
+    if (isWindowsEnvironment()) {
+      await invoke<boolean>('clear_all_windows_notifications');
+    } else {
+      await removeAllActive();
+    }
   } catch (error) {
     console.warn('Failed to clear Tauri notifications:', error);
   }

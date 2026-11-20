@@ -11,6 +11,9 @@ import {
 import { useScrollAnchor, type ScrollAnchor } from './useScrollAnchor';
 import {
   getCanSendReadReceipts,
+  getChatSDK,
+  getHasBrowserNetwork,
+  getHasWebsocketConnection,
   markAsRead,
   consumeBufferedIncomingMessagesForTopic,
   markTopicReactionSeenChat
@@ -40,6 +43,8 @@ import {
 import type { IMessage } from '../../interfaces/interfaces';
 import { isUnreadTrackableMessageForUser } from '../../../utils/messageTracking';
 import { shouldPinMessageAppendToBottom } from '../../../utils/messageScroll';
+import { getMessageRangeDiagnostic } from '../../../utils/message-range-diagnostic';
+import { useMessageViewportTelemetry } from '../../../services/use-message-viewport-telemetry';
 
 export function useMessageScroll(
   chatWrapperRef: Ref<HTMLElement | null>,
@@ -695,6 +700,70 @@ export function useMessageScroll(
   } | null =>
     messageListUserItemsRef.value?.getVisibleMessageSnapshot?.() || null;
 
+  const viewportTelemetry = useMessageViewportTelemetry({
+    getTopicId: () => (route.value.type === 'AI' ? '' : route.value.id),
+    getMessages: () => state.messages,
+    getLatestMessageId: () => getSelectedTopic(route.value.id)?.lastMessage?.id,
+    getVisibleMessageIds: () => {
+      if (!getIsAppActivelyVisible() || !canTrackVisibleMessages()) return [];
+      return (
+        getVisibleMessageSnapshot()?.visibleMessageIds ||
+        Array.from(
+          chatWrapperRef.value?.querySelectorAll('[data-message-id]') || []
+        )
+          .map(element => element.getAttribute('data-message-id') || '')
+          .filter(id => id && isMessageVisibleInViewport(id))
+      );
+    },
+    getSnapshot: () => {
+      const container = chatWrapperRef.value;
+      const topic = getSelectedTopic(route.value.id);
+      const latestId = topic?.lastMessage?.id;
+      return {
+        loaded: getMessageRangeDiagnostic(state.messages, latestId),
+        resident: getMessageRangeDiagnostic(
+          getFullMessagesByTopicId(route.value.id),
+          latestId
+        ),
+        unreadMarkerMessageId: state.unreadMarkerMessageId || null,
+        unreadMessageCount: topic?.unreadMessageCount,
+        loadedUnreadCount: unreadTrackableMessageIds.value.size,
+        appVisible: getIsAppActivelyVisible(),
+        containerVisible: canTrackVisibleMessages(),
+        browserOnline: getHasBrowserNetwork(),
+        socketConnected: !!getChatSDK()?.isConnected(),
+        transportReady: getHasWebsocketConnection(),
+        canSendReadReceipts: getCanSendReadReceipts(),
+        readBlockedReasons: [
+          !getIsAppActivelyVisible() && 'app_hidden',
+          !canTrackVisibleMessages() && 'container_hidden',
+          !getHasWebsocketConnection() && 'transport_unavailable',
+          !readReceiptsEnabled.value && 'read_receipts_disabled',
+          Date.now() < autoReadSuspendedUntil.value && 'auto_read_suspended'
+        ].filter(Boolean),
+        readReceiptsEnabled: readReceiptsEnabled.value,
+        autoReadSuspended: Date.now() < autoReadSuspendedUntil.value,
+        historyFetchSuspended: Date.now() < historyFetchSuspendedUntil.value,
+        initialHistoryLoading: isLoadingInitialMessages.value,
+        newerHistoryLoading: isNewerScrollLoading,
+        hasNewerPage: hasNewMessage,
+        pendingReadCount: pendingReadIds.size,
+        queuedReadCount: queuedReadIds.size,
+        nearLoadedBottom: scrollAnchor.isNearBottom.value,
+        distanceFromLoadedBottom: container
+          ? Math.round(
+              Math.max(
+                0,
+                container.scrollHeight -
+                  container.clientHeight -
+                  container.scrollTop
+              )
+            )
+          : null
+      };
+    }
+  });
+
   const isVisibleSnapshotNearLoadedStart = (
     snapshot: ReturnType<typeof getVisibleMessageSnapshot>
   ): boolean =>
@@ -1082,9 +1151,10 @@ export function useMessageScroll(
     );
   };
 
-  const submitReadMessages = async (messageIds: string[]) => {
+  const submitReadMessages = async (messageIds: string[], source: string) => {
     if (!messageIds.length || !route.value?.id) return;
     if (!canTrackVisibleMessages()) return;
+    const readViewId = viewportTelemetry.getViewId();
 
     const uniqueMessageIds = Array.from(new Set(messageIds)).filter(
       id => !pendingReadIds.has(id)
@@ -1100,6 +1170,7 @@ export function useMessageScroll(
 
     if (!canMarkVisibleMessagesAsRead()) {
       uniqueMessageIds.forEach(id => queuedReadIds.add(id));
+      viewportTelemetry.readDecision(source, uniqueMessageIds, 'queued');
       return;
     }
 
@@ -1109,6 +1180,7 @@ export function useMessageScroll(
     });
 
     try {
+      viewportTelemetry.readDecision(source, uniqueMessageIds, 'submitted');
       await markAsRead({
         messageIds: uniqueMessageIds,
         topicId: route.value.id,
@@ -1121,6 +1193,12 @@ export function useMessageScroll(
         pendingReadIds.delete(id);
       });
     } catch (error) {
+      viewportTelemetry.readDecision(
+        source,
+        uniqueMessageIds,
+        'failed',
+        readViewId
+      );
       console.warn('Failed to mark messages as read:', error);
       uniqueMessageIds.forEach(id => {
         pendingReadIds.delete(id);
@@ -1178,16 +1256,22 @@ export function useMessageScroll(
     const visibleUnreadMessageIds = collectVisibleUnreadMessageIds();
     if (visibleUnreadMessageIds.length > 0) {
       void clearTopicNotifications(route.value.id);
-      submitReadMessages(visibleUnreadMessageIds);
+      submitReadMessages(visibleUnreadMessageIds, 'visible_flush');
     }
   };
 
   const flushQueuedReadMessages = async () => {
+    const readViewId = viewportTelemetry.getViewId();
     if (!route.value?.id || queuedReadIds.size === 0) {
       return;
     }
 
     if (!canMarkVisibleMessagesAsRead()) {
+      viewportTelemetry.readDecision(
+        'queued_flush',
+        [...queuedReadIds],
+        'blocked'
+      );
       return;
     }
 
@@ -1205,6 +1289,7 @@ export function useMessageScroll(
     });
 
     try {
+      viewportTelemetry.readDecision('queued_flush', messageIds, 'submitted');
       await markAsRead({
         messageIds,
         topicId: route.value.id,
@@ -1217,6 +1302,12 @@ export function useMessageScroll(
         pendingReadIds.delete(id);
       });
     } catch (error) {
+      viewportTelemetry.readDecision(
+        'queued_flush',
+        messageIds,
+        'failed',
+        readViewId
+      );
       console.warn('Failed to flush queued read messages:', error);
       messageIds.forEach(id => {
         pendingReadIds.delete(id);
@@ -1226,7 +1317,9 @@ export function useMessageScroll(
   };
 
   const markAllVisibleAsRead = async () => {
+    const readViewId = viewportTelemetry.getViewId();
     if (!canMarkVisibleMessagesAsRead()) {
+      viewportTelemetry.readDecision('loaded_window', [], 'blocked');
       return;
     }
 
@@ -1246,6 +1339,12 @@ export function useMessageScroll(
 
     try {
       await clearTopicNotifications(route.value.id);
+      viewportTelemetry.readDecision(
+        'loaded_window',
+        unreadMessages.map(message => message.id),
+        'submitted',
+        readViewId
+      );
       await markAsRead({
         messageIds: unreadMessages.map((message: IMessage) => message.id),
         topicId: route.value.id,
@@ -1259,6 +1358,12 @@ export function useMessageScroll(
         );
       }
     } catch (error) {
+      viewportTelemetry.readDecision(
+        'loaded_window',
+        unreadMessages.map(message => message.id),
+        'failed',
+        readViewId
+      );
       console.warn('Failed to mark messages as read:', error);
     }
   };
@@ -1300,9 +1405,10 @@ export function useMessageScroll(
         });
 
         if (visibleUnreadMessageIds.length > 0) {
-          submitReadMessages(visibleUnreadMessageIds);
+          submitReadMessages(visibleUnreadMessageIds, 'intersection');
         }
 
+        viewportTelemetry.schedule();
         clearVisibleUnreadReaction();
       },
       {
@@ -1324,6 +1430,9 @@ export function useMessageScroll(
   };
 
   const handleVisibilityChange = () => {
+    viewportTelemetry.snapshot(
+      document.visibilityState === 'visible' ? 'foreground' : 'background'
+    );
     if (document.visibilityState === 'visible') {
       nextTick(() => {
         void flushQueuedReadMessages();
@@ -1333,6 +1442,7 @@ export function useMessageScroll(
   };
 
   const handleWindowFocus = () => {
+    viewportTelemetry.schedule();
     nextTick(() => {
       void flushQueuedReadMessages();
       flushVisibleUnreadMessages();
@@ -1369,6 +1479,7 @@ export function useMessageScroll(
     const el = chatWrapperRef.value;
     if (!el) return;
 
+    viewportTelemetry.schedule();
     scrollAnchor.onScroll();
     scheduleViewportRevisionUpdate();
     scheduleObservedReadMessageTargetsSync();
@@ -1994,6 +2105,7 @@ export function useMessageScroll(
 
   const setReadReceiptsEnabled = (enabled: boolean) => {
     readReceiptsEnabled.value = enabled;
+    viewportTelemetry.schedule();
 
     if (enabled) {
       void flushQueuedReadMessages();

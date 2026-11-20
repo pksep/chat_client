@@ -2,6 +2,8 @@ import { createApp, h, ref } from 'vue';
 import { createPinia } from 'pinia';
 import { useThemeStore } from '../../src/stores/theme';
 import MenuProfilePanel from '../../src/components/Menu/MenuProfilePanel.vue';
+import MenuUpdateButton from '../../src/components/Menu/MenuUpdateButton.vue';
+import { desktopUpdater } from '../../src/services/useDesktopUpdater';
 import {
   saveChatAuthSession,
   setAuthUser
@@ -39,9 +41,19 @@ const isActive = ref(true);
 
 Object.assign(window, {
   profileQrFixture: {
+    desktopUpdater,
     setToken,
     collapse: () => (isCollapse.value = true),
-    leave: () => (isActive.value = false)
+    leave: () => (isActive.value = false),
+    showUpdateBanner: () => {
+      const host = document.createElement('aside');
+      host.style.cssText =
+        'position:fixed;top:0;right:0;width:250px;z-index:99999;background:var(--surface-main)';
+      document.body.append(host);
+      createApp({ render: () => h(MenuUpdateButton) })
+        .use(pinia)
+        .mount(host);
+    }
   }
 });
 

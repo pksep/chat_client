@@ -1,0 +1,26 @@
+{
+  "build": {
+    "beforeDevCommand": "",
+    "devUrl": "http://localhost:5173/e2e/fixtures/tauri-desktop.html?notification=auto"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "SEP Chat: проверка desktop",
+        "width": 1200,
+        "height": 800
+      }
+    ],
+    "security": {
+      "capabilities": [
+        "default",
+        {
+          "identifier": "desktop-qa",
+          "windows": ["main"],
+          "permissions": ["core:window:allow-hide"]
+        }
+      ]
+    }
+  }
+}

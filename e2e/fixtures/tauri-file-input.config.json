@@ -1,0 +1,17 @@
+{
+  "identifier": "ru.pksep.chat.uploadqa",
+  "build": {
+    "beforeDevCommand": "",
+    "devUrl": "http://127.0.0.1:5173/e2e/fixtures/tauri-file-input.html"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "SEP Chat: проверка отправки файлов",
+        "width": 1200,
+        "height": 800
+      }
+    ]
+  }
+}

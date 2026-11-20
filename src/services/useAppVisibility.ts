@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
+import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ref } from 'vue';
@@ -26,6 +27,7 @@ const USER_ACTIVITY_EVENTS = [
 const tauriWindowFocused = ref(true);
 const tauriWindowVisible = ref(true);
 const tauriWindowMinimized = ref(false);
+const tauriWindowStateReady = ref(false);
 const capacitorAppActive = ref(true);
 const isUserIdle = ref(false);
 
@@ -35,6 +37,8 @@ let isUserActivityTrackingBound = false;
 let tauriWindowStatePollInterval: ReturnType<typeof setInterval> | null = null;
 let userIdleTimeout: ReturnType<typeof setTimeout> | null = null;
 let lastUserActivityAt = Date.now();
+let tauriWindowStateRevision = 0;
+let tauriWindowStateRequest = 0;
 const windowStateChangeCallbacks = new Set<() => void>();
 
 const notifyWindowStateChange = (): void => {
@@ -48,6 +52,9 @@ const notifyWindowStateChange = (): void => {
 };
 
 const applyTauriWindowState = (nextState: TauriWindowStatePayload): void => {
+  tauriWindowStateRevision += 1;
+  const wasReady = tauriWindowStateReady.value;
+  tauriWindowStateReady.value = true;
   const nextFocused =
     typeof nextState.focused === 'boolean'
       ? nextState.focused
@@ -61,6 +68,7 @@ const applyTauriWindowState = (nextState: TauriWindowStatePayload): void => {
       ? nextState.minimized
       : tauriWindowMinimized.value;
   const hasChanges =
+    !wasReady ||
     tauriWindowFocused.value !== nextFocused ||
     tauriWindowVisible.value !== nextVisible ||
     tauriWindowMinimized.value !== nextMinimized;
@@ -191,18 +199,22 @@ export const syncTauriWindowState = async (): Promise<void> => {
   }
 
   try {
-    const appWindow = getCurrentWindow();
-    const [focused, visible, minimized] = await Promise.all([
-      appWindow.isFocused(),
-      appWindow.isVisible(),
-      appWindow.isMinimized()
-    ]);
-
-    applyTauriWindowState({
-      focused,
-      minimized,
-      visible
-    });
+    const revision = tauriWindowStateRevision;
+    const request = ++tauriWindowStateRequest;
+    const state = await invoke<TauriWindowStatePayload>('desktop_window_state');
+    // Событие скрытия/фокуса новее снимка, который ещё находился в IPC.
+    if (
+      revision !== tauriWindowStateRevision ||
+      request !== tauriWindowStateRequest
+    )
+      return;
+    if (
+      typeof state?.visible === 'boolean' &&
+      typeof state?.focused === 'boolean' &&
+      typeof state?.minimized === 'boolean'
+    ) {
+      applyTauriWindowState(state);
+    }
   } catch (error) {
     console.warn('Failed to resolve Tauri window state:', error);
   }
@@ -218,11 +230,13 @@ export const ensureTauriWindowStateTracking = (): void => {
 
   const appWindow = getCurrentWindow();
 
-  void syncTauriWindowState();
-
   void listen<TauriWindowStatePayload>(TAURI_WINDOW_STATE_EVENT, event => {
     applyTauriWindowState(event.payload || {});
-  });
+  })
+    .then(() => syncTauriWindowState())
+    .catch(error => {
+      console.warn('Не удалось подписаться на видимость окна Tauri:', error);
+    });
 
   void appWindow.onFocusChanged(({ payload: focused }) => {
     applyTauriWindowState({ focused });
@@ -267,10 +281,13 @@ export const subscribeToAppVisibilityChanges = (
 export const getIsAppActivelyVisible = (): boolean => {
   const canUseVisibleAsFocused =
     Capacitor.isNativePlatform() ||
-    (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+    (!isTauriRuntime() &&
+      typeof navigator !== 'undefined' &&
+      navigator.maxTouchPoints > 0);
   const tauriWindowReady =
     !isTauriRuntime() ||
-    (tauriWindowVisible.value &&
+    (tauriWindowStateReady.value &&
+      tauriWindowVisible.value &&
       !tauriWindowMinimized.value &&
       (tauriWindowFocused.value || canUseVisibleAsFocused));
 

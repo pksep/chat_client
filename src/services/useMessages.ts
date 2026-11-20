@@ -81,6 +81,9 @@ import {
 } from '../utils/message-identity';
 import { recordTopicStateTelemetry } from './topic-state-telemetry';
 import { recordMessageDeletionTelemetry } from './message-deletion-telemetry';
+import { createTelemetryTraceId } from './useTelemetry';
+import { recordMessageTelemetry } from './message-telemetry';
+import { getMessageRangeDiagnostic } from '../utils/message-range-diagnostic';
 
 // Read может прийти до echo или загрузки истории. Сохраняем подтверждение
 // по серверному ID, чтобы последующий снимок не вернул WAIT/DELIVERED.
@@ -1516,6 +1519,48 @@ export const fetchMessagesForTopic = async (
     maxAgeMs?: number;
   }
 ): Promise<IMessage[]> => {
+  const historyStartedAt = Date.now();
+  const historyTraceId = createTelemetryTraceId('history');
+  const reportHistoryResult = (
+    source: string,
+    messages: IMessage[],
+    details: Record<string, unknown> = {}
+  ): IMessage[] => {
+    if (!topicId) return messages;
+    const latestId = getSelectedTopic(topicId)?.lastMessage?.id;
+    recordMessageTelemetry({
+      name: 'chat.history.resolved',
+      level: source.startsWith('error') ? 'warn' : 'info',
+      traceId: historyTraceId,
+      entityType: 'topic',
+      entityId: topicId,
+      payload: {
+        topicId,
+        source,
+        direction: getHistoryDirection(opts),
+        elapsedMs: Date.now() - historyStartedAt,
+        lastMessageId: opts?.lastMessageId || null,
+        afterMessageId: opts?.afterMessageId || null,
+        requestedLimit: opts?.limit || 50,
+        newMessages: !!opts?.newMessages,
+        forceRefresh: !!opts?.forceRefresh,
+        forceNetwork: !!opts?.forceNetwork,
+        skipSave: !!opts?.skipSave,
+        updateVisible: opts?.updateVisible !== false,
+        replaceInitialWindow: !!opts?.replaceInitialWindow,
+        browserOnline: getHasBrowserNetwork(),
+        sdkReady: !!getChatSDK(),
+        activeTopicId: route.value?.id || null,
+        result: getMessageRangeDiagnostic(messages, latestId),
+        window: getMessageRangeDiagnostic(
+          getMessagesByTopicId(topicId),
+          latestId
+        ),
+        ...details
+      }
+    });
+    return messages;
+  };
   const initialRead = opts?.replaceInitialWindow
     ? { topicId, changes: new Map<string, IMessage>() }
     : undefined;
@@ -1556,7 +1601,10 @@ export const fetchMessagesForTopic = async (
       (recentFetch.complete || recentFetch.limit >= (opts.limit || 50))
     ) {
       await metadataReady;
-      return existingMessages.slice(-(opts.limit || 50));
+      return reportHistoryResult(
+        'recent-memory',
+        existingMessages.slice(-(opts.limit || 50))
+      );
     }
 
     // Запрос выбранного чата не ждёт IndexedDB. Ошибку удерживаем до await,
@@ -1637,7 +1685,7 @@ export const fetchMessagesForTopic = async (
             lastMessageId: opts?.lastMessageId || null,
             afterMessageId: opts?.afterMessageId || null
           });
-          return localPage;
+          return reportHistoryResult('offline-memory-page', localPage);
         }
       }
 
@@ -1649,7 +1697,7 @@ export const fetchMessagesForTopic = async (
           lastMessageId: opts?.lastMessageId || null,
           afterMessageId: opts?.afterMessageId || null
         });
-        return existingMessages;
+        return reportHistoryResult('offline-memory', existingMessages);
       }
 
       traceHistoryResolution(topicId, {
@@ -1659,7 +1707,10 @@ export const fetchMessagesForTopic = async (
         lastMessageId: opts?.lastMessageId || null,
         afterMessageId: opts?.afterMessageId || null
       });
-      return hydrateMessagesFromCache(topicId);
+      return reportHistoryResult(
+        'offline-cache',
+        await hydrateMessagesFromCache(topicId)
+      );
     }
 
     if (
@@ -1676,7 +1727,7 @@ export const fetchMessagesForTopic = async (
           lastMessageId: opts?.lastMessageId || null,
           afterMessageId: opts?.afterMessageId || null
         });
-        return existingMessages;
+        return reportHistoryResult('memory-store', existingMessages);
       }
     }
 
@@ -1754,7 +1805,9 @@ export const fetchMessagesForTopic = async (
           afterMessageId: opts?.afterMessageId || null
         });
 
-        return normalizedShadowMessages;
+        return reportHistoryResult('indexeddb', normalizedShadowMessages, {
+          cacheResolution: shadowPageResolution.status
+        });
       }
     }
 
@@ -1765,11 +1818,15 @@ export const fetchMessagesForTopic = async (
     }
 
     if (!sdk) {
-      return opts?.allowStaleFallback === false ? [] : existingMessages;
+      return reportHistoryResult(
+        'sdk-unavailable',
+        opts?.allowStaleFallback === false ? [] : existingMessages
+      );
     }
 
     const earlyResult = await earlyRequest;
-    if (earlyRequest && requestSdk !== getChatSDK()) return [];
+    if (earlyRequest && requestSdk !== getChatSDK())
+      return reportHistoryResult('discarded-sdk-changed', []);
     if (earlyResult?.ok === false) throw earlyResult.error;
     const networkMessages = normalizePaginationResult(
       earlyResult?.ok === true && earlyResult.messages
@@ -1869,7 +1926,12 @@ export const fetchMessagesForTopic = async (
     }
 
     opts?.onNetworkApplied?.();
-    return messages;
+    return reportHistoryResult('network', messages, {
+      response: getMessageRangeDiagnostic(
+        networkMessages,
+        getSelectedTopic(topicId)?.lastMessage?.id
+      )
+    });
   } catch (error) {
     console.warn('Failed to fetch message history:', error);
     traceHistoryResolution(topicId, {
@@ -1881,15 +1943,25 @@ export const fetchMessagesForTopic = async (
     });
 
     if (opts?.allowStaleFallback === false) {
-      return [];
+      return reportHistoryResult('error-empty', [], {
+        errorName: error instanceof Error ? error.name : 'UnknownError'
+      });
     }
 
     const existingMessages = getFullMessagesByTopicId(topicId);
     if (existingMessages.length > 0) {
-      return existingMessages;
+      return reportHistoryResult('error-memory', existingMessages, {
+        errorName: error instanceof Error ? error.name : 'UnknownError'
+      });
     }
 
-    return hydrateMessagesFromCache(topicId);
+    return reportHistoryResult(
+      'error-cache',
+      await hydrateMessagesFromCache(topicId),
+      {
+        errorName: error instanceof Error ? error.name : 'UnknownError'
+      }
+    );
   } finally {
     if (initialRead) initialHistoryReads.delete(initialRead);
   }

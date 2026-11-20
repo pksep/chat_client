@@ -1,3 +1,160 @@
+## [1.53.6](https://github.com/pksep/chat_client/compare/v1.53.5...v1.53.6) (2026-11-19)
+
+
+### Bug Fixes
+
+* let macOS persist chat state before desktop updates ([aefe518](https://github.com/pksep/chat_client/commit/aefe5183a0737a0b5b226cb25bcf0c5b2b31f49f))
+
+## [1.53.5](https://github.com/pksep/chat_client/compare/v1.53.4...v1.53.5) (2026-11-19)
+
+
+### Bug Fixes
+
+* resolve short Windows paths before migrating shortcuts ([7ff77b4](https://github.com/pksep/chat_client/commit/7ff77b4e59dc4620245d2088f534862ffca4604b))
+
+## [1.53.4](https://github.com/pksep/chat_client/compare/v1.53.3...v1.53.4) (2026-11-19)
+
+
+### Bug Fixes
+
+* restore Windows shortcuts after the application rename ([1aff819](https://github.com/pksep/chat_client/commit/1aff81919f5f546dc7c0937c3c7cd70937acf467))
+
+## [1.53.3](https://github.com/pksep/chat_client/compare/v1.53.2...v1.53.3) (2026-11-18)
+
+
+### Bug Fixes
+
+* keep native badges updating when tray sync fails ([b29a4e0](https://github.com/pksep/chat_client/commit/b29a4e0d4e05be9072676a6f98cbef3e8bb1a449))
+
+## [1.53.2](https://github.com/pksep/chat_client/compare/v1.53.1...v1.53.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* keep chat and bot dialogs within the desktop content area ([6a151a4](https://github.com/pksep/chat_client/commit/6a151a4f1a853cbc3c2f93ed10f58aaed248a256))
+
+## [1.53.1](https://github.com/pksep/chat_client/compare/v1.53.0...v1.53.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* preserve macOS storage name and encode Cyrillic MSI branding ([3e71734](https://github.com/pksep/chat_client/commit/3e7173431f5e260dfe9e618c1e05827dc482d624))
+
+# [1.53.0](https://github.com/pksep/chat_client/compare/v1.52.2...v1.53.0) (2026-11-18)
+
+
+### Features
+
+* rename app to Russian brand and isolate Linux media plugins ([49fd0f9](https://github.com/pksep/chat_client/commit/49fd0f904b51b6a2d52bccf7e0af3edfd55c9b9f))
+
+## [1.52.2](https://github.com/pksep/chat_client/compare/v1.52.1...v1.52.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* fit desktop content and sidebar toggle below titlebar ([20836ba](https://github.com/pksep/chat_client/commit/20836babc65eab371ef4b75d9f856d2d82acacf8))
+
+## [1.52.1](https://github.com/pksep/chat_client/compare/v1.52.0...v1.52.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* keep desktop updates visible and refresh automatically ([c2edb56](https://github.com/pksep/chat_client/commit/c2edb56eeb70428f57a25b3aba19c466aff20a0b))
+
+# [1.52.0](https://github.com/pksep/chat_client/compare/v1.51.3...v1.52.0) (2026-11-18)
+
+
+### Features
+
+* **profile:** скачивание Android через настраиваемый QR ([#498](https://github.com/pksep/chat_client/issues/498)) ([93d2c2c](https://github.com/pksep/chat_client/commit/93d2c2c60b482ded7aba1f63fc50b4a1ee246646))
+
+## [1.51.3](https://github.com/pksep/chat_client/compare/v1.51.2...v1.51.3) (2026-11-18)
+
+
+### Bug Fixes
+
+* refresh desktop updates when opening profile check ([67c8515](https://github.com/pksep/chat_client/commit/67c8515c995665849befc0ac2a1ca14e10ce6ce1))
+
+## [1.51.2](https://github.com/pksep/chat_client/compare/v1.51.1...v1.51.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* **android:** открывать ссылки чата из ручной APK ([#497](https://github.com/pksep/chat_client/issues/497)) ([a824f79](https://github.com/pksep/chat_client/commit/a824f79cada07ebbd11091473384411ef6e299b3))
+
+## [1.51.1](https://github.com/pksep/chat_client/compare/v1.51.0...v1.51.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* import macOS capture delegate traits ([6b3bfa4](https://github.com/pksep/chat_client/commit/6b3bfa49f5d38e49b02af51da60cfe91738aa7a4))
+
+# [1.51.0](https://github.com/pksep/chat_client/compare/v1.50.3...v1.51.0) (2026-11-18)
+
+
+### Features
+
+* add branded Tauri chrome and screen sharing ([a899ab5](https://github.com/pksep/chat_client/commit/a899ab589aa304939546db35da4a28b4dfde14c2))
+
+## [1.50.3](https://github.com/pksep/chat_client/compare/v1.50.2...v1.50.3) (2026-11-18)
+
+
+### Bug Fixes
+
+* restore macOS window lifecycle and media drop zones ([e7a00f0](https://github.com/pksep/chat_client/commit/e7a00f05555ec40b84736ede5117adec055a829d))
+
+## [1.50.2](https://github.com/pksep/chat_client/compare/v1.50.1...v1.50.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* scope recording notifications to the active call ([c63b9cf](https://github.com/pksep/chat_client/commit/c63b9cfc902cddb1e7648e35f4063906d1bb9a8f))
+
+## [1.50.1](https://github.com/pksep/chat_client/compare/v1.50.0...v1.50.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* open desktop call links and restore tray notifications ([d309a6f](https://github.com/pksep/chat_client/commit/d309a6f12b3f033a58c487094d81b797cbd9df88))
+
+# [1.50.0](https://github.com/pksep/chat_client/compare/v1.49.2...v1.50.0) (2026-11-17)
+
+
+### Features
+
+* add message receipt diagnostics and client runtime context ([6d7a462](https://github.com/pksep/chat_client/commit/6d7a462d464c3f9e59575c9dc111c9de7f46d8c8))
+
+## [1.49.2](https://github.com/pksep/chat_client/compare/v1.49.1...v1.49.2) (2026-11-17)
+
+
+### Bug Fixes
+
+* distribute desktop updates through GitHub Releases ([15628a5](https://github.com/pksep/chat_client/commit/15628a5fe05aa1f9fc40b02ac6a92c42bb6f15c3))
+
+## [1.49.1](https://github.com/pksep/chat_client/compare/v1.49.0...v1.49.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* restore web and desktop release workflows ([1a58533](https://github.com/pksep/chat_client/commit/1a585331b683d57733a235fae40943fa787100c4))
+
+# [1.49.0](https://github.com/pksep/chat_client/compare/v1.48.6...v1.49.0) (2026-11-17)
+
+
+### Bug Fixes
+
+* align Tauri file drop and updater profile ([be28100](https://github.com/pksep/chat_client/commit/be28100b7e8a9fe279b516110cb24134462aaf67))
+* handle desktop file drops and retain upload source paths ([3ed0134](https://github.com/pksep/chat_client/commit/3ed0134c295921fa06c53893874f039191870154))
+* match Android profile update layout without jumps ([1cfb79f](https://github.com/pksep/chat_client/commit/1cfb79f14947dc4ee9542e8278fe3c3bdc22a15e))
+* use retina density for the macOS 1024px icon ([d919bbd](https://github.com/pksep/chat_client/commit/d919bbd48ed01c73ff3f832d6ceac382c96743e1))
+* use RGBA8 desktop icons for macOS packaging ([4eada7b](https://github.com/pksep/chat_client/commit/4eada7ba0865a24cd0923ad0322b7a37aaf71561))
+
+
+### Features
+
+* enable short QR login in profile ([78cc8b9](https://github.com/pksep/chat_client/commit/78cc8b99044b04e4e7299a9b2115a7c9ee583d9c))
+* integrate native Tauri files and signed desktop updates ([830385f](https://github.com/pksep/chat_client/commit/830385ff137fa110e7641f4d4d3ff6f52be2a87e))
+
 ## [1.48.6](https://github.com/pksep/chat_client/compare/v1.48.5...v1.48.6) (2026-11-13)
 
 

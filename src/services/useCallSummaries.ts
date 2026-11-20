@@ -8,6 +8,11 @@ import {
 } from '../composables/useNotifications';
 import { getChatSDK, sendMessageChat, waitForChatSDK } from './useChat';
 import { useChatApi } from './useApi';
+import {
+  open as isCallOpen,
+  isIncoming as isIncomingCall,
+  roomId as activeCallRoomId
+} from './useCallState';
 import { WebSocketEventType } from './useChatSDK/websocketEvents';
 import { addMessageToLocal } from './useMessages';
 import type { IMessage } from '../components/interfaces/interfaces';
@@ -268,6 +273,16 @@ const bindSocketEvents = async (): Promise<void> => {
     WebSocketEventType.CALL_SUMMARY_RECORDING_STARTED,
     ({ payload }) => {
       upsertActiveRecorder(payload);
+
+      // Событие получают все участники чата, включая занятых другим звонком.
+      if (
+        !isCallOpen.value ||
+        isIncomingCall.value ||
+        !payload.roomId ||
+        payload.roomId !== activeCallRoomId.value
+      ) {
+        return;
+      }
 
       if (payload.summaryId) {
         if (notifiedRecordingSummaryIds.has(payload.summaryId)) {

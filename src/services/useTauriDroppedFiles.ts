@@ -1,102 +1,173 @@
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import type { UnlistenFn } from '@tauri-apps/api/event';
+import { readTauriFiles } from './tauri-upload-files';
+import { showErrorNotification } from '../composables/useNotifications';
 
-interface TauriDroppedFilePayload {
-  bytes: number[];
-  lastModified?: number | null;
-  mimeType?: string;
-  name: string;
+export interface TauriFileDragState {
+  dragging: boolean;
+  hasMedia: boolean;
+  position: { x: number; y: number } | null;
 }
 
 interface BindTauriFileDropOptions {
   getTargetElement: () => HTMLElement | null;
-  onDragStateChange?: (isDragging: boolean) => void;
-  onFilesDropped: (files: File[]) => void;
+  getContextKey: () => string;
+  isMediaDrop: (position: { x: number; y: number }) => boolean;
+  onDragStateChange: (state: TauriFileDragState) => void;
+  onReadStateChange: (isReading: boolean) => void;
+  onFilesDropped: (files: File[], onlyMedia: boolean) => void | Promise<void>;
 }
-
-const isTauriRuntime = (): boolean => {
-  try {
-    return isTauri();
-  } catch {
-    return false;
-  }
-};
-
-const getFallbackFileName = (path: string): string => {
-  const parts = path.split(/[\\/]/).filter(Boolean);
-
-  return parts[parts.length - 1] || `dropped-file-${Date.now()}`;
-};
-
-const readDroppedFile = async (path: string): Promise<File | null> => {
-  try {
-    const payload = await invoke<TauriDroppedFilePayload>('read_dropped_file', {
-      path
-    });
-    const bytes = new Uint8Array(payload.bytes);
-
-    return new File([bytes], payload.name || getFallbackFileName(path), {
-      type: payload.mimeType || '',
-      lastModified: payload.lastModified || Date.now()
-    });
-  } catch (error) {
-    console.warn('Failed to read Tauri dropped file:', error);
-    return null;
-  }
-};
-
-const resolveDroppedFiles = async (paths: string[]): Promise<File[]> => {
-  const files = await Promise.all(paths.map(readDroppedFile));
-
-  return files.filter((file): file is File => !!file);
-};
-
-const isElementVisible = (element: HTMLElement): boolean => {
-  const rect = element.getBoundingClientRect();
-
-  return rect.width > 0 && rect.height > 0;
-};
 
 export const bindTauriFileDrop = async ({
   getTargetElement,
+  getContextKey,
+  isMediaDrop,
   onDragStateChange,
+  onReadStateChange,
   onFilesDropped
 }: BindTauriFileDropOptions): Promise<UnlistenFn | null> => {
-  if (!isTauriRuntime()) {
-    return null;
-  }
-
-  return getCurrentWebview().onDragDropEvent(async event => {
-    const payload = event.payload;
-    const targetElement = getTargetElement();
-
-    if (!targetElement || !isElementVisible(targetElement)) {
-      onDragStateChange?.(false);
-      return;
+  if (!isTauri()) return null;
+  let disposed = false;
+  let lastDrop: { native: boolean; at: number } | undefined;
+  let pendingReads = 0;
+  let dragState: TauriFileDragState = {
+    dragging: false,
+    hasMedia: false,
+    position: null
+  };
+  const updateDragState = (state: Partial<TauriFileDragState>) => {
+    dragState = { ...dragState, ...state };
+    onDragStateChange(dragState);
+  };
+  const nativeHasMedia = (paths: string[]) =>
+    paths.some(path =>
+      /\.(jpe?g|png|gif|webp|bmp|svg|heic|heif|avif|mp4|m4v|mov|webm|avi|mkv)$/i.test(
+        path
+      )
+    );
+  const htmlHasFiles = (transfer: DataTransfer | null) =>
+    transfer?.types.includes('Files') ||
+    Array.from(transfer?.items || []).some(item => item.kind === 'file');
+  const htmlHasMedia = (transfer: DataTransfer) =>
+    Array.from(transfer.items).some(
+      item => item.kind === 'file' && /^(image|video)\//i.test(item.type)
+    ) || nativeHasMedia(Array.from(transfer.files).map(file => file.name));
+  const logicalPosition = (position: { x: number; y: number }) => {
+    const platform =
+      (navigator as Navigator & { userAgentData?: { platform?: string } })
+        .userAgentData?.platform ||
+      navigator.platform ||
+      navigator.userAgent;
+    // Wry 0.57 передаёт координаты Cocoa в points, а Windows — в физических px.
+    const scale = /mac/i.test(platform) ? 1 : window.devicePixelRatio || 1;
+    return { x: position.x / scale, y: position.y / scale };
+  };
+  const visibleTarget = () => {
+    const element = getTargetElement();
+    const rect = element?.getBoundingClientRect();
+    return element && rect && rect.width > 0 && rect.height > 0
+      ? element
+      : null;
+  };
+  const acceptDrop = (native: boolean) => {
+    const at = performance.now();
+    if (lastDrop && lastDrop.native !== native && at - lastDrop.at < 500)
+      return false;
+    lastDrop = { native, at };
+    return true;
+  };
+  const handlePaths = async (paths: string[], onlyMedia: boolean) => {
+    const target = visibleTarget();
+    if (!target || disposed || !paths.length || !acceptDrop(true)) return;
+    const context = getContextKey();
+    pendingReads++;
+    onReadStateChange(true);
+    try {
+      const files = await readTauriFiles(paths);
+      if (
+        !disposed &&
+        visibleTarget() === target &&
+        getContextKey() === context &&
+        files.length
+      )
+        await onFilesDropped(files, onlyMedia);
+    } finally {
+      pendingReads--;
+      if (!disposed) onReadStateChange(pendingReads > 0);
     }
-
-    if (payload.type === 'enter' || payload.type === 'over') {
-      onDragStateChange?.(true);
+  };
+  // HTML drop и native drop используют один выбор; браузерный DropZone
+  // остаётся штатным, поскольку эти обработчики подключаются только в Tauri.
+  const handleHtmlDrag = (event: DragEvent) => {
+    if (disposed || !visibleTarget() || !htmlHasFiles(event.dataTransfer))
       return;
-    }
-
-    if (payload.type === 'leave') {
-      onDragStateChange?.(false);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    updateDragState({
+      dragging: true,
+      hasMedia:
+        (dragState.dragging && dragState.hasMedia) ||
+        htmlHasMedia(event.dataTransfer!),
+      position: { x: event.clientX, y: event.clientY }
+    });
+  };
+  const handleHtmlDrop = (event: DragEvent) => {
+    if (disposed || !visibleTarget() || !event.dataTransfer?.files.length)
       return;
-    }
-
-    if (payload.type !== 'drop' || !payload.paths.length) {
-      onDragStateChange?.(false);
-      return;
-    }
-
-    onDragStateChange?.(false);
-
-    const files = await resolveDroppedFiles(payload.paths);
-
-    if (files.length) {
-      onFilesDropped(files);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const onlyMedia =
+      (dragState.hasMedia || htmlHasMedia(event.dataTransfer)) &&
+      isMediaDrop({ x: event.clientX, y: event.clientY });
+    updateDragState({ dragging: false });
+    if (acceptDrop(false))
+      void Promise.resolve(
+        onFilesDropped(Array.from(event.dataTransfer.files), onlyMedia)
+      ).catch(showErrorNotification);
+  };
+  const handleHtmlLeave = (event: DragEvent) => {
+    if (event.clientX === 0 && event.clientY === 0)
+      updateDragState({ dragging: false });
+  };
+  const endDrag = () => updateDragState({ dragging: false });
+  const unlisten = await getCurrentWebview().onDragDropEvent(event => {
+    if (disposed) return;
+    const { payload } = event;
+    if (!visibleTarget() || payload.type === 'leave') {
+      endDrag();
+    } else if (payload.type === 'enter' || payload.type === 'over') {
+      updateDragState({
+        dragging: true,
+        ...(payload.type === 'enter'
+          ? { hasMedia: nativeHasMedia(payload.paths) }
+          : {}),
+        position: logicalPosition(payload.position)
+      });
+    } else if (payload.type === 'drop') {
+      updateDragState({
+        hasMedia: nativeHasMedia(payload.paths),
+        position: logicalPosition(payload.position)
+      });
+      const onlyMedia =
+        nativeHasMedia(payload.paths) &&
+        isMediaDrop(logicalPosition(payload.position));
+      void handlePaths(payload.paths, onlyMedia).catch(showErrorNotification);
+      endDrag();
     }
   });
+  window.addEventListener('dragenter', handleHtmlDrag, true);
+  window.addEventListener('dragover', handleHtmlDrag, true);
+  window.addEventListener('dragleave', handleHtmlLeave, true);
+  window.addEventListener('dragend', endDrag, true);
+  window.addEventListener('drop', handleHtmlDrop, true);
+  return () => {
+    disposed = true;
+    window.removeEventListener('dragenter', handleHtmlDrag, true);
+    window.removeEventListener('dragover', handleHtmlDrag, true);
+    window.removeEventListener('dragleave', handleHtmlLeave, true);
+    window.removeEventListener('dragend', endDrag, true);
+    window.removeEventListener('drop', handleHtmlDrop, true);
+    unlisten();
+  };
 };

@@ -1,5 +1,6 @@
 import { ref, shallowRef } from 'vue';
 import { MessageTypeEnum } from '@pksep/yui';
+import { registerTauriUploadedFile } from './tauri-upload-files';
 import { ChatSDK } from './useChatSDK';
 import { createReconnectRefreshCoordinator } from './reconnect-refresh';
 import { createNetworkReachabilityCheck } from './network-reachability';
@@ -75,7 +76,10 @@ import {
 import { IMedia, IMessage } from 'src/components/interfaces/interfaces';
 import { isUnreadTrackableMessageForUser } from '../utils/messageTracking';
 import { Capacitor } from '@capacitor/core';
-import { isTauriRuntime } from './useTauriNotifications';
+import {
+  clearTauriCallNotification,
+  isTauriRuntime
+} from './useTauriNotifications';
 import { showWebSocketMessageNotification } from './web-socket-notifications';
 import { App as CapacitorApp } from '@capacitor/app';
 import {
@@ -1280,6 +1284,7 @@ const setupChatListeners = (): void => {
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CALL_ANSWERED, ({ payload }) => {
+    void clearTauriCallNotification(payload.topicId, payload.roomId);
     void (async () => {
       if (Capacitor.isNativePlatform()) {
         const { dismissIncomingCallKit } = await loadCallKitApi();
@@ -1300,6 +1305,7 @@ const setupChatListeners = (): void => {
   chatSDK.subscribeToEvent(
     WebSocketEventType.DISMISS_INCOMING_CALL,
     ({ payload }) => {
+      void clearTauriCallNotification(payload.topicId, payload.roomId);
       void (async () => {
         if (Capacitor.isNativePlatform()) {
           const { dismissIncomingCallKit } = await loadCallKitApi();
@@ -1323,6 +1329,7 @@ const setupChatListeners = (): void => {
   });
 
   chatSDK.subscribeToEvent(WebSocketEventType.CALL_ENDED, ({ payload }) => {
+    void clearTauriCallNotification(payload.topicId, payload.roomId);
     void (async () => {
       const loadedCallsApi = callsApiPromise ? await loadCallsApi() : callsApi;
       const didEndCall =
@@ -2471,6 +2478,7 @@ const syncPresenceForVisibility = (): void => {
 
 const restoreInvitedGroupCallIfNeeded = (): void => {
   if (
+    isTauriRuntime() ||
     typeof window === 'undefined' ||
     !isGroupCallInviteUrl(window.location.href)
   ) {
@@ -2510,7 +2518,7 @@ const startChatConnectionInBackground = (sdk: ChatSDK): void => {
         isWebsocketConnecting.value = false;
         restoreInvitedGroupCallIfNeeded();
 
-        if (Capacitor.isNativePlatform()) {
+        if (Capacitor.isNativePlatform() || isTauriRuntime()) {
           void loadCallKitApi()
             .then(({ flushPendingGroupCallInviteUrl }) =>
               flushPendingGroupCallInviteUrl()
@@ -2619,7 +2627,7 @@ export const initializeChat = async (options: {
 
     void refreshChatFoldersFromSocket();
 
-    if (Capacitor.isNativePlatform()) {
+    if (Capacitor.isNativePlatform() || isTauriRuntime()) {
       void loadCallKitApi()
         .then(({ flushPendingGroupCallInviteUrl }) =>
           flushPendingGroupCallInviteUrl()
@@ -3166,6 +3174,7 @@ export const uploadFile = async (
       getConnectionState: getChatConnectionDiagnosticState
     }
   );
+  await registerTauriUploadedFile(file, objectName);
   return { file, path: objectName, thumbnailPath: thumbnailObjectName, ex };
 };
 

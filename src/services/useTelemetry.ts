@@ -89,6 +89,8 @@ const shouldPersistTelemetry = (
   (event.category === 'app' && event.name.startsWith('app.update.')) ||
   (event.category === 'chat' &&
     (event.name.startsWith('chat.message_delete.') ||
+      event.name === 'chat.message_view.closed' ||
+      event.name === 'chat.message_view.hidden' ||
       event.level === 'warn' ||
       event.level === 'error'));
 
@@ -289,6 +291,9 @@ const buildDefaultTelemetryContext = (): Record<string, unknown> => {
   return sanitizeTelemetryValue({
     platform: Capacitor.getPlatform(),
     isNative: Capacitor.isNativePlatform(),
+    runtime: device.runtime,
+    os: device.os,
+    osSource: device.osSource,
     installationId: getTelemetryInstallationId(),
     page: getTelemetryPageContext(),
     tabs: telemetryTabs.snapshot(),

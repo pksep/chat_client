@@ -151,7 +151,7 @@ const createTopicsApi = () => {
       return;
     }
 
-    const baseTitle = 'SEP:Chat';
+    const baseTitle = 'СЭП Чат';
     const nextTitle = count > 0 ? `(${count}) ${baseTitle}` : baseTitle;
 
     if (document.title !== nextTitle) {

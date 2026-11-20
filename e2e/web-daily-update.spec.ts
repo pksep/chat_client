@@ -326,12 +326,44 @@ for (const version of [
 
 test('Tauri сохраняет ручное обновление после смены дня', async ({ page }) => {
   await page.addInitScript(() => {
-    (window as any).isTauri = true;
+    const win = window as any;
+    win.isTauri = true;
+    win.updateCalls = [];
+    win.__TAURI_INTERNALS__ = {
+      transformCallback: () => 1,
+      invoke: async (command: string) => {
+        win.updateCalls.push(command);
+        if (command === 'plugin:app|version') return '1.53.1';
+        if (command === 'plugin:updater|check')
+          return {
+            rid: 1,
+            currentVersion: '1.53.1',
+            version: '1.53.2'
+          };
+        return null;
+      }
+    };
     localStorage.setItem('chat_web_seen_update_version', '1');
   });
   const state = await openUpdates(page);
+  await expect(page.locator('.menu-update-button')).toBeVisible();
   await changeDay(page);
   await check(page);
   expect(state.navigations).toBe(1);
+  expect(state.requests).toBe(0);
   await expect(page.locator('.menu-update-button')).toBeVisible();
+  expect(await page.evaluate(() => (window as any).updateCalls)).toContain(
+    'plugin:updater|check'
+  );
+  expect(await page.evaluate(() => (window as any).updateCalls)).not.toContain(
+    'plugin:updater|install'
+  );
+  await page.locator('.menu-update-button').click();
+  await expect(page.locator('.menu-update-button')).toHaveText(
+    'Перезапустить чат'
+  );
+  const commands = await page.evaluate(() => (window as any).updateCalls);
+  expect(commands).toContain('plugin:updater|download');
+  expect(commands).not.toContain('plugin:updater|install');
+  expect(state.navigations).toBe(1);
 });

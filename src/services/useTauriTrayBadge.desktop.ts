@@ -53,21 +53,21 @@ const loadBaseTrayIconImage = (): Promise<HTMLImageElement> => {
 
 const getUnreadLabel = (count: number): string => {
   if (count <= 0) {
-    return 'SEP Chat';
+    return 'СЭП Чат';
   }
 
   const lastTwoDigits = count % 100;
   const lastDigit = count % 10;
 
   if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
-    return `SEP Chat: ${count} непрочитанных`;
+    return `СЭП Чат: ${count} непрочитанных`;
   }
 
   if (lastDigit === 1) {
-    return `SEP Chat: ${count} непрочитанное`;
+    return `СЭП Чат: ${count} непрочитанное`;
   }
 
-  return `SEP Chat: ${count} непрочитанных`;
+  return `СЭП Чат: ${count} непрочитанных`;
 };
 
 const getBadgeText = (count: number): string => {
@@ -309,30 +309,38 @@ export const syncTauriTrayBadge = async ({
 
   try {
     const appWindow = getCurrentWindow();
-    const trayIcon = await TrayIcon.getById(TRAY_ICON_ID);
     const isWindows = isWindowsEnvironment();
 
-    if (trayIcon) {
-      const iconBytes = await renderTrayBadgeIcon(normalizedCount, mutedOnly);
-
-      await trayIcon.setIcon(iconBytes);
-      await trayIcon.setTooltip(getUnreadLabel(normalizedCount));
+    // Сбой иконки в трее не должен блокировать счётчик Dock/панели задач.
+    const results = await Promise.allSettled([
+      (async () => {
+        const trayIcon = await TrayIcon.getById(TRAY_ICON_ID);
+        if (!trayIcon) return;
+        const iconBytes = await renderTrayBadgeIcon(normalizedCount, mutedOnly);
+        await trayIcon.setIcon(iconBytes);
+        await trayIcon.setTooltip(getUnreadLabel(normalizedCount));
+      })(),
+      (async () => {
+        if (isWindows) {
+          const overlayIconBytes = await renderWindowOverlayIcon(
+            normalizedCount,
+            mutedOnly
+          );
+          await appWindow.setOverlayIcon(overlayIconBytes);
+        } else {
+          await appWindow.setBadgeCount(normalizedCount || undefined);
+        }
+      })()
+    ]);
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.warn('Не удалось обновить счётчик Tauri:', result.reason);
+      }
     }
 
-    if (isWindows) {
-      const overlayIconBytes = await renderWindowOverlayIcon(
-        normalizedCount,
-        mutedOnly
-      );
-
-      await appWindow.setOverlayIcon(overlayIconBytes).catch(() => {});
-    } else if (normalizedCount > 0) {
-      await appWindow.setBadgeCount(normalizedCount).catch(() => {});
-    } else {
-      await appWindow.setBadgeCount(undefined).catch(() => {});
+    if (results.every(result => result.status === 'fulfilled')) {
+      lastAppliedDesktopBadgeKey = badgeKey;
     }
-
-    lastAppliedDesktopBadgeKey = badgeKey;
   } catch (error) {
     console.warn('Failed to sync Tauri desktop badge:', error);
   }

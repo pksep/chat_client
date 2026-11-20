@@ -11,10 +11,15 @@ import { LaunchStartup } from './services/launchStartup';
 import { NATIVE_STARTUP_READY_EVENT } from './utils/nativeStartup';
 import { createPinia } from 'pinia';
 import { initIosPwaViewport } from './utils/ios-pwa-viewport';
+import { suppressDefaultDesktopContextMenu } from './utils/desktop-context-menu';
+import { installDesktopMediaPermissions } from './services/desktop-media-permissions';
+import { initDesktopScreenCapture } from './services/desktop-screen-capture';
 
 performance.mark('chat-startup:modules-ready');
 const disposeIosPwaViewport = initIosPwaViewport();
 import.meta.hot?.dispose(disposeIosPwaViewport);
+const disposeDesktopContextMenu = suppressDefaultDesktopContextMenu();
+import.meta.hot?.dispose(disposeDesktopContextMenu);
 
 const INDEXED_DB_RESET_EPOCH = 'chat-client-indexeddb-reset-2026-04-29-v1';
 const INDEXED_DB_RESET_DONE_KEY = 'chat.indexeddb.reset.done';
@@ -197,6 +202,9 @@ const mountApp = async (): Promise<void> => {
   performance.mark('chat-startup:notification-ready');
   registerNativeFileBridge();
   applyRuntimeBodyClasses();
+  const disposeDesktopMediaPermissions = await installDesktopMediaPermissions();
+  import.meta.hot?.dispose(disposeDesktopMediaPermissions);
+  await initDesktopScreenCapture();
   installNotoEmojiFontFaces({
     preferSystemFont: Capacitor.getPlatform() === 'android'
   });

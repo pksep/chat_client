@@ -54,7 +54,16 @@ import {
 import { prewarmCallBackgroundAssets } from './callBackgroundWarmup';
 import { createMediapipeMulticlassBackgroundTrackProcessor } from './mediapipeMulticlassBackgroundTrackProcessor';
 import { copyTextToClipboard } from '../utils/copyTextToClipboard';
-import { parseGroupCallInviteUrl } from '../utils/groupCallInviteUrl';
+import {
+  buildPublicGroupCallInviteUrl,
+  parseGroupCallInviteUrl
+} from '../utils/groupCallInviteUrl';
+import { isTauri as isTauriRuntime } from '@tauri-apps/api/core';
+import { pendingDesktopCallInvite } from './useDesktopCallLinks';
+import {
+  prepareDesktopScreenCapture,
+  stopDesktopScreenCapture
+} from './desktop-screen-capture';
 import { mergeRemoteParticipantsDuringReconnect } from './call-reconnect-participants';
 import { createCallConnectionDiagnostics } from './call-connection-diagnostics';
 import { createCallWebRtcDiagnostics } from './call-webrtc-diagnostics';
@@ -2458,7 +2467,7 @@ const getInviteParamsFromUrl = () => {
   if (typeof window === 'undefined') return null;
 
   const invite = parseGroupCallInviteUrl(window.location.href, {
-    allowTrustedNativeOrigin: Capacitor.isNativePlatform()
+    allowTrustedNativeOrigin: Capacitor.isNativePlatform() || isTauriRuntime()
   });
 
   if (!invite) {
@@ -2476,16 +2485,12 @@ const buildInviteUrl = (invite: {
   inviteToken: string;
 }): string => {
   const currentUrl = new URL(window.location.href);
-  const url = new URL(window.location.origin);
-  url.searchParams.set('callRoom', invite.roomId);
-  url.searchParams.set('callInvite', invite.inviteToken);
-
-  const organization = currentUrl.searchParams.get('organization');
-  if (organization) {
-    url.searchParams.set('organization', organization);
-  }
-
-  return url.toString();
+  return buildPublicGroupCallInviteUrl({
+    ...invite,
+    organization:
+      currentUrl.searchParams.get('organization') ||
+      localStorage.getItem('chat_runtime_last_organization')
+  });
 };
 
 const clearInviteParamsFromUrl = () => {
@@ -6187,6 +6192,7 @@ export const joinPendingGroupCall = async (
 export const hydrateInvitedGroupCallFromUrl = async (options?: {
   preview?: GroupCallInvitePreview;
 }): Promise<boolean> => {
+  if (pendingDesktopCallInvite.value) return false;
   const sdk = getChatSDK();
   const inviteParams = getInviteParamsFromUrl();
 
@@ -6238,7 +6244,8 @@ export const openGroupCallInviteUrl = async (
 
   const invite = parseGroupCallInviteUrl(value, {
     allowTrustedOrigin:
-      options?.allowTrustedOrigin ?? Capacitor.isNativePlatform()
+      options?.allowTrustedOrigin ??
+      (Capacitor.isNativePlatform() || isTauriRuntime())
   });
 
   if (!invite) {
@@ -7406,9 +7413,13 @@ const toggleScreenShareInternal = async (
       }
     } else {
       if (nextScreenShareState) {
-        const tracks = await activeRoom.localParticipant.createScreenTracks(
-          SCREEN_SHARE_CAPTURE_DEFAULTS
-        );
+        const desktopCapture = prepareDesktopScreenCapture();
+        const tracks = desktopCapture
+          ? [new LocalVideoTrack(await desktopCapture)]
+          : await activeRoom.localParticipant.createScreenTracks(
+              SCREEN_SHARE_CAPTURE_DEFAULTS
+            );
+        if (desktopCapture) tracks[0].source = Track.Source.ScreenShare;
         if (
           activeRoom !== room ||
           operationAttemptId !== screenShareRecoveryAttemptId ||
@@ -7548,6 +7559,7 @@ export const sendCallReaction = async (reaction: CallReaction) => {
 
 export const leaveCall = () => {
   isExplicitHangupInProgress = true;
+  stopDesktopScreenCapture();
   const activeRoomId = roomId.value;
   const activeTopicId = topicId.value;
   const activeCaller = user.value;
@@ -7777,6 +7789,14 @@ export const handleNativeCallAction = async (
   }
 
   if (action === 'accept') {
+    if (
+      isTauriRuntime() &&
+      incomingRoomId &&
+      roomId.value &&
+      incomingRoomId !== roomId.value &&
+      open.value
+    )
+      return;
     const targetRoomId = incomingRoomId || roomId.value;
     const targetTopicId = resolveCallTargetTopicId(
       incomingRoomId,
@@ -7813,6 +7833,13 @@ export const handleNativeCallAction = async (
     incomingRoomId,
     incomingTopicId
   );
+  if (isTauriRuntime() && incomingRoomId) {
+    if (roomId.value && roomId.value !== incomingRoomId && open.value) return;
+    if (!(await isLiveKitCallAvailable(targetRoomId, targetTopicId))) {
+      dismissIncomingCallState(incomingRoomId, targetTopicId || undefined);
+      return;
+    }
+  }
   const isCurrentCallTarget =
     !incomingRoomId || !roomId.value || roomId.value === incomingRoomId;
 
@@ -8012,6 +8039,7 @@ const sendActiveCallPageUnloadHangup = (
 
   pageUnloadHangupRoomId = targetRoomId;
   isExplicitHangupInProgress = true;
+  stopDesktopScreenCapture();
   clearPersistedActiveCallSession(targetRoomId);
 
   const sdk = getChatSDK();
