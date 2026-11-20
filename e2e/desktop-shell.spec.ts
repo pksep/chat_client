@@ -444,6 +444,128 @@ test('Одновременные запросы не дают доступ к к
   ).toBe(1);
 });
 
+test('разрешение микрофона переживает перезапуск интерфейса, камера требует отдельного согласия', async ({
+  page
+}) => {
+  await openShell(page);
+  await page.getByRole('button', { name: 'Проверить микрофон' }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Разрешить', exact: true })
+    .click();
+  await expect(page.getByTestId('DesktopShellCaptureResult')).toHaveText(
+    'Доступ разрешён'
+  );
+  await page.reload();
+  await expect
+    .poll(() =>
+      page.evaluate(() => !!(window as any).desktopShellFixture?.ready)
+    )
+    .toBe(true);
+  await page.getByRole('button', { name: 'Проверить микрофон' }).click();
+  await expect(page.getByTestId('DesktopShellCaptureResult')).toHaveText(
+    'Доступ разрешён'
+  );
+  await expect(
+    page.getByTestId('DesktopMediaPermissionDialog')
+  ).not.toBeVisible();
+  const restored = await page.evaluate(() =>
+    (window as any).shellCalls.filter(
+      (call: any) => call.command === 'desktop_grant_permissions'
+    )
+  );
+  expect(restored).toContainEqual({
+    command: 'desktop_grant_permissions',
+    args: { permissions: ['microphone'] }
+  });
+  await page.getByRole('button', { name: 'Проверить видеозвонок' }).click();
+  await expect(page.getByRole('dialog')).toContainText(
+    'Разрешить доступ к камере?'
+  );
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Разрешить', exact: true })
+    .click();
+  await expect(page.getByTestId('DesktopShellCaptureResult')).toHaveText(
+    'Доступ разрешён'
+  );
+  await page.reload();
+  await expect
+    .poll(() =>
+      page.evaluate(() => !!(window as any).desktopShellFixture?.ready)
+    )
+    .toBe(true);
+  await page.getByRole('button', { name: 'Проверить видеозвонок' }).click();
+  await expect(page.getByTestId('DesktopShellCaptureResult')).toHaveText(
+    'Доступ разрешён'
+  );
+  await expect(
+    page.getByTestId('DesktopMediaPermissionDialog')
+  ).not.toBeVisible();
+});
+
+test('сохранённые ответы можно сбросить без изменения разрешений ОС', async ({
+  page
+}, testInfo) => {
+  await openShell(page);
+  await page.evaluate(() =>
+    localStorage.setItem(
+      'chat.desktop.permissions.v1',
+      JSON.stringify({
+        microphone: 'granted',
+        geolocation: 'denied',
+        notifications: 'requested'
+      })
+    )
+  );
+  await page
+    .getByRole('button', { name: 'Разрешения устройств', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Запросить разрешения заново', exact: true })
+    .click();
+  await expect(
+    page.getByTestId('DesktopPermissions-Container').getByRole('status')
+  ).toContainText('Системные разрешения не изменены');
+  await page
+    .getByTestId('DesktopPermissions-Container')
+    .screenshot({ path: testInfo.outputPath('permission-preferences.png') });
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem('chat.desktop.permissions.v1')
+    )
+  ).toBe('{}');
+  await page.reload();
+  await expect
+    .poll(() =>
+      page.evaluate(() => !!(window as any).desktopShellFixture?.ready)
+    )
+    .toBe(true);
+  await page.getByRole('button', { name: 'Проверить микрофон' }).click();
+  await expect(page.getByRole('dialog')).toContainText(
+    'Разрешить доступ к микрофону?'
+  );
+});
+
+test('«Не сейчас» не сохраняет разрешение на устройство', async ({ page }) => {
+  await openShell(page);
+  await page.getByRole('button', { name: 'Проверить микрофон' }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Не сейчас' })
+    .click();
+  await page.reload();
+  await expect
+    .poll(() =>
+      page.evaluate(() => !!(window as any).desktopShellFixture?.ready)
+    )
+    .toBe(true);
+  await page.getByRole('button', { name: 'Проверить микрофон' }).click();
+  await expect(page.getByRole('dialog')).toContainText(
+    'Разрешить доступ к микрофону?'
+  );
+});
+
 test('Светлая и тёмная темы: собственная шапка и запрос устройств', async ({
   page
 }, testInfo) => {

@@ -10,6 +10,66 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/__telemetry-location');
 });
 
+test('Tauri: отказ геолокации переживает перезапуск, включённое разрешение ОС восстанавливает работу', async ({
+  page
+}) => {
+  await page.addInitScript(() => {
+    (window as any).isTauri = true;
+    (window as any).locationRequests = 0;
+    Object.defineProperty(navigator.permissions, 'query', {
+      value: async () => ({
+        state: sessionStorage.getItem('location-system-granted')
+          ? 'granted'
+          : 'prompt'
+      })
+    });
+    Object.defineProperty(navigator.geolocation, 'getCurrentPosition', {
+      value: (resolve: PositionCallback, reject: PositionErrorCallback) => {
+        (window as any).locationRequests++;
+        if (!sessionStorage.getItem('location-system-granted')) {
+          reject({
+            code: 1,
+            message: 'Тест: отказ геолокации'
+          } as GeolocationPositionError);
+        } else {
+          resolve({
+            timestamp: Date.now(),
+            coords: { latitude: 40, longitude: 44, accuracy: 20 }
+          } as GeolocationPosition);
+        }
+      }
+    });
+  });
+  const initialize = () =>
+    page.evaluate(async () => {
+      const geo = await import('/src/services/useTelemetryLocation.ts');
+      await geo.initTelemetryLocation();
+      return {
+        calls: (window as any).locationRequests,
+        context: geo.getTelemetryLocationContext()
+      };
+    });
+  await page.reload();
+  expect((await initialize()).calls).toBe(1);
+  await page.reload();
+  expect((await initialize()).calls).toBe(0);
+  await page.evaluate(() =>
+    sessionStorage.setItem('location-system-granted', 'true')
+  );
+  await page.reload();
+  const allowed = await initialize();
+  expect(allowed.calls).toBe(1);
+  expect(allowed.context.device).toMatchObject({
+    status: 'resolved',
+    latitude: 40,
+    longitude: 44
+  });
+  const saved = await page.evaluate(() =>
+    localStorage.getItem('chat.desktop.permissions.v1')
+  );
+  expect(JSON.parse(saved!)).toEqual({ geolocation: 'granted' });
+});
+
 test('локация работает по умолчанию с системным разрешением, без настройки приложения', async ({
   page
 }) => {

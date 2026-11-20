@@ -8,5 +8,9 @@
     <string>СЭП Чат использует микрофон для голосовых и видеозвонков.</string>
     <key>NSScreenCaptureUsageDescription</key>
     <string>СЭП Чат передаёт выбранный экран или окно участникам звонка только после вашего подтверждения.</string>
+    <key>NSLocationUsageDescription</key>
+    <string>СЭП Чат использует местоположение устройства для диагностики качества связи.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>СЭП Чат использует местоположение устройства для диагностики качества связи.</string>
   </dict>
 </plist>

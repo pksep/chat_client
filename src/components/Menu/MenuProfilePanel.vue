@@ -439,6 +439,8 @@
           </div>
         </div>
 
+        <DesktopPermissionPreferences v-if="isDesktopApp" />
+
         <MenuDesktopAppUpdate
           v-if="isDesktopApp"
           :state="desktopUpdater.state.value"
@@ -956,6 +958,7 @@ import StickerPackSelect from './StickerPackSelect.vue';
 import ProfileQrLogin from './ProfileQrLogin.vue';
 import ProfileAndroidDownload from './ProfileAndroidDownload.vue';
 import MenuDesktopAppUpdate from './MenuDesktopAppUpdate.vue';
+import DesktopPermissionPreferences from '../Desktop/DesktopPermissionPreferences.vue';
 
 const CallBackgroundPreviewModal = defineAsyncComponent(
   () => import('../CallModal/CallBackgroundPreviewModal.vue')

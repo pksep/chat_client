@@ -5,15 +5,19 @@ use tauri::{Manager, Runtime, State, Webview, WebviewWindow};
 
 const MICROPHONE: u8 = 1;
 const CAMERA: u8 = 2;
+const GEOLOCATION: u8 = 4;
+const CLIPBOARD_READ: u8 = 8;
 
 #[derive(Default)]
 pub struct DesktopMediaPermissions(AtomicU8);
 
 #[derive(Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub enum MediaPermission {
     Microphone,
     Camera,
+    Geolocation,
+    ClipboardRead,
 }
 
 #[tauri::command]
@@ -34,10 +38,21 @@ pub fn desktop_grant_media_permissions<R: Runtime>(
         mask | match permission {
             MediaPermission::Microphone => MICROPHONE,
             MediaPermission::Camera => CAMERA,
+            MediaPermission::Geolocation => GEOLOCATION,
+            MediaPermission::ClipboardRead => CLIPBOARD_READ,
         }
     });
     state.0.fetch_or(mask, Ordering::SeqCst);
     Ok(())
+}
+
+#[tauri::command]
+pub fn desktop_grant_permissions<R: Runtime>(
+    window: WebviewWindow<R>,
+    state: State<'_, DesktopMediaPermissions>,
+    permissions: Vec<MediaPermission>,
+) -> Result<(), String> {
+    desktop_grant_media_permissions(window, state, permissions)
 }
 
 pub fn handle_request<R: Runtime>(webview: Webview<R>, kind: PermissionKind) -> PermissionResponse {
@@ -47,6 +62,8 @@ pub fn handle_request<R: Runtime>(webview: Webview<R>, kind: PermissionKind) -> 
     let mask = match kind {
         PermissionKind::Microphone => MICROPHONE,
         PermissionKind::Camera => CAMERA,
+        PermissionKind::Geolocation => GEOLOCATION,
+        PermissionKind::ClipboardRead => CLIPBOARD_READ,
         _ => return PermissionResponse::Default,
     };
     let granted = webview

@@ -2,6 +2,7 @@ import { createApp, h } from 'vue';
 import { createPinia } from 'pinia';
 import DesktopTitleBar from '../../src/components/Desktop/DesktopTitleBar.vue';
 import DesktopMediaPermissionDialog from '../../src/components/Desktop/DesktopMediaPermissionDialog.vue';
+import DesktopPermissionPreferences from '../../src/components/Desktop/DesktopPermissionPreferences.vue';
 import DesktopScreenSharePicker from '../../src/components/Desktop/DesktopScreenSharePicker.vue';
 import {
   initDesktopScreenCapture,
@@ -41,6 +42,7 @@ const app = createApp({
       [
         h('h1', 'SEP Chat'),
         h('p', 'Оформление приложения и доступ к устройствам'),
+        h(DesktopPermissionPreferences),
         h(
           'button',
           { onClick: () => capture({ audio: true }) },

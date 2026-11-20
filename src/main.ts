@@ -14,6 +14,7 @@ import { createPinia } from 'pinia';
 import { initIosPwaViewport } from './utils/ios-pwa-viewport';
 import { suppressDefaultDesktopContextMenu } from './utils/desktop-context-menu';
 import { installDesktopMediaPermissions } from './services/desktop-media-permissions';
+import { installDesktopClipboardPermissions } from './services/desktop-permission-preferences';
 import { initDesktopScreenCapture } from './services/desktop-screen-capture';
 
 performance.mark('chat-startup:modules-ready');
@@ -207,6 +208,9 @@ const mountApp = async (): Promise<void> => {
   applyRuntimeBodyClasses();
   const disposeDesktopMediaPermissions = await installDesktopMediaPermissions();
   import.meta.hot?.dispose(disposeDesktopMediaPermissions);
+  const disposeDesktopClipboardPermissions =
+    installDesktopClipboardPermissions();
+  import.meta.hot?.dispose(disposeDesktopClipboardPermissions);
   await initDesktopScreenCapture();
   installNotoEmojiFontFaces({
     preferSystemFont: Capacitor.getPlatform() === 'android'

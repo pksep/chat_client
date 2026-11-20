@@ -553,6 +553,7 @@ pub fn run() {
             desktop_restart,
             desktop_media_permissions::desktop_media_permissions_available,
             desktop_media_permissions::desktop_grant_media_permissions,
+            desktop_media_permissions::desktop_grant_permissions,
             desktop_screen_capture::desktop_screen_capture_available,
             desktop_screen_capture::desktop_screen_capture_active,
             desktop_screen_capture::desktop_screen_capture_permission,

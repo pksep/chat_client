@@ -45,6 +45,7 @@ export default defineConfig({
       testMatch: [
         'macos-desktop.spec.ts',
         'desktop-shell.spec.ts',
+        'telemetry-location.spec.ts',
         'desktop-app-download.spec.ts',
         'forward-modal-desktop.spec.ts',
         'creation-modal-desktop.spec.ts'

@@ -2,11 +2,9 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
-  isPermissionGranted,
   onAction,
   removeActive,
   removeAllActive,
-  requestPermission,
   sendNotification,
   type Options
 } from '@tauri-apps/plugin-notification';
@@ -20,6 +18,7 @@ import { getStickerMessagePreview } from '../utils/stickers';
 import { ensureStickerMessageMetadata } from './sticker-catalog';
 import { getNotificationAttachmentPreview } from '../utils/notification-attachments';
 import { getChatAuthSession } from '../utils/stored-chat-session';
+import { ensureDesktopNotificationPermission } from './desktop-notification-permissions';
 
 type TauriNotificationExtra = Record<string, unknown> & {
   callerId?: string | null;
@@ -44,7 +43,6 @@ interface TauriNotificationPayload {
 const MAX_NOTIFICATION_ID = 2_147_483_647;
 const TAURI_NOTIFICATION_CLICK_EVENT = 'sep-chat://notification-click';
 
-let permissionGrantedCache: boolean | null = null;
 let isActionListenerBound = false;
 const activeMessageNotificationIdsByTopic = new Map<string, string>();
 const activeCallNotificationRoomsByTopic = new Map<string, string | null>();
@@ -134,19 +132,7 @@ const ensureTauriNotificationPermission = async (): Promise<boolean> => {
     return false;
   }
 
-  if (permissionGrantedCache !== null) {
-    return permissionGrantedCache;
-  }
-
-  let isGranted = await isPermissionGranted();
-
-  if (!isGranted) {
-    const permission = await requestPermission();
-    isGranted = permission === 'granted';
-  }
-
-  permissionGrantedCache = isGranted;
-  return isGranted;
+  return ensureDesktopNotificationPermission();
 };
 
 const getTopicTitle = (topic?: ITopic | null): string =>
