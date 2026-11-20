@@ -1,3 +1,10 @@
+## [1.54.1](https://github.com/pksep/chat_client/compare/v1.54.0...v1.54.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* preserve desktop permissions across restarts [skip ci] ([735cfc9](https://github.com/pksep/chat_client/commit/735cfc94b92f1ec41973cca2990959f6721cb82b))
+
 # [1.54.0](https://github.com/pksep/chat_client/compare/v1.53.7...v1.54.0) (2026-11-20)
 
 
