@@ -206,7 +206,8 @@ export const clientPlatform = (item: ManagerInquiry): string =>
     vk: 'ВКонтакте',
     vkontakte: 'ВКонтакте',
     telegram: 'Telegram',
-    max: 'MAX'
+    max: 'MAX',
+    whatsapp: 'WhatsApp'
   })[item.source?.channel || 'widget'] ||
   item.source?.name ||
   'Сайт';

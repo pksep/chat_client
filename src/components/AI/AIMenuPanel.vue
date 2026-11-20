@@ -153,6 +153,13 @@
                   :height="24"
                   class="ai-menu-panel__collapsed-icon"
                 />
+                <span
+                  v-if="item.activityStatus"
+                  :class="[
+                    'ai-menu-panel__activity-status',
+                    `ai-menu-panel__activity-status--${item.activityStatus}`
+                  ]"
+                ></span>
               </span>
             </button>
             <span
@@ -537,6 +544,7 @@ type CollapsedAiMenuItem =
       description: string;
       status: AiAssistantActivityStatus;
       statusLabel: string;
+      activityStatus?: AiAssistantActivityStatus;
       sessionId?: string;
       taskId?: string;
     }
@@ -547,6 +555,7 @@ type CollapsedAiMenuItem =
       description: string;
       status: AiAssistantActivityStatus;
       statusLabel: string;
+      activityStatus?: AiAssistantActivityStatus;
     };
 
 const {
@@ -689,7 +698,7 @@ const getCollapsedItemActivity = (
     status: AiAssistantActivityStatus;
     statusLabel: string;
   }
-): typeof fallback => {
+): typeof fallback & { activityStatus?: AiAssistantActivityStatus } => {
   const activity = sessionId
     ? backgroundActivityBySessionId.value.get(sessionId)
     : undefined;
@@ -699,6 +708,7 @@ const getCollapsedItemActivity = (
   return {
     description: activity.description,
     status: activity.status,
+    activityStatus: activity.status,
     statusLabel: getActivityStatusLabel(activity.status)
   };
 };

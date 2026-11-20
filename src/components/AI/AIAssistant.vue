@@ -232,6 +232,13 @@
             </Teleport>
           </div>
         </template>
+        <div
+          v-if="conversationError"
+          class="ai-assistant__thinking"
+          role="alert"
+        >
+          {{ conversationError }}
+        </div>
         <div v-if="isThinking" class="ai-assistant__thinking">
           {{ preparationStatus }} <span>•••</span>
         </div>
@@ -518,6 +525,14 @@
           :expression="voiceAssistantExpression"
         />
       </div>
+      <p
+        v-if="voiceQueueNotice"
+        class="ai-assistant__voice-notice"
+        role="status"
+        aria-live="polite"
+      >
+        {{ voiceQueueNotice }}
+      </p>
       <div
         class="ai-assistant__voice-actions call-modal__control-button-wrapper call-modal__control-button-wrapper--call-controls"
       >
@@ -638,14 +653,8 @@ import { useIosPwaFilePicker } from '../../composables/useIosPwaFilePicker';
 import { stageAiAttachments } from '../../services/aiAttachments';
 import { validateAiAttachments } from '../../services/aiAttachmentLimits';
 import { MediaType } from '@pksep/zod-shared-chat';
-import {
-  recognizeVoice,
-  startVoiceCapture,
-  startVoicePlayback,
-  synthesizeVoice,
-  type VoiceCaptureSession,
-  type VoicePlaybackSession
-} from '../../services/aiSpeech';
+import { VoiceConversation } from '../../services/voiceConversation';
+import { VoiceActionFeedback } from '../../services/aiActionTaskPresentation';
 import { stripHtml } from '../../utils/stripHtml';
 import { copyMessageSelection } from '../../utils/copyMessageSelection';
 import type { IMedia, ITopic } from '../interfaces/interfaces';
@@ -703,12 +712,12 @@ const getMessageHtml = (text: string): string =>
 
 const {
   sessions,
-  tasks,
   activeView,
   activeSessionId,
   activeSession,
   isThinking,
   preparationStatus,
+  conversationError,
   taskBusy,
   resolveActionTask,
   isVoiceModeOpen,
@@ -720,8 +729,6 @@ const {
   stopVoiceCall,
   startNewSession,
   selectSession,
-  selectTaskSession,
-  selectTask,
   sendMessage,
   sendSuggestedPrompt,
   startNewTask,
@@ -904,12 +911,10 @@ type VoiceAssistantState =
 type AiAvatarExpression = 'standard' | 'thinking' | 'sad' | 'happy' | 'love';
 
 const voiceAssistantState = ref<VoiceAssistantState>('idle');
+const voiceQueueNotice = ref('');
 const voiceAssistantExpression = ref<AiAvatarExpression>('standard');
-let activeVoiceCapture: VoiceCaptureSession | null = null;
-let activeVoicePlayback: VoicePlaybackSession | null = null;
-let voiceRequestController: AbortController | null = null;
-let voiceCycleId = 0;
-let voiceRestartTimer: number | null = null;
+let voiceConversation: VoiceConversation | undefined;
+const voiceActionFeedback = new VoiceActionFeedback();
 
 /** Открывает голосовой режим непосредственно из пользовательского клика. */
 const openVoiceMode = (): void => {
@@ -930,107 +935,42 @@ useBackButtonHandler(
 
 /** Закрывает голосовой режим и освобождает микрофон и воспроизведение. */
 const closeVoiceMode = (): void => {
+  voiceConversation?.stop();
+  voiceConversation = undefined;
   stopVoiceCall();
-  voiceCycleId += 1;
-  clearVoiceRestartTimer();
-  activeVoiceCapture?.cancel();
-  activeVoiceCapture = null;
-  activeVoicePlayback?.stop();
-  activeVoicePlayback = null;
-  voiceRequestController?.abort();
-  voiceRequestController = null;
-  voiceAssistantState.value = 'idle';
-  voiceAssistantExpression.value = 'standard';
+  setVoicePresentation('idle');
   focusComposer();
 };
 
-/** Приостанавливает или возобновляет только пользовательский микрофон. */
 const toggleVoiceMicrophone = (): void => {
   isVoiceMuted.value = !isVoiceMuted.value;
-  if (isVoiceMuted.value) {
-    clearVoiceRestartTimer();
-    activeVoiceCapture?.cancel();
-    activeVoiceCapture = null;
-    if (voiceAssistantState.value === 'listening') {
-      voiceAssistantState.value = 'idle';
-      voiceAssistantExpression.value = 'standard';
-    }
-    return;
-  }
-
-  if (
-    voiceAssistantState.value === 'idle' ||
-    voiceAssistantState.value === 'error'
-  ) {
-    voiceCycleId += 1;
-    void runVoiceConversationCycle(voiceCycleId);
-  }
+  voiceConversation?.mute(isVoiceMuted.value);
 };
 
-/** Выполняет один полный голосовой ход и затем снова включает прослушивание. */
-const runVoiceConversationCycle = async (cycleId: number): Promise<void> => {
-  if (!isCurrentVoiceCycle(cycleId) || isVoiceMuted.value) return;
+const startVoiceConversation = async (): Promise<void> => {
+  voiceConversation?.stop();
+  const conversation = new VoiceConversation({
+    send: async (text, options): Promise<string | null> => {
+      return sendMessage(text, [], undefined, undefined, undefined, options);
+    },
+    isBusy: (): boolean => isThinking.value,
+    notice: (text): void => {
+      voiceQueueNotice.value = text;
+    },
+    state: setVoicePresentation,
+    error: (error): void => showErrorNotification(getVoiceErrorMessage(error)),
+    ended: (): void => {
+      if (voiceConversation === conversation) closeVoiceMode();
+    }
+  });
+  voiceConversation = conversation;
 
   try {
-    setVoicePresentation('listening');
-    const capture = await startVoiceCapture();
-    if (!isCurrentVoiceCycle(cycleId) || isVoiceMuted.value) {
-      capture.cancel();
-      return;
-    }
-
-    activeVoiceCapture = capture;
-    const audio = await capture.result;
-    if (activeVoiceCapture === capture) activeVoiceCapture = null;
-    if (!isCurrentVoiceCycle(cycleId) || isVoiceMuted.value) return;
-    if (!audio) {
-      restartVoiceListening(cycleId);
-      return;
-    }
-
-    setVoicePresentation('thinking');
-    voiceRequestController = new AbortController();
-    const transcript = await recognizeVoice(
-      audio,
-      voiceRequestController.signal
-    );
-    if (!isCurrentVoiceCycle(cycleId)) return;
-    if (!transcript) {
-      restartVoiceListening(cycleId);
-      return;
-    }
-
-    const responseText = await sendMessage(transcript);
-    if (!isCurrentVoiceCycle(cycleId) || !responseText) {
-      restartVoiceListening(cycleId);
-      return;
-    }
-
-    const speech = await synthesizeVoice(
-      responseText,
-      voiceRequestController.signal
-    );
-    if (!isCurrentVoiceCycle(cycleId)) return;
-
-    setVoicePresentation('speaking', responseText);
-    const playback = startVoicePlayback(speech);
-    activeVoicePlayback = playback;
-    await playback.done;
-    if (activeVoicePlayback === playback) activeVoicePlayback = null;
-    restartVoiceListening(cycleId);
+    await conversation.start();
   } catch (error) {
-    if (!isCurrentVoiceCycle(cycleId) || isAbortError(error)) return;
-    if (isMicrophoneAccessError(error)) {
-      isVoiceMuted.value = true;
-      setVoicePresentation('idle');
-      showErrorNotification(getVoiceErrorMessage(error));
-      return;
-    }
-    setVoicePresentation('error');
+    if (voiceConversation !== conversation) return;
+    closeVoiceMode();
     showErrorNotification(getVoiceErrorMessage(error));
-    restartVoiceListening(cycleId, 1_200);
-  } finally {
-    voiceRequestController = null;
   }
 };
 
@@ -1063,9 +1003,6 @@ const getResponseExpression = (text: string): AiAvatarExpression => {
   return 'happy';
 };
 
-const isCurrentVoiceCycle = (cycleId: number): boolean =>
-  isVoiceModeOpen.value && cycleId === voiceCycleId;
-
 /** Возвращает короткое понятное объяснение проблем с голосовым режимом. */
 const getVoiceErrorMessage = (error: unknown): string => {
   if (error instanceof DOMException && error.name === 'NotAllowedError') {
@@ -1078,30 +1015,6 @@ const getVoiceErrorMessage = (error: unknown): string => {
     return error.message;
   }
   return 'Не удалось обработать голос. Попробуйте ещё раз.';
-};
-
-const isAbortError = (error: unknown): boolean =>
-  error instanceof DOMException && error.name === 'AbortError';
-
-const isMicrophoneAccessError = (error: unknown): boolean =>
-  error instanceof DOMException &&
-  ['NotAllowedError', 'NotFoundError'].includes(error.name);
-
-const restartVoiceListening = (cycleId: number, delay = 0): void => {
-  if (!isCurrentVoiceCycle(cycleId) || isVoiceMuted.value) return;
-  clearVoiceRestartTimer();
-  voiceRestartTimer = window.setTimeout(() => {
-    voiceRestartTimer = null;
-    if (!isCurrentVoiceCycle(cycleId) || isVoiceMuted.value) return;
-    voiceCycleId += 1;
-    void runVoiceConversationCycle(voiceCycleId);
-  }, delay);
-};
-
-const clearVoiceRestartTimer = (): void => {
-  if (voiceRestartTimer === null) return;
-  window.clearTimeout(voiceRestartTimer);
-  voiceRestartTimer = null;
 };
 
 type AIMessageMenuAction =
@@ -1642,12 +1555,17 @@ const handleApproval = async (
   try {
     const task = visibleActionTasks.value.get(messageId);
     if (task?.status === 'waiting_approval') {
+      if (voiceConversation) voiceActionFeedback.track(task.id);
       await resolveActionTask(
         task.id,
         state === 'approved' ? 'approve' : 'cancel'
       );
     } else {
-      await updateApproval(messageId, state);
+      if (voiceConversation)
+        await voiceConversation.respond(options =>
+          updateApproval(messageId, state, options)
+        );
+      else await updateApproval(messageId, state);
     }
   } finally {
     focusComposer();
@@ -1905,14 +1823,7 @@ watch(
 
     const session = sessions.value.find(item => item.id === sessionId);
     if (session) {
-      const task = tasks.value.find(item => item.sessionId === sessionId);
-      if (task) {
-        selectTask(task.id);
-      } else if (session.kind === 'task') {
-        selectTaskSession(sessionId);
-      } else {
-        selectSession(sessionId);
-      }
+      selectSession(sessionId, false);
       void scrollOpenedChatToBottom();
       return;
     }
@@ -1987,12 +1898,34 @@ watch(
   }
 );
 
+// Первый голосовой запрос создаёт диалог из пустого экрана; остальные переходы завершают звонок.
+watch(
+  activeSessionId,
+  (id, previous) => {
+    if (previous && id !== previous && isVoiceModeOpen.value) closeVoiceMode();
+  },
+  { flush: 'sync' }
+);
+
 watch(isVoiceModeOpen, (isOpen, wasOpen) => {
-  if (!isOpen || wasOpen) return;
+  if (!isOpen) {
+    voiceActionFeedback.clear();
+    voiceConversation?.stop();
+    voiceConversation = undefined;
+    return;
+  }
+  if (wasOpen) return;
 
   isVoiceMuted.value = false;
-  voiceCycleId += 1;
-  void runVoiceConversationCycle(voiceCycleId);
+  void startVoiceConversation();
+});
+
+watch(visibleActionTasks, tasks => {
+  const conversation = voiceConversation;
+  if (!conversation) return;
+  const replies = voiceActionFeedback.update(tasks.values());
+  if (replies.length)
+    void conversation.respond(async (): Promise<string> => replies.join(' '));
 });
 
 watch(

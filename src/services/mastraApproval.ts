@@ -484,6 +484,8 @@ const APPROVAL_ACTION_LABELS: Record<string, string> = {
   board_actions_tasks_delete: 'удаление задачи',
   board_actions_subtasks_create: 'создание подзадачи',
   board_actions_task_comments_create: 'добавление комментария',
+  board_actions_task_attributes_update: 'изменение атрибутов задачи',
+  board_actions_task_time_entries_create: 'запись времени выполнения',
   automation_schedule_create: 'создание автоматизации',
   automation_schedule_update: 'изменение автоматизации',
   automation_schedule_pause: 'приостановка автоматизации',
@@ -499,6 +501,42 @@ const buildApprovalQuestion = (approval: PendingToolApproval): string => {
   const taskTitle = quotedValue(args.taskTitle);
 
   switch (toolName) {
+    case 'board_actions_task_time_entries_create':
+      return `Записать по задаче ${taskTitle} фактически затраченное время: ${formatValue(args.durationMinutes, 'не указано')} мин.${typeof args.comment === 'string' && args.comment.trim() ? `, комментарий: ${quotedValue(args.comment)}` : ', без комментария'}?`;
+    case 'board_actions_task_attributes_update': {
+      const changes = Array.isArray(args.attributes)
+        ? args.attributes
+            .map((attribute: unknown): string => {
+              if (!attribute || typeof attribute !== 'object')
+                return 'некорректное поле';
+
+              const item = attribute as Record<string, unknown>;
+              const value =
+                item.value === null ||
+                item.value === '' ||
+                (Array.isArray(item.value) && item.value.length === 0)
+                  ? 'очистить'
+                  : typeof item.value === 'boolean'
+                    ? item.value
+                      ? 'да'
+                      : 'нет'
+                    : item.type === 'participants'
+                      ? Array.isArray(item.participantNames)
+                        ? item.participantNames
+                            .map((name: unknown): string =>
+                              formatValue(name, 'имя не указано')
+                            )
+                            .join(', ')
+                        : 'имена не указаны'
+                      : formatValue(item.value, 'не указано');
+
+              return `${quotedValue(item.name)}: ${value}`;
+            })
+            .join('; ')
+        : 'изменения не указаны';
+
+      return `Изменить атрибуты задачи ${taskTitle}: ${changes}?`;
+    }
     case 'automation_schedule_create':
       return `Настроить автоматизацию ${quotedValue(args.title)}: ${formatValue(args.task, 'поручение не указано')}. Расписание: ${automationRecurrenceValue(args.recurrence)}, часовой пояс: ${formatValue(args.timezone, 'Europe/Moscow')}?`;
     case 'automation_schedule_update': {

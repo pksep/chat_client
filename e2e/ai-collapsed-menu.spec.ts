@@ -111,6 +111,84 @@ test.beforeEach(async ({ page }, testInfo) => {
   );
 });
 
+test('после перезагрузки оба меню восстанавливают статус поручения и обновляют его с сервера', async ({
+  page
+}, testInfo): Promise<void> => {
+  test.skip(testInfo.project.name !== 'chromium-desktop');
+  test.setTimeout(120_000);
+  let completed = false;
+  const readTask = (): object => ({
+    id: 'qa-restored-plan',
+    requestId: 'qa-restored-request',
+    title: 'Проверка фонового поручения',
+    revision: 1,
+    version: completed ? 2 : 1,
+    digest: '0'.repeat(64),
+    approved: true,
+    createdAt: 1,
+    updatedAt: completed ? 2 : 1,
+    completed: completed ? 1 : 0,
+    status: completed ? 'completed' : 'running',
+    steps: []
+  });
+  await page.route(`**/action-tasks/${CHAT_SESSION_ID}`, route =>
+    route.fulfill({ json: { tasks: [readTask()] } })
+  );
+  await page.goto(`/ai/${SECOND_CHAT_SESSION_ID}`);
+  await expect(page.locator('.ai-menu-panel--collapse')).toBeVisible({
+    timeout: 30_000
+  });
+  await expect(page.locator('#startup-shell')).toHaveCount(0);
+  await page.evaluate(sessionId => {
+    const key = 'sep:chat:ai-assistant:v1';
+    const state = JSON.parse(localStorage.getItem(key) || '{}');
+    state.activitiesOwnerId = 'local-ui-test-user';
+    state.activities = [
+      {
+        sessionId,
+        title: 'Рабочий чат',
+        description: 'Проверяю состояние поручения',
+        status: 'running',
+        updatedAt: Date.now(),
+        isBackground: false,
+        requestId: 'qa-restored-request'
+      }
+    ];
+    localStorage.setItem(key, JSON.stringify(state));
+  }, CHAT_SESSION_ID);
+  await page.reload();
+
+  const sidebar = page.locator('.ai-menu-panel__activity-status');
+  await expect(sidebar).toHaveClass(/activity-status--running/, {
+    timeout: 30_000
+  });
+  await expect(
+    page.locator('.menu-bottom-nav__ai-status--running')
+  ).toBeVisible();
+  await expect
+    .poll(async () =>
+      page.evaluate(
+        () => localStorage.getItem('sep:chat:ai-assistant:v1') || ''
+      )
+    )
+    .toContain('Выполняю план действий');
+
+  completed = true;
+  await expect(sidebar).toHaveClass(/activity-status--success/, {
+    timeout: 15_000
+  });
+  await expect(
+    page.locator('.menu-bottom-nav__ai-status--success')
+  ).toBeVisible();
+  await page.reload();
+  await expect(sidebar).toHaveClass(/activity-status--success/, {
+    timeout: 30_000
+  });
+  await expect(
+    page.locator('.menu-bottom-nav__ai-status--success')
+  ).toBeVisible();
+});
+
 test('показывает задачи и AI-чаты единым списком в свёрнутом меню', async ({
   page
 }, testInfo) => {
@@ -703,7 +781,9 @@ test('троеточие доступно на стартовом экране �
   await expect(headerTrigger).toBeVisible({ timeout: 60_000 });
   await headerTrigger.click();
   const menu = page.locator('.chat__header-context-menu:visible');
-  await menu.getByRole('button', { name: 'Создать задачу', exact: true }).click();
+  await menu
+    .getByRole('button', { name: 'Создать задачу', exact: true })
+    .click();
   await expect(
     page.getByRole('heading', { name: 'Автоматизированные задачи' })
   ).toBeVisible();
