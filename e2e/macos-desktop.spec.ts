@@ -72,3 +72,98 @@ for (const width of [562, 1124]) {
       .toBe(1);
   });
 }
+
+for (const width of [420, 700, 1124]) {
+  for (const customChrome of [false, true]) {
+    test(`Mac: удаление сообщения ${width}px, своя шапка ${customChrome}`, async ({
+      page
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 766 });
+      await page.route('**/*', route => {
+        const url = new URL(route.request().url());
+        return ['localhost', '127.0.0.1'].includes(url.hostname)
+          ? route.continue()
+          : route.abort();
+      });
+      await page.goto('/e2e/fixtures/ios-compact-modals.html');
+      await page.evaluate(customChrome => {
+        document.body.classList.add(
+          'chat-tauri-runtime',
+          'chat-tauri-macos-runtime'
+        );
+        document.documentElement.dataset.theme = 'dark';
+        if (customChrome) {
+          document.documentElement.classList.add('chat-desktop-custom-chrome');
+        }
+      }, customChrome);
+      await page.getByRole('button', { name: 'delete', exact: true }).click();
+
+      const modal = page.locator('dialog[open]');
+      await expect(
+        modal.getByRole('heading', { name: 'Удалить сообщение', exact: true })
+      ).toBeVisible();
+      await expect(modal).not.toHaveClass(
+        /(?:fade-and-scale|slide-bottom)-enter-/
+      );
+      await expect(modal).toHaveCSS('opacity', '1');
+      await page.screenshot({
+        path: testInfo.outputPath('delete-modal.png'),
+        animations: 'disabled'
+      });
+      const geometry = await modal.evaluate(dialog => {
+        const rect = dialog.getBoundingClientRect();
+        const content = dialog
+          .querySelector('.modal-yui-kit__modal-content')!
+          .getBoundingClientRect();
+        const title = dialog
+          .querySelector('.confirm__modal__title')!
+          .getBoundingClientRect();
+        const buttons = Array.from(dialog.querySelectorAll('button')).map(
+          button => button.getBoundingClientRect()
+        );
+        return {
+          height: rect.height,
+          width: rect.width,
+          x: rect.x,
+          y: rect.y,
+          bottom: rect.bottom,
+          contentOverflow: dialog.scrollHeight - dialog.clientHeight,
+          centerOffset: Math.abs(
+            (title.left + title.right - rect.left - rect.right) / 2
+          ),
+          contentWidth: content.width,
+          buttons: buttons.map(button => ({
+            x: button.x,
+            y: button.y,
+            right: button.right,
+            bottom: button.bottom
+          }))
+        };
+      });
+      await testInfo.attach('geometry', {
+        body: JSON.stringify(geometry),
+        contentType: 'application/json'
+      });
+      expect(geometry.height).toBeLessThan(400);
+      expect(geometry.centerOffset).toBeLessThanOrEqual(1);
+      expect(geometry.contentOverflow).toBeLessThanOrEqual(1);
+      expect(geometry.y).toBeGreaterThanOrEqual(customChrome ? 36 : 0);
+      expect(geometry.bottom).toBeLessThanOrEqual(766);
+      expect(geometry.width).toBeLessThanOrEqual(width);
+      for (const button of geometry.buttons) {
+        expect(button.x).toBeGreaterThanOrEqual(geometry.x);
+        expect(button.right).toBeLessThanOrEqual(geometry.x + geometry.width);
+        expect(button.bottom).toBeLessThanOrEqual(geometry.bottom);
+      }
+      await modal.getByRole('button', { name: 'Нет', exact: true }).click();
+      await expect(page.locator('dialog[open]')).toHaveCount(0);
+      await expect(page.getByTestId('confirmed')).toHaveText('0');
+      await page.getByRole('button', { name: 'delete', exact: true }).click();
+      await page
+        .locator('dialog[open]')
+        .getByRole('button', { name: 'Да', exact: true })
+        .click();
+      await expect(page.getByTestId('confirmed')).toHaveText('1');
+    });
+  }
+}

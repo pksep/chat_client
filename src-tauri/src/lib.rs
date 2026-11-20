@@ -38,7 +38,7 @@ use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use windows::{
     core::{IInspectable, Interface, HSTRING},
     Data::Xml::Dom::XmlDocument,
-    Foundation::TypedEventHandler,
+    Foundation::{IPropertyValue, TypedEventHandler},
     UI::Notifications::{ToastActivatedEventArgs, ToastNotification, ToastNotificationManager},
 };
 
@@ -47,6 +47,12 @@ const AUTOSTART_ARG: &str = "--autostart";
 
 #[cfg(desktop)]
 const TRAY_SHOW_ID: &str = "tray-show";
+
+#[cfg(desktop)]
+const TRAY_INSPECT_ID: &str = "tray-inspect";
+
+#[cfg(desktop)]
+const TRAY_MINIMIZE_ID: &str = "tray-minimize";
 
 #[cfg(desktop)]
 const TRAY_QUIT_ID: &str = "tray-quit";
@@ -166,7 +172,9 @@ fn store_pending_notification_target<R: Runtime>(app: &AppHandle<R>, payload: St
 #[cfg(desktop)]
 fn handle_notification_activation<R: Runtime>(app: &AppHandle<R>, payload: String) {
     store_pending_notification_target(app, payload.clone());
-    show_main_window(app);
+    if desktop_notifications::activation_needs_window(&payload) {
+        show_main_window(app);
+    }
     let _ = app.emit(NOTIFICATION_CLICK_EVENT, payload);
 }
 
@@ -174,14 +182,23 @@ fn handle_notification_activation<R: Runtime>(app: &AppHandle<R>, payload: Strin
 fn get_toast_activated_arguments(insp: &Option<IInspectable>) -> Option<String> {
     let args = insp
         .as_ref()
-        .and_then(|value| value.cast::<ToastActivatedEventArgs>().ok())?
-        .Arguments()
-        .ok()?;
+        .and_then(|value| value.cast::<ToastActivatedEventArgs>().ok())?;
+    let payload = args.Arguments().ok()?;
 
-    if args.is_empty() {
+    if payload.is_empty() {
         None
     } else {
-        Some(args.to_string())
+        let text = args
+            .UserInput()
+            .ok()
+            .and_then(|input| input.Lookup(&HSTRING::from("reply_text")).ok())
+            .and_then(|value| value.cast::<IPropertyValue>().ok())
+            .and_then(|value| value.GetString().ok())
+            .map(|value| value.to_string());
+        Some(desktop_notifications::with_reply_input(
+            &payload.to_string(),
+            text.as_deref(),
+        ))
     }
 }
 
@@ -396,7 +413,7 @@ fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     // Dev-сборка не должна заменять установленный exe в автозапуске.
     if !cfg!(debug_assertions) {
         #[cfg(windows)]
-        if let Err(error) = desktop_autostart::register() {
+        if let Err(error) = desktop_autostart::register(&app.config().identifier) {
             eprintln!("Не удалось обновить автозапуск СЭП Чат: {error}");
         }
         #[cfg(not(windows))]
@@ -407,6 +424,9 @@ fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
 
     let tray_menu = MenuBuilder::new(app)
         .text(TRAY_SHOW_ID, "Открыть СЭП Чат")
+        .text(TRAY_MINIMIZE_ID, "Свернуть")
+        .separator()
+        .text(TRAY_INSPECT_ID, "Открыть инспектор")
         .separator()
         .text(TRAY_QUIT_ID, "Выйти")
         .build()?;
@@ -420,6 +440,17 @@ fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
                     .is_quitting
                     .store(false, Ordering::SeqCst);
                 show_main_window(app);
+            }
+            TRAY_MINIMIZE_ID => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.minimize();
+                }
+            }
+            TRAY_INSPECT_ID => {
+                show_main_window(app);
+                if let Some(window) = app.get_webview_window("main") {
+                    window.open_devtools();
+                }
             }
             TRAY_QUIT_ID => {
                 app.state::<AppLifecycleState>()
@@ -522,6 +553,7 @@ pub fn run() {
             desktop_restart,
             desktop_media_permissions::desktop_media_permissions_available,
             desktop_media_permissions::desktop_grant_media_permissions,
+            desktop_media_permissions::desktop_grant_permissions,
             desktop_screen_capture::desktop_screen_capture_available,
             desktop_screen_capture::desktop_screen_capture_active,
             desktop_screen_capture::desktop_screen_capture_permission,

@@ -3,6 +3,216 @@ import { createAndroidPerformanceServer } from './fixtures/android-performance-s
 
 test.use({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' });
 
+test('при ошибке быстрого ответа текст сохраняется в редакторе и не отмечается прочитанным', async ({
+  page
+}) => {
+  const paths: string[] = [];
+  await page.route('**/notification-actions-error/**', route => {
+    paths.push(new URL(route.request().url()).pathname);
+    return route.fulfill({ status: 503, json: { message: 'Нет сети' } });
+  });
+  await page.goto('/e2e/fixtures/call-download.html');
+  const result = await page.evaluate(async () => {
+    (window as any).isTauri = true;
+    localStorage.setItem(
+      'chat_auth_session',
+      JSON.stringify({
+        token: 'local-notification-test',
+        user: { id: 'notification-owner' }
+      })
+    );
+    const { mockIPC, mockWindows } = await import(
+      '/node_modules/@tauri-apps/api/mocks.js'
+    );
+    mockWindows('main');
+    const commands: string[] = [];
+    mockIPC(command => {
+      commands.push(command);
+      return true;
+    });
+    const { setConfig } = await import('/src/services/useConfig.ts');
+    setConfig({
+      CHAT_API_DOMAIN: location.origin + '/notification-actions-error'
+    });
+    const { handleDesktopNotificationAction } = await import(
+      '/src/services/desktop-notification-actions.ts'
+    );
+    await handleDesktopNotificationAction({
+      type: 'new_message',
+      action: 'reply',
+      accountId: 'notification-owner',
+      topicType: 'GROUP',
+      topicId: 'c8490ca4-47e9-4b24-a5ba-c2b0b4023bd7',
+      messageId: 'bcd4d922-b955-4f6f-9fbc-16a3ff317672',
+      replyClientId: '5e356d09-18bb-4e64-b0ac-a7587ada8537',
+      replyText: '<b>Текст</b> & ответ\nвторая строка'
+    });
+    const { usePendingMessageDraft } = await import(
+      '/src/composables/useMessageDraftTransfer.ts'
+    );
+    const draft = usePendingMessageDraft();
+    return {
+      topicId: draft.pendingDraftTopicId.value,
+      text: draft.pendingDraftText.value,
+      commands
+    };
+  });
+  expect(result.topicId).toBe('c8490ca4-47e9-4b24-a5ba-c2b0b4023bd7');
+  expect(result.text).toBe(
+    '&lt;b&gt;Текст&lt;/b&gt; &amp; ответ<br>вторая строка'
+  );
+  expect(paths).toHaveLength(1);
+  expect(paths[0]).toMatch(/\/reply$/);
+  expect(
+    result.commands.filter(command => command.startsWith('clear_windows'))
+  ).toHaveLength(0);
+});
+
+test('уведомления показывают типы и имена вложений по-русски и привязку быстрых действий к аккаунту', async ({
+  page
+}) => {
+  await page.goto('/e2e/fixtures/call-download.html');
+  const result = await page.evaluate(async () => {
+    const win = window as any;
+    win.isTauri = true;
+    Object.defineProperty(Notification, 'permission', {
+      configurable: true,
+      value: 'default'
+    });
+    localStorage.setItem(
+      'chat_auth_session',
+      JSON.stringify({
+        token: 'local-notification-test',
+        user: { id: 'notification-owner' }
+      })
+    );
+    const { mockIPC } = await import('/node_modules/@tauri-apps/api/mocks.js');
+    const notifications: any[] = [];
+    mockIPC((command, args) => {
+      if (command === 'plugin:notification|is_permission_granted') return true;
+      if (command === 'show_windows_notification') notifications.push(args);
+      return true;
+    });
+    const { showTauriMessageNotification } = await import(
+      '/src/services/useTauriNotifications.ts'
+    );
+    for (const [index, media] of [
+      [{ type: 'IMAGE', originName: 'photo.jpg' }],
+      [{ type: 'VIDEO', originName: 'video.mp4' }],
+      [{ type: 'FILE', originName: 'Счёт.pdf' }],
+      [
+        { type: 'IMAGE' },
+        { type: 'IMAGE' },
+        { type: 'FILE', originName: 'архив.zip' }
+      ]
+    ].entries())
+      await showTauriMessageNotification({
+        message: {
+          id: `message-${index}`,
+          topicId: 'group',
+          text: '',
+          media
+        } as any,
+        sender: { initials: 'Иван' } as any,
+        topic: { id: 'group', type: 'GROUP', name: 'Отдел' } as any
+      });
+    return notifications.map(({ body, title, payload }) => ({
+      body,
+      title,
+      payload: JSON.parse(payload)
+    }));
+  });
+  expect(result.map(item => item.body)).toEqual([
+    'Фото',
+    'Видео',
+    'Документ: Счёт.pdf',
+    '2 фото, 1 файл'
+  ]);
+  for (const item of result) {
+    expect(item.title).toBe('Иван в Отдел');
+    expect(item.payload.accountId).toBe('notification-owner');
+    expect(item.payload.replyClientId).toMatch(/^[a-f0-9-]{14}4[a-f0-9-]{21}$/);
+  }
+});
+
+test('кнопки Windows вызывают те же подтверждаемые действия, что Android, без дублей callback', async ({
+  page
+}) => {
+  const requests: Array<{ path: string; body: any }> = [];
+  await page.route('**/notification-actions-test/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    requests.push({ path, body: route.request().postDataJSON() });
+    return route.fulfill({
+      json: path.endsWith('/reply')
+        ? { id: 'sent-reply' }
+        : { success: true, messageIds: [] }
+    });
+  });
+  await page.goto('/e2e/fixtures/call-download.html');
+  await page.evaluate(async () => {
+    const win = window as any;
+    win.isTauri = true;
+    localStorage.setItem(
+      'chat_auth_session',
+      JSON.stringify({
+        token: 'local-notification-test',
+        user: { id: 'notification-owner' }
+      })
+    );
+    const { setConfig } = await import('/src/services/useConfig.ts');
+    setConfig({
+      CHAT_API_DOMAIN: location.origin + '/notification-actions-test'
+    });
+    const { mockIPC, mockWindows } = await import(
+      '/node_modules/@tauri-apps/api/mocks.js'
+    );
+    mockWindows('main');
+    mockIPC(
+      command =>
+        command === 'consume_pending_notification_target' ? null : true,
+      { shouldMockEvents: true }
+    );
+    const { initPushNotifications } = await import(
+      '/src/services/usePushNotifications.ts'
+    );
+    await initPushNotifications();
+    const { emit } = await import('/node_modules/@tauri-apps/api/event.js');
+    const payload = {
+      type: 'new_message',
+      accountId: 'notification-owner',
+      topicId: 'c8490ca4-47e9-4b24-a5ba-c2b0b4023bd7',
+      messageId: 'bcd4d922-b955-4f6f-9fbc-16a3ff317672',
+      replyClientId: '5e356d09-18bb-4e64-b0ac-a7587ada8537'
+    };
+    win.testNotificationAction = async (action: string) => {
+      await emit(
+        'sep-chat://notification-click',
+        JSON.stringify({ ...payload, action, replyText: '  <Тест> & ответ  ' })
+      );
+    };
+    await win.testNotificationAction('like');
+  });
+  await expect.poll(() => requests.length).toBe(1);
+  await page.evaluate(() => (window as any).testNotificationAction('read'));
+  await expect.poll(() => requests.length).toBe(2);
+  await page.evaluate(() => (window as any).testNotificationAction('reply'));
+  await expect.poll(() => requests.length).toBe(4);
+  await page.evaluate(() => (window as any).testNotificationAction('reply'));
+  await page.waitForTimeout(150);
+  expect(requests.map(item => item.path.split('/').at(-1))).toEqual([
+    'reaction',
+    'read',
+    'reply',
+    'read'
+  ]);
+  expect(requests[0].body.emoji).toBe('❤️');
+  expect(requests[2].body).toEqual({
+    text: '<Тест> & ответ',
+    clientId: '5e356d09-18bb-4e64-b0ac-a7587ada8537',
+    replyMessageId: 'bcd4d922-b955-4f6f-9fbc-16a3ff317672'
+  });
+});
+
 test('Tauri запускает уведомления, пока запрос геолокации остаётся без ответа', async ({
   page
 }) => {
@@ -154,7 +364,16 @@ test('Windows: запуск, переход и очистка уведомлен
     result.commands
       .filter(({ command }) => command.startsWith('plugin:notification|'))
       .map(({ command }) => command)
-  ).toEqual(['plugin:notification|is_permission_granted']);
+  ).toEqual(
+    expect.arrayContaining(['plugin:notification|is_permission_granted'])
+  );
+  expect(
+    result.commands.filter(
+      ({ command }) =>
+        command.startsWith('plugin:notification|') &&
+        command !== 'plugin:notification|is_permission_granted'
+    )
+  ).toHaveLength(0);
   expect(
     result.commands
       .filter(({ command }) => command.startsWith('plugin:window|'))

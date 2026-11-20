@@ -33,6 +33,10 @@ async function openProfile(page: Page, mode = 'available', theme = 'light') {
           };
         }
         if (command === 'plugin:updater|download') {
+          if (win.updateMode === 'slow-download')
+            await new Promise(resolve => {
+              win.resumeUpdateDownload = resolve;
+            });
           await new Promise(resolve => setTimeout(resolve, 100));
           if (win.updateMode === 'bad-signature')
             throw new Error('invalid signature');
@@ -68,17 +72,15 @@ async function openProfile(page: Page, mode = 'available', theme = 'light') {
     );
 }
 
-test('Профиль Tauri: версия, скачивание и отдельная установка', async ({
+test('Профиль Tauri: фоновое скачивание и установка одним кликом', async ({
   page
 }, testInfo) => {
   await openProfile(page);
   const action = page.getByTestId('Fixture-MenuProfilePanel-UpdateAction');
   await expect(action).toHaveText('Обновить');
-  await expect(action).toHaveAccessibleName(
-    'Скачать обновление до версии 1.6.9'
-  );
+  await expect(action).toHaveAccessibleName('Обновить до версии 1.6.9');
   await expect(
-    page.getByText('Доступна новая версия', { exact: true })
+    page.getByText('Готово к установке', { exact: true })
   ).toBeVisible();
   const screenshot = testInfo.outputPath('desktop-updater.png');
   await page.locator('.menu-profile__update').screenshot({ path: screenshot });
@@ -86,9 +88,6 @@ test('Профиль Tauri: версия, скачивание и отдельн
     path: screenshot,
     contentType: 'image/png'
   });
-  await action.click();
-  await expect(action).toHaveText('Перезагрузить');
-  await expect(action).toHaveAccessibleName('Установить и перезапустить');
   const buttonBox = (await action.boundingBox())!;
   const cardBox = (await page
     .locator('.menu-profile__update-content')
@@ -130,8 +129,7 @@ test('Боковая кнопка Tauri показывает ошибку уст
     (window as any).profileQrFixture.showUpdateBanner()
   );
   const button = page.locator('.menu-update-button');
-  await button.click();
-  await expect(button).toHaveText('Перезапустить чат');
+  await expect(button).toHaveText('Обновить');
   await button.click();
   await expect(page.locator('.menu-update__error')).toHaveText(
     'Не удалось установить обновление. Повторите установку.'
@@ -367,27 +365,24 @@ test('Профиль Tauri: повторное раскрытие находит
   await trigger.click();
   await expect(
     page.getByTestId('Fixture-MenuProfilePanel-UpdateAction')
-  ).toHaveAccessibleName('Скачать обновление до версии 1.6.9');
+  ).toHaveAccessibleName('Обновить до версии 1.6.9');
   expect(await countChecks()).toBe(checks + 1);
   expect(
     await page.evaluate(() =>
       (window as any).updateCalls.some((command: string) =>
-        [
-          'plugin:updater|download',
-          'plugin:updater|install',
-          'desktop_restart'
-        ].includes(command)
+        ['plugin:updater|install', 'desktop_restart'].includes(command)
       )
     )
   ).toBe(false);
 });
 
-test('Профиль Tauri: раскрытие сохраняет найденное и скачанное обновление', async ({
+test('Профиль Tauri: раскрытие сохраняет готовое обновление без повторной загрузки', async ({
   page
 }) => {
   await openProfile(page);
   const trigger = page.getByTestId('Fixture-MenuProfilePanel-UpdateTrigger');
   const action = page.getByTestId('Fixture-MenuProfilePanel-UpdateAction');
+  await expect(action).toHaveAccessibleName('Обновить до версии 1.6.9');
   const countChecks = () =>
     page.evaluate(
       () =>
@@ -398,15 +393,11 @@ test('Профиль Tauri: раскрытие сохраняет найденн
   const checks = await countChecks();
   await trigger.click();
   await trigger.click();
-  await expect(action).toHaveAccessibleName(
-    'Скачать обновление до версии 1.6.9'
-  );
+  await expect(action).toHaveAccessibleName('Обновить до версии 1.6.9');
   expect(await countChecks()).toBe(checks);
-  await action.click();
-  await expect(action).toHaveAccessibleName('Установить и перезапустить');
   await trigger.click();
   await trigger.click();
-  await expect(action).toHaveAccessibleName('Установить и перезапустить');
+  await expect(action).toHaveAccessibleName('Обновить до версии 1.6.9');
   expect(await countChecks()).toBe(checks);
   expect(
     await page.evaluate(() =>
@@ -415,16 +406,32 @@ test('Профиль Tauri: раскрытие сохраняет найденн
   ).toBe(false);
 });
 
-for (const trigger of ['timer', 'focus', 'online', 'visibility', 'retry']) {
+for (const trigger of [
+  'timer',
+  'focus',
+  'online',
+  'visibility',
+  'retry',
+  'download-retry'
+]) {
   test(`Tauri: кнопка появляется без перезапуска приложения (${trigger})`, async ({
     page
   }) => {
     await page.clock.install();
-    await openProfile(page, trigger === 'retry' ? 'error' : 'latest');
-    if (trigger === 'retry')
+    await openProfile(
+      page,
+      trigger === 'retry'
+        ? 'error'
+        : trigger === 'download-retry'
+          ? 'bad-signature'
+          : 'latest'
+    );
+    if (trigger === 'retry' || trigger === 'download-retry') {
+      await page.clock.runFor(200);
       await expect(
         page.getByTestId('Fixture-MenuProfilePanel-UpdateAction')
       ).toHaveText('Проверить');
+    }
     await page.evaluate(() => {
       (window as any).profileQrFixture.showUpdateBanner();
       (window as any).updateMode = 'available';
@@ -470,50 +477,52 @@ for (const trigger of ['timer', 'focus', 'online', 'visibility', 'retry']) {
         await page.evaluate(() => window.dispatchEvent(new Event('focus')));
       }
     }
+    await page.clock.runFor(200);
     await expect(button).toBeVisible();
-    await expect(button).toHaveText('Скачать обновление');
+    await expect(button).toHaveText('Обновить');
     expect(
       await page.evaluate(() =>
         (window as any).updateCalls.some((command: string) =>
-          [
-            'plugin:updater|download',
-            'plugin:updater|install',
-            'desktop_restart'
-          ].includes(command)
+          ['plugin:updater|install', 'desktop_restart'].includes(command)
         )
       )
     ).toBe(false);
   });
 }
 
-test('Tauri: найденная версия остаётся видимой при проверке и сетевой ошибке', async ({
+test('Tauri: фоновая загрузка скрыта, кнопка появляется только для готового пакета', async ({
   page
 }) => {
-  await openProfile(page);
+  await openProfile(page, 'slow-download');
   await page.evaluate(async () => {
     const win = window as any;
     win.profileQrFixture.showUpdateBanner();
-    win.pauseUpdateCheck = true;
-    win.updateMode = 'error';
-    void win.profileQrFixture.desktopUpdater.check(true);
   });
   const button = page.locator('.menu-update-button');
-  await expect(button).toBeVisible();
-  await expect(button).toHaveText('Проверяем…');
-  await expect(button).toBeDisabled();
+  const action = page.getByTestId('Fixture-MenuProfilePanel-UpdateAction');
+  await expect
+    .poll(() =>
+      page.evaluate(() => typeof (window as any).resumeUpdateDownload)
+    )
+    .toBe('function');
+  await expect(button).toHaveCount(0);
+  await expect(action).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).updateCalls)).not.toContain(
+    'plugin:updater|install'
+  );
   await page.evaluate(() => {
-    (window as any).pauseUpdateCheck = false;
-    (window as any).resumeUpdateCheck();
+    (window as any).resumeUpdateDownload();
   });
   await expect(button).toBeVisible();
-  await expect(button).toHaveText('Повторить');
+  await expect(button).toHaveText('Обновить');
   await expect(button).toBeEnabled();
-  await expect(page.locator('.menu-update__error')).toContainText(
-    'Не удалось проверить обновления'
+  await expect(action).toHaveText('Обновить');
+  expect(await page.evaluate(() => (window as any).updateCalls)).not.toContain(
+    'plugin:updater|install'
   );
 });
 
-test('Tauri: ошибка загрузки сохраняет кнопку и позволяет скачать повторно', async ({
+test('Tauri: ошибка фоновой загрузки скрывает кнопку; повтор в профиле готовит пакет', async ({
   page
 }) => {
   await openProfile(page, 'bad-signature');
@@ -521,17 +530,17 @@ test('Tauri: ошибка загрузки сохраняет кнопку и п
     (window as any).profileQrFixture.showUpdateBanner()
   );
   const button = page.locator('.menu-update-button');
-  await button.click();
-  await expect(button).toBeVisible();
-  await expect(button).toHaveText('Повторить');
-  await expect(page.locator('.menu-update__error')).toContainText(
+  const action = page.getByTestId('Fixture-MenuProfilePanel-UpdateAction');
+  await expect(action).toHaveText('Проверить');
+  await expect(button).toHaveCount(0);
+  await expect(page.locator('.menu-profile__update-description')).toContainText(
     'Не удалось скачать или проверить подпись'
   );
   await page.evaluate(() => {
     (window as any).updateMode = 'available';
   });
-  await button.click();
-  await expect(button).toHaveText('Перезапустить чат');
+  await action.click();
+  await expect(button).toHaveText('Обновить');
   expect(
     await page.evaluate(() =>
       (window as any).updateCalls.includes('plugin:updater|install')
@@ -543,7 +552,6 @@ test('Профиль Tauri: повреждённый пакет не стано�
   page
 }) => {
   await openProfile(page, 'bad-signature');
-  await page.getByTestId('Fixture-MenuProfilePanel-UpdateAction').click();
   await expect(
     page.getByText(
       'Не удалось скачать или проверить подпись обновления. Попробуйте ещё раз.',
@@ -562,8 +570,7 @@ test('Профиль Tauri: звонок и передача откладыва�
 }) => {
   await openProfile(page);
   const action = page.getByTestId('Fixture-MenuProfilePanel-UpdateAction');
-  await action.click();
-  await expect(action).toHaveText('Перезагрузить');
+  await expect(action).toHaveText('Обновить');
   await page.evaluate(async () => {
     const path = '/src/services/useCallState.ts';
     const state = await import(/* @vite-ignore */ path);

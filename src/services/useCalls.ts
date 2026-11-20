@@ -31,6 +31,18 @@ export {
 
 const loadLiveKit = () => import('./useLiveKit');
 let invitedGroupCallRestorePromise: Promise<boolean> | null = null;
+let invitedGroupCallRestoreKey: string | null = null;
+
+const getInviteRestoreKey = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  const params = new URL(window.location.href).searchParams;
+  if (!params.get('callRoom') || !params.get('callInvite')) return null;
+  return JSON.stringify([
+    params.get('callRoom'),
+    params.get('callInvite'),
+    params.get('organization')
+  ]);
+};
 
 export const handleIncomingCall = async (
   targetUser: any,
@@ -183,19 +195,26 @@ export const removeInvitedGroupCall = async (roomId?: string) => {
 };
 
 export const restoreInvitedGroupCallFromUrl = (): Promise<boolean> => {
-  if (invitedGroupCallRestorePromise) {
+  const key = getInviteRestoreKey();
+  if (!key) return Promise.resolve(false);
+  if (invitedGroupCallRestorePromise && invitedGroupCallRestoreKey === key) {
     return invitedGroupCallRestorePromise;
   }
 
-  invitedGroupCallRestorePromise = loadLiveKit()
+  const promise = loadLiveKit()
     .then(({ hydrateInvitedGroupCallFromUrl }) =>
-      hydrateInvitedGroupCallFromUrl()
+      getInviteRestoreKey() === key ? hydrateInvitedGroupCallFromUrl() : false
     )
     .finally(() => {
-      invitedGroupCallRestorePromise = null;
+      if (invitedGroupCallRestorePromise === promise) {
+        invitedGroupCallRestorePromise = null;
+        invitedGroupCallRestoreKey = null;
+      }
     });
 
-  return invitedGroupCallRestorePromise;
+  invitedGroupCallRestoreKey = key;
+  invitedGroupCallRestorePromise = promise;
+  return promise;
 };
 
 export const copyInviteGroupCallLink = async () => {

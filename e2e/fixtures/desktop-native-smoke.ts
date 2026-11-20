@@ -22,6 +22,10 @@ const assert = (value: unknown, message: string) => {
 };
 
 try {
+  if (new URLSearchParams(location.search).has('links')) {
+    const { verifyNativeCallLinks } = await import('./desktop-links-native');
+    await verifyNativeCallLinks(report);
+  }
   if (new URLSearchParams(location.search).has('shell')) {
     const { verifyNativeShell } = await import('./desktop-shell-native');
     const fixture = await (await fetch(`${api}/fixture`)).json();
@@ -51,6 +55,15 @@ try {
     'desktop_window_state'
   );
   assert(beforeClose.visible, 'Окно стенда не стало видимым');
+  await appWindow.minimize();
+  await syncTauriWindowState();
+  const minimized = await invoke<{ minimized: boolean }>(
+    'desktop_window_state'
+  );
+  assert(minimized.minimized, 'Системное окно не свернулось');
+  assert(!getIsAppActivelyVisible(), 'Свёрнутое окно считается активным');
+  await report('minimize', { passed: true, minimized });
+  await appWindow.unminimize();
   // Окно стенда закрывается штатным native событием, сохраняя процесс в трее.
   await appWindow.close();
   await new Promise(resolve => setTimeout(resolve, 200));
@@ -110,52 +123,8 @@ try {
   let mediaPassed = true;
   if (new URLSearchParams(location.search).has('media')) {
     await appWindow.show();
-    for (const kind of ['audio', 'video'] as const) {
-      let expired = false;
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const capture = navigator.mediaDevices.getUserMedia(
-        kind === 'audio' ? { audio: true } : { video: true }
-      );
-      void capture.then(
-        stream => {
-          if (expired) stream.getTracks().forEach(track => track.stop());
-        },
-        () => {}
-      );
-      try {
-        const stream = await Promise.race([
-          capture,
-          new Promise<never>((_resolve, reject) => {
-            timer = setTimeout(() => {
-              expired = true;
-              reject(new Error('Истекло ожидание разрешения или устройства'));
-            }, 10_000);
-          })
-        ]);
-        const tracks = stream.getTracks().map(track => {
-          const settings = track.getSettings();
-          return {
-            kind: track.kind,
-            state: track.readyState,
-            width: settings.width,
-            height: settings.height,
-            sampleRate: settings.sampleRate,
-            channelCount: settings.channelCount
-          };
-        });
-        stream.getTracks().forEach(track => track.stop());
-        await report('media-probe', { kind, captured: true, tracks });
-      } catch (error) {
-        mediaPassed = false;
-        await report('media-probe', {
-          kind,
-          captured: false,
-          error: String(error)
-        });
-      } finally {
-        clearTimeout(timer);
-      }
-    }
+    const { verifyPhysicalDevices } = await import('./desktop-devices-native');
+    mediaPassed = await verifyPhysicalDevices(report);
     await appWindow.close();
   }
   await report('complete', { passed: mediaPassed, corePassed: true });

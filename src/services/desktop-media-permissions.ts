@@ -1,5 +1,10 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { shallowRef } from 'vue';
+import {
+  getDesktopPermissionChoice,
+  restoreDesktopWebviewPermissions,
+  saveDesktopPermissionChoice
+} from './desktop-permission-preferences';
 
 export type DesktopMediaPermission = 'microphone' | 'camera';
 
@@ -26,14 +31,24 @@ const ask = (
     if (!isActive()) return false;
     const missing = permissions.filter(permission => !granted.has(permission));
     if (!missing.length) return true;
-    const allowed = await new Promise<boolean>(resolve => {
-      settle = resolve;
-      desktopMediaPermissionRequest.value = { permissions: missing };
-    });
+    const needsConfirmation = missing.filter(
+      permission => getDesktopPermissionChoice(permission) !== 'granted'
+    );
+    const allowed =
+      !needsConfirmation.length ||
+      (await new Promise<boolean>(resolve => {
+        settle = resolve;
+        desktopMediaPermissionRequest.value = {
+          permissions: needsConfirmation
+        };
+      }));
     if (!allowed || !isActive()) return false;
     await invoke('desktop_grant_media_permissions', { permissions: missing });
     if (!isActive()) return false;
-    missing.forEach(permission => granted.add(permission));
+    missing.forEach(permission => {
+      granted.add(permission);
+      saveDesktopPermissionChoice(permission, 'granted');
+    });
     return true;
   });
   queue = task.then(
@@ -53,6 +68,7 @@ export const installDesktopMediaPermissions = async (): Promise<() => void> => {
   } catch {
     return () => {};
   }
+  await restoreDesktopWebviewPermissions();
   const devices = navigator.mediaDevices;
   const original = devices.getUserMedia;
   let active = true;

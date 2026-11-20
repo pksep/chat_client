@@ -6,7 +6,7 @@ const HTML_TIMEOUT_MS = 10_000;
 const localDay = (date: Date): string =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-const clearAppShellCache = async (): Promise<void> => {
+export const clearAppShellCache = async (): Promise<void> => {
   if ('serviceWorker' in navigator) {
     const registrations = await navigator.serviceWorker.getRegistrations();
     await Promise.all(

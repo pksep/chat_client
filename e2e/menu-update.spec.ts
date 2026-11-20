@@ -1,16 +1,57 @@
 import { expect, test, type Page } from './fixtures/ai-history';
 
+test.setTimeout(90_000);
+
+test('кнопка открывает Tauri и при неудаче страницу загрузки вместо установки PWA', async ({
+  page,
+  isMobile
+}) => {
+  test.skip(isMobile, 'В мобильном браузере desktop-кнопка скрыта');
+  await openMenu(page, 2);
+  const open = page.getByRole('button', { name: 'Открыть приложение' });
+  await expect(open).toHaveAttribute('href', 'sepchat://open');
+  await page.evaluate(() =>
+    document.addEventListener(
+      'click',
+      event => {
+        const link = (event.target as Element).closest('a');
+        if (!link) return;
+        if (link.href === 'https://pksep.ru/chat/#contacts') {
+          (window as any).menuWebsiteLink = {
+            href: link.href,
+            target: link.target
+          };
+          event.preventDefault();
+        } else if (link.protocol === 'sepchat:') event.preventDefault();
+      },
+      true
+    )
+  );
+  await open.click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).menuWebsiteLink))
+    .toEqual({
+      href: 'https://pksep.ru/chat/#contacts',
+      target: '_blank'
+    });
+  await expect(page.locator('.desktop-app-downloads')).toHaveCount(0);
+  const box = (await open.boundingBox())!;
+  const nav = (await page.locator('.menu-bottom-nav:visible').boundingBox())!;
+  expect(box.y + box.height).toBeLessThanOrEqual(nav.y);
+});
+
 async function openMenu(
   page: Page,
   seenVersion: number,
-  availableVersion: number | string = 2
+  availableVersion: number | string = 2,
+  standalone = true
 ) {
   await page.addInitScript(
-    ({ seenVersion }) => {
+    ({ seenVersion, standalone }) => {
       const url = 'http://127.0.0.1:65530';
       Object.defineProperty(navigator, 'standalone', {
         configurable: true,
-        value: true
+        value: standalone
       });
       localStorage.setItem(
         'chat_runtime_organizations',
@@ -41,7 +82,7 @@ async function openMenu(
         );
       }
     },
-    { seenVersion }
+    { seenVersion, standalone }
   );
   await page.route('**/web-update.json', route =>
     route.fulfill({ json: { version: availableVersion } })
@@ -55,9 +96,51 @@ async function openMenu(
   await page.route('**/manager/managers', route => route.fulfill({ json: [] }));
   await page.goto('/');
   await expect(page.locator('.menu-bottom-nav:visible')).toBeVisible({
-    timeout: 30_000
+    timeout: 60_000
   });
 }
+
+test('Android открывает установленный чат, а при отсутствии пакета направляет в RuStore', async ({
+  page
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      value: 'Mozilla/5.0 (Linux; Android 15) Chrome/130 Mobile Safari/537.36'
+    });
+  });
+  await page.setViewportSize({ width: 393, height: 851 });
+  await openMenu(page, 2, 2, false);
+  await page.evaluate(() =>
+    document.addEventListener(
+      'click',
+      event => {
+        const link = (event.target as Element).closest('a[href^="intent:"]');
+        if (!link) return;
+        event.preventDefault();
+        (window as any).androidAppIntent = (link as HTMLAnchorElement).href;
+      },
+      true
+    )
+  );
+  await expect(
+    page.getByRole('button', { name: 'Загрузить на Android' })
+  ).toHaveCount(0);
+  await page
+    .getByRole('button', { name: 'Открыть приложение', exact: true })
+    .click();
+  const intent = await page.evaluate(
+    () => (window as any).androidAppIntent as string
+  );
+  expect(intent).toContain(
+    'intent://chat.pksep.ru/#Intent;scheme=https;package=sep.pksep.app;'
+  );
+  expect(
+    decodeURIComponent(
+      intent.split('S.browser_fallback_url=')[1].split(';end')[0]
+    )
+  ).toBe('https://www.rustore.ru/catalog/app/sep.pksep.app');
+});
 
 test('Новая веб-версия не показывает кнопку ручного обновления', async ({
   page

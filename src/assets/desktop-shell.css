@@ -30,7 +30,8 @@ html.chat-desktop-custom-chrome {
   top: var(--desktop-titlebar-height);
 }
 
-.chat-desktop-custom-chrome dialog.mobile__modal.modal-yui-kit_bottom {
+/* Компактные подтверждения сохраняют высоту содержимого под шапкой Tauri. */
+.chat-desktop-custom-chrome dialog.mobile__modal:not(.mobile-modal).modal-yui-kit_bottom {
   --mobile-modal-rows: auto minmax(0, 1fr);
   box-sizing: border-box;
   top: var(--desktop-content-top);
@@ -39,19 +40,19 @@ html.chat-desktop-custom-chrome {
   max-height: var(--app-viewport-height);
 }
 
-.chat-desktop-custom-chrome dialog.mobile__modal--divider.modal-yui-kit_bottom {
+.chat-desktop-custom-chrome dialog.mobile__modal--divider:not(.mobile-modal).modal-yui-kit_bottom {
   --mobile-modal-rows: auto auto minmax(0, 1fr);
 }
 
-.chat-desktop-custom-chrome dialog.mobile__modal--footer.modal-yui-kit_bottom {
+.chat-desktop-custom-chrome dialog.mobile__modal--footer:not(.mobile-modal).modal-yui-kit_bottom {
   --mobile-modal-rows: auto minmax(0, 1fr) auto;
 }
 
-.chat-desktop-custom-chrome dialog.mobile__modal--divider.mobile__modal--footer.modal-yui-kit_bottom {
+.chat-desktop-custom-chrome dialog.mobile__modal--divider.mobile__modal--footer:not(.mobile-modal).modal-yui-kit_bottom {
   --mobile-modal-rows: auto auto minmax(0, 1fr) auto;
 }
 
-.chat-desktop-custom-chrome dialog.mobile__modal.modal-yui-kit_bottom > .modal-yui-kit__modal-content {
+.chat-desktop-custom-chrome dialog.mobile__modal:not(.mobile-modal).modal-yui-kit_bottom > .modal-yui-kit__modal-content {
   box-sizing: border-box;
   min-height: 0;
   height: 100%;
@@ -59,7 +60,7 @@ html.chat-desktop-custom-chrome {
   grid-template-rows: var(--mobile-modal-rows);
 }
 
-.chat-desktop-custom-chrome dialog.mobile__modal.modal-yui-kit_bottom .mobile__modal-content {
+.chat-desktop-custom-chrome dialog.mobile__modal:not(.mobile-modal).modal-yui-kit_bottom .mobile__modal-content {
   min-height: 0;
   overflow: auto;
 }

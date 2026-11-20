@@ -5,6 +5,11 @@ import path from 'node:path';
 
 if (process.platform !== 'win32')
   throw new Error('Нативный smoke предназначен для Windows WebView2');
+if (
+  ['--links', '--shell', '--media'].filter(mode => process.argv.includes(mode))
+    .length > 1
+)
+  throw new Error('Выберите один режим smoke: --links, --shell или --media');
 
 const root = path.resolve(
   'test-results-native',
@@ -17,6 +22,8 @@ const body = Buffer.from('Локальная проверка SEP Chat\n', 'utf8
 const origin = 'http://127.0.0.1:5178';
 const reports: Array<Record<string, unknown>> = [];
 const isShellCheck = process.argv.includes('--shell');
+const isLinksCheck = process.argv.includes('--links');
+const linkLaunches: ChildProcess[] = [];
 const captureSourceTitle = `SEP Capture QA ${randomUUID()}`;
 let captureSourceBrowser: ChildProcess | null = null;
 const removeOwnedDirectory = async (directory: string) => {
@@ -57,7 +64,7 @@ await writeFile(
     identifier: 'ru.pksep.chat.lifecycleqa',
     build: {
       beforeDevCommand: '',
-      devUrl: `${origin}/e2e/fixtures/desktop-native-smoke.html${isShellCheck ? '?shell=1' : process.argv.includes('--media') ? '?media=1' : ''}`
+      devUrl: `${origin}/e2e/fixtures/desktop-native-smoke.html${isShellCheck ? '?shell=1' : isLinksCheck ? '?links=1' : process.argv.includes('--media') ? '?media=1' : ''}`
     },
     app: {
       appDirectoriesOverride: profile,
@@ -84,7 +91,13 @@ await writeFile(
         ]
       }
     },
-    plugins: { 'deep-link': { desktop: { schemes: ['sepchat-lifecycle-qa'] } } }
+    plugins: {
+      'deep-link': {
+        desktop: {
+          schemes: [isLinksCheck ? 'sepchat' : 'sepchat-lifecycle-qa']
+        }
+      }
+    }
   })
 );
 
@@ -141,6 +154,21 @@ const api = Bun.serve({
       );
       if (report.step === 'complete') finish(report.passed === true);
       if (report.step === 'failed') finish(false);
+      const nextLink =
+        report.step === 'native-call-link-cold'
+          ? 'sepchat://invite?callRoom=native-warm-room&callInvite=native-warm-token'
+          : report.step === 'native-app-open-ready'
+            ? 'sepchat://open'
+            : null;
+      if (isLinksCheck && nextLink) {
+        const linkLaunch = spawn(
+          path.resolve('src-tauri/target/debug/sep-chat.exe'),
+          [nextLink],
+          { windowsHide: true, stdio: 'ignore' }
+        );
+        linkLaunches.push(linkLaunch);
+        linkLaunch.once('error', () => finish(false));
+      }
       return new Response(null, { status: 204, headers });
     }
     return new Response(null, { status: 404, headers });
@@ -211,7 +239,21 @@ try {
   }
   child = spawn(
     process.execPath,
-    ['run', 'tauri', 'dev', '--no-watch', '--config', config],
+    [
+      'run',
+      'tauri',
+      'dev',
+      '--no-watch',
+      '--config',
+      config,
+      ...(isLinksCheck
+        ? [
+            '--',
+            '--',
+            'sepchat://invite?callRoom=native-cold-room&callInvite=native-cold-token&organization=https%3A%2F%2Fold.example.invalid'
+          ]
+        : [])
+    ],
     { windowsHide: true, stdio: 'inherit' }
   );
   child.once('error', () => finish(false));
@@ -224,7 +266,12 @@ try {
 } finally {
   clearTimeout(timeout);
   // Только дерево процесса, запущенного этим стендом; основной SEP Chat не затрагивается.
-  for (const taskChild of [child, vite, captureSourceBrowser]) {
+  for (const taskChild of [
+    child,
+    vite,
+    captureSourceBrowser,
+    ...linkLaunches
+  ]) {
     if (!taskChild || taskChild.exitCode !== null || !taskChild.pid) continue;
     await new Promise(resolve => setTimeout(resolve, 1000));
     if (taskChild.exitCode === null) {
@@ -244,7 +291,7 @@ try {
   await unlink(source);
   await unlink(config);
   await unlink(viteConfig);
-  // Каталоги созданы выше с UUID и находятся строго внутри test-results.
+  // Каталоги созданы выше с UUID и находятся строго внутри test-results-native.
   await removeOwnedDirectory(profile);
   await removeOwnedDirectory(path.join(root, 'cache'));
 }

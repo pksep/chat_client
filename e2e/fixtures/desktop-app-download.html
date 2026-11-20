@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Приложение СЭП Чат</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h } from 'vue';
+      import MenuDesktopAppButton from '/src/components/Menu/MenuDesktopAppButton.vue';
+      import { configureBrowserAppInstall } from '/src/services/browser-app-install.ts';
+      configureBrowserAppInstall();
+      import '/src/assets/chat-container.css';
+      const query = new URLSearchParams(location.search);
+      const collapsed = query.has('collapsed');
+      document.documentElement.className =
+        query.get('theme') === 'dark' ? 'theme-dark' : 'theme-light';
+      document.body.style.margin = '0';
+      createApp({
+        render: () =>
+          h(
+            'aside',
+            {
+              class: ['menu', collapsed && 'menu--collapse'],
+              style: {
+                boxSizing: 'border-box',
+                width: collapsed ? '60px' : 'min(360px, 100vw)',
+                height: '100dvh'
+              }
+            },
+            [
+              h('main', { class: 'menu__start' }, 'Список чатов'),
+              h(MenuDesktopAppButton, {
+                isCollapse: collapsed,
+                dataTestid: 'Fixture'
+              }),
+              h('nav', { style: { height: '56px' } }, 'Чаты')
+            ]
+          )
+      }).mount('#app');
+      document.addEventListener('click', event => {
+        const link = event.target.closest('a');
+        if (link && !event.defaultPrevented) {
+          if (!query.has('allow-navigation') || link.protocol === 'sepchat:')
+            event.preventDefault();
+          window.selectedAppLink = link.href;
+          (window.selectedAppLinks ??= []).push(link.href);
+          (window.selectedAppTargets ??= []).push(link.target);
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -2,6 +2,142 @@ import { expect, test } from '@playwright/test';
 
 test.use({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' });
 
+test('последний чат уведомляет после minimize даже до события окна и очередного опроса', async ({
+  page
+}) => {
+  test.setTimeout(90_000);
+  await page.route('**/native-test-api/**', route =>
+    route.fulfill({ json: [] })
+  );
+  await page.goto('/e2e/fixtures/call-download.html');
+  await page.evaluate(async () => {
+    const win = window as any;
+    win.isTauri = true;
+    Object.defineProperty(Notification, 'permission', {
+      configurable: true,
+      value: 'default'
+    });
+    Object.defineProperty(document, 'hasFocus', { value: () => true });
+    history.replaceState(null, '', '/dialogs/last-topic');
+    const { mockIPC, mockWindows } = await import(
+      '/node_modules/@tauri-apps/api/mocks.js'
+    );
+    const state = { focused: true, visible: true, minimized: false };
+    const notifications: any[] = [];
+    const snapshots: any[] = [];
+    mockWindows('main');
+    mockIPC(
+      (command, args) => {
+        if (command === 'desktop_window_state') {
+          snapshots.push({ ...state });
+          return { ...state };
+        }
+        if (command === 'plugin:notification|is_permission_granted')
+          return true;
+        if (command === 'show_windows_notification') {
+          notifications.push(args);
+          return true;
+        }
+        return null;
+      },
+      { shouldMockEvents: true }
+    );
+    const visibility = await import('/src/services/useAppVisibility.ts');
+    visibility.ensureTauriWindowStateTracking();
+    await visibility.syncTauriWindowState();
+    const { setConfig } = await import('/src/services/useConfig.ts');
+    setConfig({ CHAT_API_DOMAIN: location.origin + '/native-test-api' });
+    const { ChatSDK } = await import('/src/services/useChatSDK/index.ts');
+    ChatSDK.prototype.connect = () => new Promise<void>(() => {});
+    const { initializeChat, getChatSDK } = await import(
+      '/src/services/useChat.ts'
+    );
+    await initializeChat({
+      userId: 'me',
+      token: 'isolated-test',
+      apiUrl: location.origin + '/native-test-api',
+      wsUrl: 'ws://127.0.0.1:65530'
+    });
+    win.minimizedNotificationFixture = {
+      state,
+      notifications,
+      snapshots,
+      visibility,
+      sdk: getChatSDK()
+    };
+  });
+  await page.clock.install();
+  await page.clock.pauseAt(new Date());
+  await page.evaluate(() => {
+    const f = (window as any).minimizedNotificationFixture;
+    if (!f.visibility.getIsAppActivelyVisible())
+      throw new Error('Окно изначально не активно');
+    // WebView ещё сообщает focus, а системное окно уже свёрнуто.
+    f.state.minimized = true;
+    f.sdk.ws.handleWebSocketEvent({
+      type: 'newMessage',
+      payload: {
+        id: 'minimized-message',
+        topicId: 'last-topic',
+        text: 'После сворачивания',
+        senderUserId: 'other-user',
+        senderUser: { id: 'other-user', initials: 'Собеседник' },
+        createdAt: new Date().toISOString(),
+        isReadByMe: false,
+        media: []
+      }
+    });
+  });
+  await page.clock.runFor(200);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const f = (window as any).minimizedNotificationFixture;
+        return {
+          count: f.notifications.length,
+          active: f.visibility.getIsAppActivelyVisible(),
+          snapshots: f.snapshots.slice(-2)
+        };
+      })
+    )
+    .toMatchObject({ count: 1, active: false });
+  expect(
+    await page.evaluate(() =>
+      (
+        window as any
+      ).minimizedNotificationFixture.visibility.getIsAppActivelyVisible()
+    )
+  ).toBe(false);
+  await page.evaluate(() => {
+    const f = (window as any).minimizedNotificationFixture;
+    f.state.minimized = false;
+    f.sdk.ws.handleWebSocketEvent({
+      type: 'newMessage',
+      payload: {
+        id: 'foreground-message',
+        topicId: 'last-topic',
+        text: 'В открытом чате',
+        senderUserId: 'other-user',
+        createdAt: new Date().toISOString(),
+        isReadByMe: false,
+        media: []
+      }
+    });
+  });
+  await page.clock.runFor(200);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const f = (window as any).minimizedNotificationFixture;
+        return {
+          count: f.notifications.length,
+          active: f.visibility.getIsAppActivelyVisible()
+        };
+      })
+    )
+    .toEqual({ count: 1, active: true });
+});
+
 test('скрытое окно остаётся неактивным после запоздалого снимка и уведомляет о последнем чате', async ({
   page
 }) => {

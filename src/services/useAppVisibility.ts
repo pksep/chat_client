@@ -93,6 +93,10 @@ const applyTauriWindowState = (nextState: TauriWindowStatePayload): void => {
   }
 };
 
+export const markTauriWindowInactive = (): void => {
+  if (isTauriRuntime()) applyTauriWindowState({ focused: false });
+};
+
 const scheduleUserIdleTimeout = (): void => {
   if (userIdleTimeout) {
     clearTimeout(userIdleTimeout);
@@ -252,6 +256,7 @@ export const ensureTauriWindowStateTracking = (): void => {
   });
 
   window.addEventListener('blur', () => {
+    markTauriWindowInactive();
     void syncTauriWindowState();
   });
 

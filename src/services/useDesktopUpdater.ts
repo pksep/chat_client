@@ -89,13 +89,8 @@ export const desktopUpdater = createDesktopUpdater({
   }
 });
 
-export const desktopUpdateVisible = computed(
-  () =>
-    ['available', 'downloading', 'downloaded', 'installing'].includes(
-      desktopUpdater.state.value.phase
-    ) ||
-    (Boolean(desktopUpdater.state.value.version) &&
-      ['checking', 'error'].includes(desktopUpdater.state.value.phase))
+export const desktopUpdateVisible = computed(() =>
+  ['downloaded', 'installing'].includes(desktopUpdater.state.value.phase)
 );
 
 let consumers = 0;

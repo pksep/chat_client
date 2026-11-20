@@ -2,6 +2,7 @@ import { createApp } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { isTauri } from '@tauri-apps/api/core';
 import App from './App.vue';
+import { configureBrowserAppInstall } from './services/browser-app-install';
 import './assets/chat-container.css';
 import { installNotoEmojiFontFaces } from './composables/useEmojiStyle';
 import { emojiDirective } from './directives/emoji';
@@ -13,10 +14,13 @@ import { createPinia } from 'pinia';
 import { initIosPwaViewport } from './utils/ios-pwa-viewport';
 import { suppressDefaultDesktopContextMenu } from './utils/desktop-context-menu';
 import { installDesktopMediaPermissions } from './services/desktop-media-permissions';
+import { installDesktopClipboardPermissions } from './services/desktop-permission-preferences';
 import { initDesktopScreenCapture } from './services/desktop-screen-capture';
 
 performance.mark('chat-startup:modules-ready');
 const disposeIosPwaViewport = initIosPwaViewport();
+const disposeBrowserAppInstall = configureBrowserAppInstall();
+import.meta.hot?.dispose(disposeBrowserAppInstall);
 import.meta.hot?.dispose(disposeIosPwaViewport);
 const disposeDesktopContextMenu = suppressDefaultDesktopContextMenu();
 import.meta.hot?.dispose(disposeDesktopContextMenu);
@@ -204,6 +208,9 @@ const mountApp = async (): Promise<void> => {
   applyRuntimeBodyClasses();
   const disposeDesktopMediaPermissions = await installDesktopMediaPermissions();
   import.meta.hot?.dispose(disposeDesktopMediaPermissions);
+  const disposeDesktopClipboardPermissions =
+    installDesktopClipboardPermissions();
+  import.meta.hot?.dispose(disposeDesktopClipboardPermissions);
   await initDesktopScreenCapture();
   installNotoEmojiFontFaces({
     preferSystemFont: Capacitor.getPlatform() === 'android'

@@ -166,7 +166,7 @@
         v-if="mobilePlatform === MobilePlatformEnum.ANDROID"
         class="mobile-modal-download-button"
         @click="handleInstall"
-        ><AndroidIcon />Загрузить на Android</Button
+        ><AndroidIcon />Открыть приложение</Button
       >
       <Button
         v-if="mobilePlatform === MobilePlatformEnum.APPLE"

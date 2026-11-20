@@ -81,10 +81,25 @@ try {
     await bad?.close().catch(() => undefined);
     await report('invalid-signature', { rejected });
     if (!rejected) throw new Error('Invalid signature accepted');
+    let installs = 0;
+    let preparations = 0;
     const updater = createDesktopUpdater({
-      check: () => check(),
+      check: async () => {
+        const update = await check();
+        if (!update) return null;
+        return {
+          version: update.version,
+          download: onEvent => update.download(onEvent),
+          close: () => update.close(),
+          install: async () => {
+            installs++;
+            await update.install();
+          }
+        };
+      },
       blockingReason: () => '',
       prepareToInstall: async () => {
+        preparations++;
         localStorage.setItem(
           'qa-draft',
           'Несохранённый текст перед обновлением'
@@ -96,10 +111,15 @@ try {
       relaunch: () => invoke('desktop_restart')
     });
     await updater.check();
-    await updater.act();
-    await report('downloaded', { phase: updater.state.value.phase });
+    await report('downloaded', {
+      phase: updater.state.value.phase,
+      installs,
+      preparations
+    });
     if (updater.state.value.phase !== 'downloaded')
       throw new Error(updater.state.value.error);
+    if (installs || preparations)
+      throw new Error('Фоновая загрузка запустила установку без клика');
     await updater.act();
     if (updater.state.value.error) throw new Error(updater.state.value.error);
   }

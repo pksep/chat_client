@@ -3,6 +3,10 @@ import {
   Geolocation,
   type PermissionStatus as NativePermissionStatus
 } from '@capacitor/geolocation';
+import {
+  getDesktopPermissionChoice,
+  saveDesktopPermissionChoice
+} from './desktop-permission-preferences';
 
 const MAX_AGE_MS = 60_000;
 let deviceLocation: Record<string, unknown> | null = null;
@@ -87,13 +91,16 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
         }
       } else {
         const state = await getBrowserPermission();
+        const previousChoice = getDesktopPermissionChoice('geolocation');
         permission = { location: state };
         if (!state && deviceLocation) permission.location = 'granted';
         if (
           state !== 'denied' &&
           !isGranted(permission) &&
           requestPermission &&
-          !permissionRequested
+          !permissionRequested &&
+          previousChoice !== 'denied' &&
+          previousChoice !== 'requested'
         ) {
           // В браузере системный запрос открывает сам getCurrentPosition.
           permissionRequested = true;
@@ -101,6 +108,9 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
         }
       }
       if (!isGranted(permission)) {
+        if (permission.location === 'denied') {
+          saveDesktopPermissionChoice('geolocation', 'denied');
+        }
         clearLocation(
           permission.location === 'denied' ? 'denied' : 'permission_required'
         );
@@ -110,6 +120,9 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
       if (Date.now() - lastAttemptAt < MAX_AGE_MS) return;
       lastAttemptAt = Date.now();
       const currentGeneration = generation;
+      if (!getDesktopPermissionChoice('geolocation')) {
+        saveDesktopPermissionChoice('geolocation', 'requested');
+      }
       const position = await Geolocation.getCurrentPosition({
         enableHighAccuracy: permission.location === 'granted',
         timeout: 10_000,
@@ -130,6 +143,7 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
         throw new Error('Не удалось получить актуальную геолокацию.');
       }
       sampledAt = position.timestamp;
+      saveDesktopPermissionChoice('geolocation', 'granted');
       status = 'resolved';
       deviceLocation = {
         source: 'device',
@@ -139,8 +153,10 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
         accuracyMeters: accuracy,
         observedAt: new Date(position.timestamp).toISOString()
       };
-    } catch {
-      clearLocation('unavailable');
+    } catch (error) {
+      const denied = Number(error?.code) === 1;
+      if (denied) saveDesktopPermissionChoice('geolocation', 'denied');
+      clearLocation(denied ? 'denied' : 'unavailable');
     }
   })().finally(() => {
     inFlight = null;

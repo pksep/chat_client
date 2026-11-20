@@ -6,6 +6,7 @@ import {
 import { PushNotifications } from '@capacitor/push-notifications';
 import { useChatApi } from './useApi';
 import { getCurrentUserId } from './useChat';
+import { isDesktopMessageAction } from '../utils/desktop-notification-actions';
 import { getUserById } from '../composables/useUsers';
 import {
   clearTopicNotifications,
@@ -964,6 +965,13 @@ const initializePushNotifications = async () => {
 
   if (
     await initTauriNotifications(payload => {
+      if (isDesktopMessageAction(payload)) {
+        void import('./desktop-notification-actions').then(
+          ({ handleDesktopNotificationAction }) =>
+            handleDesktopNotificationAction(payload)
+        );
+        return;
+      }
       recordTelemetryEvent({
         category: 'notification',
         name: 'notification.tauri.received',

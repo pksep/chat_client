@@ -38,7 +38,7 @@ export const clearPendingMessageDraft = (): void => {
 
 /** Переносит внешний текст в редактор выбранного диалога или группы. */
 export const openMessageDraft = (
-  topic: ITopic,
+  topic: Pick<ITopic, 'id' | 'type'>,
   text: string,
   source?: AiConversationSource
 ): void => {

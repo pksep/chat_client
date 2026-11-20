@@ -1,3 +1,34 @@
+## [1.54.1](https://github.com/pksep/chat_client/compare/v1.54.0...v1.54.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* preserve desktop permissions across restarts [skip ci] ([735cfc9](https://github.com/pksep/chat_client/commit/735cfc94b92f1ec41973cca2990959f6721cb82b))
+
+# [1.54.0](https://github.com/pksep/chat_client/compare/v1.53.7...v1.54.0) (2026-11-20)
+
+
+### Bug Fixes
+
+* isolate desktop QA protocol and autostart registration [skip ci] ([38a5954](https://github.com/pksep/chat_client/commit/38a595457ec177ecbc57f1ecb191674163f8de2a))
+* open native chat before download destinations [skip ci] ([15356e3](https://github.com/pksep/chat_client/commit/15356e30f34e97375ee625183debbec05210c792))
+* restore minimized notifications and native app downloads [skip ci] ([8855ab2](https://github.com/pksep/chat_client/commit/8855ab2b0098bab85152258336a81e7995d251f0))
+* use one native app action and keep PWA only on iOS [skip ci] ([56e0191](https://github.com/pksep/chat_client/commit/56e01914f9dbc57a5cdd5c990c587376c32d4174))
+
+
+### Features
+
+* improve desktop launcher, inspector and notification actions [skip ci] ([45001eb](https://github.com/pksep/chat_client/commit/45001eb8b27561a5118ceb3126089f229a319edd))
+
+## [1.53.7](https://github.com/pksep/chat_client/compare/v1.53.6...v1.53.7) (2026-11-20)
+
+
+### Bug Fixes
+
+* clear stale organization when opening desktop call links [skip ci] ([98547e9](https://github.com/pksep/chat_client/commit/98547e963cdc2249feaf3aefe02a08cf70779788))
+* open call invitations through app choice on mobile ([#499](https://github.com/pksep/chat_client/issues/499)) ([880bb8f](https://github.com/pksep/chat_client/commit/880bb8fdcd5b1f02f9b258191b2a38aa5209cb18))
+* prepare desktop updates silently before installation [skip ci] ([d02adee](https://github.com/pksep/chat_client/commit/d02adeec4a5ce3720746f9233f20a793f0d311bd))
+
 ## [1.53.6](https://github.com/pksep/chat_client/compare/v1.53.5...v1.53.6) (2026-11-19)
 
 

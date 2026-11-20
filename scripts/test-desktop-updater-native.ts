@@ -10,6 +10,45 @@ import path from 'node:path';
 
 if (process.platform !== 'win32')
   throw new Error('Этот smoke проверяет NSIS updater на Windows');
+const productionIntegration = async () => {
+  const child = spawn(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `$values = [ordered]@{}
+foreach ($entry in @(
+  @{name='protocol'; path='Software\\Classes\\sepchat'; value=''},
+  @{name='protocolMarker'; path='Software\\Classes\\sepchat'; value='URL Protocol'},
+  @{name='protocolCommand'; path='Software\\Classes\\sepchat\\shell\\open\\command'; value=''},
+  @{name='protocolIcon'; path='Software\\Classes\\sepchat\\DefaultIcon'; value=''},
+  @{name='autostart'; path='Software\\Microsoft\\Windows\\CurrentVersion\\Run'; value='SEP Chat'}
+)) {
+  $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($entry.path)
+  try { $values[$entry.name] = if ($key) { $key.GetValue($entry.value) } else { $null } }
+  finally { if ($key) { $key.Dispose() } }
+}
+$values | ConvertTo-Json -Compress`
+    ],
+    { windowsHide: true, stdio: ['ignore', 'pipe', 'inherit'] }
+  );
+  let output = '';
+  child.stdout!.setEncoding('utf8');
+  child.stdout!.on('data', chunk => {
+    output += chunk;
+  });
+  await new Promise<void>((resolve, reject) => {
+    child.once('error', reject);
+    child.once('exit', code =>
+      code === 0
+        ? resolve()
+        : reject(new Error('Не удалось проверить регистрацию рабочего клиента'))
+    );
+  });
+  return JSON.parse(output) as Record<string, string | null>;
+};
+const integrationBefore = await productionIntegration();
 const root = path.resolve('.codex/desktop-updater-native');
 await mkdir(root, { recursive: true });
 const run = (file: string, args: string[], env = process.env, quiet = false) =>
@@ -82,6 +121,7 @@ for (const version of ['1.6.100', '1.6.101']) {
       },
       bundle: { targets: ['nsis'], createUpdaterArtifacts: true },
       plugins: {
+        'deep-link': { desktop: { schemes: ['sepchat-updater-qa'] } },
         updater: {
           pubkey,
           endpoints: ['http://127.0.0.1:17883/manifest.json'],
@@ -212,4 +252,32 @@ try {
   );
   const uninstaller = path.join(installDirectory, 'uninstall.exe');
   if (await Bun.file(uninstaller).exists()) await mustRun(uninstaller, ['/S']);
+  const integrationAfter = await productionIntegration();
+  const unchanged =
+    JSON.stringify(integrationBefore) === JSON.stringify(integrationAfter);
+  await writeFile(
+    path.join(root, 'integration-isolation.json'),
+    JSON.stringify(
+      {
+        passed: unchanged,
+        protocolPreserved:
+          integrationBefore.protocolCommand ===
+          integrationAfter.protocolCommand,
+        autostartPreserved:
+          integrationBefore.autostart === integrationAfter.autostart
+      },
+      null,
+      2
+    )
+  );
+  if (!unchanged)
+    throw new Error(
+      'Тестовый установщик изменил протокол или автозапуск рабочего клиента'
+    );
+  console.log(
+    JSON.stringify({
+      productionProtocolPreserved: true,
+      productionAutostartPreserved: true
+    })
+  );
 }

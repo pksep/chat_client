@@ -4,30 +4,104 @@ import { listen } from '@tauri-apps/api/event';
 import { ref } from 'vue';
 import {
   buildDesktopGroupCallInviteUrl,
+  buildAndroidGroupCallInviteUrl,
+  buildPublicGroupCallInviteUrl,
+  CALL_BROWSER_CHOICE_PARAM,
   parseDesktopGroupCallInviteUrl,
   parseGroupCallInviteUrl
 } from '../utils/groupCallInviteUrl';
 
-const isDesktopBrowser = (): boolean =>
+const isWebBrowser = (): boolean =>
   typeof window !== 'undefined' &&
   typeof navigator !== 'undefined' &&
   !isTauri() &&
-  !Capacitor.isNativePlatform() &&
-  !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) &&
-  !(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  !Capacitor.isNativePlatform();
 
-// Выбор приложения доступен до авторизации, в том числе при вводе ссылки вручную.
-export const pendingDesktopCallInvite = ref<string | null>(
-  isDesktopBrowser()
-    ? buildDesktopGroupCallInviteUrl(window.location.href)
-    : null
-);
+// Поля приглашения живут в памяти/текущем URL и не пишутся в хранилища или логи.
+export const pendingDesktopCallInvite = ref<string | null>(null);
+const pendingPublicInvite = ref<string | null>(null);
+export const callInviteApplicationDownloadUrl =
+  typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
+    ? 'https://pksep.github.io/sep-chat-ui/android/'
+    : 'https://github.com/pksep/chat_client/releases/latest';
+
+const canonicalInvite = (value: string): string | null => {
+  const invite = parseGroupCallInviteUrl(value, { allowTrustedOrigin: true });
+  return invite ? buildPublicGroupCallInviteUrl(invite) : null;
+};
+
+export const presentBrowserCallInviteChoice = (value: string): boolean => {
+  if (!isWebBrowser()) return false;
+  const publicUrl = canonicalInvite(value);
+  if (!publicUrl) return false;
+  const appUrl = /Android/i.test(navigator.userAgent)
+    ? buildAndroidGroupCallInviteUrl(publicUrl)
+    : buildDesktopGroupCallInviteUrl(publicUrl);
+  if (!appUrl) return false;
+  pendingPublicInvite.value = publicUrl;
+  pendingDesktopCallInvite.value = appUrl;
+  return true;
+};
+
+const clearChoice = () => {
+  pendingPublicInvite.value = null;
+  pendingDesktopCallInvite.value = null;
+};
+
+const updateInviteLocation = (publicUrl: string, browser: boolean) => {
+  const invite = parseGroupCallInviteUrl(publicUrl, {
+    allowTrustedOrigin: true
+  });
+  if (!invite) return;
+  const currentUrl = new URL(window.location.href);
+  currentUrl.searchParams.set('callRoom', invite.roomId);
+  currentUrl.searchParams.set('callInvite', invite.inviteToken);
+  currentUrl.searchParams.delete('organization');
+  if (invite.organization)
+    currentUrl.searchParams.set('organization', invite.organization);
+  currentUrl.searchParams.delete('callAppFallback');
+  currentUrl.searchParams.delete(CALL_BROWSER_CHOICE_PARAM);
+  if (browser) currentUrl.searchParams.set(CALL_BROWSER_CHOICE_PARAM, 'web');
+  window.history.replaceState(window.history.state, '', currentUrl);
+};
+
+const syncBrowserInvite = () => {
+  if (!isWebBrowser()) return;
+  const url = new URL(window.location.href);
+  if (
+    url.searchParams.get(CALL_BROWSER_CHOICE_PARAM) === 'web' ||
+    !canonicalInvite(url.href)
+  ) {
+    clearChoice();
+    return;
+  }
+  presentBrowserCallInviteChoice(url.href);
+};
+
+if (isWebBrowser()) {
+  // До подключения SDK: веб-звонок не начинается раньше выбора пользователя.
+  syncBrowserInvite();
+  window.addEventListener('popstate', syncBrowserInvite);
+  window.addEventListener('hashchange', syncBrowserInvite);
+}
 
 export const continueCallInviteInBrowser = async (): Promise<void> => {
-  pendingDesktopCallInvite.value = null;
+  const selected = pendingPublicInvite.value;
+  if (!selected) return;
+  updateInviteLocation(selected, true);
+  clearChoice();
   const { getChatSDK } = await import('./useChat');
-  if (getChatSDK()?.isConnected()) {
+  if (
+    getChatSDK()?.isConnected() &&
+    !pendingDesktopCallInvite.value &&
+    canonicalInvite(window.location.href) === selected
+  ) {
     const { restoreInvitedGroupCallFromUrl } = await import('./useCalls');
+    if (
+      pendingDesktopCallInvite.value ||
+      canonicalInvite(window.location.href) !== selected
+    )
+      return;
     await restoreInvitedGroupCallFromUrl();
   }
 };
@@ -48,12 +122,7 @@ export const initDesktopCallLinks = (): Promise<void> => {
       });
       if (!invite) return;
 
-      const currentUrl = new URL(window.location.href);
-      currentUrl.searchParams.set('callRoom', invite.roomId);
-      currentUrl.searchParams.set('callInvite', invite.inviteToken);
-      if (invite.organization)
-        currentUrl.searchParams.set('organization', invite.organization);
-      window.history.replaceState(window.history.state, '', currentUrl);
+      updateInviteLocation(publicUrl, false);
       await handleAppUrlOpen({ url: publicUrl });
     };
 

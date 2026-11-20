@@ -71,6 +71,7 @@ const props = withDefaults(
 );
 
 const {
+  isDesktopApp,
   showUpdateBanner,
   updateActionLabel,
   updateProgress,
@@ -80,18 +81,21 @@ const {
 } = useMobileApp();
 
 const actionLabel = computed(() =>
-  updateActionLabel.value === 'Установить и перезапустить'
-    ? 'Перезапустить чат'
-    : updateActionLabel.value === 'Обновить' ||
-        updateActionLabel.value === 'Установить'
-      ? 'Обновить чат'
-      : updateActionLabel.value
+  isDesktopApp
+    ? updateActionLabel.value
+    : updateActionLabel.value === 'Установить и перезапустить'
+      ? 'Перезапустить чат'
+      : updateActionLabel.value === 'Обновить' ||
+          updateActionLabel.value === 'Установить'
+        ? 'Обновить чат'
+        : updateActionLabel.value
 );
 const isUpdateDownloaded = computed(
   () =>
     updateActionLabel.value === 'Перезапустить' ||
     updateActionLabel.value === 'Установить и перезапустить' ||
-    updateActionLabel.value === 'Установлено'
+    updateActionLabel.value === 'Установлено' ||
+    (isDesktopApp && updateActionLabel.value === 'Обновить')
 );
 const accessibleLabel = computed(
   () =>
