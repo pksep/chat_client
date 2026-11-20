@@ -22,6 +22,10 @@ const assert = (value: unknown, message: string) => {
 };
 
 try {
+  if (new URLSearchParams(location.search).has('links')) {
+    const { verifyNativeCallLinks } = await import('./desktop-links-native');
+    await verifyNativeCallLinks(report);
+  }
   if (new URLSearchParams(location.search).has('shell')) {
     const { verifyNativeShell } = await import('./desktop-shell-native');
     const fixture = await (await fetch(`${api}/fixture`)).json();

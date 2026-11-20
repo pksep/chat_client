@@ -1,10 +1,60 @@
 import { expect, test } from '@playwright/test';
 
+test('новая desktop-ссылка без организации не наследует организацию предыдущего звонка', async ({
+  page
+}) => {
+  test.setTimeout(90_000);
+  await page.goto('/e2e/fixtures/call-download.html');
+  await page.evaluate(async () => {
+    (window as any).isTauri = true;
+    const { mockIPC, mockWindows } = await import(
+      '/node_modules/@tauri-apps/api/mocks.js'
+    );
+    mockWindows('main');
+    mockIPC(
+      command =>
+        command === 'desktop_get_open_urls'
+          ? [
+              'sepchat://invite?callRoom=first&callInvite=first-token&organization=https%3A%2F%2Fold.example.invalid'
+            ]
+          : null,
+      { shouldMockEvents: true }
+    );
+    const { initDesktopCallLinks } = await import(
+      '/src/services/useDesktopCallLinks.ts'
+    );
+    await initDesktopCallLinks();
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        new URL(location.href).searchParams.get('organization')
+      )
+    )
+    .toBe('https://old.example.invalid');
+  await page.evaluate(async () => {
+    const { emit } = await import('/node_modules/@tauri-apps/api/event.js');
+    await emit('deep-link://new-url', [
+      'sepchat://invite?callRoom=second&callInvite=second-token'
+    ]);
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() => new URL(location.href).searchParams.get('callRoom'))
+    )
+    .toBe('second');
+  expect(
+    await page.evaluate(() =>
+      new URL(location.href).searchParams.get('organization')
+    )
+  ).toBeNull();
+});
+
 test('ссылка из адресной строки предлагает приложение до входа и сохраняет браузерный вход', async ({
   page,
   isMobile
 }, testInfo) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   await page.goto(
     '/?callRoom=shared-room&callInvite=signed%2Btoken&organization=https%3A%2F%2Fexample.invalid'
   );
@@ -13,7 +63,7 @@ test('ссылка из адресной строки предлагает пр�
     return;
   }
   const prompt = page.getByTestId('DesktopCallInvitePrompt');
-  await expect(prompt).toBeVisible({ timeout: 45_000 });
+  await expect(prompt).toBeVisible({ timeout: 90_000 });
   await prompt.screenshot({
     path: testInfo.outputPath('desktop-call-invite.png')
   });

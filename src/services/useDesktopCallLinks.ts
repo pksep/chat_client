@@ -53,6 +53,7 @@ export const initDesktopCallLinks = (): Promise<void> => {
       currentUrl.searchParams.set('callInvite', invite.inviteToken);
       if (invite.organization)
         currentUrl.searchParams.set('organization', invite.organization);
+      else currentUrl.searchParams.delete('organization');
       window.history.replaceState(window.history.state, '', currentUrl);
       await handleAppUrlOpen({ url: publicUrl });
     };
