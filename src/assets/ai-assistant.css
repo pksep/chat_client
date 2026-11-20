@@ -523,10 +523,12 @@
 }
 
 .ai-assistant__scroll {
+  --ai-assistant-conversation-gutter: 15px;
+
   grid-row: 1;
   grid-column: 1;
   min-height: 0;
-  padding: 15px;
+  padding: 15px var(--ai-assistant-conversation-gutter);
   overflow: hidden auto;
   scrollbar-width: none;
 }
@@ -758,7 +760,31 @@
 }
 
 .ai-assistant__message--assistant {
-  align-self: flex-start;
+  align-self: stretch;
+  width: auto;
+  max-width: none;
+  margin-inline: calc(-1 * var(--ai-assistant-conversation-gutter));
+}
+
+.ai-assistant__message--assistant
+  :is(.ai-assistant__message-content, .ai-assistant__message-files) {
+  justify-self: stretch;
+}
+
+.ai-assistant__message--assistant
+  :is(.message__article__text, .message__article__file) {
+  max-width: 100%;
+  padding-inline: 0;
+  background-color: transparent;
+}
+
+.ai-assistant__message--assistant .message-bubble-tail {
+  display: none;
+}
+
+.ai-assistant__message--assistant .message-file__caption {
+  max-width: 100%;
+  padding-inline: 0;
 }
 
 .ai-assistant__message-reply .message-reference-reply {
@@ -1639,9 +1665,11 @@
   }
 
   .ai-assistant__conversation {
+    --ai-assistant-conversation-gutter: 10px;
+
     gap: 8px;
     padding-block: 14px 10px;
-    padding-inline: 10px;
+    padding-inline: var(--ai-assistant-conversation-gutter);
   }
 
   .ai-assistant__permission-trigger--desktop {
