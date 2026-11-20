@@ -30,3 +30,9 @@ Production HTML дополнительно проверен в отдельны�
 [desktop-protocol-repair-2026-11-20.md](desktop-protocol-repair-2026-11-20.md).
 Нативный NSIS-тест подтвердил, что установка, обновление и удаление QA теперь
 сохраняют рабочие протокол и автозапуск пользователя.
+
+Попытка выкладки 112:
+[Deploy Web 44715144058](https://github.com/pksep/chat_client/actions/runs/44715144058)
+остановилась на `ssh: unable to authenticate` 20 ноября. Исходники 112 в main;
+на момент проверки публичный `web-update.json` содержит 111. Стабильный desktop-
+канал остаётся 1.53.6, новый desktop-выпуск не создавался.
