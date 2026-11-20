@@ -2,6 +2,7 @@ import { isTauri } from '@tauri-apps/api/core';
 
 const CALL_INVITE_PARAM = 'callInvite';
 const CALL_ROOM_PARAM = 'callRoom';
+export const CALL_BROWSER_CHOICE_PARAM = 'callClient';
 const TRUSTED_CALL_INVITE_ORIGINS = new Set(['https://chat.pksep.ru']);
 
 interface GroupCallInviteParams {
@@ -57,6 +58,24 @@ export const buildDesktopGroupCallInviteUrl = (
   return url.toString();
 };
 
+/** Явное нажатие в Android-браузере открывает установленный пакет даже до re-verify домена. */
+export const buildAndroidGroupCallInviteUrl = (
+  value: string
+): string | null => {
+  const invite = parseGroupCallInviteUrl(value, {
+    currentOrigin: 'https://chat.pksep.ru'
+  });
+  if (!invite) return null;
+  const publicUrl = new URL(buildPublicGroupCallInviteUrl(invite));
+  const fallback = new URL(publicUrl);
+  fallback.searchParams.set('callAppFallback', '1');
+  return (
+    `intent://${publicUrl.host}${publicUrl.pathname}${publicUrl.search}` +
+    '#Intent;scheme=https;package=sep.pksep.app;' +
+    `S.browser_fallback_url=${encodeURIComponent(fallback.toString())};end`
+  );
+};
+
 export const parseDesktopGroupCallInviteUrl = (
   value: string
 ): string | null => {
@@ -102,6 +121,16 @@ export const parseGroupCallInviteUrl = (
           );
 
     if (!['http:', 'https:'].includes(url.protocol)) {
+      return null;
+    }
+
+    if (
+      url.username ||
+      url.password ||
+      url.searchParams.getAll(CALL_ROOM_PARAM).length !== 1 ||
+      url.searchParams.getAll(CALL_INVITE_PARAM).length !== 1 ||
+      url.searchParams.getAll('organization').length > 1
+    ) {
       return null;
     }
 
@@ -164,6 +193,10 @@ export const buildGroupCallInviteAuthorizationUrl = (
   if (invite.organization) {
     authorizationUrl.searchParams.set('organization', invite.organization);
   }
+
+  // Выбор браузера относится к текущему приглашению и переживает переход на вход.
+  if (currentUrl.searchParams.get(CALL_BROWSER_CHOICE_PARAM) === 'web')
+    authorizationUrl.searchParams.set(CALL_BROWSER_CHOICE_PARAM, 'web');
 
   return authorizationUrl.toString();
 };

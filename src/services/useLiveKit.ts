@@ -59,7 +59,10 @@ import {
   parseGroupCallInviteUrl
 } from '../utils/groupCallInviteUrl';
 import { isTauri as isTauriRuntime } from '@tauri-apps/api/core';
-import { pendingDesktopCallInvite } from './useDesktopCallLinks';
+import {
+  pendingDesktopCallInvite,
+  presentBrowserCallInviteChoice
+} from './useDesktopCallLinks';
 import {
   prepareDesktopScreenCapture,
   stopDesktopScreenCapture
@@ -2499,6 +2502,8 @@ const clearInviteParamsFromUrl = () => {
   const url = new URL(window.location.href);
   url.searchParams.delete('callInvite');
   url.searchParams.delete('callRoom');
+  url.searchParams.delete('callClient');
+  url.searchParams.delete('callAppFallback');
   window.history.replaceState({}, document.title, url.toString());
 };
 
@@ -6198,6 +6203,10 @@ export const hydrateInvitedGroupCallFromUrl = async (options?: {
 
   if (!sdk || !inviteParams) return false;
 
+  const organization = new URL(window.location.href).searchParams.get(
+    'organization'
+  );
+
   const preview =
     options?.preview?.roomId === inviteParams.roomId
       ? options.preview
@@ -6205,6 +6214,18 @@ export const hydrateInvitedGroupCallFromUrl = async (options?: {
           inviteParams.roomId,
           inviteParams.inviteToken
         );
+
+  // Ответ старого приглашения не должен открывать звонок или стирать новую ссылку.
+  const currentInvite = getInviteParamsFromUrl();
+  if (
+    pendingDesktopCallInvite.value ||
+    getChatSDK() !== sdk ||
+    currentInvite?.roomId !== inviteParams.roomId ||
+    currentInvite?.inviteToken !== inviteParams.inviteToken ||
+    new URL(window.location.href).searchParams.get('organization') !==
+      organization
+  )
+    return false;
 
   if (!preview) {
     handleExpiredInviteLink();
@@ -6252,10 +6273,15 @@ export const openGroupCallInviteUrl = async (
     return false;
   }
 
+  if (presentBrowserCallInviteChoice(value)) return true;
+
   const currentUrl = new URL(window.location.href);
 
   currentUrl.searchParams.set('callRoom', invite.roomId);
   currentUrl.searchParams.set('callInvite', invite.inviteToken);
+  currentUrl.searchParams.delete('callClient');
+  currentUrl.searchParams.delete('callAppFallback');
+  currentUrl.searchParams.delete('organization');
 
   if (invite.organization) {
     currentUrl.searchParams.set('organization', invite.organization);
@@ -6276,6 +6302,14 @@ const joinInvitedGroupCallInternal = async (
   clearCallStatusNotice();
 
   const callStatus = await getLiveKitCallStatus(invite.roomId, invite.topicId);
+  if (
+    pendingDesktopCallInvite.value ||
+    getChatSDK() !== sdk ||
+    getAuthUser() !== me ||
+    invitedGroupCall.value !== invite ||
+    open.value
+  )
+    return false;
   if (!callStatus?.active) {
     clearUnavailableCallState(invite.roomId, invite.topicId);
     clearInviteParamsFromUrl();
