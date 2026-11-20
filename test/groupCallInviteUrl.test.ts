@@ -3,6 +3,7 @@ import {
   buildGroupCallInviteAuthorizationUrl,
   buildPublicGroupCallInviteUrl,
   buildDesktopGroupCallInviteUrl,
+  buildAndroidGroupCallInviteUrl,
   parseDesktopGroupCallInviteUrl,
   parseGroupCallInviteUrl
 } from '../src/utils/groupCallInviteUrl';
@@ -10,6 +11,60 @@ import {
 const inviteQuery = 'callRoom=livekit-room&callInvite=signed-invite';
 
 describe('group call invite URL', () => {
+  test('Android targets the HTTPS handler and retains only the invitation', () => {
+    const publicUrl = buildPublicGroupCallInviteUrl({
+      roomId: 'room & 1',
+      inviteToken: 'signed+token/=',
+      organization: 'https://org.pksep.ru'
+    });
+    const appUrl = buildAndroidGroupCallInviteUrl(
+      `${publicUrl}&token=private-session&callClient=web`
+    )!;
+    const [target, intent] = appUrl.split('#Intent;');
+    expect(target.replace('intent:', 'https:')).toBe(publicUrl);
+    expect(intent).toStartWith('scheme=https;package=sep.pksep.app;');
+    const fallback = new URL(
+      decodeURIComponent(
+        intent.split('S.browser_fallback_url=')[1].split(';')[0]
+      )
+    );
+    expect(fallback.searchParams.get('callInvite')).toBe('signed+token/=');
+    expect(fallback.searchParams.get('callAppFallback')).toBe('1');
+    expect(fallback.searchParams.has('callClient')).toBe(false);
+    expect(appUrl).not.toContain('private-session');
+  });
+
+  test('Android rejects untrusted and ambiguous invitation URLs', () => {
+    for (const url of [
+      `https://example.invalid/?${inviteQuery}`,
+      `http://chat.pksep.ru/?${inviteQuery}`,
+      `https://user@chat.pksep.ru/?${inviteQuery}`,
+      `https://chat.pksep.ru/?${inviteQuery}&callRoom=other`,
+      `https://chat.pksep.ru/?${inviteQuery}&callInvite=other`,
+      `https://chat.pksep.ru/?${inviteQuery}&organization=a&organization=b`,
+      'https://chat.pksep.ru/?callRoom=only-room',
+      'javascript:alert(1)'
+    ])
+      expect(buildAndroidGroupCallInviteUrl(url)).toBeNull();
+  });
+
+  test('browser choice survives authorization only with a valid invitation', () => {
+    const authorized = new URL(
+      buildGroupCallInviteAuthorizationUrl(
+        `https://chat.pksep.ru/dialogs/topic?${inviteQuery}&callClient=web&callAppFallback=1&token=expired`
+      )
+    );
+    expect(authorized.pathname).toBe('/');
+    expect(authorized.searchParams.get('callClient')).toBe('web');
+    expect(authorized.searchParams.has('callAppFallback')).toBe(false);
+    expect(authorized.searchParams.has('token')).toBe(false);
+    expect(
+      buildGroupCallInviteAuthorizationUrl(
+        'https://chat.pksep.ru/?callClient=web'
+      )
+    ).toBe('https://chat.pksep.ru/');
+  });
+
   test('shares a production URL regardless of the native webview origin', () => {
     const publicUrl = buildPublicGroupCallInviteUrl({
       roomId: 'room & 1',
