@@ -155,6 +155,29 @@ for (const theme of ['theme-light', 'theme-dark']) {
     });
     releaseFirstReply();
     await expect(page.locator('.ai-assistant__thinking')).toHaveCount(0);
+
+    const conversation = page.locator('.ai-assistant__scroll');
+    const answer = conversation.locator(
+      '.ai-assistant__message--assistant .message__article__text'
+    );
+    const prompt = conversation.locator(
+      '.ai-assistant__message--user .message__article__text'
+    );
+    await expect(answer).toBeVisible();
+    await expect(answer).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(answer).toHaveCSS('padding-left', '0px');
+    await expect(answer).toHaveCSS('padding-right', '0px');
+    await expect(answer.locator('.message-bubble-tail')).toBeHidden();
+    await expect(prompt).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    const answerBox = await answer.boundingBox();
+    const conversationBox = await conversation.boundingBox();
+    expect(answerBox?.x).toBeCloseTo(conversationBox!.x, 1);
+    expect(answerBox?.width).toBeCloseTo(conversationBox!.width, 1);
+    await testInfo.attach(`full-width-reply-${theme}`, {
+      body: await conversation.screenshot(),
+      contentType: 'image/png'
+    });
+
     await editor
       .locator('[contenteditable="true"]')
       .fill('Теперь ответь быстро');
