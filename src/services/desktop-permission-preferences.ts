@@ -8,15 +8,18 @@ export const desktopWebviewPermissions = [
   'geolocation',
   'clipboard-read'
 ] as const;
-type DesktopPermission =
+export type DesktopPermission =
   | (typeof desktopWebviewPermissions)[number]
-  | 'notifications';
+  | 'notifications'
+  | 'screen-capture';
 type PermissionChoice = 'granted' | 'denied' | 'requested';
 type Preferences = Partial<Record<DesktopPermission, PermissionChoice>>;
 const permissions: DesktopPermission[] = [
   ...desktopWebviewPermissions,
-  'notifications'
+  'notifications',
+  'screen-capture'
 ];
+const preferencesRevision = ref(0);
 
 export const desktopPermissionStorageWarning = ref('');
 let nativePreferences: Preferences | null = null;
@@ -96,12 +99,18 @@ export const initializeDesktopPermissionPreferences = (): Promise<void> => {
     }
   })().finally(() => {
     initialization = null;
+    preferencesRevision.value += 1;
   });
   return initialization;
 };
 
-export const getDesktopPermissionChoice = (permission: DesktopPermission) =>
-  isTauri() ? (nativePreferences ?? readPreferences())[permission] : undefined;
+export const getDesktopPermissionChoice = (permission: DesktopPermission) => {
+  // Список в профиле обновляется после загрузки, выдачи и сброса разрешений.
+  void preferencesRevision.value;
+  return isTauri()
+    ? (nativePreferences ?? readPreferences())[permission]
+    : undefined;
+};
 
 export const resetDesktopPermissionChoices = async (): Promise<boolean> => {
   if (!isTauri()) return false;
@@ -113,6 +122,7 @@ export const resetDesktopPermissionChoices = async (): Promise<boolean> => {
     if (!mirrored && !nativeStoreAvailable)
       throw new Error('Хранилище недоступно');
     nativePreferences = nativeStoreAvailable ? {} : null;
+    preferencesRevision.value += 1;
     desktopPermissionStorageWarning.value = '';
     return true;
   } catch {
@@ -131,6 +141,7 @@ export const saveDesktopPermissionChoice = async (
   const updated = { ...previous, [permission]: choice };
   const mirrored = mirrorPreferences(updated);
   if (nativeStoreAvailable) nativePreferences = updated;
+  preferencesRevision.value += 1;
   try {
     if (nativeStoreAvailable) {
       await persist(() =>
@@ -175,7 +186,17 @@ export const installDesktopClipboardPermissions = (): (() => void) => {
     const original = clipboard[method];
     if (!original) continue;
     const wrapped = async (...args: unknown[]) => {
+      if (getDesktopPermissionChoice('clipboard-read') === 'denied')
+        throw new DOMException(
+          'Чтение буфера обмена запрещено в настройках СЭП Чата',
+          'NotAllowedError'
+        );
       const value = await Reflect.apply(original, clipboard, args);
+      if (getDesktopPermissionChoice('clipboard-read') === 'denied')
+        throw new DOMException(
+          'Доступ к буферу обмена отозван',
+          'NotAllowedError'
+        );
       await saveDesktopPermissionChoice('clipboard-read', 'granted');
       return value;
     };

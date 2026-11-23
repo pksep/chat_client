@@ -16,6 +16,7 @@ pub enum Permission {
     Geolocation,
     ClipboardRead,
     Notifications,
+    ScreenCapture,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -116,6 +117,25 @@ fn require_main<R: Runtime>(window: &WebviewWindow<R>) -> Result<(), String> {
     }
 }
 
+fn apply_choice<R: Runtime>(app: &AppHandle<R>, permission: Permission, choice: Choice) {
+    use super::desktop_media_permissions::{DesktopMediaPermissions, MediaPermission};
+    let permission = match permission {
+        Permission::Microphone => MediaPermission::Microphone,
+        Permission::Camera => MediaPermission::Camera,
+        Permission::Geolocation => MediaPermission::Geolocation,
+        Permission::ClipboardRead => MediaPermission::ClipboardRead,
+        Permission::Notifications | Permission::ScreenCapture => return,
+    };
+    app.state::<DesktopMediaPermissions>().set_choice(
+        permission,
+        match choice {
+            Choice::Granted => Some(true),
+            Choice::Denied => Some(false),
+            Choice::Requested => None,
+        },
+    );
+}
+
 async fn access_preferences<R: Runtime, T: Send + 'static>(
     app: AppHandle<R>,
     legacy: Preferences,
@@ -136,7 +156,11 @@ pub async fn desktop_load_permission_preferences<R: Runtime>(
     legacy: Preferences,
 ) -> Result<Preferences, String> {
     require_main(&window)?;
-    access_preferences(app, legacy, |store| Ok(store.choices())).await
+    let choices = access_preferences(app.clone(), legacy, |store| Ok(store.choices())).await?;
+    for (permission, choice) in &choices {
+        apply_choice(&app, *permission, *choice);
+    }
+    Ok(choices)
 }
 
 #[tauri::command]
@@ -147,10 +171,16 @@ pub async fn desktop_save_permission_choice<R: Runtime>(
     choice: Choice,
 ) -> Result<(), String> {
     require_main(&window)?;
-    access_preferences(app, Preferences::new(), move |store| {
+    // Отзыв действует сразу, даже если сохранение на диск завершится ошибкой.
+    if choice == Choice::Denied {
+        apply_choice(&app, permission, choice);
+    }
+    access_preferences(app.clone(), Preferences::new(), move |store| {
         store.save(permission, choice)
     })
-    .await
+    .await?;
+    apply_choice(&app, permission, choice);
+    Ok(())
 }
 
 #[tauri::command]

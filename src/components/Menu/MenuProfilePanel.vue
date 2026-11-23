@@ -47,112 +47,51 @@
       <span class="menu-section-heading__label">Профиль</span>
     </MenuSectionHeading>
     <div v-if="authUser && !props.isCollapse" class="menu-profile__body">
-      <header class="menu-profile__header">
-        <CachedAvatar
-          class="menu-profile__avatar"
-          :path="authUser.avatarUrl"
-          :initials="authUser.initials || authUser.nickname"
-          :data-testid="`${props.dataTestid}-MenuProfilePanel-Avatar`"
-        />
-      </header>
-
-      <div class="menu-profile__form">
-        <ProfileQrLogin
-          v-if="props.isActive"
-          :key="authUser.id"
-          :data-testid="`${props.dataTestid}-MenuProfilePanel-QrLogin`"
-        />
-
-        <ProfileAndroidDownload
-          v-if="props.isActive"
-          :data-testid="`${props.dataTestid}-MenuProfilePanel-AndroidDownload`"
-        />
-
-        <div class="menu-profile__row">
-          <span
-            class="menu-profile__row-value"
-            :data-testid="`${props.dataTestid}-MenuProfilePanel-ProfileValue`"
-          >
-            {{ authUser.initials || authUser.nickname }}
-          </span>
-        </div>
-
-        <div
-          class="menu-profile__row menu-profile__row_theme"
-          @click="themeStore.setTheme(!isDarkTheme)"
-        >
-          <div class="menu-profile__group">
-            <Icon
-              class="menu-profile__icon"
-              :name="IconNameEnum.darkThemeSwitcher"
-            />
-
-            <div class="menu-profile__row-label">Тёмная тема</div>
-          </div>
-
-          <Toggle
-            v-model="isDarkTheme"
-            @click.stop
-            theme="minor"
-            @change="themeStore.setTheme"
+      <header ref="profileHeader" class="menu-profile__header">
+        <div class="menu-profile__avatar-wrap">
+          <CachedAvatar
+            class="menu-profile__avatar"
+            :path="authUser.avatarUrl"
+            :initials="authUser.initials || authUser.nickname"
+            :data-testid="`${props.dataTestid}-MenuProfilePanel-Avatar`"
           />
         </div>
-
-        <div class="menu-profile__status">
-          <div
-            v-if="!currentStatusLabel"
-            class="menu-profile__status-trigger"
-            :data-testid="`${props.dataTestid}-MenuProfilePanel-StatusTrigger`"
-            @click="toggleStatusMenu"
+        <div class="menu-profile__identity">
+          <span
+            class="menu-profile__identity-name"
+            :data-testid="`${props.dataTestid}-MenuProfilePanel-ProfileValue`"
+            >{{ authUser.initials || authUser.nickname }}</span
           >
-            <span>Установить статус</span>
-            <Icon
-              v-if="props.isCollapse"
-              class="menu-profile__status-trigger-plus"
-              :name="IconNameEnum.plus"
-              :width="24"
-              :height="24"
-            />
-            <Icon
-              :name="
-                isStatusMenuOpen
-                  ? IconNameEnum.chevronUp
-                  : IconNameEnum.chevronDown
+          <Tooltip
+            class="menu-profile__status-tooltip"
+            :hint="currentStatusText || 'Установить статус'"
+            :is-can-show="!isStatusMenuOpen && !isCustomStatusOpen"
+            position="top-center"
+            type="black"
+            size="small"
+            :data-testid="`${props.dataTestid}-MenuProfilePanel-StatusTooltip`"
+          >
+            <button
+              type="button"
+              class="menu-profile__identity-status"
+              :data-testid="`${props.dataTestid}-MenuProfilePanel-${currentStatusLabel ? 'CurrentStatus' : 'StatusTrigger'}`"
+              :aria-label="
+                currentStatusText
+                  ? `Изменить статус: ${currentStatusText}`
+                  : 'Установить статус'
               "
-              :width="24"
-              :height="16"
-            />
-          </div>
-
-          <div
-            v-if="currentStatusLabel"
-            class="menu-profile__status-current"
-            :data-testid="`${props.dataTestid}-MenuProfilePanel-CurrentStatus`"
-            :role="props.isCollapse ? 'button' : undefined"
-            :tabindex="props.isCollapse ? 0 : undefined"
-            @click="props.isCollapse && toggleStatusMenu()"
-            @keydown.enter="props.isCollapse && toggleStatusMenu()"
-            @keydown.space.prevent="props.isCollapse && toggleStatusMenu()"
-          >
-            <span class="menu-profile__status-current-label">
-              <EmojiIcon
-                v-if="currentStatusIcon"
-                class="menu-profile__status-option-icon"
-                :emoji="currentStatusIcon"
-              />
-              <span>{{ currentStatusText }}</span>
-            </span>
-            <Button
-              :type="ButtonTypeEnum.ghost"
-              class="menu-profile__status-clear"
-              :size="SizesEnum.little"
+              :aria-expanded="isStatusMenuOpen"
               :disabled="isSavingStatus"
-              @click="clearStatus"
+              @click="toggleStatusMenu"
             >
-              <Icon :name="IconNameEnum.closeTag" :width="16" :height="16" />
-            </Button>
-          </div>
-
+              <EmojiIcon :emoji="currentStatusIcon || '✏️'" />
+            </button>
+          </Tooltip>
+        </div>
+        <div
+          v-if="isStatusMenuOpen || isCustomStatusOpen || statusError"
+          class="menu-profile__status"
+        >
           <div
             v-if="isStatusMenuOpen"
             class="menu-profile__status-menu"
@@ -180,7 +119,6 @@
                 type="button"
                 class="menu-profile__status-option-remove"
                 :aria-label="`Удалить вариант «${option.text}»`"
-                :title="`Удалить вариант «${option.text}»`"
                 :disabled="isSavingStatus"
                 @click.stop="removeStatusPreset(option)"
               >
@@ -196,6 +134,16 @@
             >
               <EmojiIcon class="menu-profile__status-option-icon" emoji="🦄" />
               <span>Свой вариант</span>
+            </button>
+            <button
+              v-if="currentStatusLabel"
+              type="button"
+              class="menu-profile__status-option"
+              :disabled="isSavingStatus"
+              @click="clearStatus"
+            >
+              <Icon :name="IconNameEnum.closeTag" :width="20" :height="20" />
+              <span>Сбросить статус</span>
             </button>
           </div>
 
@@ -262,6 +210,29 @@
           <p v-if="statusError" class="menu-profile__status-error">
             {{ statusError }}
           </p>
+        </div>
+      </header>
+
+      <div class="menu-profile__form">
+        <div
+          class="menu-profile__row menu-profile__row_theme"
+          @click="themeStore.setTheme(!isDarkTheme)"
+        >
+          <div class="menu-profile__group">
+            <Icon
+              class="menu-profile__icon"
+              :name="IconNameEnum.darkThemeSwitcher"
+            />
+
+            <div class="menu-profile__row-label">Тёмная тема</div>
+          </div>
+
+          <Toggle
+            v-model="isDarkTheme"
+            @click.stop
+            theme="minor"
+            @change="themeStore.setTheme"
+          />
         </div>
 
         <div class="menu-profile__wallpapers">
@@ -592,7 +563,17 @@
           :data-testid="`${props.dataTestid}-MenuProfilePanel-Stickers`"
         />
 
+        <ProfileAndroidDownload
+          v-if="props.isActive"
+          :data-testid="`${props.dataTestid}-MenuProfilePanel-AndroidDownload`"
+        />
         <div class="menu-profile__actions">
+          <ProfileQrLogin
+            v-if="props.isActive"
+            :key="authUser.id"
+            tile
+            :data-testid="`${props.dataTestid}-MenuProfilePanel-QrLogin`"
+          />
           <Button
             :type="ButtonTypeEnum.ghost"
             class="menu-profile__logout"
@@ -904,6 +885,7 @@ import {
   Input,
   SizesEnum,
   Toggle,
+  Tooltip,
   autoUpdate,
   flip,
   offset,
@@ -1001,6 +983,7 @@ const statusPresets = computed(() => [
 ]);
 const MAX_CUSTOM_WALLPAPER_SIZE_BYTES = 2 * 1024 * 1024;
 const isStatusMenuOpen = ref(false);
+const profileHeader = useTemplateRef<HTMLElement>('profileHeader');
 const isCustomStatusOpen = ref(false);
 const isEmojiPickerOpen = ref(false);
 useBackButtonHandler(
@@ -1015,6 +998,14 @@ const statusEmojiButtonRef = useTemplateRef<HTMLButtonElement>(
 );
 const statusEmojiPickerRef = useTemplateRef<HTMLDivElement>(
   'statusEmojiPickerRef'
+);
+onClickOutside(
+  profileHeader,
+  () => {
+    isStatusMenuOpen.value = false;
+    resetCustomStatusForm();
+  },
+  { ignore: [statusEmojiPickerRef] }
 );
 const { floatingStyles: statusEmojiPickerStyles } = useFloating(
   statusEmojiButtonRef,
@@ -1039,7 +1030,14 @@ onClickOutside(
   { ignore: [statusEmojiButtonRef] }
 );
 onKeyStroke('Escape', event => {
-  if (!isEmojiPickerOpen.value) return;
+  if (!isEmojiPickerOpen.value) {
+    if (isStatusMenuOpen.value || isCustomStatusOpen.value) {
+      event.preventDefault();
+      isStatusMenuOpen.value = false;
+      resetCustomStatusForm();
+    }
+    return;
+  }
   event.preventDefault();
   isEmojiPickerOpen.value = false;
   statusEmojiButtonRef.value?.focus();

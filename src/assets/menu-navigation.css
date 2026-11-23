@@ -196,14 +196,15 @@
 .menu-profile__body {
   display: grid;
   align-content: start;
-  gap: 24px;
+  gap: 0;
   padding-top: 10px;
 }
 
 .menu-profile__header {
+  position: relative;
   display: grid;
   justify-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .menu-profile__avatar-button {
@@ -214,7 +215,58 @@
 }
 
 .menu-profile__avatar {
-  --size-avatar: 36px;
+  --size-avatar: 40px;
+}
+
+.menu-profile__avatar-wrap {
+  position: relative;
+  width: 80px;
+  height: 80px;
+}
+.menu-profile__identity {
+  position: relative;
+  width: max-content;
+  max-width: calc(100% - 50px);
+}
+.menu-profile__identity-name {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.menu-profile__identity .menu-profile__status-tooltip {
+  position: absolute;
+  left: calc(100% + 5px);
+  top: -2px;
+}
+.menu-profile__identity-status {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.menu-profile__identity-status > span {
+  width: 18px;
+  height: 18px;
+}
+.menu-profile__header > .menu-profile__status {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+}
+.menu-profile__header .menu-profile__status-custom {
+  padding: 8px;
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-hover);
+  border-radius: 5px;
 }
 
 .menu-profile__name {
@@ -969,7 +1021,7 @@ dialog.menu-profile__wallpaper-modal > .modal-yui-kit__modal-content {
 }
 
 .menu-profile__actions {
-  background-color: var(--table-surface-search);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   display: grid;
   gap: 8px;
   border-radius: 5px;
@@ -983,6 +1035,8 @@ dialog.menu-profile__wallpaper-modal > .modal-yui-kit__modal-content {
 
   height: 66px;
   padding: 10px !important;
+  background-color: var(--table-surface-search) !important;
+  border-radius: 5px;
 }
 
 .menu-profile__logout__icon {

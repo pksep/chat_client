@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { watch } from 'vue';
 import {
   Geolocation,
   type PermissionStatus as NativePermissionStatus
@@ -34,10 +35,20 @@ const clearLocation = (nextStatus: string): void => {
 
 export const getTelemetryLocationContext = (): Record<string, unknown> => ({
   device:
-    deviceLocation && Date.now() - sampledAt <= MAX_AGE_MS
-      ? deviceLocation
-      : { status: status === 'resolved' ? 'not_sampled' : status }
+    getDesktopPermissionChoice('geolocation') === 'denied'
+      ? { status: 'denied' }
+      : deviceLocation && Date.now() - sampledAt <= MAX_AGE_MS
+        ? deviceLocation
+        : { status: status === 'resolved' ? 'not_sampled' : status }
 });
+
+watch(
+  () => getDesktopPermissionChoice('geolocation'),
+  choice => {
+    if (choice === 'denied') clearLocation('denied');
+  },
+  { flush: 'sync' }
+);
 
 const isGranted = (permission: Partial<NativePermissionStatus>): boolean =>
   permission.location === 'granted' || permission.coarseLocation === 'granted';
@@ -70,6 +81,10 @@ const getBrowserPermission = async (): Promise<PermissionState | undefined> => {
 };
 
 const refreshLocation = (requestPermission: boolean): Promise<void> => {
+  if (getDesktopPermissionChoice('geolocation') === 'denied') {
+    if (status !== 'denied') clearLocation('denied');
+    return Promise.resolve();
+  }
   if (
     typeof document !== 'undefined' &&
     document.visibilityState === 'hidden'
@@ -132,7 +147,11 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
         timeout: 10_000,
         maximumAge: MAX_AGE_MS
       });
-      if (currentGeneration !== generation) return;
+      if (
+        currentGeneration !== generation ||
+        getDesktopPermissionChoice('geolocation') === 'denied'
+      )
+        return;
       const { latitude, longitude, accuracy } = position.coords;
       if (
         !Number.isFinite(latitude) ||
