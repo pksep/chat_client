@@ -39,6 +39,10 @@ path = "tests/desktop_notifications.rs"
 name = "desktop_screen_capture"
 path = "tests/desktop_screen_capture.rs"
 
+[[test]]
+name = "desktop_permission_preferences"
+path = "tests/desktop_permission_preferences.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

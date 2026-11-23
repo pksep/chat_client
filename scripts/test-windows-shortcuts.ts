@@ -53,10 +53,19 @@ try {
       ).catch(() => 'Нет отчёта установщика');
       throw new Error(`Проверка ярлыков не пройдена: ${reason}`);
     }
-    if ((await readFile(path.join(directory, 'passed.txt'), 'utf8')) !== '7')
+    if ((await readFile(path.join(directory, 'passed.txt'), 'utf8')) !== '8')
       throw new Error('Не все сценарии ярлыков выполнены');
+    const ids = await run('powershell.exe', [
+      '-NoProfile',
+      '-File',
+      path.resolve('test/fixtures/windows-shortcut-ids.ps1'),
+      '-TestDirectory',
+      directory
+    ]);
+    if (ids)
+      throw new Error('Не восстановлен идентификатор уведомлений ярлыка');
     console.log(
-      `Пройдено 7 сценариев: меню ${startMenu ? 'с папкой' : 'без папки'}`
+      `Пройдено 8 сценариев: меню ${startMenu ? 'с папкой' : 'без папки'}`
     );
   }
 } finally {

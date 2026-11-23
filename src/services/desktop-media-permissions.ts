@@ -45,10 +45,12 @@ const ask = (
     if (!allowed || !isActive()) return false;
     await invoke('desktop_grant_media_permissions', { permissions: missing });
     if (!isActive()) return false;
-    missing.forEach(permission => {
-      granted.add(permission);
-      saveDesktopPermissionChoice(permission, 'granted');
-    });
+    await Promise.all(
+      missing.map(async permission => {
+        granted.add(permission);
+        await saveDesktopPermissionChoice(permission, 'granted');
+      })
+    );
     return true;
   });
   queue = task.then(
@@ -60,7 +62,9 @@ const ask = (
 
 // Системные разрешения ОС остаются у WebView; заменяем его запрос внутри приложения.
 export const installDesktopMediaPermissions = async (): Promise<() => void> => {
-  if (!isTauri() || !navigator.mediaDevices?.getUserMedia) return () => {};
+  if (!isTauri()) return () => {};
+  await restoreDesktopWebviewPermissions();
+  if (!navigator.mediaDevices?.getUserMedia) return () => {};
   try {
     // В dev-режиме интерфейс может работать со старой нативной оболочкой.
     if (!(await invoke<boolean>('desktop_media_permissions_available')))
@@ -68,7 +72,6 @@ export const installDesktopMediaPermissions = async (): Promise<() => void> => {
   } catch {
     return () => {};
   }
-  await restoreDesktopWebviewPermissions();
   const devices = navigator.mediaDevices;
   const original = devices.getUserMedia;
   let active = true;

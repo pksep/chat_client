@@ -7,6 +7,8 @@ mod desktop_autostart;
 mod desktop_files;
 #[cfg(desktop)]
 mod desktop_media_permissions;
+#[cfg(desktop)]
+mod desktop_permission_preferences;
 mod desktop_notifications;
 #[cfg(desktop)]
 mod desktop_screen_capture;
@@ -266,6 +268,26 @@ fn show_windows_notification<R: Runtime>(
     Ok(true)
 }
 
+#[tauri::command]
+fn desktop_notification_permission<R: Runtime>(app: AppHandle<R>) -> Result<Option<bool>, String> {
+    #[cfg(windows)]
+    {
+        let notifier = ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(
+            app.config().identifier.clone(),
+        ))
+        .map_err(|error| error.to_string())?;
+        let setting = notifier.Setting().map_err(|error| error.to_string())?;
+        Ok(Some(
+            setting == windows::UI::Notifications::NotificationSetting::Enabled,
+        ))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        Ok(None)
+    }
+}
+
 #[cfg(not(windows))]
 #[tauri::command]
 fn show_windows_notification<R: Runtime>(
@@ -503,6 +525,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(desktop_media_permissions::DesktopMediaPermissions::default())
+        .manage(desktop_permission_preferences::DesktopPermissionPreferences::default())
         .manage(desktop_screen_capture::DesktopScreenCapture::default())
         .on_permission_request(desktop_media_permissions::handle_request);
     #[cfg(desktop)]
@@ -554,6 +577,9 @@ pub fn run() {
             desktop_media_permissions::desktop_media_permissions_available,
             desktop_media_permissions::desktop_grant_media_permissions,
             desktop_media_permissions::desktop_grant_permissions,
+            desktop_permission_preferences::desktop_load_permission_preferences,
+            desktop_permission_preferences::desktop_save_permission_choice,
+            desktop_permission_preferences::desktop_reset_permission_preferences,
             desktop_screen_capture::desktop_screen_capture_available,
             desktop_screen_capture::desktop_screen_capture_active,
             desktop_screen_capture::desktop_screen_capture_permission,
@@ -562,6 +588,7 @@ pub fn run() {
             desktop_screen_capture::desktop_screen_capture_stop,
             desktop_screen_capture::desktop_screen_capture_ack,
             show_windows_notification,
+            desktop_notification_permission,
             clear_windows_topic_notifications,
             clear_all_windows_notifications,
             consume_pending_notification_target,

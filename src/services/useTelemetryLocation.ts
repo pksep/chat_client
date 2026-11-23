@@ -56,6 +56,10 @@ const getBrowserPermission = async (): Promise<PermissionState | undefined> => {
           clearLocation(
             permission.state === 'denied' ? 'denied' : 'permission_required'
           );
+          void saveDesktopPermissionChoice(
+            'geolocation',
+            permission.state === 'denied' ? 'denied' : 'requested'
+          );
         }
       };
     }
@@ -109,7 +113,7 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
       }
       if (!isGranted(permission)) {
         if (permission.location === 'denied') {
-          saveDesktopPermissionChoice('geolocation', 'denied');
+          await saveDesktopPermissionChoice('geolocation', 'denied');
         }
         clearLocation(
           permission.location === 'denied' ? 'denied' : 'permission_required'
@@ -121,7 +125,7 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
       lastAttemptAt = Date.now();
       const currentGeneration = generation;
       if (!getDesktopPermissionChoice('geolocation')) {
-        saveDesktopPermissionChoice('geolocation', 'requested');
+        await saveDesktopPermissionChoice('geolocation', 'requested');
       }
       const position = await Geolocation.getCurrentPosition({
         enableHighAccuracy: permission.location === 'granted',
@@ -142,8 +146,9 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
       ) {
         throw new Error('Не удалось получить актуальную геолокацию.');
       }
+      await saveDesktopPermissionChoice('geolocation', 'granted');
+      if (currentGeneration !== generation) return;
       sampledAt = position.timestamp;
-      saveDesktopPermissionChoice('geolocation', 'granted');
       status = 'resolved';
       deviceLocation = {
         source: 'device',
@@ -155,7 +160,7 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
       };
     } catch (error) {
       const denied = Number(error?.code) === 1;
-      if (denied) saveDesktopPermissionChoice('geolocation', 'denied');
+      if (denied) await saveDesktopPermissionChoice('geolocation', 'denied');
       clearLocation(denied ? 'denied' : 'unavailable');
     }
   })().finally(() => {

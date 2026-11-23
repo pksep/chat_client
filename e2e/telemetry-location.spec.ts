@@ -215,6 +215,76 @@ test('отзыв системного разрешения во время за�
   expect(result.device).toEqual({ status: 'denied' });
 });
 
+test('Tauri: отзыв геолокации во время записи ответа не публикует координаты и сохраняет отказ', async ({
+  page
+}) => {
+  const result = await page.evaluate(async () => {
+    (window as any).isTauri = true;
+    const { mockIPC } = await import('/node_modules/@tauri-apps/api/mocks.js');
+    let release!: () => void;
+    let signalStarted!: () => void;
+    const started = new Promise<void>(resolve => {
+      signalStarted = resolve;
+    });
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    let saved: unknown;
+    const commands: string[] = [];
+    mockIPC(async (command, args) => {
+      commands.push(command);
+      if (command === 'desktop_load_permission_preferences') return {};
+      if (command === 'desktop_save_permission_choice') {
+        if (args.choice === 'granted') {
+          signalStarted();
+          await gate;
+        }
+        saved = args.choice;
+      }
+    });
+    const { preferences: prefs, location: geo } = await import(
+      '/e2e/fixtures/telemetry-location-permissions.ts'
+    );
+    await prefs.initializeDesktopPermissionPreferences();
+    const permission = {
+      state: 'granted',
+      onchange: null as null | (() => void)
+    };
+    Object.defineProperty(navigator.permissions, 'query', {
+      value: async () => permission
+    });
+    Object.defineProperty(navigator.geolocation, 'getCurrentPosition', {
+      value: (resolve: PositionCallback) =>
+        resolve({
+          timestamp: Date.now(),
+          coords: { latitude: 40, longitude: 44, accuracy: 20 }
+        } as GeolocationPosition)
+    });
+    const refresh = geo.initTelemetryLocation();
+    await Promise.race([
+      started,
+      refresh.then(() => {
+        throw new Error(
+          `Не началась запись разрешения: ${commands.join(', ')}`
+        );
+      })
+    ]);
+    permission.state = 'denied';
+    permission.onchange?.();
+    release();
+    await refresh;
+    await prefs.flushDesktopPermissionPreferences();
+    return {
+      context: geo.getTelemetryLocationContext(),
+      choice: prefs.getDesktopPermissionChoice('geolocation'),
+      saved
+    };
+  });
+  expect(result.context.device).toEqual({ status: 'denied' });
+  expect(result.choice).toBe('denied');
+  expect(result.saved).toBe('denied');
+});
+
 test('ошибка GPS оставляет диагностику без координат и не прерывает выполнение', async ({
   page
 }) => {

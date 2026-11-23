@@ -88,6 +88,28 @@ async function openShell(
             if (command === 'plugin:window|toggle_maximize')
               win.shellState.maximized = !win.shellState.maximized;
             if (command === 'desktop_media_permissions_available') return true;
+            if (command === 'desktop_load_permission_preferences') {
+              const saved = sessionStorage.getItem('shell-native-permissions');
+              if (saved) return JSON.parse(saved);
+              sessionStorage.setItem(
+                'shell-native-permissions',
+                JSON.stringify(args.legacy)
+              );
+              return args.legacy;
+            }
+            if (command === 'desktop_save_permission_choice') {
+              const saved = JSON.parse(
+                sessionStorage.getItem('shell-native-permissions') || '{}'
+              );
+              saved[args.permission] = args.choice;
+              sessionStorage.setItem(
+                'shell-native-permissions',
+                JSON.stringify(saved)
+              );
+            }
+            if (command === 'desktop_reset_permission_preferences') {
+              sessionStorage.setItem('shell-native-permissions', '{}');
+            }
             if (command === 'desktop_screen_capture_available')
               return {
                 supported: true,
