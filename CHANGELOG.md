@@ -1,3 +1,11 @@
+## [1.54.2](https://github.com/pksep/chat_client/compare/v1.54.1...v1.54.2) (2026-11-23)
+
+
+### Bug Fixes
+
+* keep reaction picker anchored to the message menu [skip ci] ([1549152](https://github.com/pksep/chat_client/commit/154915289a03845176d7954e745261aabb82dd50))
+* preserve desktop permissions through updates and restore Windows notifications ([88b3c85](https://github.com/pksep/chat_client/commit/88b3c85a1952d1bf4a91ec585b1045b924bfa9aa))
+
 ## [1.54.1](https://github.com/pksep/chat_client/compare/v1.54.0...v1.54.1) (2026-11-20)
 
 
