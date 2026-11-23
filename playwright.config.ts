@@ -47,6 +47,7 @@ export default defineConfig({
         'desktop-shell.spec.ts',
         'telemetry-location.spec.ts',
         'desktop-app-download.spec.ts',
+        'message-reaction-picker-position.spec.ts',
         'forward-modal-desktop.spec.ts',
         'creation-modal-desktop.spec.ts'
       ],

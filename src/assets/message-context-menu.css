@@ -31,33 +31,9 @@
     transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.message-context-menu__emoji-picker--origin-top-right.emoji-picker-panel {
-  transform-origin: top right;
-}
-
-.message-context-menu__emoji-picker--origin-bottom-left.emoji-picker-panel {
-  transform-origin: bottom left;
-}
-
-.message-context-menu__emoji-picker--origin-bottom-right.emoji-picker-panel {
-  transform-origin: bottom right;
-}
-
 .message-context-menu__emoji-picker--ready.emoji-picker-panel {
   opacity: 1;
   transform: translateY(0) scale(1);
-}
-
-.context-menu--flip .message-context-menu__emoji-picker {
-  transform-origin: top right;
-}
-
-.context-menu--flip-y .message-context-menu__emoji-picker {
-  transform-origin: bottom left;
-}
-
-.context-menu--flip.context-menu--flip-y .message-context-menu__emoji-picker {
-  transform-origin: bottom right;
 }
 
 .select-reactions {

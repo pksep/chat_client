@@ -56,8 +56,7 @@
       :class="[
         'message-context-menu__emoji-picker',
         {
-          'message-context-menu__emoji-picker--ready': emojiPickerReady,
-          [`message-context-menu__emoji-picker--origin-${emojiPickerOrigin}`]: true
+          'message-context-menu__emoji-picker--ready': emojiPickerReady
         }
       ]"
       v-on-click-outside="toggleShowEmojies"
@@ -747,18 +746,10 @@ const reactionsPositionReady = ref(false);
 const showEmojies = ref(false);
 const emojiPickerReady = ref(false);
 const emojiPickerPosition = ref<{ x: number; y: number } | null>(null);
-const emojiPickerOrigin = ref<
-  'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
->('bottom-right');
 const showReadDetails = ref(false);
 let readDetailsHoverTimeout: ReturnType<typeof setTimeout> | null = null;
 let reactionLayoutObserver: ResizeObserver | null = null;
 let emojiPickerRevealFrame: number | null = null;
-
-const EMOJI_PICKER_WIDTH = 359;
-const EMOJI_PICKER_HEIGHT = 382;
-const EMOJI_PICKER_VIEWPORT_GAP = 8;
-const EMOJI_PICKER_TRIGGER_GAP = 5;
 
 const contextMenuPosition = computed(() =>
   showEmojies.value && emojiPickerPosition.value
@@ -785,53 +776,15 @@ const preserveComposerFocus = (event: Event) => {
 };
 
 const setEmojiPickerPosition = (trigger: HTMLElement): void => {
-  const triggerRect = trigger.getBoundingClientRect();
-  const viewport = getVisibleViewport();
-  const pickerWidth = Math.min(
-    EMOJI_PICKER_WIDTH,
-    viewport.width - EMOJI_PICKER_VIEWPORT_GAP * 2
-  );
-  const pickerHeight = Math.min(
-    EMOJI_PICKER_HEIGHT,
-    viewport.height - EMOJI_PICKER_VIEWPORT_GAP * 2
-  );
-  const canOpenLeft =
-    triggerRect.right - pickerWidth >=
-    viewport.left + EMOJI_PICKER_VIEWPORT_GAP;
-  const canOpenAbove =
-    triggerRect.top - EMOJI_PICKER_TRIGGER_GAP - pickerHeight >=
-    viewport.top + EMOJI_PICKER_VIEWPORT_GAP;
-  const opensLeft =
-    canOpenLeft ||
-    triggerRect.left + pickerWidth > viewport.right - EMOJI_PICKER_VIEWPORT_GAP;
-  const opensAbove =
-    canOpenAbove ||
-    triggerRect.bottom + EMOJI_PICKER_TRIGGER_GAP + pickerHeight >
-      viewport.bottom - EMOJI_PICKER_VIEWPORT_GAP;
-  const preferredX = opensLeft
-    ? triggerRect.right - pickerWidth
-    : triggerRect.left;
-  const preferredY = opensAbove
-    ? triggerRect.top - EMOJI_PICKER_TRIGGER_GAP - pickerHeight
-    : triggerRect.bottom + EMOJI_PICKER_TRIGGER_GAP;
+  const menu = trigger.closest('.message-context-menu');
+  if (!menu) return;
 
+  const menuRect = menu.getBoundingClientRect();
+  // Панель заменяет меню; ContextMenu подвинет её только при нехватке места.
   emojiPickerPosition.value = {
-    x: Math.min(
-      Math.max(viewport.left + EMOJI_PICKER_VIEWPORT_GAP, preferredX),
-      viewport.right - EMOJI_PICKER_VIEWPORT_GAP - pickerWidth
-    ),
-    y: Math.min(
-      Math.max(viewport.top + EMOJI_PICKER_VIEWPORT_GAP, preferredY),
-      viewport.bottom - EMOJI_PICKER_VIEWPORT_GAP - pickerHeight
-    )
+    x: menuRect.left,
+    y: menuRect.top
   };
-  emojiPickerOrigin.value = opensAbove
-    ? opensLeft
-      ? 'bottom-right'
-      : 'bottom-left'
-    : opensLeft
-      ? 'top-right'
-      : 'top-left';
 };
 
 const resolveElement = (
