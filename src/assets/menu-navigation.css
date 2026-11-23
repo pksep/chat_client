@@ -224,9 +224,12 @@
   height: 80px;
 }
 .menu-profile__identity {
-  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   width: max-content;
-  max-width: calc(100% - 50px);
+  max-width: 100%;
 }
 .menu-profile__identity-name {
   min-width: 0;
@@ -238,9 +241,8 @@
   overflow-wrap: anywhere;
 }
 .menu-profile__identity .menu-profile__status-tooltip {
-  position: absolute;
-  left: calc(100% + 5px);
-  top: -2px;
+  position: relative;
+  flex: 0 0 20px;
 }
 .menu-profile__identity-status {
   flex: 0 0 20px;

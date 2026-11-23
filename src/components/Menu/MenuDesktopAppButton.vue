@@ -1,6 +1,7 @@
 <template>
-  <div
+  <MenuDesktopAppVisibility
     v-if="isDesktopBrowser"
+    @hide="clearLaunchAttempt"
     :class="[
       'menu-native-app',
       { 'menu-native-app--collapse': props.isCollapse }
@@ -37,7 +38,7 @@
         }}</span
       >
     </a>
-  </div>
+  </MenuDesktopAppVisibility>
 </template>
 
 <script setup lang="ts">
@@ -46,6 +47,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { onMounted, onBeforeUnmount, ref, useTemplateRef } from 'vue';
 import { onClickOutside, onKeyStroke } from '@vueuse/core';
 import { Icon, IconNameEnum } from '@pksep/yui';
+import MenuDesktopAppVisibility from './MenuDesktopAppVisibility.vue';
 import {
   DESKTOP_APP_OPEN_URL,
   DESKTOP_APP_DOWNLOAD_PAGE_URL,
