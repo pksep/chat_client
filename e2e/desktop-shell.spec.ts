@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { devices, expect, test, type Page } from '@playwright/test';
 
 test.setTimeout(90_000);
 
@@ -16,6 +16,11 @@ async function openShell(
   await page.addInitScript(
     ({ tauri, decorated, screenPermission, fullApp }) => {
       const win = window as any;
+      // Геометрия и клики проверяются без временного оверлея смены темы.
+      Object.defineProperty(document, 'startViewTransition', {
+        value: undefined,
+        configurable: true
+      });
       win.shellCalls = [];
       win.shellCaptureCalls = [];
       win.shellScreenPermission = screenPermission !== false;
@@ -260,67 +265,75 @@ test('Полноэкранное видео звонка и панели пом�
   expect((await overlay.boundingBox())!.height).toBe(640);
 });
 
-test('Tauri: окно целиком помещается под шапкой, сворачивание списка доступно', async ({
-  page
-}) => {
-  // Этот сценарий проверяет desktop layout даже при мобильном browser project.
-  await page.setViewportSize({ width: 960, height: 640 });
-  await openShell(page, {
-    tauri: true,
-    decorated: false,
-    theme: 'light',
-    fullApp: true
+test.describe('desktop application geometry', () => {
+  test.use({
+    isMobile: false,
+    hasTouch: false,
+    userAgent: devices['Desktop Chrome'].userAgent
   });
-  const collapse = page.locator('.chats-toolbar__collapse');
-  const checkLayout = async (titlebarHeight: number) => {
-    const geometry = await page.evaluate(() => {
-      const box = (selector: string) => {
-        const { top, bottom, height } = document
-          .querySelector(selector)!
-          .getBoundingClientRect();
-        return { top, bottom, height };
-      };
-      return {
-        viewport: innerHeight,
-        scrollHeight: document.scrollingElement!.scrollHeight,
-        body: box('body'),
-        root: box('#app'),
-        content: box('.chat-container'),
-        collapse: box('.chats-toolbar__collapse')
-      };
+  test('Tauri: окно целиком помещается под шапкой, сворачивание списка доступно', async ({
+    page
+  }) => {
+    // Этот сценарий проверяет desktop layout даже при мобильном browser project.
+    await page.setViewportSize({ width: 960, height: 640 });
+    await openShell(page, {
+      tauri: true,
+      decorated: false,
+      theme: 'light',
+      fullApp: true
     });
-    expect(geometry.scrollHeight, JSON.stringify(geometry)).toBeLessThanOrEqual(
-      geometry.viewport
-    );
-    expect(geometry.content.bottom).toBeLessThanOrEqual(geometry.viewport);
-    expect(geometry.content.top).toBe(titlebarHeight);
-    expect(geometry.collapse.top).toBe(titlebarHeight + 20);
-  };
-  for (const viewport of [
-    { width: 960, height: 640 },
-    { width: 1280, height: 800 }
-  ]) {
-    await page.setViewportSize(viewport);
-    await checkLayout(36);
-    await collapse.click();
-    await expect(page.locator('.menu')).toHaveClass(/menu--collapse/);
-    await checkLayout(36);
-    await collapse.click();
-    await expect(page.locator('.menu')).not.toHaveClass(/menu--collapse/);
-  }
-  for (const fullscreen of [true, false]) {
-    await page.evaluate(fullscreen => {
-      (window as any).shellState.fullscreen = fullscreen;
-      (window as any).emitShellEvent('tauri://resize', {
-        width: innerWidth,
-        height: innerHeight
+    const collapse = page.locator('.chats-toolbar__collapse');
+    const checkLayout = async (titlebarHeight: number) => {
+      const geometry = await page.evaluate(() => {
+        const box = (selector: string) => {
+          const { top, bottom, height } = document
+            .querySelector(selector)!
+            .getBoundingClientRect();
+          return { top, bottom, height };
+        };
+        return {
+          viewport: innerHeight,
+          scrollHeight: document.scrollingElement!.scrollHeight,
+          body: box('body'),
+          root: box('#app'),
+          content: box('.chat-container'),
+          collapse: box('.chats-toolbar__collapse')
+        };
       });
-    }, fullscreen);
-    await expect(page.getByTestId('DesktopTitleBar')).toHaveCount(
-      fullscreen ? 0 : 1
-    );
-    await checkLayout(fullscreen ? 0 : 36);
-  }
+      expect(
+        geometry.scrollHeight,
+        JSON.stringify(geometry)
+      ).toBeLessThanOrEqual(geometry.viewport);
+      expect(geometry.content.bottom).toBeLessThanOrEqual(geometry.viewport);
+      expect(geometry.content.top).toBe(titlebarHeight);
+      expect(geometry.collapse.top).toBe(titlebarHeight + 20);
+    };
+    for (const viewport of [
+      { width: 960, height: 640 },
+      { width: 1280, height: 800 }
+    ]) {
+      await page.setViewportSize(viewport);
+      await checkLayout(36);
+      await collapse.click();
+      await expect(page.locator('.menu')).toHaveClass(/menu--collapse/);
+      await checkLayout(36);
+      await collapse.click();
+      await expect(page.locator('.menu')).not.toHaveClass(/menu--collapse/);
+    }
+    for (const fullscreen of [true, false]) {
+      await page.evaluate(fullscreen => {
+        (window as any).shellState.fullscreen = fullscreen;
+        (window as any).emitShellEvent('tauri://resize', {
+          width: innerWidth,
+          height: innerHeight
+        });
+      }, fullscreen);
+      await expect(page.getByTestId('DesktopTitleBar')).toHaveCount(
+        fullscreen ? 0 : 1
+      );
+      await checkLayout(fullscreen ? 0 : 36);
+    }
+  });
 });
 
 test('Шапка Tauri: управление окном и отступы без полосы прокрутки', async ({
