@@ -66,7 +66,27 @@ if (showCall) {
     '../../src/components/CallModal/CallModal.vue'
   );
   const call = await import('../../src/services/useCallState');
-  const stream = new MediaStream();
+  // Playwright WebKit на Windows не содержит MediaStream; здесь проверяется геометрия.
+  if (typeof MediaStream === 'undefined') {
+    const assigned = new WeakMap<HTMLMediaElement, MediaStream>();
+    Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', {
+      configurable: true,
+      get() {
+        return assigned.get(this) ?? null;
+      },
+      set(value: MediaStream) {
+        assigned.set(this, value);
+      }
+    });
+  }
+  const stream =
+    typeof MediaStream === 'undefined'
+      ? ({
+          getTracks: () => [],
+          getVideoTracks: () => [],
+          getAudioTracks: () => []
+        } as unknown as MediaStream)
+      : new MediaStream();
   call.user.value = { id: 'layout-peer', initials: 'Проверка звонка' } as any;
   call.roomId.value = 'layout-only-no-network';
   call.remoteParticipants.value = [

@@ -246,8 +246,12 @@ test('Полноэкранное видео звонка и панели пом�
       .toBeLessThanOrEqual(height + 1);
   }
   await page.mouse.move(400, 90);
+  await expect(
+    overlay.locator('.call-modal__video-overlay-bar--top')
+  ).toBeVisible();
   await page.screenshot({
-    path: testInfo.outputPath('call-below-titlebar.png')
+    path: testInfo.outputPath('call-below-titlebar.png'),
+    animations: 'disabled'
   });
   await page.evaluate(() =>
     document.documentElement.classList.remove('chat-desktop-custom-chrome')
