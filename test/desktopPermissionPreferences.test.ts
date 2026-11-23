@@ -217,3 +217,38 @@ test('обёртка буфера сохраняет параметры чтен
   expect(received).toBe(options);
   dispose();
 });
+
+test('отключение буфера блокирует новое чтение и результат уже начатого чтения', async () => {
+  let complete!: (value: string) => void;
+  let reads = 0;
+  const clipboard = {
+    readText: () => {
+      reads++;
+      return new Promise<string>(resolve => {
+        complete = resolve;
+      });
+    }
+  };
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { clipboard }
+  });
+  const dispose = preferences.installDesktopClipboardPermissions();
+  try {
+    const pending = clipboard.readText();
+    const result = pending.then(
+      () => null,
+      error => error
+    );
+    await preferences.saveDesktopPermissionChoice('clipboard-read', 'denied');
+    complete('Не должно передаваться приложению');
+    expect(await result).toBeInstanceOf(DOMException);
+    await expect(clipboard.readText()).rejects.toBeInstanceOf(DOMException);
+    expect(reads).toBe(1);
+    expect(preferences.getDesktopPermissionChoice('clipboard-read')).toBe(
+      'denied'
+    );
+  } finally {
+    dispose();
+  }
+});

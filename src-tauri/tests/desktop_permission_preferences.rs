@@ -1,3 +1,5 @@
+#[path = "../src/desktop_media_permissions.rs"]
+mod desktop_media_permissions;
 #[path = "../src/desktop_permission_preferences.rs"]
 mod desktop_permission_preferences;
 
@@ -30,6 +32,7 @@ fn all_choices_survive_a_new_store_without_webview_data() {
         (Permission::Geolocation, Choice::Denied),
         (Permission::ClipboardRead, Choice::Granted),
         (Permission::Notifications, Choice::Requested),
+        (Permission::ScreenCapture, Choice::Denied),
     ]);
     let mut store = PreferenceStore::open(path.clone(), Preferences::new()).unwrap();
     for (permission, choice) in &choices {
@@ -39,6 +42,34 @@ fn all_choices_survive_a_new_store_without_webview_data() {
     let reopened = PreferenceStore::open(path.clone(), Preferences::new()).unwrap();
     assert_eq!(reopened.choices(), choices);
     fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn revoking_one_permission_keeps_other_devices_allowed() {
+    use desktop_media_permissions::{DesktopMediaPermissions, MediaPermission};
+    use tauri::webview::PermissionResponse;
+    let state = DesktopMediaPermissions::default();
+    state.set_choice(MediaPermission::Microphone, Some(true));
+    state.set_choice(MediaPermission::Camera, Some(true));
+    state.set_choice(MediaPermission::Microphone, Some(false));
+    assert!(matches!(
+        state.response_for(MediaPermission::Microphone),
+        PermissionResponse::Deny
+    ));
+    assert!(matches!(
+        state.response_for(MediaPermission::Camera),
+        PermissionResponse::Allow
+    ));
+    state.set_choice(MediaPermission::Microphone, Some(true));
+    assert!(matches!(
+        state.response_for(MediaPermission::Microphone),
+        PermissionResponse::Allow
+    ));
+    state.set_choice(MediaPermission::Microphone, None);
+    assert!(matches!(
+        state.response_for(MediaPermission::Microphone),
+        PermissionResponse::Default
+    ));
 }
 
 #[test]

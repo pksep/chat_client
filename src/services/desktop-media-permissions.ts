@@ -1,5 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
-import { shallowRef } from 'vue';
+import { shallowRef, watch } from 'vue';
 import {
   getDesktopPermissionChoice,
   restoreDesktopWebviewPermissions,
@@ -28,7 +28,13 @@ const ask = (
   isActive: () => boolean
 ): Promise<boolean> => {
   const task = queue.then(async () => {
-    if (!isActive()) return false;
+    if (
+      !isActive() ||
+      permissions.some(
+        permission => getDesktopPermissionChoice(permission) === 'denied'
+      )
+    )
+      return false;
     const missing = permissions.filter(permission => !granted.has(permission));
     if (!missing.length) return true;
     const needsConfirmation = missing.filter(
@@ -42,9 +48,22 @@ const ask = (
           permissions: needsConfirmation
         };
       }));
-    if (!allowed || !isActive()) return false;
+    if (
+      !allowed ||
+      !isActive() ||
+      permissions.some(
+        permission => getDesktopPermissionChoice(permission) === 'denied'
+      )
+    )
+      return false;
     await invoke('desktop_grant_media_permissions', { permissions: missing });
-    if (!isActive()) return false;
+    if (
+      !isActive() ||
+      permissions.some(
+        permission => getDesktopPermissionChoice(permission) === 'denied'
+      )
+    )
+      return false;
     await Promise.all(
       missing.map(async permission => {
         granted.add(permission);
@@ -75,17 +94,60 @@ export const installDesktopMediaPermissions = async (): Promise<() => void> => {
   const devices = navigator.mediaDevices;
   const original = devices.getUserMedia;
   let active = true;
+  const tracks = new Map<DesktopMediaPermission, Set<MediaStreamTrack>>();
+  const stopWatching = watch(
+    () => [
+      getDesktopPermissionChoice('microphone'),
+      getDesktopPermissionChoice('camera')
+    ],
+    () => {
+      for (const permission of ['microphone', 'camera'] as const) {
+        if (getDesktopPermissionChoice(permission) !== 'denied') continue;
+        granted.delete(permission);
+        tracks.get(permission)?.forEach(track => track.stop());
+        tracks.delete(permission);
+        if (
+          desktopMediaPermissionRequest.value?.permissions.includes(permission)
+        )
+          resolveDesktopMediaPermission(false);
+      }
+    },
+    { flush: 'sync' }
+  );
   const wrapped: MediaDevices['getUserMedia'] = async constraints => {
     const permissions: DesktopMediaPermission[] = [];
     if (constraints?.audio) permissions.push('microphone');
     if (constraints?.video) permissions.push('camera');
     if (permissions.length && !(await ask(permissions, () => active)))
       throw new DOMException('Доступ к устройству отклонён', 'NotAllowedError');
-    return original.call(devices, constraints);
+    const stream = await original.call(devices, constraints);
+    for (const permission of permissions) {
+      const captured =
+        permission === 'microphone'
+          ? stream.getAudioTracks()
+          : stream.getVideoTracks();
+      if (getDesktopPermissionChoice(permission) === 'denied') {
+        stream.getTracks().forEach(track => track.stop());
+        throw new DOMException(
+          'Доступ к устройству отозван',
+          'NotAllowedError'
+        );
+      }
+      const known = tracks.get(permission) ?? new Set<MediaStreamTrack>();
+      captured.forEach(track => {
+        known.add(track);
+        track.addEventListener('ended', () => known.delete(track), {
+          once: true
+        });
+      });
+      tracks.set(permission, known);
+    }
+    return stream;
   };
   devices.getUserMedia = wrapped;
   return () => {
     active = false;
+    stopWatching();
     resolveDesktopMediaPermission(false);
     if (devices.getUserMedia === wrapped) devices.getUserMedia = original;
   };

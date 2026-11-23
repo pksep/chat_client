@@ -25,6 +25,24 @@
       <p id="desktop-media-permission-description">
         {{ description }}
       </p>
+      <ul
+        class="desktop-media-permission__list"
+        aria-label="Запрашиваемые разрешения"
+      >
+        <li v-if="needsMicrophone">
+          <MicIcon aria-hidden="true" />
+          <span
+            ><strong>Микрофон</strong
+            ><span>Звонки и голосовые сообщения</span></span
+          >
+          <span class="desktop-media-permission__status">Нужен доступ</span>
+        </li>
+        <li v-if="needsCamera">
+          <VideoIcon aria-hidden="true" />
+          <span><strong>Камера</strong><span>Видео во время звонка</span></span>
+          <span class="desktop-media-permission__status">Нужен доступ</span>
+        </li>
+      </ul>
       <div class="desktop-media-permission__actions">
         <Button
           :type="ButtonTypeEnum.secondary"
@@ -191,6 +209,43 @@ p {
   gap: 10px;
   width: 100%;
   margin-top: 8px;
+}
+
+.desktop-media-permission__list {
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.desktop-media-permission__list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-table);
+  font-size: 13px;
+}
+.desktop-media-permission__list li > svg {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  color: var(--text-secondary);
+}
+.desktop-media-permission__list li > span:first-of-type {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.desktop-media-permission__list strong {
+  font-size: 14px;
+}
+.desktop-media-permission__list span span {
+  color: var(--text-secondary);
+}
+.desktop-media-permission__status {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--text-secondary);
 }
 
 .desktop-media-permission__actions :deep(button) {

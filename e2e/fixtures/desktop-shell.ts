@@ -60,6 +60,40 @@ const app = createApp({
 const dispose = await installDesktopMediaPermissions();
 await initDesktopScreenCapture();
 app.use(pinia).mount(host);
+const showCall = new URLSearchParams(location.search).has('call');
+if (showCall) {
+  const { default: CallModal } = await import(
+    '../../src/components/CallModal/CallModal.vue'
+  );
+  const call = await import('../../src/services/useCallState');
+  const stream = new MediaStream();
+  call.user.value = { id: 'layout-peer', initials: 'Проверка звонка' } as any;
+  call.roomId.value = 'layout-only-no-network';
+  call.remoteParticipants.value = [
+    {
+      identity: 'layout-peer',
+      name: 'Проверка звонка',
+      videoStream: stream,
+      cameraStream: stream,
+      screenShareStream: null,
+      audioStream: null,
+      isVideoActive: true,
+      isScreenShareActive: false,
+      isHandRaised: false,
+      activeReaction: null,
+      activeReactionExpiresAt: null,
+      isSpeaking: false,
+      audioLevel: 0,
+      isMicActive: false,
+      connectionQuality: 'excellent'
+    }
+  ];
+  call.open.value = true;
+  call.isModalVisible.value = true;
+  const callHost = document.createElement('div');
+  document.body.append(callHost);
+  createApp(CallModal).use(pinia).mount(callHost);
+}
 const output = document.createElement('output');
 output.dataset.testid = 'DesktopShellCaptureResult';
 document.body.append(output);

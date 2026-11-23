@@ -4,6 +4,7 @@
       ref="trigger"
       type="button"
       class="menu-profile__row profile-qr-login__trigger"
+      :class="{ 'profile-qr-login__trigger--tile': props.tile }"
       aria-haspopup="dialog"
       :aria-expanded="isOpen"
       :aria-controls="dialogId"
@@ -17,7 +18,7 @@
         :height="20"
         aria-hidden="true"
       />
-      <span>Авторизоваться через QR</span>
+      <span>{{ props.tile ? 'Войти по QR' : 'Авторизоваться через QR' }}</span>
     </button>
 
     <Teleport to="body">
@@ -73,9 +74,13 @@ import {
   useBackButtonHandler
 } from '../../composables/useBackButton';
 
-const props = withDefaults(defineProps<{ dataTestid?: string }>(), {
-  dataTestid: 'ProfileQrLogin'
-});
+const props = withDefaults(
+  defineProps<{ dataTestid?: string; tile?: boolean }>(),
+  {
+    dataTestid: 'ProfileQrLogin',
+    tile: false
+  }
+);
 const dialogId = useId();
 const trigger = useTemplateRef<HTMLButtonElement>('trigger');
 const popover = useTemplateRef<HTMLElement>('popover');
@@ -185,6 +190,16 @@ onBeforeUnmount(clear);
 
 .profile-qr-login__trigger .menu-profile__icon {
   flex-shrink: 0;
+}
+
+.profile-qr-login__trigger--tile {
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  height: 66px;
+  padding: 10px;
+  line-height: 18px;
+  text-align: center;
 }
 
 @media (hover: hover) {

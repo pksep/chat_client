@@ -10,7 +10,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/__telemetry-location');
 });
 
-test('Tauri: отказ геолокации переживает перезапуск, включённое разрешение ОС восстанавливает работу', async ({
+test('Tauri: отказ геолокации переживает перезапуск, включение в профиле восстанавливает работу', async ({
   page
 }) => {
   await page.addInitScript(() => {
@@ -56,6 +56,14 @@ test('Tauri: отказ геолокации переживает перезап
   await page.evaluate(() =>
     sessionStorage.setItem('location-system-granted', 'true')
   );
+  await page.reload();
+  expect((await initialize()).calls).toBe(0);
+  await page.evaluate(async () => {
+    const { saveDesktopPermissionChoice } = await import(
+      '/src/services/desktop-permission-preferences.ts'
+    );
+    await saveDesktopPermissionChoice('geolocation', 'granted');
+  });
   await page.reload();
   const allowed = await initialize();
   expect(allowed.calls).toBe(1);

@@ -19,11 +19,46 @@
       />
     </button>
     <div v-if="open" class="menu-profile__wallpapers-menu">
-      <p class="menu-profile__update-description">
-        Выбор доступа к микрофону, камере, геолокации, уведомлениям и буферу
-        обмена сохраняется между запусками и обновлениями. Экран или окно для
-        демонстрации выбирается каждый раз отдельно.
-      </p>
+      <p class="desktop-permissions__caption">Доступ в СЭП Чате</p>
+      <ul class="desktop-permissions__list" aria-label="Разрешения СЭП Чата">
+        <li
+          v-for="permission in permissionRows"
+          :key="permission.id"
+          class="desktop-permissions__row"
+        >
+          <button
+            type="button"
+            class="desktop-permissions__control"
+            role="switch"
+            :aria-label="permission.label"
+            :aria-checked="permission.granted"
+            :disabled="changing !== null"
+            :aria-description="
+              permission.id === 'screen-capture'
+                ? 'Источник демонстрации выбирается каждый раз'
+                : permission.status
+            "
+            @click="togglePermission(permission.id)"
+          >
+            <span class="desktop-permissions__label">{{
+              permission.label
+            }}</span>
+            <span
+              class="desktop-permissions__status"
+              :class="{
+                'desktop-permissions__status--granted': permission.granted
+              }"
+              >{{ permission.status }}</span
+            >
+            <span
+              class="desktop-permissions__switch"
+              :class="{ 'desktop-permissions__switch--on': permission.granted }"
+              aria-hidden="true"
+              ><span
+            /></span>
+          </button>
+        </li>
+      </ul>
       <p
         v-if="desktopNotificationsBlocked"
         role="status"
@@ -40,17 +75,6 @@
         Не удалось проверить системный доступ к уведомлениям. Если баннеров нет,
         проверьте настройки уведомлений компьютера.
       </p>
-      <div class="menu-profile__wallpapers-actions">
-        <Button
-          :type="ButtonTypeEnum.secondary"
-          :size="SizesEnum.small"
-          :data-testid="`${props.dataTestid}-ResetButton`"
-          :disabled="resetting"
-          @click="reset"
-        >
-          Запросить разрешения заново
-        </Button>
-      </div>
       <p
         v-if="desktopPermissionStorageWarning"
         role="alert"
@@ -66,21 +90,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import {
-  Button,
-  ButtonTypeEnum,
-  Icon,
-  IconNameEnum,
-  SizesEnum
-} from '@pksep/yui';
+import { computed, ref } from 'vue';
+import { Icon, IconNameEnum } from '@pksep/yui';
 import {
   desktopPermissionStorageWarning,
-  resetDesktopPermissionChoices
+  getDesktopPermissionChoice,
+  saveDesktopPermissionChoice,
+  type DesktopPermission
 } from '../../services/desktop-permission-preferences';
 import {
   desktopNotificationsBlocked,
-  desktopNotificationCheckFailed
+  desktopNotificationCheckFailed,
+  ensureDesktopNotificationPermission
 } from '../../services/desktop-notification-permissions';
 
 const props = withDefaults(defineProps<{ dataTestid?: string }>(), {
@@ -88,12 +109,132 @@ const props = withDefaults(defineProps<{ dataTestid?: string }>(), {
 });
 const open = ref(false);
 const message = ref('');
-const resetting = ref(false);
-const reset = async () => {
-  resetting.value = true;
-  message.value = (await resetDesktopPermissionChoices())
-    ? 'Ответы сброшены. При следующем запуске приложение снова запросит доступ по мере необходимости. Системные разрешения не изменены.'
-    : 'Не удалось сбросить ответы. Повторите попытку.';
-  resetting.value = false;
+const changing = ref<DesktopPermission | null>(null);
+const permissionRows = computed(() => {
+  const rows = (
+    [
+      ['microphone', 'Микрофон'],
+      ['camera', 'Камера'],
+      ['geolocation', 'Геолокация'],
+      ['notifications', 'Уведомления'],
+      ['clipboard-read', 'Буфер обмена'],
+      ['screen-capture', 'Демонстрация экрана']
+    ] as const
+  ).map(([id, label]) => {
+    const choice = getDesktopPermissionChoice(id);
+    const blocked = id === 'notifications' && desktopNotificationsBlocked.value;
+    return {
+      id,
+      label,
+      granted: choice === 'granted' && !blocked,
+      status: blocked
+        ? 'Отключено в системе'
+        : choice === 'granted'
+          ? 'Разрешено'
+          : choice === 'denied'
+            ? 'Не разрешено'
+            : choice === 'requested'
+              ? 'Нужен доступ'
+              : 'Не запрошено'
+    };
+  });
+  return rows;
+});
+const togglePermission = async (
+  permission: DesktopPermission
+): Promise<void> => {
+  if (changing.value) return;
+  changing.value = permission;
+  message.value = '';
+  try {
+    const allowed = getDesktopPermissionChoice(permission) !== 'granted';
+    if (permission === 'notifications' && allowed) {
+      if (!(await ensureDesktopNotificationPermission({ interactive: true })))
+        message.value =
+          'Разрешите уведомления СЭП Чата в настройках компьютера.';
+    } else {
+      await saveDesktopPermissionChoice(
+        permission,
+        allowed ? 'granted' : 'denied'
+      );
+    }
+  } catch {
+    message.value = 'Не удалось изменить разрешение. Повторите попытку.';
+  } finally {
+    changing.value = null;
+  }
 };
 </script>
+
+<style scoped>
+.desktop-permissions__list {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.desktop-permissions__caption {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+.desktop-permissions__row {
+  border-bottom: 1px solid var(--border-table);
+}
+.desktop-permissions__control {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 18px;
+}
+.desktop-permissions__label {
+  flex: 1;
+  color: var(--text-primary);
+}
+.desktop-permissions__status {
+  max-width: 55%;
+  color: var(--text-secondary);
+  text-align: right;
+}
+.desktop-permissions__control:focus-visible {
+  outline: 2px solid var(--text-link);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.desktop-permissions__switch {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 16px;
+  padding: 3px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: var(--border-table);
+}
+.desktop-permissions__switch > span {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--white, #fff);
+  transition: transform 150ms ease;
+}
+.desktop-permissions__switch--on {
+  background: var(--action-primary-bg);
+}
+.desktop-permissions__switch--on > span {
+  transform: translateX(10px);
+}
+.desktop-permissions__status--granted {
+  color: var(--text-link);
+}
+</style>

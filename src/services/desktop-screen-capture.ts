@@ -1,5 +1,6 @@
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core';
-import { shallowRef } from 'vue';
+import { shallowRef, watch } from 'vue';
+import { getDesktopPermissionChoice } from './desktop-permission-preferences';
 
 export interface DesktopCaptureSource {
   id: string;
@@ -57,8 +58,23 @@ export const stopDesktopScreenCapture = () => {
   activeStop?.();
 };
 
+watch(
+  () => getDesktopPermissionChoice('screen-capture'),
+  choice => {
+    if (choice === 'denied') stopDesktopScreenCapture();
+  },
+  { flush: 'sync' }
+);
+
 export const prepareDesktopScreenCapture =
   (): Promise<MediaStreamTrack> | null => {
+    if (isTauri() && getDesktopPermissionChoice('screen-capture') === 'denied')
+      return Promise.reject(
+        new DOMException(
+          'Демонстрация экрана запрещена в настройках СЭП Чата',
+          'NotAllowedError'
+        )
+      );
     if (!isTauri() || !supported) return null;
     if (selectSource)
       return Promise.reject(

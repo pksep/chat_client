@@ -27,11 +27,28 @@ const getNativePermission = async (): Promise<boolean | null> => {
   }
 };
 
-export const ensureDesktopNotificationPermission = (): Promise<boolean> => {
+export const ensureDesktopNotificationPermission = (
+  options: { interactive?: boolean } = {}
+): Promise<boolean> => {
+  if (
+    getDesktopPermissionChoice('notifications') === 'denied' &&
+    !options.interactive
+  )
+    return Promise.resolve(false);
   pending ??= (async () => {
     // Сохранённый выбор не подменяет актуальное системное разрешение.
     const nativePermission = await getNativePermission();
+    if (
+      getDesktopPermissionChoice('notifications') === 'denied' &&
+      !options.interactive
+    )
+      return false;
     const granted = nativePermission ?? (await isPermissionGranted());
+    if (
+      getDesktopPermissionChoice('notifications') === 'denied' &&
+      !options.interactive
+    )
+      return false;
     desktopNotificationsBlocked.value = !granted;
     if (granted) {
       await saveDesktopPermissionChoice('notifications', 'granted');
@@ -42,9 +59,11 @@ export const ensureDesktopNotificationPermission = (): Promise<boolean> => {
       await saveDesktopPermissionChoice('notifications', 'denied');
       return false;
     }
-    if (getDesktopPermissionChoice('notifications')) return false;
+    if (getDesktopPermissionChoice('notifications') && !options.interactive)
+      return false;
     await saveDesktopPermissionChoice('notifications', 'requested');
     const permission = await requestPermission();
+    if (getDesktopPermissionChoice('notifications') === 'denied') return false;
     desktopNotificationsBlocked.value = permission !== 'granted';
     await saveDesktopPermissionChoice(
       'notifications',

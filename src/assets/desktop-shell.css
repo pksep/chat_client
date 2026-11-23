@@ -30,6 +30,17 @@ html.chat-desktop-custom-chrome {
   top: var(--desktop-titlebar-height);
 }
 
+.chat-desktop-custom-chrome .call-modal__video-overlay,
+.chat-desktop-custom-chrome .call-modal__video-overlay-bar--top {
+  top: var(--desktop-content-top);
+}
+
+.chat-desktop-custom-chrome .call-modal__video-overlay-video,
+.chat-desktop-custom-chrome .call-modal__video-overlay-reaction {
+  width: 100%;
+  height: var(--app-viewport-height);
+}
+
 /* Компактные подтверждения сохраняют высоту содержимого под шапкой Tauri. */
 .chat-desktop-custom-chrome dialog.mobile__modal:not(.mobile-modal).modal-yui-kit_bottom {
   --mobile-modal-rows: auto minmax(0, 1fr);
