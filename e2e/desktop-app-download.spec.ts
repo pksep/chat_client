@@ -22,6 +22,41 @@ const device = async (
   );
 };
 
+test('правый клик предлагает только скрытие кнопки и запоминает выбор', async ({
+  page
+}) => {
+  await device(page, 'Win32');
+  await page.goto(fixture);
+  const action = page.getByRole('button', {
+    name: 'Открыть приложение',
+    exact: true
+  });
+  await action.click({ button: 'right' });
+  const menu = page.getByTestId(
+    'DesktopAppButton-ContextMenu-ContextMenu-Container'
+  );
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('button')).toHaveCount(1);
+  await expect(
+    page.getByRole('button', { name: 'Скрыть кнопку', exact: true })
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => (window as any).selectedAppLinks ?? [])
+  ).toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toBeVisible();
+  await expect(action).toBeVisible();
+  await action.click({ button: 'right' });
+  await page
+    .getByRole('button', { name: 'Скрыть кнопку', exact: true })
+    .click();
+  await expect(action).toHaveCount(0);
+  await page.reload();
+  await expect(action).toHaveCount(0);
+  await page.goto(fixture + '?collapsed');
+  await expect(action).toHaveCount(0);
+});
+
 test('desktop удаляет старую PWA-оболочку, сохраняя уведомления и кеш файлов', async ({
   page
 }) => {

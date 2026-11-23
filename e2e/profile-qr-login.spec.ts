@@ -89,13 +89,12 @@ test('статус рядом с именем использует тултип 
   const name = page.locator('.menu-profile__identity-name');
   const identity = (await name.boundingBox())!;
   const header = (await page.locator('.menu-profile__header').boundingBox())!;
-  expect(identity.x + identity.width / 2).toBeCloseTo(
+  const icon = (await status.boundingBox())!;
+  expect((identity.x + icon.x + icon.width) / 2).toBeCloseTo(
     header.x + header.width / 2,
     0
   );
-  const icon = (await status.boundingBox())!;
-  expect(icon.x - identity.x - identity.width).toBeGreaterThanOrEqual(4);
-  expect(icon.x - identity.x - identity.width).toBeLessThanOrEqual(8);
+  expect(icon.x - identity.x - identity.width).toBeCloseTo(5, 1);
   await status.hover();
   await expect(
     page
