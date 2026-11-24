@@ -11,11 +11,21 @@
     @keydown="handleKeys"
   >
     <button
+      type="button"
+      role="menuitem"
+      @click="run(requestDesktopCallStatus)"
+    >
+      <InfoIcon />
+      <span>Статус звонка</span>
+    </button>
+    <div class="desktop-call-context-menu__separator" />
+    <button
       v-for="device in devices"
       :key="device.label"
       type="button"
       role="menuitem"
       :aria-label="device.actionLabel"
+      :disabled="!canControl"
       @click="run(device.action)"
     >
       <component :is="device.icon" />
@@ -30,6 +40,7 @@
       type="button"
       role="menuitem"
       @click="run(context.actions.toggleHandRaise)"
+      :disabled="!canControl"
     >
       <HandRaiseIcon />
       <span>{{ state.isHandRaised ? 'Опустить руку' : 'Поднять руку' }}</span>
@@ -41,6 +52,7 @@
         type="button"
         role="menuitem"
         :aria-label="reaction.label"
+        :disabled="!canControl"
         @click="run(() => context.actions.sendCallReaction?.(reaction.value))"
       >
         {{ reaction.emoji }}
@@ -65,11 +77,14 @@ import VideoIcon from '../CallModal/UI/VideoIcon.vue';
 import VideoDisableIcon from '../CallModal/UI/VideoDisableIcon.vue';
 import ScreenShareIcon from '../CallModal/UI/ScreenShareIcon.vue';
 import HandRaiseIcon from '../CallModal/UI/HandRaiseIcon.vue';
+import InfoIcon from '../CallModal/UI/GroupInfoIcon.vue';
+import { requestDesktopCallStatus } from '../../services/desktop-call-status';
 
 const context = useDesktopCallWindowContext()!;
 const host = context.renderWindow;
 const doc = host.document;
 const menu = ref<HTMLElement>();
+const canControl = computed(() => !isCalling.value && !isIncoming.value);
 const position = ref({ x: 0, y: 0 });
 const devices = computed(() => [
   {
@@ -111,13 +126,7 @@ const close = () => {
   context.contextMenuOpen.value = false;
 };
 const open = async (event: MouseEvent) => {
-  if (
-    !callOpen.value ||
-    isCalling.value ||
-    isIncoming.value ||
-    doc.querySelector('dialog:modal')
-  )
-    return;
+  if (!callOpen.value || doc.querySelector('dialog:modal')) return;
   event.preventDefault();
   position.value = { x: event.clientX, y: event.clientY };
   context.contextMenuOpen.value = true;

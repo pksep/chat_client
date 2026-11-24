@@ -3000,6 +3000,7 @@ const handleCallModalBackdropMouseMove = (event: MouseEvent) => {
 };
 
 const handleCallModalKeydown = (event: KeyboardEvent) => {
+  if (callWindow && renderDocument.querySelector('dialog:modal')) return;
   if (callWindow?.contextMenuOpen.value) return;
   if (
     event.key !== 'Escape' ||

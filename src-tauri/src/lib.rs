@@ -56,6 +56,9 @@ const TRAY_SHOW_ID: &str = "tray-show";
 const TRAY_INSPECT_ID: &str = "tray-inspect";
 
 #[cfg(desktop)]
+const TRAY_CALL_STATUS_ID: &str = "tray-call-status";
+
+#[cfg(desktop)]
 const TRAY_MINIMIZE_ID: &str = "tray-minimize";
 
 #[cfg(desktop)]
@@ -449,6 +452,7 @@ fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     let tray_menu = MenuBuilder::new(app)
         .text(TRAY_SHOW_ID, "Открыть СЭП Чат")
         .text(TRAY_MINIMIZE_ID, "Свернуть")
+        .text(TRAY_CALL_STATUS_ID, "Статус звонка")
         .separator()
         .text(TRAY_INSPECT_ID, "Открыть инспектор")
         .separator()
@@ -475,6 +479,16 @@ fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
                 if let Some(window) = app.get_webview_window("main") {
                     window.open_devtools();
                 }
+            }
+            TRAY_CALL_STATUS_ID => {
+                if let Some(window) = app.get_webview_window(desktop_call_window::CALL_WINDOW_LABEL) {
+                    let _ = window.unminimize();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                } else {
+                    show_main_window(app);
+                }
+                let _ = app.emit_to("main", "sep-chat://call-status-requested", ());
             }
             TRAY_QUIT_ID => {
                 app.state::<AppLifecycleState>()

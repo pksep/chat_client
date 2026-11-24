@@ -5,6 +5,9 @@ import { openDesktopCallWindow } from '../../src/services/desktop-call-window';
 import DesktopTitleBar from '../../src/components/Desktop/DesktopTitleBar.vue';
 import DesktopMediaPermissionDialog from '../../src/components/Desktop/DesktopMediaPermissionDialog.vue';
 import DesktopScreenSharePicker from '../../src/components/Desktop/DesktopScreenSharePicker.vue';
+import DesktopCallStatusPanel from '../../src/components/Desktop/DesktopCallStatusPanel.vue';
+import { desktopCallStatusVisible } from '../../src/services/desktop-call-status';
+import { showTauriCallActivityNotification } from '../../src/services/useTauriNotifications';
 import * as call from '../../src/services/useCallState';
 import { authedUser } from '../../src/composables/useAuth';
 import { useThemeStore } from '../../src/stores/theme';
@@ -14,6 +17,7 @@ import { saveDesktopPermissionChoice } from '../../src/services/desktop-permissi
 import '../../src/assets/chat-container.css';
 
 const api = 'http://127.0.0.1:5213/report';
+const exerciseNativeToasts = new URLSearchParams(location.search).has('nativeToasts');
 const report = async (data: Record<string, unknown>) => {
   const output = document.querySelector('output');
   if (output) output.textContent = JSON.stringify(data, null, 2);
@@ -24,8 +28,8 @@ window.addEventListener('unhandledrejection', event => void report({ rejection: 
 const pinia = createPinia();
 useThemeStore(pinia).setTheme(false);
 authedUser.value = { id: 'local-preview', initials: 'Вы' } as any;
-call.user.value = { id: 'local-peer', initials: 'Проверка звонка' } as any;
-call.roomId.value = 'local-preview-no-network';
+call.user.value = { id: 'ac7dbd0b-6e93-41ad-acf5-4e3b1dcc6a6f', initials: 'Проверка звонка' } as any;
+call.roomId.value = 'e641f474-1b51-4cec-ac54-b9c752de8ed6';
 call.topicId.value = 'local-call-topic';
 useTopics().setTopics([{ id: 'local-call-topic', type: 'GROUP', name: 'Локальная проверка' } as any]);
 call.state.connectionQuality = 'excellent';
@@ -47,7 +51,14 @@ const open = async () => {
     appContext: app._context,
     signal: new AbortController().signal,
     getMicrophoneTrack: () => track,
-    notifyActivity: async activity => { activityNotifications.push(activity); return true; },
+    notifyActivity: async activity => {
+      if (exerciseNativeToasts) {
+        if (!(await showTauriCallActivityNotification({ ...activity, participantName: 'Проверка уведомления' }))) throw new Error('Windows не приняла уведомление');
+        await report({ step: 'native-toast', kind: activity.kind, accepted: true });
+      }
+      activityNotifications.push(activity);
+      return true;
+    },
     actions: {
       toggleMic: () => { call.state.isMicActive = !call.state.isMicActive; if (track) track.enabled = call.state.isMicActive; },
       leaveCall: async () => { endCount++; call.open.value = false; call.isModalVisible.value = false; const current = host; host = null; await current?.dispose(); },
@@ -77,7 +88,7 @@ const useMicrophone = async () => {
   } catch (error) { status.value = String(error); }
 };
 const app = createApp({ render: () => [
-  h(DesktopTitleBar), h(DesktopMediaPermissionDialog), h(DesktopScreenSharePicker),
+  h(DesktopTitleBar), h(DesktopMediaPermissionDialog), h(DesktopScreenSharePicker), h(DesktopCallStatusPanel),
   h('main', { style: 'padding:32px;color:var(--text-primary);background:var(--surface-main);height:100%;box-sizing:border-box' }, [
     h('h1', 'Локальная проверка звонка Tauri'),
     h('p', status.value),
@@ -133,7 +144,7 @@ const verify = async () => {
   const videoStream = canvas.captureStream(10);
   const painting = setInterval(paint, 100);
   call.remoteParticipants.value = [{
-    identity: 'local-peer', name: 'Проверка видео', videoStream,
+    identity: 'ac7dbd0b-6e93-41ad-acf5-4e3b1dcc6a6f', name: 'Проверка видео', videoStream,
     cameraStream: videoStream, screenShareStream: null, audioStream: null,
     isVideoActive: true, isScreenShareActive: false, isHandRaised: false,
     activeReaction: null, activeReactionExpiresAt: null, isSpeaking: false,
@@ -169,6 +180,7 @@ const verify = async () => {
   await report({ step: 'native-controls', passed: true });
   await active.show();
   const openContext = async () => {
+    await nextTick();
     doc.dispatchEvent(new active.popup.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: active.popup.innerWidth - 10, clientY: active.popup.innerHeight - 10 }));
     await wait(() => !!doc.querySelector('[data-testid="DesktopCallContextMenu"]'), 'Меню по правому клику не появилось');
   };
@@ -176,6 +188,12 @@ const verify = async () => {
   const menuBounds = doc.querySelector('[data-testid="DesktopCallContextMenu"]')!.getBoundingClientRect();
   if (menuBounds.right > active.popup.innerWidth || menuBounds.bottom > active.popup.innerHeight) throw new Error('Меню выходит за край окна звонка');
   await report({ step: 'context-menu', passed: true });
+  Array.from(doc.querySelectorAll<HTMLButtonElement>('.desktop-call-context-menu button')).find(button => button.textContent?.trim() === 'Статус звонка')!.click();
+  await wait(() => !!doc.querySelector('[data-testid="DesktopCallStatusPanel"]:modal'), 'Не открылась панель статуса звонка');
+  if (!doc.querySelector('[data-testid="DesktopCallStatusPanel"]')?.textContent?.includes('Демонстрация экрана')) throw new Error('В панели нет статуса демонстрации');
+  await report({ step: 'call-status-panel', passed: true });
+  doc.querySelector<HTMLButtonElement>('[aria-label="Закрыть статус звонка"]')!.click();
+  await openContext();
   click('.desktop-call-context-menu button[aria-label="Включить камеру"]');
   if (!call.state.isVideoActive) throw new Error('Меню не включило камеру');
   await openContext();
@@ -197,20 +215,26 @@ const verify = async () => {
   await native.minimize();
   call.requestCallPresentation();
   await wait(async () => await native.isFocused() && !(await native.isMinimized()), 'Возврат из хедера не восстановил окно звонка');
-  call.handRaisedParticipants.value = { 'local-peer': true };
+  call.handRaisedParticipants.value = { 'ac7dbd0b-6e93-41ad-acf5-4e3b1dcc6a6f': true };
   await nextTick(); await sleep(100);
   if (activityNotifications.length) throw new Error('Уведомление появилось поверх активного звонка');
-  call.handRaisedParticipants.value = { 'local-peer': false };
+  call.handRaisedParticipants.value = { 'ac7dbd0b-6e93-41ad-acf5-4e3b1dcc6a6f': false };
   await nextTick();
   await active.context.showMain();
   await wait(async () => !(await native.isFocused()), 'Звонок не потерял фокус');
-  call.handRaisedParticipants.value = { 'local-peer': true };
+  const { emit } = await import('@tauri-apps/api/event');
+  await emit('sep-chat://call-status-requested');
+  await wait(() => desktopCallStatusVisible.value && !!doc.querySelector('[data-testid="DesktopCallStatusPanel"]:modal'), 'Запрос из трея не открыл статус в окне звонка');
+  doc.querySelector<HTMLButtonElement>('[aria-label="Закрыть статус звонка"]')!.click();
+  await active.context.showMain();
+  await wait(async () => !(await native.isFocused()), 'Звонок не потерял фокус после панели');
+  call.handRaisedParticipants.value = { 'ac7dbd0b-6e93-41ad-acf5-4e3b1dcc6a6f': true };
   await wait(() => activityNotifications.length === 1, 'Нет уведомления о руке при активном главном чате');
   const reaction = { reaction: 'heart' as const, expiresAt: Date.now() + 10_000 };
-  call.participantReactions.value = { 'local-peer': reaction };
+  call.participantReactions.value = { 'ac7dbd0b-6e93-41ad-acf5-4e3b1dcc6a6f': reaction };
   await wait(() => activityNotifications.length === 2, 'Нет уведомления о реакции');
-  call.participantReactions.value = { 'local-peer': { ...reaction }, 'local-preview': reaction };
-  call.handRaisedParticipants.value = { 'local-peer': true, 'local-preview': true };
+  call.participantReactions.value = { 'ac7dbd0b-6e93-41ad-acf5-4e3b1dcc6a6f': { ...reaction }, 'local-preview': reaction };
+  call.handRaisedParticipants.value = { 'ac7dbd0b-6e93-41ad-acf5-4e3b1dcc6a6f': true, 'local-preview': true };
   await nextTick(); await sleep(100);
   if (activityNotifications.length !== 2) throw new Error('Повторная или собственная реакция дала лишнее уведомление');
   await report({ step: 'focus-navigation-activity', passed: true, events: activityNotifications.map(({ kind, participantId }) => ({ kind, participantId })) });

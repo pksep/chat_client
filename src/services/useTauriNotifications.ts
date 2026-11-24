@@ -261,7 +261,7 @@ export const showTauriNotification = async ({
         payload: JSON.stringify(extra || {}),
         tag:
           extra?.type === 'call_activity' && extra.roomId
-            ? `sep-chat-activity-${extra.roomId}-${extra.participantId}-${extra.kind}`
+            ? `sc-a-${hashNotificationId(`${extra.roomId}:${extra.participantId}:${extra.kind}`)}`
             : extra?.type === 'incoming_call' && extra.topicId
               ? getWindowsCallNotificationTag(extra.topicId)
               : extra?.topicId

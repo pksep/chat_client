@@ -9,7 +9,7 @@ const config = path.join(root, 'tauri.conf.json');
 await writeFile(config, JSON.stringify({
   identifier: 'ru.pksep.chat.callpreview',
   productName: 'СЭП Чат — локальный звонок',
-  build: { beforeDevCommand: '', devUrl: `${origin}/e2e/fixtures/desktop-call-window.html` },
+  build: { beforeDevCommand: '', devUrl: `${origin}/e2e/fixtures/desktop-call-window.html${process.argv.includes('--native-toasts') ? '?nativeToasts=1' : ''}` },
   app: {
     appDirectoriesOverride: path.join(root, 'profile'),
     windows: [{ label: 'main', create: false, title: 'СЭП Чат — локальная проверка', decorations: false, width: 1000, height: 740, minHeight: 400 }]
