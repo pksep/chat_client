@@ -496,6 +496,7 @@
 </template>
 
 <script lang="ts" setup>
+import { isTauri } from '@tauri-apps/api/core';
 import {
   useManagerInquiries,
   clientUser,
@@ -597,7 +598,7 @@ import {
   isAnyCallDialing,
   isAnyCallModalVisible,
   isCallActive,
-  isModalVisible as isCallModalVisible,
+  requestCallPresentation,
   invitedGroupCallInfo,
   pendingGroupCallInfo
 } from '../../services/useCallState';
@@ -658,7 +659,7 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
 const showCallModal = (): void => {
-  isCallModalVisible.value = true;
+  requestCallPresentation();
 };
 
 const joinInviteGroupCall = async () => {
@@ -927,7 +928,8 @@ const hasInvitedCall = computed(
 const showRegularCallBanner = computed(
   () =>
     (isCallActive.value &&
-      (!isAnyCallModalVisible.value ||
+      (isTauri() ||
+        !isAnyCallModalVisible.value ||
         (!route.value.id && route.value.type !== RouteTypes.AI))) ||
     !!currentHeaderCallEntry.value ||
     hasInvitedCall.value

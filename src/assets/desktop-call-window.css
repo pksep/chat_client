@@ -1,0 +1,22 @@
+html.desktop-call-window {
+  overflow: hidden;
+  --app-viewport-height: calc(100dvh - var(--desktop-content-top)) !important;
+}
+
+.desktop-call-window body {
+  margin: 0;
+}
+
+.desktop-call-window .call-modal__container {
+  box-sizing: border-box;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.desktop-call-window .mic-icon__audio-wave {
+  transition: none;
+}

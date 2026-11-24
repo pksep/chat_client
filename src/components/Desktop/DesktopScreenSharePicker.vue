@@ -1,5 +1,5 @@
 <template>
-  <Teleport to="body">
+  <Teleport :to="desktopOverlayTarget">
     <dialog
       ref="dialog"
       class="desktop-screen-picker"
@@ -154,6 +154,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { desktopOverlayTarget } from '../../services/desktop-overlay-target';
 import {
   Button,
   ButtonTypeEnum,
@@ -196,7 +197,9 @@ const handleTabKey = (event: KeyboardEvent) => {
           ? 'window'
           : 'screen';
   void nextTick(() =>
-    document.getElementById(`desktop-screen-tab-${kind.value}`)?.focus()
+    dialog.value?.ownerDocument
+      .getElementById(`desktop-screen-tab-${kind.value}`)
+      ?.focus()
   );
 };
 const cancel = () => resolveDesktopScreenPicker(null);
@@ -237,6 +240,17 @@ const requestPermission = async () => {
     loading.value = false;
   }
 };
+watch(
+  desktopOverlayTarget,
+  async () => {
+    dialog.value?.close();
+    await nextTick();
+    if (desktopScreenPicker.value && !dialog.value?.open)
+      dialog.value?.showModal();
+  },
+  { flush: 'sync' }
+);
+
 watch(
   desktopScreenPicker,
   async (request, previous) => {

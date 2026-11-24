@@ -11,7 +11,7 @@ import {
   isAnyCallIncoming,
   isAnyCallModalVisible,
   isCallActive,
-  isModalVisible,
+  requestCallPresentation,
   pendingGroupCallInfo
 } from './useCallState';
 
@@ -69,7 +69,7 @@ export const declineCall = async () => {
 };
 
 export const showCallModal = () => {
-  isModalVisible.value = true;
+  requestCallPresentation();
 };
 
 export const joinGroupCall = async (topicId?: string) => {

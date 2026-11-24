@@ -162,7 +162,8 @@
     </MobileModal>
   </main>
 
-  <CallModal v-if="shouldRenderCallModal" />
+  <DesktopCallWindow v-if="shouldRenderCallModal && isTauriRuntime()" />
+  <CallModal v-else-if="shouldRenderCallModal" />
   <VpnConfirmModal
     :open="isVpnConfirmModalOpen"
     :data-testid="`${props.dataTestid}-VpnConfirmModal`"
@@ -173,6 +174,7 @@
 
 <script setup lang="ts">
 import { Capacitor } from '@capacitor/core';
+import { isTauri as isTauriRuntime } from '@tauri-apps/api/core';
 import {
   computed,
   defineAsyncComponent,
@@ -256,6 +258,9 @@ const NewGroupModal = defineAsyncComponent(
 );
 const CallModal = defineAsyncComponent(
   () => import('./CallModal/CallModal.vue')
+);
+const DesktopCallWindow = defineAsyncComponent(
+  () => import('./Desktop/DesktopCallWindow.vue')
 );
 
 const { mobilePlatform, handleInstall, showDownloadModal } = useMobileApp();

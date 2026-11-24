@@ -67,6 +67,7 @@ import {
   prepareDesktopScreenCapture,
   stopDesktopScreenCapture
 } from './desktop-screen-capture';
+import { requestDesktopScreenCaptureConsent } from './desktop-media-permissions';
 import { mergeRemoteParticipantsDuringReconnect } from './call-reconnect-participants';
 import { createCallConnectionDiagnostics } from './call-connection-diagnostics';
 import { createCallWebRtcDiagnostics } from './call-webrtc-diagnostics';
@@ -6919,6 +6920,17 @@ export const toggleMic = async () => {
   }
 };
 
+// Tauri читает существующий track для локального индикатора без ожидания RTCP.
+// Владение захватом и отправкой звука остаётся у текущего Room.
+export const getDesktopMicrophoneTrack = (): MediaStreamTrack | null => {
+  if (!isTauriRuntime() || !room) return null;
+  const publication = Array.from(
+    room.localParticipant.audioTrackPublications.values()
+  ).find(item => item.source === Track.Source.Microphone);
+  const track = publication?.track?.mediaStreamTrack;
+  return track?.readyState === 'live' ? track : null;
+};
+
 const applyRequestedVideoState = async (): Promise<void> => {
   while (room && state.isVideoActive !== requestedVideoActive) {
     const activeRoom = room;
@@ -7448,6 +7460,16 @@ const toggleScreenShareInternal = async (
     } else {
       if (nextScreenShareState) {
         const desktopCapture = prepareDesktopScreenCapture();
+        if (
+          !desktopCapture &&
+          isTauriRuntime() &&
+          !(await requestDesktopScreenCaptureConsent())
+        ) {
+          throw new DOMException(
+            'Демонстрация экрана не разрешена',
+            'NotAllowedError'
+          );
+        }
         const tracks = desktopCapture
           ? [new LocalVideoTrack(await desktopCapture)]
           : await activeRoom.localParticipant.createScreenTracks(

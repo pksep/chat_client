@@ -1,6 +1,6 @@
 <template>
   <header
-    v-if="visible"
+    v-if="visible && !callWindow?.fullscreen.value"
     class="desktop-titlebar"
     :class="{ 'desktop-titlebar--inactive': !focused }"
     data-testid="DesktopTitleBar"
@@ -75,6 +75,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import ChatIcon from '../UI/Icons/ChatIcon.vue';
+import { useDesktopCallWindowContext } from './call-window-context';
 import { showErrorNotification } from '../../composables/useNotifications';
 import {
   markTauriWindowInactive,
@@ -86,6 +87,9 @@ import {
 } from '../../services/desktop-screen-capture';
 
 const visible = ref(false);
+const callWindow = useDesktopCallWindowContext();
+const renderDocument = callWindow?.renderWindow.document || document;
+const currentWindow = () => callWindow?.nativeWindow || getCurrentWindow();
 const focused = ref(true);
 const maximized = ref(false);
 const stoppingShare = ref(false);
@@ -107,7 +111,7 @@ const stopSharing = async () => {
 };
 
 const refreshWindow = async () => {
-  const appWindow = getCurrentWindow();
+  const appWindow = currentWindow();
   const [decorated, fullscreen, isMaximized] = await Promise.all([
     appWindow.isDecorated(),
     appWindow.isFullscreen(),
@@ -116,7 +120,8 @@ const refreshWindow = async () => {
   if (disposed) return;
   visible.value = !decorated && !fullscreen;
   maximized.value = isMaximized;
-  document.documentElement.classList.toggle(
+  if (callWindow) callWindow.fullscreen.value = fullscreen;
+  renderDocument.documentElement.classList.toggle(
     'chat-desktop-custom-chrome',
     visible.value
   );
@@ -126,11 +131,12 @@ const runWindowAction = async (
   action: 'minimize' | 'toggleMaximize' | 'close' | 'startDragging'
 ) => {
   try {
-    if (action === 'minimize' || action === 'close') markTauriWindowInactive();
-    await getCurrentWindow()[action]();
+    if (!callWindow && (action === 'minimize' || action === 'close'))
+      markTauriWindowInactive();
+    await currentWindow()[action]();
     if (action === 'toggleMaximize') await refreshWindow();
   } catch {
-    void syncTauriWindowState();
+    if (!callWindow) void syncTauriWindowState();
     showErrorNotification(
       'Не удалось изменить состояние окна. Повторите действие.'
     );
@@ -161,7 +167,7 @@ const startDrag = (event: MouseEvent) => {
 onMounted(async () => {
   if (!isTauri()) return;
   try {
-    const appWindow = getCurrentWindow();
+    const appWindow = currentWindow();
     const bind = (unlisten: UnlistenFn) => {
       if (disposed) unlisten();
       else listeners.push(unlisten);
@@ -186,7 +192,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   disposed = true;
   listeners.forEach(unlisten => unlisten());
-  document.documentElement.classList.remove('chat-desktop-custom-chrome');
+  renderDocument.documentElement.classList.remove('chat-desktop-custom-chrome');
 });
 </script>
 

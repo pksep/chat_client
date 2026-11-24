@@ -2,6 +2,8 @@ use serde::Serialize;
 use std::process::Command;
 use tauri::{Manager, WindowEvent};
 mod desktop_auth;
+#[cfg(desktop)]
+mod desktop_call_window;
 #[cfg(windows)]
 mod desktop_autostart;
 mod desktop_files;
@@ -527,6 +529,7 @@ pub fn run() {
         .manage(desktop_media_permissions::DesktopMediaPermissions::default())
         .manage(desktop_permission_preferences::DesktopPermissionPreferences::default())
         .manage(desktop_screen_capture::DesktopScreenCapture::default())
+        .manage(desktop_call_window::DesktopCallWindow::default())
         .on_permission_request(desktop_media_permissions::handle_request);
     #[cfg(desktop)]
     let builder = builder
@@ -543,6 +546,7 @@ pub fn run() {
             if webview.label() == "main"
                 && matches!(payload.event(), tauri::webview::PageLoadEvent::Started)
             {
+                let _ = desktop_call_window::close_call_window(webview.app_handle());
                 webview
                     .state::<desktop_screen_capture::DesktopScreenCapture>()
                     .stop_all();
@@ -572,6 +576,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_telemetry_os,
             desktop_window_state,
+            desktop_call_window::desktop_call_window_available,
+            desktop_call_window::desktop_close_call_window,
             desktop_get_open_urls,
             desktop_restart,
             desktop_media_permissions::desktop_media_permissions_available,
@@ -608,6 +614,7 @@ pub fn run() {
         .setup(|app| {
             #[cfg(desktop)]
             {
+                desktop_call_window::create_main_window(app)?;
                 setup_desktop(app)?;
                 let app_handle = app.handle().clone();
                 app.deep_link()
@@ -623,6 +630,11 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            #[cfg(desktop)]
+            if window.label() == desktop_call_window::CALL_WINDOW_LABEL {
+                // У окна звонка свой onCloseRequested; оно не прячет главное окно.
+                return;
+            }
             #[cfg(desktop)]
             if let WindowEvent::Focused(focused) = event {
                 if let Some(webview_window) = window.app_handle().get_webview_window("main") {

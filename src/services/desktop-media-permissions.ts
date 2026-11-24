@@ -9,7 +9,7 @@ import {
 export type DesktopMediaPermission = 'microphone' | 'camera';
 
 export const desktopMediaPermissionRequest = shallowRef<{
-  permissions: DesktopMediaPermission[];
+  permissions: Array<DesktopMediaPermission | 'screen-capture'>;
 } | null>(null);
 
 const granted = new Set<DesktopMediaPermission>();
@@ -21,6 +21,23 @@ export const resolveDesktopMediaPermission = (allowed: boolean) => {
   settle = null;
   desktopMediaPermissionRequest.value = null;
   resolve?.(allowed);
+};
+
+export const requestDesktopScreenCaptureConsent = (): Promise<boolean> => {
+  const task = queue.then(async () => {
+    if (getDesktopPermissionChoice('screen-capture') === 'granted') return true;
+    const allowed = await new Promise<boolean>(resolve => {
+      settle = resolve;
+      desktopMediaPermissionRequest.value = { permissions: ['screen-capture'] };
+    });
+    if (allowed) await saveDesktopPermissionChoice('screen-capture', 'granted');
+    return allowed;
+  });
+  queue = task.then(
+    () => undefined,
+    () => undefined
+  );
+  return task;
 };
 
 const ask = (

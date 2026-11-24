@@ -51,6 +51,11 @@ export const callStartedAt = ref<number | null>(null);
 export const callElapsedMs = ref(0);
 export const timerSeconds = ref(0);
 export const isModalVisible = ref(false);
+export const callPresentationRequest = ref(0);
+export const requestCallPresentation = () => {
+  isModalVisible.value = true;
+  callPresentationRequest.value += 1;
+};
 export const isRemoteVideoActive = ref(false);
 export const localVideoStream = ref<MediaStream | null>(null);
 export const localScreenShareStream = ref<MediaStream | null>(null);

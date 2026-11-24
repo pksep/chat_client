@@ -123,7 +123,10 @@ async function openShell(
               };
             if (command === 'desktop_screen_capture_sources')
               return win.shellSources;
-            if (command === 'desktop_screen_capture_permission') return true;
+            if (command === 'desktop_screen_capture_permission') {
+              win.shellScreenPermissionRequests = (win.shellScreenPermissionRequests || 0) + 1;
+              return win.shellScreenPermission || win.shellScreenPermissionRequests > 1;
+            }
             if (command === 'desktop_screen_capture_start') {
               win.shellCaptureActive = true;
               const buffer = new ArrayBuffer(24);
@@ -547,8 +550,40 @@ async function openScreenPicker(page: Page) {
         }
       );
   });
+  const permission = page.getByTestId('DesktopMediaPermissionDialog');
+  await expect(permission).toBeVisible();
+  await expect(permission).toContainText('Разрешить демонстрацию экрана?');
+  await permission.getByRole('button', { name: 'Разрешить', exact: true }).click();
   return page.getByTestId('DesktopScreenSharePicker');
 }
+
+test('Запрещённая демонстрация спрашивает согласие; отказ и остановка не запускают захват', async ({ page }) => {
+  await openShell(page);
+  await page.evaluate(async () => {
+    const preferences = await import('/src/services/desktop-permission-preferences.ts');
+    await preferences.saveDesktopPermissionChoice('screen-capture', 'denied');
+    const win = window as any;
+    win.desktopShellFixture.prepareDesktopScreenCapture().catch((error: Error) => { win.shellDisplayError = error.name; });
+  });
+  const permission = page.getByTestId('DesktopMediaPermissionDialog');
+  await expect(permission).toBeVisible();
+  await permission.getByRole('button', { name: 'Не сейчас', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).shellDisplayError)).toBe('NotAllowedError');
+  expect(await page.evaluate(() => (window as any).shellCalls.some((call: any) => call.command === 'desktop_screen_capture_start'))).toBe(false);
+  await page.evaluate(() => {
+    (window as any).desktopShellFixture.prepareDesktopScreenCapture().catch(() => {});
+  });
+  await expect(permission).toBeVisible();
+  await page.evaluate(async () => {
+    const { stopDesktopScreenCapture } = await import('/src/services/desktop-screen-capture.ts');
+    stopDesktopScreenCapture();
+  });
+  await expect(permission).not.toBeVisible();
+  const picker = await openScreenPicker(page);
+  await expect(picker).toBeVisible();
+  await picker.getByRole('button', { name: 'Отмена', exact: true }).click();
+  expect(await page.evaluate(() => (window as any).shellCalls.some((call: any) => call.command === 'desktop_screen_capture_start'))).toBe(false);
+});
 
 test('Свой выбор экрана: конкретный источник, начало только по кнопке, освобождение захвата', async ({
   page
@@ -909,18 +944,14 @@ test('отзыв микрофона останавливает текущий т
   await page
     .getByRole('switch', { name: 'Демонстрация экрана', exact: true })
     .click();
-  const denied = await page.evaluate(async () => {
-    const { prepareDesktopScreenCapture } = await import(
-      '/src/services/desktop-screen-capture.ts'
-    );
-    try {
-      await prepareDesktopScreenCapture();
-      return false;
-    } catch (error) {
-      return (error as Error).name === 'NotAllowedError';
-    }
+  await page.evaluate(() => {
+    const win = window as any;
+    win.desktopShellFixture.prepareDesktopScreenCapture().catch((error: Error) => { win.shellDisplayError = error.name; });
   });
-  expect(denied).toBe(true);
+  const permission = page.getByTestId('DesktopMediaPermissionDialog');
+  await expect(permission).toBeVisible();
+  await permission.getByRole('button', { name: 'Не сейчас', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).shellDisplayError)).toBe('NotAllowedError');
 });
 
 test('«Не сейчас» не сохраняет разрешение на устройство', async ({ page }) => {

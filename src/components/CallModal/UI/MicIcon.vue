@@ -33,6 +33,12 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { useDesktopCallWindowContext } from '../../Desktop/call-window-context';
+
+const callWindow = useDesktopCallWindowContext();
+const scheduler = callWindow?.renderWindow || window;
+const requestFrame = scheduler.requestAnimationFrame.bind(scheduler);
+const cancelFrame = scheduler.cancelAnimationFrame.bind(scheduler);
 
 const props = withDefaults(
   defineProps<{
@@ -72,7 +78,7 @@ const animateAudioLevel = (timestamp: number) => {
     : 16;
   const targetLevel = targetAudioLevel.value;
   const currentLevel = displayedAudioLevel.value;
-  const smoothing = targetLevel > currentLevel ? 0.38 : 0.24;
+  const smoothing = targetLevel > currentLevel ? (callWindow ? 1 : 0.38) : 0.24;
   const step = 1 - Math.pow(1 - smoothing, deltaMs / 16);
   const nextLevel = currentLevel + (targetLevel - currentLevel) * step;
   const isWaveActive = targetLevel > 0.02 || nextLevel > 0.02;
@@ -88,7 +94,7 @@ const animateAudioLevel = (timestamp: number) => {
   }
 
   displayedAudioLevel.value = nextLevel;
-  animationFrame = requestAnimationFrame(animateAudioLevel);
+  animationFrame = requestFrame(animateAudioLevel);
 };
 
 const scheduleAudioLevelAnimation = () => {
@@ -101,14 +107,14 @@ const scheduleAudioLevelAnimation = () => {
     return;
   }
 
-  animationFrame = requestAnimationFrame(animateAudioLevel);
+  animationFrame = requestFrame(animateAudioLevel);
 };
 
 watch(targetAudioLevel, scheduleAudioLevelAnimation, { immediate: true });
 
 onBeforeUnmount(() => {
   if (animationFrame !== null) {
-    cancelAnimationFrame(animationFrame);
+    cancelFrame(animationFrame);
   }
 });
 
