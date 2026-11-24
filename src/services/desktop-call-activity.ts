@@ -52,11 +52,15 @@ export function installDesktopCallActivityNotifications(options: {
       console.warn('Не удалось показать событие звонка:', error)
     );
   };
-  const stopHands = watch(handRaisedParticipants, (current, previous) => {
-    for (const [participantId, raised] of Object.entries(current)) {
-      if (raised && !previous[participantId]) notify(participantId, 'hand');
-    }
-  });
+  const stopHands = watch(
+    handRaisedParticipants,
+    (current, previous) => {
+      for (const [participantId, raised] of Object.entries(current)) {
+        if (raised && !previous[participantId]) notify(participantId, 'hand');
+      }
+    },
+    { flush: 'sync' }
+  );
   const stopReactions = watch(participantReactions, (current, previous) => {
     for (const [participantId, entry] of Object.entries(current)) {
       const old = previous[participantId];

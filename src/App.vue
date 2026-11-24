@@ -40,7 +40,6 @@
   />
 
   <NotificationStack />
-  <DesktopCallInvitePrompt />
 </template>
 <script lang="ts" setup>
 import {
@@ -53,7 +52,6 @@ import {
 } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import NotificationStack from './components/UI/NotificationStack.vue';
-import DesktopCallInvitePrompt from './components/Menu/DesktopCallInvitePrompt.vue';
 import DesktopTitleBar from './components/Desktop/DesktopTitleBar.vue';
 import DesktopMediaPermissionDialog from './components/Desktop/DesktopMediaPermissionDialog.vue';
 import DesktopScreenSharePicker from './components/Desktop/DesktopScreenSharePicker.vue';

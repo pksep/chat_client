@@ -2,6 +2,19 @@
 mod desktop_notifications;
 
 #[test]
+fn hand_alert_does_not_duplicate_the_sound_already_played_in_call() {
+    let payload = r#"{"type":"call_activity","kind":"hand","roomId":"room","soundPlayed":true}"#;
+    let xml =
+        desktop_notifications::build_toast_xml("Звонок", Some("Иван поднимает руку"), payload);
+    assert!(xml.contains(r#"<audio silent="true"/>"#));
+    assert!(xml.contains(r#"duration="long""#));
+    let fallback = payload.replace("true", "false");
+    assert!(!desktop_notifications::build_toast_xml("Звонок", None, &fallback).contains("silent"));
+    let reaction = payload.replace("hand", "reaction");
+    assert!(!desktop_notifications::build_toast_xml("Звонок", None, &reaction).contains("silent"));
+}
+
+#[test]
 fn incoming_call_buttons_keep_the_room_and_escape_xml() {
     let xml = desktop_notifications::build_toast_xml(
         "Входящий звонок",
@@ -51,7 +64,9 @@ fn message_actions_keep_the_owner_and_target_and_support_inline_reply() {
     #[cfg(windows)]
     {
         let document = windows::Data::Xml::Dom::XmlDocument::new().unwrap();
-        document.LoadXml(&windows::core::HSTRING::from(&xml)).unwrap();
+        document
+            .LoadXml(&windows::core::HSTRING::from(&xml))
+            .unwrap();
         windows::UI::Notifications::ToastNotification::CreateToastNotification(&document).unwrap();
     }
     let reply = payload.replace(

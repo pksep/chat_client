@@ -242,6 +242,7 @@ const callConnectionDiagnostics = createCallConnectionDiagnostics(() =>
 );
 let invitedGroupCallJoinPromise: Promise<boolean | void> | null = null;
 let invitedGroupCallJoinRoomId: string | null = null;
+let invitedGroupCallJoinSignal: AbortSignal | undefined;
 let activeCallTraceId: string | null = null;
 let lastTelemetryConnectionQuality: string | null = null;
 let currentCameraFacingMode: 'user' | 'environment' = 'user';
@@ -2570,8 +2571,10 @@ const isConnectedToTargetCall = (
 const prepareInvitedGroupCallJoinState = async (
   invite: InvitedGroupCallEntry,
   callStatus: LiveKitCallStatus,
-  me: IUser
+  me: IUser,
+  options?: { signal?: AbortSignal }
 ) => {
+  if (options?.signal?.aborted) return false;
   user.value = me as any;
   roomId.value = invite.roomId;
   topicId.value = invite.topicId;
@@ -2580,6 +2583,7 @@ const prepareInvitedGroupCallJoinState = async (
     callStatus.elapsedDurationMs ?? invite.elapsedDurationMs ?? 0
   );
   await applyDefaultAudioOutputRoute();
+  if (options?.signal?.aborted) return false;
   open.value = true;
   isIncoming.value = false;
   isCalling.value = true;
@@ -2587,6 +2591,7 @@ const prepareInvitedGroupCallJoinState = async (
   isAcceptingLocally = true;
   localAcceptRoomId = invite.roomId;
   localAcceptTopicId = invite.topicId;
+  return true;
 };
 
 const startTimer = (startTime: number | null = callStartedAt.value) => {
@@ -6111,8 +6116,10 @@ const resolveJoinablePendingGroupCall = (
 };
 
 export const joinPendingGroupCall = async (
-  targetTopicId?: string
+  targetTopicId?: string,
+  options?: { signal?: AbortSignal }
 ): Promise<boolean> => {
+  if (options?.signal?.aborted) return false;
   const pendingGroupCall = resolveJoinablePendingGroupCall(targetTopicId);
   if (!pendingGroupCall || open.value) return false;
 
@@ -6128,6 +6135,7 @@ export const joinPendingGroupCall = async (
   clearCallStatusNotice();
 
   const callStatus = await getLiveKitCallStatus(pendingRoomId, pendingTopicId);
+  if (options?.signal?.aborted) return false;
   if (!callStatus?.active) {
     clearUnavailableCallState(pendingRoomId, pendingTopicId);
     showTransientCallStatusNotice('Звонок уже завершён');
@@ -6142,6 +6150,7 @@ export const joinPendingGroupCall = async (
     callStatus.elapsedDurationMs ?? pendingGroupCall.elapsedDurationMs ?? 0
   );
   await applyDefaultAudioOutputRoute();
+  if (options?.signal?.aborted) return false;
   open.value = true;
   isIncoming.value = false;
   isCalling.value = true;
@@ -6293,8 +6302,10 @@ export const openGroupCallInviteUrl = async (
 };
 
 const joinInvitedGroupCallInternal = async (
-  invite: InvitedGroupCallEntry
+  invite: InvitedGroupCallEntry,
+  options?: { signal?: AbortSignal }
 ): Promise<boolean | void> => {
+  if (options?.signal?.aborted) return false;
   const sdk = getChatSDK();
   const me = getAuthUser();
 
@@ -6303,6 +6314,7 @@ const joinInvitedGroupCallInternal = async (
   clearCallStatusNotice();
 
   const callStatus = await getLiveKitCallStatus(invite.roomId, invite.topicId);
+  if (options?.signal?.aborted) return false;
   if (
     pendingDesktopCallInvite.value ||
     getChatSDK() !== sdk ||
@@ -6318,7 +6330,10 @@ const joinInvitedGroupCallInternal = async (
     return false;
   }
 
-  await prepareInvitedGroupCallJoinState(invite, callStatus, me);
+  if (
+    !(await prepareInvitedGroupCallJoinState(invite, callStatus, me, options))
+  )
+    return false;
   resetCallTelemetryState();
   ensureCallTelemetryTraceId();
   recordCallTelemetryEvent('call.join.start', {
@@ -6372,14 +6387,18 @@ const joinInvitedGroupCallInternal = async (
   }
 };
 
-export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
+export const joinInvitedGroupCall = async (options?: {
+  signal?: AbortSignal;
+}): Promise<boolean | void> => {
+  if (options?.signal?.aborted) return false;
   const invite = invitedGroupCall.value;
 
   if (!invite) return false;
 
   if (
     invitedGroupCallJoinPromise &&
-    invitedGroupCallJoinRoomId === invite.roomId
+    invitedGroupCallJoinRoomId === invite.roomId &&
+    !invitedGroupCallJoinSignal?.aborted
   ) {
     recordCallTelemetryEvent('call.join.invite_join_in_flight', {
       invited: true,
@@ -6390,9 +6409,10 @@ export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
     return invitedGroupCallJoinPromise;
   }
 
-  const joinPromise = joinInvitedGroupCallInternal(invite);
+  const joinPromise = joinInvitedGroupCallInternal(invite, options);
   invitedGroupCallJoinPromise = joinPromise;
   invitedGroupCallJoinRoomId = invite.roomId;
+  invitedGroupCallJoinSignal = options?.signal;
 
   try {
     return await joinPromise;
@@ -6400,6 +6420,7 @@ export const joinInvitedGroupCall = async (): Promise<boolean | void> => {
     if (invitedGroupCallJoinPromise === joinPromise) {
       invitedGroupCallJoinPromise = null;
       invitedGroupCallJoinRoomId = null;
+      invitedGroupCallJoinSignal = undefined;
     }
   }
 };

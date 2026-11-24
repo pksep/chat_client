@@ -20,6 +20,7 @@ import {
 import { saveDesktopPermissionChoice } from '../../src/services/desktop-permission-preferences';
 import '../../src/assets/chat-container.css';
 import { verifyDesktopMessageVisibility } from './desktop-message-visibility';
+import { beginDesktopCallPreparation } from '../../src/services/desktop-call-presentation';
 import {
   isDesktopWindowActive,
   readDesktopWindowState
@@ -112,18 +113,22 @@ const open = async () => {
     appContext: app._context,
     signal: new AbortController().signal,
     getMicrophoneTrack: () => track,
-    notifyActivity: async activity => {
+    notifyActivity: async (activity, options) => {
       if (exerciseNativeToasts) {
         if (
-          !(await showTauriCallActivityNotification({
-            ...activity,
-            participantName: 'Проверка уведомления'
-          }))
+          !(await showTauriCallActivityNotification(
+            {
+              ...activity,
+              participantName: 'Проверка уведомления'
+            },
+            options
+          ))
         )
           throw new Error('Windows не приняла уведомление');
         await report({
           step: 'native-toast',
           kind: activity.kind,
+          soundPlayed: options?.soundPlayed,
           accepted: true
         });
       }
@@ -207,6 +212,38 @@ const click = (selector: string) => {
 };
 const verify = async () => {
   await installDesktopCallControls({ actions: fixtureActions });
+  const preparation = beginDesktopCallPreparation();
+  const preparingAt = performance.now();
+  const preparingWindow = await openDesktopCallWindow({
+    appContext: app._context,
+    signal: new AbortController().signal,
+    actions: fixtureActions
+  });
+  if (!preparingWindow) throw new Error('Нет раннего окна звонка');
+  await preparingWindow.show();
+  await wait(
+    () =>
+      !!preparingWindow.popup.document.querySelector(
+        '[data-testid="DesktopCallPreparing"]'
+      ),
+    'Нет экрана подключения до начала звонка'
+  );
+  if (call.open.value) throw new Error('Подготовка окна запустила звонок');
+  await report({
+    step: 'early-window',
+    passed: true,
+    latencyMs: performance.now() - preparingAt
+  });
+  preparingWindow.popup.document
+    .querySelector<HTMLButtonElement>('[aria-label="Закрыть окно"]')!
+    .click();
+  await wait(
+    () => preparation.signal.aborted,
+    'Закрытие раннего окна не отменило подключение'
+  );
+  await preparingWindow.dispose();
+  preparation.finish();
+  if (endCount) throw new Error('Раннее окно завершило ещё не начатый звонок');
   if (exerciseNativeToasts) {
     await verifyDesktopMessageVisibility(report);
     call.topicId.value = 'local-call-topic';
@@ -572,6 +609,11 @@ const verify = async () => {
       participantId
     }))
   });
+  const { UserAttentionType } = await import('@tauri-apps/api/window');
+  await native.requestUserAttention(UserAttentionType.Informational);
+  if (await isWindowActive('call'))
+    throw new Error('Подсветка значка перевела фокус в звонок');
+  await report({ step: 'hand-attention', passed: true });
   call.requestCallPresentation();
   await wait(
     () => isWindowActive('call'),

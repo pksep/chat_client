@@ -283,7 +283,8 @@ export const showTauriNotification = async ({
     body,
     group,
     autoCancel: true,
-    extra
+    extra,
+    sound: extra?.type === 'call_activity' && extra.soundPlayed ? '' : undefined
   };
 
   sendNotification(options);
@@ -291,7 +292,8 @@ export const showTauriNotification = async ({
 };
 
 export const showTauriCallActivityNotification = (
-  activity: DesktopCallActivity
+  activity: DesktopCallActivity,
+  options?: { soundPlayed?: boolean }
 ): Promise<boolean> => {
   const emoji = {
     heart: '❤️',
@@ -315,7 +317,8 @@ export const showTauriCallActivityNotification = (
       roomId: activity.roomId,
       topicId: activity.topicId,
       participantId: activity.participantId,
-      kind: activity.kind
+      kind: activity.kind,
+      soundPlayed: options?.soundPlayed === true
     }
   });
 };

@@ -305,6 +305,34 @@ button.button-yui-kit {
   opacity: 0.8;
 }
 
+.chat__header-active-call--pending {
+  cursor: progress;
+}
+
+.chat__header-active-call .chat__header-active-call__spinner {
+  box-sizing: border-box;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin-left: 0;
+  border: 2px solid var(--border-table);
+  border-top-color: var(--green2);
+  border-radius: 50%;
+  animation: header-call-pending 0.75s linear infinite;
+}
+
+@keyframes header-call-pending {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat__header-active-call .chat__header-active-call__spinner {
+    animation: none;
+  }
+}
+
 @media screen and (width <=768px) {
   .chat__header-active-call {
     min-width: 0;

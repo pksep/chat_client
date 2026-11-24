@@ -195,6 +195,13 @@ const runPostMountStartupTasks = (): void => {
   runAfterFirstPaint(() => {
     void waitForAppFontReady();
     void clearTauriServiceWorkers();
+    if (isTauri())
+      void Promise.all([
+        import('./services/desktop-call-window'),
+        import('./services/useLiveKit')
+      ]).catch(error =>
+        console.warn('Не удалось подготовить окно звонка:', error)
+      );
     void runIndexedDbResetIfNeeded();
   });
 };

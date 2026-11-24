@@ -71,7 +71,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
-import { isTauri } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import ChatIcon from '../UI/Icons/ChatIcon.vue';
@@ -95,6 +95,7 @@ const maximized = ref(false);
 const stoppingShare = ref(false);
 const listeners: UnlistenFn[] = [];
 let disposed = false;
+let customMacChrome = false;
 
 const stopSharing = async () => {
   if (stoppingShare.value) return;
@@ -120,7 +121,8 @@ const refreshWindow = async () => {
     appWindow.isMaximized()
   ]);
   if (disposed) return;
-  visible.value = !decorated && (Boolean(callWindow) || !fullscreen);
+  visible.value =
+    (!decorated || customMacChrome) && (Boolean(callWindow) || !fullscreen);
   maximized.value = isMaximized;
   // У звонка fullscreen синхронизирует его контроллер: ответ старого resize
   // из шапки не должен закрывать только что открытое видео.
@@ -171,6 +173,13 @@ const startDrag = (event: MouseEvent) => {
 onMounted(async () => {
   if (!isTauri()) return;
   try {
+    if (/mac/i.test(navigator.platform || navigator.userAgent)) {
+      customMacChrome =
+        Boolean(callWindow) ||
+        (await invoke<boolean>('desktop_call_window_available').catch(
+          () => false
+        ));
+    }
     const appWindow = currentWindow();
     const bind = (unlisten: UnlistenFn) => {
       if (disposed) unlisten();

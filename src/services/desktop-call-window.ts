@@ -22,7 +22,12 @@ import type {
   DesktopCallActions,
   DesktopCallWindowContext
 } from '../components/Desktop/call-window-context';
-import { callPresentationRequest, isModalVisible, state } from './useCallState';
+import {
+  callPresentationRequest,
+  isModalVisible,
+  state,
+  open as callOpen
+} from './useCallState';
 import { desktopOverlayTarget } from './desktop-overlay-target';
 import { createDesktopMicrophoneMeter } from './desktop-microphone-meter';
 import {
@@ -30,6 +35,14 @@ import {
   type DesktopCallActivity
 } from './desktop-call-activity';
 import '../assets/desktop-call-window.css';
+import { createDesktopCallHandAlert } from './desktop-call-hand-alert';
+import { showTauriCallActivityNotification } from './useTauriNotifications';
+import {
+  desktopCallWindowOpening,
+  desktopCallWindowReady,
+  desktopCallPreparationRequested,
+  cancelDesktopCallPreparation
+} from './desktop-call-presentation';
 import {
   isDesktopWindowActive,
   readDesktopWindowState
@@ -142,7 +155,10 @@ export async function openDesktopCallWindow(options: {
   signal: AbortSignal;
   actions?: Partial<DesktopCallActions>;
   getMicrophoneTrack?: () => MediaStreamTrack | null;
-  notifyActivity?: (activity: DesktopCallActivity) => Promise<boolean>;
+  notifyActivity?: (
+    activity: DesktopCallActivity,
+    options?: { soundPlayed?: boolean }
+  ) => Promise<boolean>;
 }) {
   if (!isTauri()) return null;
   const available = await invoke<boolean>(
@@ -151,8 +167,15 @@ export async function openDesktopCallWindow(options: {
   if (!available || options.signal.aborted) return null;
   return exclusive(async () => {
     if (options.signal.aborted) return null;
-    const core = await import('./useLiveKit');
-    if (options.signal.aborted) return null;
+    let core: typeof import('./useLiveKit') | null = null;
+    const coreReady = import('./useLiveKit');
+    void coreReady
+      .then(module => {
+        core = module;
+      })
+      .catch(error =>
+        console.warn('Не удалось подготовить движок звонка:', error)
+      );
     const initialSize = measureWebCallDialog();
     const popup = window.open(
       'about:blank#sep-chat-call',
@@ -168,30 +191,35 @@ export async function openDesktopCallWindow(options: {
     let closing = false;
     let stopPresentation: (() => void) | undefined;
     let stopMeter: (() => void) | undefined;
+    let stopHandAlert: (() => void) | undefined;
     let unmount: (() => void) | undefined;
     let checkClosed: ReturnType<typeof setInterval> | undefined;
     let fullscreenChanges = Promise.resolve();
     let fullscreenRevision = 0;
     let fullscreenSettledRevision = 0;
     const actions: DesktopCallActions = {
-      acceptCall: core.acceptCall,
-      leaveCall: core.leaveCall,
-      toggleMic: core.toggleMic,
-      toggleVideo: core.toggleVideo,
-      toggleScreenShare: core.toggleScreenShare,
-      switchCamera: core.switchCamera,
-      toggleHandRaise: core.toggleHandRaise,
-      sendCallReaction: core.sendCallReaction,
+      acceptCall: async () => (await coreReady).acceptCall(),
+      leaveCall: async () => (await coreReady).leaveCall(),
+      toggleMic: async () => (await coreReady).toggleMic(),
+      toggleVideo: async () => (await coreReady).toggleVideo(),
+      toggleScreenShare: async () => (await coreReady).toggleScreenShare(),
+      switchCamera: async () => (await coreReady).switchCamera(),
+      toggleHandRaise: async () => (await coreReady).toggleHandRaise(),
+      sendCallReaction: async reaction =>
+        (await coreReady).sendCallReaction(reaction),
       ...options.actions
     };
     const closeByUser = () => {
       if (!alive || closing) return;
       closing = true;
-      void actions.leaveCall();
+      const preparing = desktopCallPreparationRequested.value;
+      cancelDesktopCallPreparation();
+      if (!preparing || callOpen.value) void actions.leaveCall();
     };
     const clean = async () => {
       if (!alive) return;
       alive = false;
+      desktopCallWindowReady.value = false;
       if (checkClosed) clearInterval(checkClosed);
       unlisten.splice(0).forEach(dispose => dispose());
       // Сначала возвращаем живые диалоги в основной документ, затем уничтожаем окно.
@@ -200,6 +228,7 @@ export async function openDesktopCallWindow(options: {
         await nextTick();
       }
       stopMeter?.();
+      stopHandAlert?.();
       unmount?.();
       stopPresentation?.();
       await invoke('desktop_close_call_window');
@@ -260,9 +289,21 @@ export async function openDesktopCallWindow(options: {
       const meter = createDesktopMicrophoneMeter({
         renderWindow: host,
         enabled: toRef(state, 'isMicActive'),
-        getTrack: options.getMicrophoneTrack || core.getDesktopMicrophoneTrack
+        getTrack:
+          options.getMicrophoneTrack ||
+          (() => core?.getDesktopMicrophoneTrack() || null)
       });
       stopMeter = meter.dispose;
+      const handAlert = createDesktopCallHandAlert({
+        renderWindow: host,
+        nativeWindow
+      });
+      stopHandAlert = handAlert.dispose;
+      unlisten.push(
+        await nativeWindow.onFocusChanged(({ payload }) => {
+          if (payload) handAlert.clearAttention();
+        })
+      );
       const context: DesktopCallWindowContext = {
         renderWindow: host,
         nativeWindow,
@@ -312,7 +353,12 @@ export async function openDesktopCallWindow(options: {
       };
       unlisten.push(
         installDesktopCallActivityNotifications({
-          notify: options.notifyActivity,
+          notify: activity => {
+            const soundPlayed = activity.kind === 'hand' && handAlert.play();
+            return (
+              options.notifyActivity || showTauriCallActivityNotification
+            )(activity, { soundPlayed });
+          },
           isActive: async () => {
             if (!alive) return true;
             return readDesktopWindowState('call')
@@ -379,19 +425,34 @@ export async function openDesktopCallWindow(options: {
       }, 300);
       const show = async () => {
         if (!alive) return;
-        await nativeWindow.unminimize();
-        await nativeWindow.show();
-        await nativeWindow.setFocus();
+        desktopCallWindowOpening.value = true;
+        try {
+          await nativeWindow.unminimize();
+          await nativeWindow.show();
+          await nativeWindow.setFocus();
+          if (alive) desktopCallWindowReady.value = true;
+        } finally {
+          desktopCallWindowOpening.value = false;
+        }
       };
       const hide = async () => {
         if (alive) await nativeWindow.hide();
       };
       unlisten.push(
-        watch([isModalVisible, callPresentationRequest], ([visible]) => {
-          void (visible ? show() : hide()).catch(error =>
-            console.warn('Не удалось изменить видимость окна звонка:', error)
-          );
-        })
+        watch(
+          [
+            isModalVisible,
+            callPresentationRequest,
+            desktopCallPreparationRequested
+          ],
+          ([visible]) => {
+            void (
+              visible || desktopCallPreparationRequested.value ? show() : hide()
+            ).catch(error =>
+              console.warn('Не удалось изменить видимость окна звонка:', error)
+            );
+          }
+        )
       );
       return {
         context,
