@@ -10,31 +10,29 @@
     @contextmenu.prevent.stop
     @keydown="handleKeys"
   >
-    <button
-      type="button"
-      role="menuitem"
-      @click="run(requestDesktopCallStatus)"
+    <div
+      class="desktop-call-context-menu__devices"
+      role="group"
+      aria-label="Устройства звонка"
     >
-      <InfoIcon />
-      <span>Статус звонка</span>
-    </button>
-    <div class="desktop-call-context-menu__separator" />
-    <button
-      v-for="device in devices"
-      :key="device.label"
-      type="button"
-      role="menuitem"
-      :aria-label="device.actionLabel"
-      :disabled="!canControl"
-      @click="run(device.action)"
-    >
-      <component :is="device.icon" />
-      <span>{{ device.label }}</span>
-      <small
-        :class="{ 'desktop-call-context-menu__enabled': device.enabled }"
-        >{{ device.status }}</small
+      <button
+        v-for="device in devices"
+        :key="device.label"
+        type="button"
+        role="menuitemcheckbox"
+        :aria-checked="device.enabled"
+        :aria-label="device.actionLabel"
+        :title="device.actionLabel"
+        :disabled="!canControl || desktopCallControlBusy"
+        @click="toggleDesktopCallDevice(device.id, context.actions)"
       >
-    </button>
+        <span class="desktop-call-context-menu__device-icon"
+          ><component :is="device.icon"
+        /></span>
+        <span>{{ device.label }}</span>
+        <small>{{ device.status }}</small>
+      </button>
+    </div>
     <div class="desktop-call-context-menu__separator" />
     <button
       type="button"
@@ -65,8 +63,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useDesktopCallWindowContext } from './call-window-context';
 import {
-  isCalling,
-  isIncoming,
   open as callOpen,
   state,
   type CallReaction
@@ -77,41 +73,43 @@ import VideoIcon from '../CallModal/UI/VideoIcon.vue';
 import VideoDisableIcon from '../CallModal/UI/VideoDisableIcon.vue';
 import ScreenShareIcon from '../CallModal/UI/ScreenShareIcon.vue';
 import HandRaiseIcon from '../CallModal/UI/HandRaiseIcon.vue';
-import InfoIcon from '../CallModal/UI/GroupInfoIcon.vue';
-import { requestDesktopCallStatus } from '../../services/desktop-call-status';
+import {
+  canControlDesktopCall as canControl,
+  desktopCallControlBusy,
+  toggleDesktopCallDevice
+} from '../../services/desktop-call-controls';
 
 const context = useDesktopCallWindowContext()!;
 const host = context.renderWindow;
 const doc = host.document;
 const menu = ref<HTMLElement>();
-const canControl = computed(() => !isCalling.value && !isIncoming.value);
 const position = ref({ x: 0, y: 0 });
 const devices = computed(() => [
   {
+    id: 'microphone' as const,
     label: 'Микрофон',
     icon: state.isMicActive ? MicIcon : MicDisableIcon,
     enabled: state.isMicActive,
     status: state.isMicActive ? 'Включён' : 'Выключен',
-    actionLabel: state.isMicActive ? 'Выключить микрофон' : 'Включить микрофон',
-    action: context.actions.toggleMic
+    actionLabel: state.isMicActive ? 'Выключить микрофон' : 'Включить микрофон'
   },
   {
+    id: 'camera' as const,
     label: 'Камера',
     icon: state.isVideoActive ? VideoIcon : VideoDisableIcon,
     enabled: state.isVideoActive,
     status: state.isVideoActive ? 'Включена' : 'Выключена',
-    actionLabel: state.isVideoActive ? 'Выключить камеру' : 'Включить камеру',
-    action: context.actions.toggleVideo
+    actionLabel: state.isVideoActive ? 'Выключить камеру' : 'Включить камеру'
   },
   {
-    label: 'Демонстрация экрана',
+    id: 'screen' as const,
+    label: 'Экран',
     icon: ScreenShareIcon,
     enabled: state.isScreenSharingActive,
     status: state.isScreenSharingActive ? 'Включена' : 'Выключена',
     actionLabel: state.isScreenSharingActive
       ? 'Остановить демонстрацию'
-      : 'Начать демонстрацию',
-    action: context.actions.toggleScreenShare
+      : 'Начать демонстрацию'
   }
 ]);
 const reactions: Array<{ value: CallReaction; emoji: string; label: string }> =
@@ -152,7 +150,17 @@ const escape = (event: KeyboardEvent) => {
   close();
 };
 const handleKeys = (event: KeyboardEvent) => {
-  if (!['ArrowUp', 'ArrowDown', 'Home', 'End', 'Tab'].includes(event.key))
+  if (
+    ![
+      'ArrowUp',
+      'ArrowDown',
+      'ArrowLeft',
+      'ArrowRight',
+      'Home',
+      'End',
+      'Tab'
+    ].includes(event.key)
+  )
     return;
   if (event.key === 'Tab') {
     close();
@@ -160,7 +168,8 @@ const handleKeys = (event: KeyboardEvent) => {
   }
   event.preventDefault();
   const buttons = Array.from(
-    menu.value?.querySelectorAll<HTMLButtonElement>('button') || []
+    menu.value?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ||
+      []
   );
   const current = buttons.indexOf(doc.activeElement as HTMLButtonElement);
   const next =
@@ -168,7 +177,9 @@ const handleKeys = (event: KeyboardEvent) => {
       ? 0
       : event.key === 'End'
         ? buttons.length - 1
-        : (current + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) %
+        : (current +
+            (['ArrowDown', 'ArrowRight'].includes(event.key) ? 1 : -1) +
+            buttons.length) %
           buttons.length;
   buttons[next]?.focus();
 };
@@ -201,8 +212,8 @@ onBeforeUnmount(() => {
 .desktop-call-context-menu {
   position: fixed;
   z-index: 100020;
-  width: min(330px, calc(100vw - 16px));
-  padding: 6px;
+  width: min(300px, calc(100vw - 16px));
+  padding: 8px;
   border: 1px solid var(--border-table);
   border-radius: 12px;
   color: var(--text-primary);
@@ -226,19 +237,55 @@ onBeforeUnmount(() => {
   background: var(--action-secondary-pressed-bg);
   outline: none;
 }
+.desktop-call-context-menu button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.desktop-call-context-menu__devices {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 4px 0;
+}
+.desktop-call-context-menu__devices button {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 2px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.desktop-call-context-menu__device-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  background: var(--action-secondary-pressed-bg);
+}
+.desktop-call-context-menu__device-icon svg {
+  width: 24px;
+  height: 24px;
+}
+.desktop-call-context-menu__devices
+  button[aria-checked='true']
+  .desktop-call-context-menu__device-icon {
+  color: #fff;
+  background: var(--text-link);
+}
 .desktop-call-context-menu > button > svg {
   width: 20px;
   height: 20px;
   flex: 0 0 20px;
 }
 .desktop-call-context-menu small {
-  margin-left: auto;
   color: var(--text-secondary);
   font-size: 11px;
   white-space: nowrap;
-}
-.desktop-call-context-menu small.desktop-call-context-menu__enabled {
-  color: var(--text-link);
 }
 .desktop-call-context-menu__separator {
   height: 1px;

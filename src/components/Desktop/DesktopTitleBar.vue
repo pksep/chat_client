@@ -114,17 +114,21 @@ const refreshWindow = async () => {
   const appWindow = currentWindow();
   const [decorated, fullscreen, isMaximized] = await Promise.all([
     appWindow.isDecorated(),
-    appWindow.isFullscreen(),
+    callWindow
+      ? Promise.resolve(callWindow.fullscreen.value)
+      : appWindow.isFullscreen(),
     appWindow.isMaximized()
   ]);
   if (disposed) return;
-  visible.value = !decorated && !fullscreen;
+  visible.value = !decorated && (Boolean(callWindow) || !fullscreen);
   maximized.value = isMaximized;
-  if (callWindow) callWindow.fullscreen.value = fullscreen;
-  renderDocument.documentElement.classList.toggle(
-    'chat-desktop-custom-chrome',
-    visible.value
-  );
+  // У звонка fullscreen синхронизирует его контроллер: ответ старого resize
+  // из шапки не должен закрывать только что открытое видео.
+  if (!callWindow)
+    renderDocument.documentElement.classList.toggle(
+      'chat-desktop-custom-chrome',
+      visible.value
+    );
 };
 
 const runWindowAction = async (

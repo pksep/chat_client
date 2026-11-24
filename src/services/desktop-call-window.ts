@@ -30,6 +30,10 @@ import {
   type DesktopCallActivity
 } from './desktop-call-activity';
 import '../assets/desktop-call-window.css';
+import {
+  isDesktopWindowActive,
+  readDesktopWindowState
+} from './desktop-window-state';
 
 let lifecycle: Promise<unknown> = Promise.resolve();
 const measureWebCallDialog = () => {
@@ -167,6 +171,8 @@ export async function openDesktopCallWindow(options: {
     let unmount: (() => void) | undefined;
     let checkClosed: ReturnType<typeof setInterval> | undefined;
     let fullscreenChanges = Promise.resolve();
+    let fullscreenRevision = 0;
+    let fullscreenSettledRevision = 0;
     const actions: DesktopCallActions = {
       acceptCall: core.acceptCall,
       leaveCall: core.leaveCall,
@@ -276,14 +282,29 @@ export async function openDesktopCallWindow(options: {
           await context.setFullscreen(!(await nativeWindow.isFullscreen()));
         },
         setFullscreen(enabled) {
+          const revision = ++fullscreenRevision;
+          // Повторный вход в видео учитывает уже запрошенный выход, даже пока ОС
+          // ещё меняет размер. Старые ответы не закрывают новый просмотр.
+          context.fullscreen.value = enabled;
+          doc.documentElement.classList.toggle(
+            'chat-desktop-custom-chrome',
+            !enabled
+          );
           const change = fullscreenChanges.then(async () => {
             if (!alive) return;
-            await nativeWindow.setFullscreen(enabled);
-            context.fullscreen.value = await nativeWindow.isFullscreen();
-            doc.documentElement.classList.toggle(
-              'chat-desktop-custom-chrome',
-              !context.fullscreen.value
-            );
+            try {
+              await nativeWindow.setFullscreen(enabled);
+            } finally {
+              const actual = await nativeWindow.isFullscreen();
+              if (alive && revision === fullscreenRevision) {
+                fullscreenSettledRevision = revision;
+                context.fullscreen.value = actual;
+                doc.documentElement.classList.toggle(
+                  'chat-desktop-custom-chrome',
+                  !actual
+                );
+              }
+            }
           });
           fullscreenChanges = change.catch(() => {});
           return change;
@@ -294,12 +315,9 @@ export async function openDesktopCallWindow(options: {
           notify: options.notifyActivity,
           isActive: async () => {
             if (!alive) return true;
-            const [focused, visible, minimized] = await Promise.all([
-              nativeWindow.isFocused(),
-              nativeWindow.isVisible(),
-              nativeWindow.isMinimized()
-            ]);
-            return focused && visible && !minimized;
+            return readDesktopWindowState('call')
+              .then(isDesktopWindowActive)
+              .catch(() => false);
           }
         })
       );
@@ -312,7 +330,20 @@ export async function openDesktopCallWindow(options: {
         await nativeWindow.onResized(async () => {
           if (!alive) return;
           resize();
-          context.fullscreen.value = await nativeWindow.isFullscreen();
+          if (fullscreenRevision !== fullscreenSettledRevision) return;
+          const revision = fullscreenRevision;
+          const actual = await nativeWindow.isFullscreen();
+          if (
+            alive &&
+            revision === fullscreenRevision &&
+            revision === fullscreenSettledRevision
+          ) {
+            context.fullscreen.value = actual;
+            doc.documentElement.classList.toggle(
+              'chat-desktop-custom-chrome',
+              !actual
+            );
+          }
         })
       );
       unlisten.push(

@@ -2,7 +2,6 @@
   <DesktopTitleBar />
   <DesktopMediaPermissionDialog />
   <DesktopScreenSharePicker />
-  <DesktopCallStatusPanel />
   <ChatContainerRoot
     v-if="config && !isCredentialsStep"
     :config="config"
@@ -58,7 +57,6 @@ import DesktopCallInvitePrompt from './components/Menu/DesktopCallInvitePrompt.v
 import DesktopTitleBar from './components/Desktop/DesktopTitleBar.vue';
 import DesktopMediaPermissionDialog from './components/Desktop/DesktopMediaPermissionDialog.vue';
 import DesktopScreenSharePicker from './components/Desktop/DesktopScreenSharePicker.vue';
-import DesktopCallStatusPanel from './components/Desktop/DesktopCallStatusPanel.vue';
 import { initDesktopCallLinks } from './services/useDesktopCallLinks';
 import { ensureTauriWindowStateTracking } from './services/useAppVisibility';
 import { IChatContainerConfig } from './components/interfaces/interfaces';

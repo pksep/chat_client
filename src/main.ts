@@ -16,6 +16,7 @@ import { suppressDefaultDesktopContextMenu } from './utils/desktop-context-menu'
 import { installDesktopMediaPermissions } from './services/desktop-media-permissions';
 import { installDesktopClipboardPermissions } from './services/desktop-permission-preferences';
 import { initDesktopScreenCapture } from './services/desktop-screen-capture';
+import { installDesktopCallControls } from './services/desktop-call-controls';
 
 performance.mark('chat-startup:modules-ready');
 const disposeIosPwaViewport = initIosPwaViewport();
@@ -212,6 +213,8 @@ const mountApp = async (): Promise<void> => {
     installDesktopClipboardPermissions();
   import.meta.hot?.dispose(disposeDesktopClipboardPermissions);
   await initDesktopScreenCapture();
+  const disposeDesktopCallControls = await installDesktopCallControls();
+  import.meta.hot?.dispose(disposeDesktopCallControls);
   installNotoEmojiFontFaces({
     preferSystemFont: Capacitor.getPlatform() === 'android'
   });
