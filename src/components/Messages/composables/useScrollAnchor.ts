@@ -11,6 +11,7 @@ interface UseScrollAnchorOptions {
   bottomLockThreshold?: number;
   messageSelector?: string;
   getViewportAnchor?: (preferredMessageId?: string) => ScrollAnchor | null;
+  suspended?: () => boolean;
 }
 
 type ViewportMode = 'live' | 'history' | 'jump';
@@ -216,6 +217,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
   };
 
   const restoreAnchorPosition = (anchor: ScrollAnchor | null): boolean => {
+    if (options.suspended?.()) return false;
     const container = containerRef.value;
     if (!container || !anchor) {
       return false;
@@ -266,6 +268,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
   };
 
   const keepBottomPinned = (behavior: ScrollBehavior = 'auto'): void => {
+    if (options.suspended?.()) return;
     const metrics = getContainerMetrics();
     if (!metrics) {
       return;
@@ -372,6 +375,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
       forceAnchor?: ScrollAnchor | null;
     }
   ): void => {
+    if (options.suspended?.()) return;
     const mutation = pendingMutation;
     if (
       !mutation ||
@@ -399,6 +403,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     behavior: ScrollBehavior = 'smooth',
     isCurrent = () => true
   ): Promise<void> => {
+    if (options.suspended?.()) return;
     const metrics = getContainerMetrics();
     if (!metrics) {
       return;
@@ -407,7 +412,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     const finalTop = Math.min(metrics.maxScroll, Math.max(0, requestedTop));
     const delta = finalTop - metrics.container.scrollTop;
     const scrollToTop = (top: number, scrollBehavior: ScrollBehavior): void => {
-      if (!isCurrent()) return;
+      if (options.suspended?.() || !isCurrent()) return;
       setInternalScrollLock();
       metrics.container.scrollTo({ top, behavior: scrollBehavior });
     };
@@ -474,6 +479,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
   };
 
   const scrollToBottomInstant = (): void => {
+    if (options.suspended?.()) return;
     viewportMode.value = 'live';
     keepBottomPinned('auto');
   };
@@ -543,6 +549,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
   };
 
   const handleContentResize = (entries: ResizeObserverEntry[]): void => {
+    if (options.suspended?.()) return;
     // Клавиатура меняет высоту окна, но не длинной ленты сообщений.
     // Удерживаем её нижний край до отрисовки нового размера окна.
     if (entries.some(entry => entry.target === observedViewport)) {
@@ -819,6 +826,7 @@ export function useScrollAnchor(options: UseScrollAnchorOptions) {
     initialize,
     onScroll,
     captureViewportAnchor,
+    restoreViewportAnchor: restoreAnchorPosition,
     beginViewportMutation,
     commitViewportMutation,
     jumpToMessage,

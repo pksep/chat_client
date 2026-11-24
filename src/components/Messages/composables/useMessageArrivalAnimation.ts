@@ -13,7 +13,8 @@ const layoutKey = (element: HTMLElement): string =>
 export function useMessageArrivalAnimation(
   root: Ref<HTMLElement | null>,
   messages: () => IMessage[],
-  topicId: () => string
+  topicId: () => string,
+  suspended: () => boolean = () => false
 ): void {
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const animations = new Set<Animation>();
@@ -108,6 +109,7 @@ export function useMessageArrivalAnimation(
     latestMessageArrival,
     message => {
       if (
+        suspended() ||
         !message ||
         !root.value ||
         message.topicId !== topicId() ||
@@ -143,5 +145,6 @@ export function useMessageArrivalAnimation(
   );
 
   watch(topicId, cleanup, { flush: 'sync' });
+  watch(suspended, cleanup, { flush: 'sync' });
   onBeforeUnmount(cleanup);
 }

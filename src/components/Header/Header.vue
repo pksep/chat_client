@@ -1,9 +1,23 @@
 <template>
   <header
     ref="headerRef"
-    :class="['chat__header-wrapper', $attrs.class]"
+    :class="[
+      'chat__header-wrapper',
+      $attrs.class,
+      { 'chat__header-wrapper--pinned': isPinnedListOpen }
+    ]"
     :data-testid="`${props.dataTestid}-Header-Container`"
   >
+    <PinnedMessagesHeader
+      v-if="isPinnedListOpen"
+      :topic-id="route.id"
+      :can-call="showHeaderCallAction"
+      @search="
+        closePinnedMessagesView();
+        showSearch();
+      "
+      @call="handleCallAction"
+    />
     <div
       v-if="showHeaderCallBanner"
       class="chat__header-active-call"
@@ -519,6 +533,11 @@
 </template>
 
 <script lang="ts" setup>
+import PinnedMessagesHeader from '../Messages/PinnedMessagesHeader.vue';
+import {
+  pinnedMessagesViewTopicId,
+  closePinnedMessagesView
+} from '../../services/pinned-messages-view';
 import { isTauri } from '@tauri-apps/api/core';
 import {
   useManagerInquiries,
@@ -716,6 +735,9 @@ defineOptions({
 const emits = defineEmits<IHeaderEmits>();
 const currentRoute = useUrlWatcher();
 const route = computed(() => props.displayRoute || currentRoute.value);
+const isPinnedListOpen = computed(
+  () => !!route.value.id && pinnedMessagesViewTopicId.value === route.value.id
+);
 const aiAssistantTitleRef = ref<HTMLElement | null>(null);
 const isAiAssistantTitleOverflowing = ref(false);
 let aiAssistantTitleResizeObserver: ResizeObserver | null = null;

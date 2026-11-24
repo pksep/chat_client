@@ -123,6 +123,7 @@
                 class="message-content__media-overlay-time"
                 data-message-context="message"
               >
+                <PinIcon v-if="props.isPin" class="message-media__pin" />
                 <span>{{ props.time }}</span>
                 <ErrorIcon v-if="showErrorIcon" />
                 <MessageStatusIcons
@@ -152,6 +153,7 @@
             class="message-time message-time--inline message-media__caption-time"
             :data-testid="`${props.dataTestid}-Time`"
           >
+            <PinIcon v-if="props.isPin" class="message-media__pin" />
             <span>{{ props.time }}</span>
             <ErrorIcon v-if="showErrorIcon" />
             <MessageStatusIcons
@@ -168,6 +170,7 @@
               class="message-time message-time--bottom message-media__caption-time"
               :data-testid="`${props.dataTestid}-Time`"
             >
+              <PinIcon v-if="props.isPin" class="message-media__pin" />
               <span>{{ props.time }}</span>
               <ErrorIcon v-if="showErrorIcon" />
               <MessageStatusIcons
@@ -209,6 +212,7 @@ import LoadingIcon from '../UI/LoadingIcon.vue';
 import PlayIcon from '../UI/PlayIcon.vue';
 import MessageEmojies from './MessageEmojies.vue';
 import ErrorIcon from '../UI/ErrorIcon.vue';
+import PinIcon from '../UI/PinIcon.vue';
 import { stripHtml } from '../../utils/stripHtml';
 import { useMessageMedia } from './composables/useMessageMedia';
 import { useReferenceWidth } from './composables/useReferenceWidth';

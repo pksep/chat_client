@@ -19,6 +19,20 @@
       />
       <span>{{ props.scopeLabel }}</span>
     </label>
+    <textarea
+      class="pin-comment-input"
+      :disabled="!props.commentsEnabled"
+      :value="props.comment"
+      aria-label="Комментарий к закреплению"
+      placeholder="Введите комментарий"
+      maxlength="4000"
+      rows="4"
+      @input="
+        emits('update:comment', ($event.target as HTMLTextAreaElement).value)
+      "
+      @click.stop
+    />
+    <p v-if="props.error" role="alert">{{ props.error }}</p>
     <Button :type="ButtonTypeEnum.primary" @click.stop="handleCloseModal">
       Нет
     </Button>
@@ -48,6 +62,20 @@
       />
       <span>{{ props.scopeLabel }}</span>
     </label>
+    <textarea
+      class="pin-comment-input"
+      :disabled="!props.commentsEnabled"
+      :value="props.comment"
+      aria-label="Комментарий к закреплению"
+      placeholder="Введите комментарий"
+      maxlength="4000"
+      rows="4"
+      @input="
+        emits('update:comment', ($event.target as HTMLTextAreaElement).value)
+      "
+      @click.stop
+    />
+    <p v-if="props.error" role="alert">{{ props.error }}</p>
     <div class="confirm__modal__buttons">
       <Button
         :type="ButtonTypeEnum.secondary"
@@ -86,6 +114,9 @@ interface IPinConfirmModalProps {
   description: string;
   scopeLabel: string;
   pinForEveryone: boolean;
+  commentsEnabled?: boolean;
+  comment?: string;
+  error?: string;
 }
 
 const props = defineProps<IPinConfirmModalProps>();
@@ -95,6 +126,7 @@ const emits = defineEmits<{
   (e: 'unmount-close'): void;
   (e: 'unmount-confirm'): void;
   (e: 'update:pinForEveryone', value: boolean): void;
+  (e: 'update:comment', value: string): void;
 }>();
 
 const handleCloseModal = () => {

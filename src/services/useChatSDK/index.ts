@@ -4,6 +4,11 @@ import { observeUploadRequest } from '../upload-request-telemetry';
 import { deferWebUpdateReload } from '../web-update-activity';
 import { bindIncomingChatEvents } from './incoming-events';
 import { createMessageDeliveryQueue } from '../message-delivery-queue';
+import type {
+  PinComment,
+  PinCommentAck,
+  PinCommentCommand
+} from '../pin-comments';
 import { createSocketReconnectScheduler } from '../socket-reconnect';
 import {
   User,
@@ -1794,6 +1799,19 @@ export class ChatSDK {
 
   async getPinnedMessages(topicId: string): Promise<Message[]> {
     return await this.message.getPinnedMessages(topicId);
+  }
+
+  getPinComments(
+    topicId: string
+  ): Promise<{ version: number; comments: PinComment[] }> {
+    return this.message.getPinComments(topicId);
+  }
+
+  sendPinCommentCommand(
+    topicId: string,
+    command: PinCommentCommand
+  ): Promise<PinCommentAck> {
+    return this.message.sendPinCommentCommand(topicId, command);
   }
 
   async getCallHistory(opts?: {

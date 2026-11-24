@@ -1,5 +1,5 @@
 const DB_NAME = 'chat-topic-messages-db';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 const PENDING_UPLOAD_STORE_NAME = 'pendingUploads';
 const PENDING_UPLOAD_CHUNKS_STORE_NAME = 'pendingUploadChunks';
 const PENDING_UPLOAD_CHUNK_SIZE = 4 * 1024 * 1024;
@@ -65,6 +65,7 @@ const openDb = () => {
       const stores = [
         ['topicMessages', { keyPath: 'cacheKey' }],
         ['pinnedMessages', { keyPath: 'cacheKey' }],
+        ['pinCommentTopics', { keyPath: 'cacheKey' }],
         [PENDING_UPLOAD_STORE_NAME, { keyPath: 'cacheKey' }],
         ['pendingUploadMeta', { keyPath: 'cacheKey' }]
       ];

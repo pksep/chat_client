@@ -55,7 +55,7 @@ export function useMessageScroll(
     hideUnreadMarker?: boolean;
     unreadMarkerMessageId?: string | null;
   },
-  props: { user?: any }
+  props: { user?: any; suspended?: boolean }
 ) {
   const isShowScrollToBottomButton = ref(false);
   const viewportRevision = ref(0);
@@ -69,6 +69,7 @@ export function useMessageScroll(
   const scrolledUnreadMarkerKey = ref<string | null>(null);
 
   const scrollAnchor = useScrollAnchor({
+    suspended: () => !!props.suspended,
     containerRef: chatWrapperRef,
     bottomThreshold: 120,
     bottomLockThreshold: 4,
@@ -112,6 +113,7 @@ export function useMessageScroll(
   let trackedViewportTopicId = '';
 
   const isMessageVisibleInViewport = (messageId: string): boolean => {
+    if (props.suspended) return false;
     const container = chatWrapperRef.value;
 
     if (!container) {
@@ -463,6 +465,7 @@ export function useMessageScroll(
   );
 
   const canTrackVisibleMessages = (): boolean => {
+    if (props.suspended) return false;
     const container = chatWrapperRef.value;
 
     if (!container) {
@@ -830,6 +833,7 @@ export function useMessageScroll(
     }
 
     if (
+      props.suspended ||
       !hasOldMessage ||
       !route.value?.id ||
       Date.now() < historyFetchSuspendedUntil.value
@@ -1339,6 +1343,7 @@ export function useMessageScroll(
 
     try {
       await clearTopicNotifications(route.value.id);
+      if (!canMarkVisibleMessagesAsRead()) return;
       viewportTelemetry.readDecision(
         'loaded_window',
         unreadMessages.map(message => message.id),
@@ -1476,6 +1481,7 @@ export function useMessageScroll(
   };
 
   const handleScroll = async (): Promise<void> => {
+    if (props.suspended) return;
     const el = chatWrapperRef.value;
     if (!el) return;
 
@@ -1529,7 +1535,7 @@ export function useMessageScroll(
       return;
     }
 
-    if (Date.now() < historyFetchSuspendedUntil.value) {
+    if (props.suspended || Date.now() < historyFetchSuspendedUntil.value) {
       return;
     }
 
@@ -1619,7 +1625,7 @@ export function useMessageScroll(
     smooth?: boolean;
     isCurrent?: () => boolean;
   }) => {
-    if (!chatWrapperRef.value) return;
+    if (props.suspended || !chatWrapperRef.value) return;
     const topicId = route.value.id;
     const isCurrent = () =>
       route.value.id === topicId && (opts?.isCurrent?.() ?? true);
@@ -1956,7 +1962,7 @@ export function useMessageScroll(
   watch(
     () => state.messages.length,
     (newLength, oldLength) => {
-      if (route.value && route.value.type === 'AI') return;
+      if (props.suspended || (route.value && route.value.type === 'AI')) return;
 
       if (oldLength === 0 && newLength > 0) {
         scrollState.shouldAutoScroll = true;
@@ -1968,6 +1974,7 @@ export function useMessageScroll(
   watch(
     messageIds,
     (newIds, oldIds) => {
+      if (props.suspended) return;
       if (!oldIds || !chatWrapperRef.value) {
         pendingMessagesMutationRevision = null;
         pendingViewportAnchorMessageId = null;
@@ -2111,6 +2118,37 @@ export function useMessageScroll(
       void flushQueuedReadMessages();
     }
   };
+
+  let suspendedViewport: { top: number; anchor: ScrollAnchor | null } | null =
+    null;
+  watch(
+    () => props.suspended,
+    suspended => {
+      if (suspended) {
+        suspendedViewport = {
+          top: chatWrapperRef.value?.scrollTop || 0,
+          anchor: scrollAnchor.captureViewportAnchor()
+        };
+        scrollAnchor.setViewportMode('history', { pin: false });
+        queuedReadIds.clear();
+        pendingReadIds.clear();
+        intersectionObserver?.disconnect();
+        historyPaginationObserver?.disconnect();
+        setTopicNearBottomState(route.value.id, false);
+      } else
+        nextTick(() => {
+          if (suspendedViewport && chatWrapperRef.value) {
+            if (!scrollAnchor.restoreViewportAnchor(suspendedViewport.anchor))
+              chatWrapperRef.value.scrollTop = suspendedViewport.top;
+            suspendedViewport = null;
+          }
+          setTopicNearBottomState(route.value.id, scrollAnchor.isAtBottom());
+          setupIntersectionObserver();
+          flushVisibleUnreadMessages();
+        });
+    },
+    { flush: 'sync' }
+  );
 
   onMounted(() => {
     document.addEventListener('visibilitychange', handleVisibilityChange);

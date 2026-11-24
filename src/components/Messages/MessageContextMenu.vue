@@ -317,6 +317,9 @@
     description="Вы уверены, что хотите закрепить это сообщение?"
     scope-label="Закрепить у всех в чате"
     :pin-for-everyone="pinForEveryone"
+    :comments-enabled="pinCommentState.support === 'available'"
+    v-model:comment="pinCommentText"
+    :error="pinCommentError"
     @update:pin-for-everyone="pinForEveryone = $event"
     @unmount-close="handleClosePinModal"
     @unmount-confirm="handleConfirmPinMessage"
@@ -347,6 +350,7 @@
 </template>
 
 <script setup lang="ts">
+import { usePinComments } from '../../services/usePinComments';
 import {
   BackButtonPriority,
   useBackButtonHandler
@@ -724,6 +728,20 @@ const deleteModalDescription = computed(() =>
 
 const deleteModalOpen = ref(false);
 const pinModalOpen = ref(false);
+const pinCommentText = ref('');
+const pinCommentError = ref('');
+watch(
+  [() => getAuthUser()?.id, () => props.topicId],
+  () => {
+    pinCommentText.value = '';
+    pinCommentError.value = '';
+    pinModalOpen.value = false;
+  },
+  { flush: 'sync' }
+);
+const { state: pinCommentState, pinComments } = usePinComments(
+  () => props.topicId || ''
+);
 const pinForEveryone = ref(false);
 const unpinModalOpen = ref(false);
 const forwardModalOpen = ref(false);
@@ -983,6 +1001,8 @@ const handleCloseUnpinModal = () => {
 };
 
 const handleOpenPinModal = () => {
+  pinCommentError.value = '';
+  if (props.topicId) void pinComments.refresh(props.topicId);
   pinForEveryone.value = true;
   pinModalOpen.value = true;
 };
@@ -1139,6 +1159,29 @@ const handlePinMessage = async () => {
 };
 
 const handleConfirmPinMessage = async () => {
+  if (
+    pinCommentState.value.support === 'available' &&
+    pinCommentText.value.trim()
+  ) {
+    try {
+      pinComments.pin(
+        props.topicId,
+        props.messageId,
+        pinForEveryone.value ? 'ALL' : 'SELF',
+        pinCommentText.value
+      );
+      pinCommentText.value = '';
+      handleClosePinModal();
+      handleClosePopover();
+    } catch (error) {
+      pinCommentError.value = (error as Error).message;
+    }
+    return;
+  }
+  if (pinComments.pending(props.topicId, props.messageId)) {
+    pinCommentError.value = 'Сначала дождитесь сохранения комментария';
+    return;
+  }
   if (pinForEveryone.value) {
     await togglePinMessageChat({
       messageId: props.messageId,
@@ -1159,6 +1202,7 @@ const handleConfirmPinMessage = async () => {
 };
 
 const handleConfirmUnpinMessage = async () => {
+  if (pinComments.pending(props.topicId, props.messageId)) return;
   if (currentMessage.value?.isPin && !isPinnedOnlyForMe.value) {
     editMessageFromLocal(props.topicId, {
       ...currentMessage.value,
