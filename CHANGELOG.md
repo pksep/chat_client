@@ -1,3 +1,23 @@
+# [1.55.0](https://github.com/pksep/chat_client/compare/v1.54.2...v1.55.0) (2026-11-24)
+
+
+### Bug Fixes
+
+* align profile and Tauri call layout (CHAT-559) [skip ci] ([2f61afc](https://github.com/pksep/chat_client/commit/2f61afcda7cac79cea52b0503454b6c2267ef043))
+* align profile controls and keep Tauri calls below titlebar ([d27da26](https://github.com/pksep/chat_client/commit/d27da26ee5f63f2a3ef32833faba99166e215f29))
+* center profile identity and allow hiding the desktop app button ([cc66e54](https://github.com/pksep/chat_client/commit/cc66e54b7f43b18b7d759fcde4a29506d92b9eca))
+* center profile identity and support hiding app button (CHAT-559) [skip ci] ([42cc906](https://github.com/pksep/chat_client/commit/42cc9063788a1d19cc02d01d8971029c708bc6e0))
+* **desktop:** control call devices directly and track native window activity ([ae3c38d](https://github.com/pksep/chat_client/commit/ae3c38da797c92da799a060f894462651d8e1062))
+* keep call settings below the Tauri titlebar ([895762e](https://github.com/pksep/chat_client/commit/895762e831d53b0e808f12fef3f1d5a88addb5a6))
+* keep call settings below the Tauri titlebar [skip ci] ([92e2a0a](https://github.com/pksep/chat_client/commit/92e2a0ad07cb51fd9ac2d0e7447a5a405f1ec9a2))
+* **tauri:** expose call status and shorten Windows activity tags ([6d6a6e6](https://github.com/pksep/chat_client/commit/6d6a6e66a8017bee2e8e682c513b3e32b018fb35))
+
+
+### Features
+
+* **chat:** improve native call feedback and app handoff ([208640f](https://github.com/pksep/chat_client/commit/208640fa379d6454ad264208cd634362052d0262))
+* **tauri:** add a dedicated call window and device controls ([6fb7009](https://github.com/pksep/chat_client/commit/6fb7009e53d8476722d47389af7ec9c1463524b5))
+
 ## [1.54.2](https://github.com/pksep/chat_client/compare/v1.54.1...v1.54.2) (2026-11-23)
 
 
