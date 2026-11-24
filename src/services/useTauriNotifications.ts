@@ -19,6 +19,7 @@ import { ensureStickerMessageMetadata } from './sticker-catalog';
 import { getNotificationAttachmentPreview } from '../utils/notification-attachments';
 import { getChatAuthSession } from '../utils/stored-chat-session';
 import { ensureDesktopNotificationPermission } from './desktop-notification-permissions';
+import type { DesktopCallActivity } from './desktop-call-activity';
 
 type TauriNotificationExtra = Record<string, unknown> & {
   callerId?: string | null;
@@ -259,11 +260,13 @@ export const showTauriNotification = async ({
         body: body || null,
         payload: JSON.stringify(extra || {}),
         tag:
-          extra?.type === 'incoming_call' && extra.topicId
-            ? getWindowsCallNotificationTag(extra.topicId)
-            : extra?.topicId
-              ? getWindowsMessageNotificationTag(extra.topicId)
-              : null,
+          extra?.type === 'call_activity' && extra.roomId
+            ? `sc-a-${hashNotificationId(`${extra.roomId}:${extra.participantId}:${extra.kind}`)}`
+            : extra?.type === 'incoming_call' && extra.topicId
+              ? getWindowsCallNotificationTag(extra.topicId)
+              : extra?.topicId
+                ? getWindowsMessageNotificationTag(extra.topicId)
+                : null,
         group: extra?.topicId || group || null
       });
     } catch (error) {
@@ -280,11 +283,44 @@ export const showTauriNotification = async ({
     body,
     group,
     autoCancel: true,
-    extra
+    extra,
+    sound: extra?.type === 'call_activity' && extra.soundPlayed ? '' : undefined
   };
 
   sendNotification(options);
   return true;
+};
+
+export const showTauriCallActivityNotification = (
+  activity: DesktopCallActivity,
+  options?: { soundPlayed?: boolean }
+): Promise<boolean> => {
+  const emoji = {
+    heart: '❤️',
+    'thumbs-up': '👍',
+    'thumbs-down': '👎',
+    joy: '😂',
+    sob: '😭'
+  };
+  return showTauriNotification({
+    id: hashNotificationId(
+      `call-activity:${activity.roomId}:${activity.participantId}:${activity.kind}`
+    ),
+    title: 'Звонок — СЭП Чат',
+    body:
+      activity.kind === 'hand'
+        ? `${activity.participantName} поднимает руку`
+        : `${activity.participantName}: реакция ${activity.reaction ? emoji[activity.reaction] : ''}`,
+    group: `call-activity:${activity.roomId}`,
+    extra: {
+      type: 'call_activity',
+      roomId: activity.roomId,
+      topicId: activity.topicId,
+      participantId: activity.participantId,
+      kind: activity.kind,
+      soundPlayed: options?.soundPlayed === true
+    }
+  });
 };
 
 export const showTauriMessageNotification = async ({

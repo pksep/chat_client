@@ -4,12 +4,16 @@ use tauri::{Manager, WindowEvent};
 mod desktop_auth;
 #[cfg(windows)]
 mod desktop_autostart;
+#[cfg(desktop)]
+mod desktop_call_controls;
+#[cfg(desktop)]
+mod desktop_call_window;
 mod desktop_files;
 #[cfg(desktop)]
 mod desktop_media_permissions;
+mod desktop_notifications;
 #[cfg(desktop)]
 mod desktop_permission_preferences;
-mod desktop_notifications;
 #[cfg(desktop)]
 mod desktop_screen_capture;
 #[cfg(windows)]
@@ -77,8 +81,9 @@ struct AppLifecycleState {
 struct PendingNotificationTarget(Mutex<Option<String>>);
 
 #[cfg(desktop)]
-#[derive(Clone, Copy, Serialize)]
+#[derive(Clone, Serialize)]
 struct WindowStatePayload {
+    label: String,
     focused: bool,
     minimized: bool,
     visible: bool,
@@ -105,7 +110,7 @@ fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
-        emit_window_state(app, desktop_window_state(window));
+        emit_window_state(app, read_window_state(&window));
     }
 }
 
@@ -118,6 +123,7 @@ fn hide_window<R: Runtime>(window: &WebviewWindow<R>) {
     emit_window_state(
         &window.app_handle(),
         WindowStatePayload {
+            label: window.label().to_string(),
             focused: false,
             minimized: false,
             visible: false,
@@ -127,18 +133,47 @@ fn hide_window<R: Runtime>(window: &WebviewWindow<R>) {
 }
 
 #[cfg(desktop)]
-#[tauri::command]
-fn desktop_window_state<R: Runtime>(window: WebviewWindow<R>) -> WindowStatePayload {
-    let visible = !window
-        .state::<AppLifecycleState>()
-        .is_hidden
-        .load(Ordering::SeqCst)
-        && window.is_visible().unwrap_or(false);
+fn read_window_state<R: Runtime>(window: &WebviewWindow<R>) -> WindowStatePayload {
+    let mut visible = window.is_visible().unwrap_or(false);
+    let mut minimized = window.is_minimized().unwrap_or(true);
+    let mut focused = window.is_focused().unwrap_or(false);
+    #[cfg(windows)]
+    if let Ok(handle) = window.hwnd() {
+        use windows::Win32::{
+            Foundation::HWND,
+            UI::WindowsAndMessaging::{GetForegroundWindow, IsIconic, IsWindowVisible},
+        };
+        let handle = HWND(handle.0);
+        // WebView2 может сохранять старый focus при сворачивании или фокусе второго окна.
+        unsafe {
+            visible = IsWindowVisible(handle).as_bool();
+            minimized = IsIconic(handle).as_bool();
+            focused = GetForegroundWindow() == handle;
+        }
+    }
     WindowStatePayload {
-        focused: visible && window.is_focused().unwrap_or(false),
-        minimized: window.is_minimized().unwrap_or(false),
+        label: window.label().to_string(),
+        focused: visible && !minimized && focused,
+        minimized,
         visible,
     }
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn desktop_window_state<R: Runtime>(
+    window: WebviewWindow<R>,
+    label: Option<String>,
+) -> Result<WindowStatePayload, String> {
+    let label = label.as_deref().unwrap_or(window.label());
+    if !matches!(label, "main" | "call") {
+        return Err("Неизвестное окно чата".into());
+    }
+    let target = window
+        .app_handle()
+        .get_webview_window(label)
+        .ok_or("Окно чата закрыто")?;
+    Ok(read_window_state(&target))
 }
 
 #[cfg(desktop)]
@@ -444,9 +479,14 @@ fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
         }
     }
 
+    let call_controls = desktop_call_controls::setup(app)?;
     let tray_menu = MenuBuilder::new(app)
         .text(TRAY_SHOW_ID, "Открыть СЭП Чат")
         .text(TRAY_MINIMIZE_ID, "Свернуть")
+        .separator()
+        .item(&call_controls[0])
+        .item(&call_controls[1])
+        .item(&call_controls[2])
         .separator()
         .text(TRAY_INSPECT_ID, "Открыть инспектор")
         .separator()
@@ -480,7 +520,9 @@ fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
                     .store(true, Ordering::SeqCst);
                 app.exit(0);
             }
-            _ => {}
+            id => {
+                desktop_call_controls::handle_action(app, id);
+            }
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
@@ -527,6 +569,7 @@ pub fn run() {
         .manage(desktop_media_permissions::DesktopMediaPermissions::default())
         .manage(desktop_permission_preferences::DesktopPermissionPreferences::default())
         .manage(desktop_screen_capture::DesktopScreenCapture::default())
+        .manage(desktop_call_window::DesktopCallWindow::default())
         .on_permission_request(desktop_media_permissions::handle_request);
     #[cfg(desktop)]
     let builder = builder
@@ -543,6 +586,7 @@ pub fn run() {
             if webview.label() == "main"
                 && matches!(payload.event(), tauri::webview::PageLoadEvent::Started)
             {
+                let _ = desktop_call_window::close_call_window(webview.app_handle());
                 webview
                     .state::<desktop_screen_capture::DesktopScreenCapture>()
                     .stop_all();
@@ -572,6 +616,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_telemetry_os,
             desktop_window_state,
+            desktop_call_controls::desktop_sync_call_controls,
+            desktop_call_window::desktop_call_window_available,
+            desktop_call_window::desktop_close_call_window,
             desktop_get_open_urls,
             desktop_restart,
             desktop_media_permissions::desktop_media_permissions_available,
@@ -608,6 +655,7 @@ pub fn run() {
         .setup(|app| {
             #[cfg(desktop)]
             {
+                desktop_call_window::create_main_window(app)?;
                 setup_desktop(app)?;
                 let app_handle = app.handle().clone();
                 app.deep_link()
@@ -624,16 +672,15 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             #[cfg(desktop)]
-            if let WindowEvent::Focused(focused) = event {
-                if let Some(webview_window) = window.app_handle().get_webview_window("main") {
-                    if *focused && webview_window.is_visible().unwrap_or(false) {
-                        window
-                            .state::<AppLifecycleState>()
-                            .is_hidden
-                            .store(false, Ordering::SeqCst);
-                    }
-                    emit_window_state(window.app_handle(), desktop_window_state(webview_window));
+            if matches!(event, WindowEvent::Focused(_) | WindowEvent::Resized(_)) {
+                if let Some(webview) = window.app_handle().get_webview_window(window.label()) {
+                    emit_window_state(window.app_handle(), read_window_state(&webview));
                 }
+            }
+            #[cfg(desktop)]
+            if window.label() == desktop_call_window::CALL_WINDOW_LABEL {
+                // У окна звонка свой onCloseRequested; оно не прячет главное окно.
+                return;
             }
             #[cfg(desktop)]
             if let WindowEvent::CloseRequested { api, .. } = event {

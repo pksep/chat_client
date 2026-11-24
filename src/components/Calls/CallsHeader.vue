@@ -80,7 +80,7 @@ import {
 } from '../../composables/useNotifications';
 import {
   isCallActive,
-  isModalVisible as isCallModalVisible
+  requestCallPresentation
 } from '../../services/useCallState';
 
 const props = withDefaults(
@@ -98,7 +98,7 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
 const showCallModal = (): void => {
-  isCallModalVisible.value = true;
+  requestCallPresentation();
 };
 
 const copyInviteGroupCallLink = async () => {

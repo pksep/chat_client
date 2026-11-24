@@ -72,8 +72,9 @@ tauri-plugin-process = "2"
 windows-capture = "=1.5.0"
 tauri-winrt-notification = "0.7.2"
 winreg = "0.55"
-windows = { version = "0.61", features = ["Data_Xml_Dom", "Foundation", "Foundation_Collections", "UI_Notifications", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock"] }
+windows = { version = "0.61", features = ["Data_Xml_Dom", "Foundation", "Foundation_Collections", "UI_Notifications", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSWindow", "NSView", "NSButton", "NSControl", "NSResponder"] }
 cidre = { version = "=0.10.1", default-features = false, features = ["async", "av", "sc", "dispatch", "macos_12_3"] }
 futures = "0.3"

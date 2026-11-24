@@ -554,9 +554,11 @@ const setupChatListeners = (): void => {
     }
 
     if (!isDuplicateMessage && isIncomingFromAnotherUser) {
-      const updateIncomingNotifications = () => {
+      const updateIncomingNotifications = (nativeWindowActive = true) => {
         const isCurrentTopicActivelyVisible =
-          route.value.id === message.topicId && getIsAppActivelyVisible();
+          nativeWindowActive &&
+          route.value.id === message.topicId &&
+          getIsAppActivelyVisible();
 
         if (isCurrentTopicActivelyVisible) {
           void clearTopicNotifications(message.topicId);
@@ -606,12 +608,12 @@ const setupChatListeners = (): void => {
         const receivingUserId = currentUserId.value;
         // WebView может сохранять focus до события minimize: не подавляем toast
         // последнего чата по устаревшему снимку видимости.
-        void syncTauriWindowState().then(() => {
+        void syncTauriWindowState().then(nativeWindowActive => {
           if (
             chatSDK === receivingSDK &&
             currentUserId.value === receivingUserId
           )
-            updateIncomingNotifications();
+            updateIncomingNotifications(nativeWindowActive);
         });
       } else updateIncomingNotifications();
     }

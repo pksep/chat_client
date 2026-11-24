@@ -50,39 +50,53 @@ test('новая desktop-ссылка без организации не нас�
   ).toBeNull();
 });
 
-test('ссылка из адресной строки предлагает приложение до входа и сохраняет браузерный вход', async ({
+test('ссылка из адресной строки вызывает системный протокол до входа и сохраняет веб-fallback', async ({
   page
-}, testInfo) => {
+}) => {
   test.setTimeout(120_000);
+  await page.addInitScript(() => {
+    Object.defineProperty(document, 'hasFocus', {
+      configurable: true,
+      value: () => true
+    });
+    const click = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () {
+      if (/^(sepchat|intent):/.test(this.href))
+        (window as any).selectedAppLink = this.href;
+      else click.call(this);
+    };
+  });
   await page.goto(
     '/?callRoom=shared-room&callInvite=signed%2Btoken&organization=https%3A%2F%2Fexample.invalid'
   );
-  const prompt = page.getByTestId('DesktopCallInvitePrompt');
-  await expect(prompt).toBeVisible({ timeout: 90_000 });
-  await prompt.screenshot({
-    path: testInfo.outputPath('desktop-call-invite.png')
-  });
-  const appLink = prompt.getByRole('link', { name: 'Продолжить в приложении' });
+  await expect
+    .poll(() => page.evaluate(() => (window as any).selectedAppLink), {
+      timeout: 90_000
+    })
+    .toBeTruthy();
+  await expect(page.getByTestId('DesktopCallInvitePrompt')).toHaveCount(0);
   const android = await page.evaluate(() =>
     /Android/i.test(navigator.userAgent)
   );
-  await expect(appLink).toHaveAttribute(
-    'href',
+  expect(await page.evaluate(() => (window as any).selectedAppLink)).toEqual(
     android
-      ? /^intent:\/\/chat\.pksep\.ru\/\?callRoom=shared-room.*#Intent;scheme=https;package=sep\.pksep\.app;/
+      ? expect.stringMatching(
+          /^intent:\/\/chat\.pksep\.ru\/\?callRoom=shared-room.*#Intent;scheme=https;package=sep\.pksep\.app;/
+        )
       : 'sepchat://invite?callRoom=shared-room&callInvite=signed%2Btoken&organization=https%3A%2F%2Fexample.invalid'
   );
   expect(
     await page.evaluate(() => localStorage.getItem('chat_auth_session'))
   ).toBeNull();
-  await prompt.getByRole('button', { name: 'Остаться в браузере' }).click();
-  await expect(prompt).toBeHidden();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get('callClient'))
+    .toBe('web');
   expect(new URL(page.url()).searchParams.get('callInvite')).toBe(
     'signed+token'
   );
   expect(new URL(page.url()).searchParams.get('callClient')).toBe('web');
   await page.reload();
-  await expect(prompt).toBeHidden();
+  await expect(page.getByTestId('DesktopCallInvitePrompt')).toHaveCount(0);
 });
 
 test('Tauri ставит launch URL в очередь до входа и открывает повторное событие только один раз', async ({
@@ -158,6 +172,100 @@ test('Tauri ставит launch URL в очередь до входа и отк�
   expect(result.opened).toHaveLength(2);
   expect(result.search).toContain('callRoom=warm-room');
   expect(result.search).not.toContain('organization');
+});
+
+test('Tauri открывает конкретную переписку из обычной веб-ссылки', async ({
+  page
+}) => {
+  await page.goto('/e2e/fixtures/call-download.html');
+  await page.evaluate(async () => {
+    (window as any).isTauri = true;
+    const { mockIPC, mockWindows } = await import(
+      '/node_modules/@tauri-apps/api/mocks.js'
+    );
+    mockWindows('main');
+    mockIPC(
+      command =>
+        command === 'desktop_get_open_urls'
+          ? ['sepchat://open?path=%2Fdialogs%2Fperson']
+          : null,
+      { shouldMockEvents: true }
+    );
+    const { initDesktopCallLinks } = await import(
+      '/src/services/useDesktopCallLinks.ts'
+    );
+    await initDesktopCallLinks();
+  });
+  await expect.poll(() => new URL(page.url()).pathname).toBe('/dialogs/person');
+  expect(new URL(page.url()).searchParams.has('token')).toBe(false);
+});
+
+test('приглашение Tauri сразу открывает состояние модалки и начинает подключение к нужной комнате', async ({
+  page
+}) => {
+  await page.goto('/e2e/fixtures/call-download.html');
+  await page.evaluate(async () => {
+    const win = window as any;
+    win.isTauri = true;
+    const { mockIPC, mockWindows } = await import(
+      '/node_modules/@tauri-apps/api/mocks.js'
+    );
+    mockWindows('main');
+    mockIPC(
+      command =>
+        command === 'desktop_get_open_urls'
+          ? ['sepchat://invite?callRoom=direct-room&callInvite=direct-token']
+          : null,
+      { shouldMockEvents: true }
+    );
+    const { ChatSDK } = await import('/src/services/useChatSDK/index.ts');
+    ChatSDK.prototype.connect = () => new Promise<void>(() => {});
+    const { initializeChat, getChatSDK } = await import(
+      '/src/services/useChat.ts'
+    );
+    await initializeChat({
+      userId: 'synthetic-user',
+      token: 'synthetic',
+      apiUrl: location.origin,
+      wsUrl: 'ws://127.0.0.1:65530'
+    });
+    const sdk = getChatSDK() as any;
+    sdk.isConnected = () => true;
+    sdk.getGroupCallInvitePreview = async () => ({
+      roomId: 'direct-room',
+      topicId: 'direct-topic',
+      members: []
+    });
+    sdk.getLiveKitCallStatus = async () => ({
+      active: true,
+      roomId: 'direct-room',
+      topicId: 'direct-topic',
+      groupMode: true
+    });
+    sdk.sendWebSocketEventWithAck = (_event: unknown, payload: unknown) => {
+      win.nativeCallJoin = payload;
+      // Запрос удерживается до подтверждения: настоящие звонки и устройства не используются.
+      return new Promise(() => {});
+    };
+    const { authedUser } = await import('/src/composables/useAuth.ts');
+    authedUser.value = { id: 'synthetic-user', name: 'Проверка' } as any;
+    win.nativeCallState = await import('/src/services/useCallState.ts');
+    const { initDesktopCallLinks } = await import(
+      '/src/services/useDesktopCallLinks.ts'
+    );
+    void initDesktopCallLinks();
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as any).nativeCallState.isModalVisible.value)
+    )
+    .toBe(true);
+  expect(
+    await page.evaluate(() => (window as any).nativeCallState.roomId.value)
+  ).toBe('direct-room');
+  expect(
+    await page.evaluate(() => (window as any).nativeCallJoin)
+  ).toMatchObject({ roomId: 'direct-room', inviteToken: 'direct-token' });
 });
 
 test('iOS принимает sepchat-приглашение без браузерного диалога и ждёт авторизации', async ({

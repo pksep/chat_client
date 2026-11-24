@@ -1,6 +1,11 @@
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core';
 import { shallowRef, watch } from 'vue';
 import { getDesktopPermissionChoice } from './desktop-permission-preferences';
+import {
+  desktopMediaPermissionRequest,
+  requestDesktopScreenCaptureConsent,
+  resolveDesktopMediaPermission
+} from './desktop-media-permissions';
 
 export interface DesktopCaptureSource {
   id: string;
@@ -54,6 +59,10 @@ export const loadDesktopCaptureSources = () =>
   invoke<DesktopCaptureSource[]>('desktop_screen_capture_sources');
 
 export const stopDesktopScreenCapture = () => {
+  if (
+    desktopMediaPermissionRequest.value?.permissions.includes('screen-capture')
+  )
+    resolveDesktopMediaPermission(false);
   resolveDesktopScreenPicker(null);
   activeStop?.();
 };
@@ -68,22 +77,35 @@ watch(
 
 export const prepareDesktopScreenCapture =
   (): Promise<MediaStreamTrack> | null => {
-    if (isTauri() && getDesktopPermissionChoice('screen-capture') === 'denied')
-      return Promise.reject(
-        new DOMException(
-          'Демонстрация экрана запрещена в настройках СЭП Чата',
-          'NotAllowedError'
-        )
-      );
     if (!isTauri() || !supported) return null;
     if (selectSource)
       return Promise.reject(
         new DOMException('Выбор экрана уже открыт', 'AbortError')
       );
+    let resolveSelection!: (source: DesktopCaptureSource | null) => void;
     const selected = new Promise<DesktopCaptureSource | null>(resolve => {
+      resolveSelection = resolve;
       selectSource = resolve;
-      desktopScreenPicker.value = { permissionGranted };
     });
+    void (async () => {
+      try {
+        const allowed = await requestDesktopScreenCaptureConsent();
+        if (selectSource !== resolveSelection) return;
+        if (!allowed) {
+          resolveDesktopScreenPicker(null);
+          return;
+        }
+        if (!permissionGranted) await requestDesktopScreenCapturePermission();
+        if (selectSource === resolveSelection)
+          desktopScreenPicker.value = { permissionGranted };
+      } catch (error) {
+        console.warn(
+          'Не удалось запросить доступ к демонстрации экрана:',
+          error
+        );
+        if (selectSource === resolveSelection) resolveDesktopScreenPicker(null);
+      }
+    })();
     return selected.then(async source => {
       if (!source)
         throw new DOMException('Демонстрация отменена', 'NotAllowedError');

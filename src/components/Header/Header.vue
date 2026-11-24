@@ -7,14 +7,37 @@
     <div
       v-if="showHeaderCallBanner"
       class="chat__header-active-call"
+      :class="{
+        'chat__header-active-call--pending': isDesktopHeaderCallPending
+      }"
+      :aria-busy="isDesktopHeaderCallPending || undefined"
+      :aria-disabled="isDesktopHeaderCallPending || undefined"
+      role="button"
+      tabindex="0"
       @click.stop="handleHeaderCallClick"
+      @keydown.enter.prevent="handleHeaderCallClick"
+      @keydown.space.prevent="handleHeaderCallClick"
     >
-      <LeaveIcon />
+      <span
+        v-if="isDesktopHeaderCallPending"
+        class="chat__header-active-call__spinner"
+        aria-hidden="true"
+      />
+      <LeaveIcon v-else />
       <span class="chat__header-active-call__label">
-        {{ resolvedHeaderCallLabel }}
+        {{
+          isDesktopHeaderCallPending
+            ? isHeaderCallJoining
+              ? 'Подключение…'
+              : 'Открываем звонок…'
+            : resolvedHeaderCallLabel
+        }}
       </span>
 
-      <span v-if="showHeaderCallTime" class="chat__header-active-call__time">
+      <span
+        v-if="showHeaderCallTime && !isDesktopHeaderCallPending"
+        class="chat__header-active-call__time"
+      >
         {{ headerCallTimeLabel }}
       </span>
     </div>
@@ -496,6 +519,7 @@
 </template>
 
 <script lang="ts" setup>
+import { isTauri } from '@tauri-apps/api/core';
 import {
   useManagerInquiries,
   clientUser,
@@ -597,11 +621,16 @@ import {
   isAnyCallDialing,
   isAnyCallModalVisible,
   isCallActive,
-  isModalVisible as isCallModalVisible,
+  requestCallPresentation,
   invitedGroupCallInfo,
   pendingGroupCallInfo
 } from '../../services/useCallState';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
+import {
+  desktopCallWindowOpening,
+  desktopCallWindowReady,
+  beginDesktopCallPreparation
+} from '../../services/desktop-call-presentation';
 import { getTopicActivityLabel } from '../../composables/useTopicActivity';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import { useContextMenu } from '../../composables/useContextMenu';
@@ -658,19 +687,22 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
 const showCallModal = (): void => {
-  isCallModalVisible.value = true;
+  requestCallPresentation();
 };
 
-const joinInviteGroupCall = async () => {
+const joinInviteGroupCall = async (options?: { signal?: AbortSignal }) => {
   const { joinInviteGroupCall } = await import('../../services/useCalls');
 
-  return joinInviteGroupCall();
+  return joinInviteGroupCall(options);
 };
 
-const joinGroupCall = async (topicId?: string) => {
+const joinGroupCall = async (
+  topicId?: string,
+  options?: { signal?: AbortSignal }
+) => {
   const { joinGroupCall } = await import('../../services/useCalls');
 
-  return joinGroupCall(topicId);
+  return joinGroupCall(topicId, options);
 };
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
@@ -927,7 +959,8 @@ const hasInvitedCall = computed(
 const showRegularCallBanner = computed(
   () =>
     (isCallActive.value &&
-      (!isAnyCallModalVisible.value ||
+      (isTauri() ||
+        !isAnyCallModalVisible.value ||
         (!route.value.id && route.value.type !== RouteTypes.AI))) ||
     !!currentHeaderCallEntry.value ||
     hasInvitedCall.value
@@ -940,6 +973,16 @@ const showAiVoiceCallBanner = computed(
 );
 const showHeaderCallBanner = computed(
   () => showRegularCallBanner.value || showAiVoiceCallBanner.value
+);
+const isHeaderCallJoining = ref(false);
+let headerCallRequestId = 0;
+const isDesktopHeaderCallPending = computed(
+  () =>
+    isTauri() &&
+    !showAiVoiceCallBanner.value &&
+    (isHeaderCallJoining.value ||
+      desktopCallWindowOpening.value ||
+      (isCallActive.value && !desktopCallWindowReady.value))
 );
 const currentTime = ref(Date.now());
 let headerCallTimerInterval: ReturnType<typeof setInterval> | null = null;
@@ -1069,6 +1112,19 @@ const isActiveDirectCallLabel = computed(
     activeCallParticipantCount.value > 0 &&
     activeCallParticipantCount.value <= 2
 );
+const lastDirectCallLabel = ref('');
+watch(
+  [isCallActive, activeCallTopic, activeCallUser, activeCallParticipantCount],
+  ([active, topic, user, count]) => {
+    if (!active || topic?.type === TopicType.Group || count > 2) {
+      lastDirectCallLabel.value = '';
+    } else if (topic?.type === TopicType.DM) {
+      lastDirectCallLabel.value =
+        user?.initials || topic.user?.initials || lastDirectCallLabel.value;
+    }
+  },
+  { immediate: true, flush: 'sync' }
+);
 
 const headerCallLabel = computed(() => {
   if (hasInvitedCall.value && !isCallActive.value) {
@@ -1086,6 +1142,9 @@ const resolvedHeaderCallLabel = computed(() => {
   if (showAiVoiceCallBanner.value) {
     return 'Разговор с СЭПи';
   }
+
+  if (isTauri() && isCallActive.value && lastDirectCallLabel.value)
+    return lastDirectCallLabel.value;
 
   if (isActiveDirectCallLabel.value) {
     return (
@@ -1373,33 +1432,54 @@ const handleCallAction = async (): Promise<void> => {
 };
 
 const handleHeaderCallClick = async () => {
-  if (showAiVoiceCallBanner.value) {
-    navigateToAI(aiAssistantSessionId.value);
-    showAiVoiceCall();
-    return;
-  }
-
-  if (hasInvitedCall.value && !isCallActive.value) {
-    const didJoin = await joinInviteGroupCall();
-
-    if (!didJoin) {
-      await handleCall();
+  if (isDesktopHeaderCallPending.value) return;
+  const desktop = isTauri() && !showAiVoiceCallBanner.value;
+  const preparation =
+    desktop && !isCallActive.value ? beginDesktopCallPreparation() : null;
+  const requestId = ++headerCallRequestId;
+  const clearJoining = () => {
+    if (desktop && requestId === headerCallRequestId)
+      isHeaderCallJoining.value = false;
+  };
+  preparation?.signal.addEventListener('abort', clearJoining, { once: true });
+  if (desktop) isHeaderCallJoining.value = true;
+  try {
+    if (showAiVoiceCallBanner.value) {
+      navigateToAI(aiAssistantSessionId.value);
+      showAiVoiceCall();
+      return;
     }
 
-    return;
-  }
+    if (hasInvitedCall.value && !isCallActive.value) {
+      const didJoin = await joinInviteGroupCall({
+        signal: preparation?.signal
+      });
 
-  if (currentHeaderCallEntry.value && !isCallActive.value) {
-    const didJoin = await joinGroupCall(route.value.id);
+      if (!didJoin && !preparation?.signal.aborted) {
+        await handleCall();
+      }
 
-    if (!didJoin) {
-      await handleCall();
+      return;
     }
 
-    return;
-  }
+    if (currentHeaderCallEntry.value && !isCallActive.value) {
+      const didJoin = await joinGroupCall(route.value.id, {
+        signal: preparation?.signal
+      });
 
-  showCallModal();
+      if (!didJoin && !preparation?.signal.aborted) {
+        await handleCall();
+      }
+
+      return;
+    }
+
+    showCallModal();
+  } finally {
+    preparation?.signal.removeEventListener('abort', clearJoining);
+    preparation?.finish();
+    clearJoining();
+  }
 };
 
 const handleCloseMobileInfoModal = (): void => {

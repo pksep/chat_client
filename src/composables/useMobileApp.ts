@@ -2,9 +2,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { isTauri } from '@tauri-apps/api/core';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { MobilePlatformEnum } from '../components/interfaces/interfaces';
 import { afterStartupPaint } from '../utils/after-startup-paint';
-import { openAndroidApp } from '../utils/android-app-link';
 import {
   desktopAppVersion,
   desktopUpdater,
@@ -54,9 +52,6 @@ export type MobileAppProfileUpdateState =
   | 'error'
   | 'latest';
 
-const mobilePlatform = ref<MobilePlatformEnum | null>(null);
-const isMobileApp = ref(false);
-const showDownloadModal = ref(false);
 const legacyUpdateBanner = ref(false);
 const showUpdateBanner = computed({
   get: () =>
@@ -498,34 +493,6 @@ export function useMobileApp() {
 
   const detect = async () => {
     const generation = webUpdateGeneration;
-    const ua = navigator.userAgent || '';
-
-    if (/Android/i.test(ua)) {
-      mobilePlatform.value = MobilePlatformEnum.ANDROID;
-      isMobileApp.value = true;
-    } else if (/iPhone|iPad|iPod/i.test(ua)) {
-      mobilePlatform.value = MobilePlatformEnum.APPLE;
-      isMobileApp.value = true;
-    } else {
-      mobilePlatform.value = null;
-      isMobileApp.value = false;
-    }
-
-    if (isMobileApp.value) {
-      const isPWA =
-        window.matchMedia('(display-mode: standalone)').matches ||
-        ('standalone' in navigator &&
-          (
-            navigator as Navigator & {
-              standalone?: boolean;
-            }
-          ).standalone === true);
-      const isNative = Capacitor.isNativePlatform();
-
-      if (!isPWA && !isNative) {
-        showDownloadModal.value = true;
-      }
-    }
 
     await afterStartupPaint();
     if (generation !== webUpdateGeneration || activeConsumers === 0) return;
@@ -543,28 +510,6 @@ export function useMobileApp() {
       hasCheckedForUpdates.value = true;
     } finally {
       isCheckingForUpdates.value = false;
-    }
-  };
-
-  const handleInstall = () => {
-    if (!mobilePlatform.value) return;
-
-    if (mobilePlatform.value === MobilePlatformEnum.ANDROID) {
-      openAndroidApp();
-
-      return;
-    }
-
-    if (mobilePlatform.value === MobilePlatformEnum.APPLE) {
-      const start = Date.now();
-
-      window.location.href = 'myapp://open';
-
-      setTimeout(() => {
-        if (Date.now() - start < 1500) {
-          window.location.href = 'https://your-domain.com/open';
-        }
-      }, 1200);
     }
   };
 
@@ -852,9 +797,6 @@ export function useMobileApp() {
   });
 
   return {
-    mobilePlatform,
-    isMobileApp,
-    showDownloadModal,
     showUpdateBanner,
     updateActionLabel,
     updateProgress,
@@ -880,7 +822,6 @@ export function useMobileApp() {
     availableAppVersion: computed(() =>
       isTauri() ? desktopUpdater.state.value.version : ''
     ),
-    handleInstall,
     handleUpdateClick,
     checkForUpdates
   };

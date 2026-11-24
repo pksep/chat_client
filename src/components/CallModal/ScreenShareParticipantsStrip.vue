@@ -96,6 +96,7 @@
 </template>
 
 <script setup lang="ts">
+import { useDesktopCallWindowContext } from '../Desktop/call-window-context';
 import type { CSSProperties } from 'vue';
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Icon, IconNameEnum } from '@pksep/yui';
@@ -105,6 +106,8 @@ import MicIcon from './UI/MicIcon.vue';
 import ConnectionQualityIndicator from './UI/ConnectionQualityIndicator.vue';
 import ReactionVideoOverlay from './ReactionVideoOverlay.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
+
+const renderWindow = useDesktopCallWindowContext()?.renderWindow || window;
 
 const remoteGrid = ref<HTMLDivElement | null>(null);
 const canScrollLeft = ref(false);
@@ -236,9 +239,9 @@ watch(
 );
 
 onMounted(() => {
-  window.addEventListener('resize', updateScrollState);
-  if (typeof ResizeObserver !== 'undefined' && remoteGrid.value) {
-    remoteGridResizeObserver = new ResizeObserver(() => {
+  renderWindow.addEventListener('resize', updateScrollState);
+  if (typeof renderWindow.ResizeObserver !== 'undefined' && remoteGrid.value) {
+    remoteGridResizeObserver = new renderWindow.ResizeObserver(() => {
       updateScrollState();
     });
     remoteGridResizeObserver.observe(remoteGrid.value);
@@ -247,7 +250,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', updateScrollState);
+  renderWindow.removeEventListener('resize', updateScrollState);
   remoteGridResizeObserver?.disconnect();
   remoteGridResizeObserver = null;
 });

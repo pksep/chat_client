@@ -1,4 +1,9 @@
-import { createApp, h, ref } from 'vue';
+import { createApp, defineAsyncComponent, h, ref } from 'vue';
+import { desktopCallPreparationRequested } from '../../src/services/desktop-call-presentation';
+import { open as callOpen } from '../../src/services/useCallState';
+const DesktopCallWindow = defineAsyncComponent(
+  () => import('../../src/components/Desktop/DesktopCallWindow.vue')
+);
 import { createPinia } from 'pinia';
 import '@pksep/yui/styles';
 import '../../src/assets/globals.css';
@@ -115,6 +120,10 @@ createApp({
             dataTestid: 'Fixture',
             displayRoute: displayRoute.value
           }),
+          params.has('native-call-test') &&
+          (desktopCallPreparationRequested.value || callOpen.value)
+            ? h(DesktopCallWindow)
+            : null,
           h('div', { style: 'padding:24px 8px' }, [
             h(
               'button',
