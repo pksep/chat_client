@@ -26,8 +26,18 @@ html.chat-desktop-custom-chrome {
   min-height: 0;
 }
 
-.chat-desktop-custom-chrome .call-modal {
+.chat-desktop-custom-chrome .call-modal,
+.chat-desktop-custom-chrome .call-modal__group-panel-shell {
   top: var(--desktop-titlebar-height);
+}
+
+.chat-desktop-custom-chrome .call-modal__group-panel {
+  /* Привязка к оболочке сохраняется и во время её transform-анимации. */
+  position: absolute;
+}
+
+.chat-desktop-custom-chrome .call-modal__group-panel > .call-modal__group-panel-content {
+  height: auto;
 }
 
 .chat-desktop-custom-chrome .call-modal__video-overlay,

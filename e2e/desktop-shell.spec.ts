@@ -271,6 +271,155 @@ test.describe('desktop application geometry', () => {
     hasTouch: false,
     userAgent: devices['Desktop Chrome'].userAgent
   });
+  for (const theme of ['light', 'dark']) {
+    test(`Настройки звонка Tauri: ${theme}, шапка, прокрутка и fullscreen`, async ({
+      page
+    }, testInfo) => {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await openShell(page, {
+        tauri: true,
+        decorated: false,
+        theme,
+        call: true
+      });
+      await page
+        .locator('.call-modal')
+        .getByRole('button', { name: 'Информация о звонке', exact: true })
+        .click();
+      const openingPositions = await page.evaluate(async () => {
+        const positions: number[] = [];
+        for (let frame = 0; frame < 20; frame++) {
+          await new Promise(requestAnimationFrame);
+          const panel = document.querySelector('.call-modal__group-panel');
+          if (panel) positions.push(panel.getBoundingClientRect().top);
+        }
+        return positions;
+      });
+      expect(openingPositions.length).toBeGreaterThan(1);
+      for (const top of openingPositions) expect(top).toBeCloseTo(36, 0);
+      const shell = page.locator('.call-modal__group-panel-shell');
+      const panel = page.locator('.call-modal__group-panel');
+      const header = panel.locator('.call-modal__group-panel-header');
+      const content = panel.locator('.call-modal__group-panel-content');
+      const close = panel.locator('.call-modal__group-panel-close');
+      await expect(panel).toBeVisible();
+      const checkPanel = async (top: number) => {
+        await expect.poll(async () => (await shell.boundingBox())!.y).toBe(top);
+        await expect.poll(async () => (await panel.boundingBox())!.y).toBe(top);
+        const viewport = page.viewportSize()!;
+        const bounds = (await panel.boundingBox())!;
+        expect(bounds.y + bounds.height).toBeLessThanOrEqual(
+          viewport.height + 1
+        );
+        const heading = (await header.boundingBox())!;
+        const body = (await content.boundingBox())!;
+        expect(heading.y).toBeGreaterThanOrEqual(top);
+        expect(body.y).toBeGreaterThanOrEqual(heading.y + heading.height - 1);
+        expect(body.y + body.height).toBeLessThanOrEqual(viewport.height + 1);
+        expect(
+          await close.evaluate(element => {
+            const rect = element.getBoundingClientRect();
+            return element.contains(
+              document.elementFromPoint(
+                rect.x + rect.width / 2,
+                rect.y + rect.height / 2
+              )
+            );
+          })
+        ).toBe(true);
+      };
+      for (const height of [800, 640, 400]) {
+        await page.setViewportSize({ width: 960, height });
+        await checkPanel(36);
+      }
+      await panel
+        .locator('.call-modal__group-panel-background-trigger')
+        .click();
+      await expect(
+        panel.getByRole('button', { name: 'Загрузить изображение' })
+      ).toBeAttached();
+      expect(
+        await content.evaluate(
+          element => element.scrollHeight > element.clientHeight
+        )
+      ).toBe(true);
+      await content.evaluate(element => {
+        element.scrollTop = element.scrollHeight;
+      });
+      await expect(
+        panel.locator('.call-modal__group-panel-member').last()
+      ).toBeInViewport();
+      await checkPanel(36);
+      await page.screenshot({
+        path: testInfo.outputPath(`call-settings-${theme}.png`),
+        animations: 'disabled'
+      });
+      for (const fullscreen of [true, false]) {
+        await page.evaluate(fullscreen => {
+          (window as any).shellState.fullscreen = fullscreen;
+          (window as any).emitShellEvent('tauri://resize', {
+            width: innerWidth,
+            height: innerHeight
+          });
+        }, fullscreen);
+        await expect(page.getByTestId('DesktopTitleBar')).toHaveCount(
+          fullscreen ? 0 : 1
+        );
+        await checkPanel(fullscreen ? 0 : 36);
+      }
+      await close.click();
+      await expect(panel).toHaveCount(0);
+    });
+  }
+
+  test('Настройки звонка в узком Tauri сохраняют доступную кнопку «Назад»', async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 760, height: 480 });
+    await openShell(page, {
+      tauri: true,
+      decorated: false,
+      theme: 'light',
+      call: true
+    });
+    await page
+      .getByRole('button', { name: 'Открыть меню звонка', exact: true })
+      .click();
+    await page.getByRole('button', { name: 'Настройки', exact: true }).click();
+    const dialog = page.locator('dialog.mobile__modal:visible');
+    await expect(dialog).toBeVisible();
+    await expect.poll(async () => (await dialog.boundingBox())!.y).toBe(36);
+    const bounds = (await dialog.boundingBox())!;
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(481);
+    await dialog.getByRole('button', { name: 'Назад', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+  });
+
+  test('Настройки звонка в браузере и Tauri с системной рамкой занимают весь viewport', async ({
+    page
+  }) => {
+    for (const tauri of [false, true]) {
+      await page.setViewportSize({ width: 960, height: 800 });
+      await openShell(page, {
+        tauri,
+        decorated: true,
+        theme: 'light',
+        call: true
+      });
+      await page
+        .locator('.call-modal')
+        .getByRole('button', { name: 'Информация о звонке', exact: true })
+        .click();
+      const panel = page.locator('.call-modal__group-panel');
+      await expect(panel).toBeVisible();
+      await page.setViewportSize({ width: 960, height: 400 });
+      expect((await panel.boundingBox())!.y).toBe(0);
+      expect((await panel.boundingBox())!.height).toBe(400);
+      await panel.locator('.call-modal__group-panel-close').click();
+      await expect(panel).toHaveCount(0);
+    }
+  });
+
   test('Tauri: окно целиком помещается под шапкой, сворачивание списка доступно', async ({
     page
   }) => {
