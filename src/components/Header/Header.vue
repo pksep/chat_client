@@ -16,7 +16,7 @@
         closePinnedMessagesView();
         showSearch();
       "
-      @call="handleCallAction"
+      @call="handleCall"
     />
     <div
       v-if="showHeaderCallBanner"
