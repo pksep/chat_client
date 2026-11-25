@@ -5,7 +5,7 @@
       'ai-assistant',
       {
         'ai-assistant--has-pinned-message':
-          activeView === 'chat' && !!currentPinnedMessage
+          activeView !== 'tasks' && !!currentPinnedMessage
       }
     ]"
     data-testid="AI-Assistant"
@@ -15,7 +15,7 @@
     @dragend.capture="handleEmojiDragEnd"
   >
     <PinnedMessageBanner
-      v-if="activeView === 'chat' && currentPinnedMessage"
+      v-if="activeView !== 'tasks' && currentPinnedMessage"
       class="ai-assistant__pinned-messages"
       :preview-text="currentPinnedMessagePreview"
       :preview-key="currentPinnedMessage.id"
@@ -30,14 +30,14 @@
       @scroll.passive="handleScroll"
     >
       <div
-        v-if="activeView === 'chat' && !activeSession"
+        v-if="showEmptyConversation"
         class="ai-assistant__empty"
       >
         <span class="ai-assistant__hero-icon">
           <AiAvatar />
         </span>
         <h1>Чем вам помочь сегодня?</h1>
-        <div class="ai-assistant__suggestions">
+        <div v-if="activeView === 'chat'" class="ai-assistant__suggestions">
           <button
             type="button"
             class="ai-assistant__suggestion ai-assistant__suggestion--voice"
@@ -61,6 +61,21 @@
           >
             <ChatSummaryIcon />
             Сводка по чатам за сегодня
+          </button>
+        </div>
+        <div
+          v-else
+          class="ai-assistant__suggestions ai-assistant__suggestions--agent"
+        >
+          <button
+            v-for="shortcut in agentShortcuts"
+            :key="shortcut.label"
+            type="button"
+            class="ai-assistant__suggestion"
+            @click="applyAgentShortcut(shortcut.prompt)"
+          >
+            <component :is="shortcut.icon" />
+            {{ shortcut.label }}
           </button>
         </div>
       </div>
@@ -91,15 +106,14 @@
         </div>
       </div>
 
-      <div v-else class="ai-assistant__conversation">
-        <template
-          v-for="(message, index) in activeSession?.messages || []"
-          :key="message.id"
-        >
+      <div
+        v-else
+        class="ai-assistant__conversation"
+        :class="{ 'ai-assistant__conversation--agent': activeView === 'agents' }"
+      >
+        <template v-for="(message, index) in visibleMessages" :key="message.id">
           <time
-            v-if="
-              isNewConversationDay(message, activeSession?.messages[index - 1])
-            "
+            v-if="isNewConversationDay(message, visibleMessages[index - 1])"
             class="ai-assistant__date"
           >
             {{ formatConversationDate(message.timestamp) }}
@@ -119,38 +133,83 @@
             ]"
             :data-message-id="message.id"
             :data-is-me-sender="message.role === 'user'"
-            @click="handleMessageSelectionClick(message, $event)"
-            @contextmenu="handleMessageContextMenu(message, $event)"
+            @click="
+              !message.pending && handleMessageSelectionClick(message, $event)
+            "
+            @contextmenu="
+              !message.pending && handleMessageContextMenu(message, $event)
+            "
             @copy="copyMessageSelection"
           >
             <div
               :class="[
                 'ai-assistant__message-selection',
                 {
-                  'ai-assistant__message-selection--hidden': !isSelectionMode
+                  'ai-assistant__message-selection--hidden':
+                    !isSelectionMode || message.pending
                 }
               ]"
             >
               <Checkbox
-                v-if="isSelectionMode"
+                v-if="isSelectionMode && !message.pending"
                 :model-value="isMessageSelected(message.id)"
                 :circular="CheckboxCircularEnum.circled"
                 @update:model-value="toggleMessageSelection(message.id)"
                 @click.stop
               />
             </div>
-            <MessageBubbleFiles
-              v-if="message.outputAttachments?.length"
-              class="message__bubble ai-assistant__message-files"
-              :message="getMessageHtml(message.text)"
-              :time="message.time"
-              :is-pin="message.pinned"
-              :is-me-sender="false"
-              :is-dialog="true"
-              :media="getMessageOutputMedia(message)"
-              :data-testid="`AI-Assistant-Message-${message.id}`"
-              @set-slider="handleOutputAttachmentClick"
-            />
+            <div
+              v-if="message.role === 'assistant'"
+              class="ai-assistant__message-content ai-assistant__answer"
+              :class="{ 'ai-assistant__message-files': message.outputAttachments?.length }"
+            >
+              <AgentWorkTimeline
+                v-if="message.durationMs != null || message.workLog?.length || message.reasoningSummaries?.length"
+                :entries="message.workLog"
+                :summaries="message.reasoningSummaries"
+                :duration="message.durationMs != null ? formatAgentDuration(message.durationMs) : ''"
+                :thread-id="activeSessionId"
+              />
+              <AiAnswerMarkdown
+                :content="message.text"
+                :files="message.projectFiles"
+                :data-testid="`AI-Assistant-Message-${message.id}-MessageText`"
+              />
+              <AIActionPipeline
+                v-if="visibleActionTasks.has(message.id)"
+                :task="visibleActionTasks.get(message.id)!"
+              />
+              <div
+                v-for="file in message.projectFiles"
+                :key="file.path"
+                class="ai-assistant__project-file"
+              >
+                <button type="button" title="Показать в папке" @click.stop="revealAgentFile(file.path)">
+                  {{ file.path }}
+                </button>
+                <small v-if="file.imageError" role="alert">{{ file.imageError }}</small>
+              </div>
+              <MessageBubble
+                v-if="message.projectFiles?.length && message.outputAttachments?.length"
+                message=""
+                :time="message.time"
+                is-dialog
+                :media="getMessageOutputMedia(message)"
+                :data-testid="`AI-Agent-Photos-${message.id}`"
+              />
+              <MessageBubbleFiles
+                v-else-if="message.outputAttachments?.length"
+                :message="''"
+                :time="message.time"
+                :is-pin="message.pinned"
+                :is-me-sender="false"
+                :is-dialog="true"
+                :continues-with-next="true"
+                :media="getMessageOutputMedia(message)"
+                :data-testid="`AI-Assistant-Message-${message.id}`"
+                @set-slider="handleOutputAttachmentClick"
+              />
+            </div>
             <MessageBubbleText
               v-else
               class="message__bubble ai-assistant__message-content"
@@ -158,17 +217,11 @@
               :time="message.time"
               :is-pin="message.pinned"
               :is-me-sender="message.role === 'user'"
-              :is-read="true"
+              :is-read="!message.pending"
               :is-dialog="true"
               :parsed-call-message="null"
               :data-testid="`AI-Assistant-Message-${message.id}`"
             >
-              <template
-                v-if="visibleActionTasks.has(message.id)"
-                #after-message
-              >
-                <AIActionPipeline :task="visibleActionTasks.get(message.id)!" />
-              </template>
               <template v-if="message.replyTo" #reference>
                 <div
                   :class="[
@@ -239,15 +292,42 @@
         >
           {{ conversationError }}
         </div>
-        <div v-if="isThinking" class="ai-assistant__thinking">
-          {{ preparationStatus }} <span>•••</span>
+        <div
+          v-if="isThinking"
+          class="ai-assistant__thinking ai-assistant__progress"
+          role="status"
+          :aria-live="activeAgentChat ? 'off' : 'polite'"
+        >
+          <AgentWorkTimeline
+            v-if="activeAgentChat?.startedAt != null"
+            :key="activeAgentChat.id + ':' + activeAgentChat.startedAt"
+            :entries="liveWorkEntries"
+            :duration="formatAgentDuration(agentElapsedMs)"
+            :thread-id="activeSessionId"
+            live
+          />
+          <span v-if="agentPermission || liveWorkEntries.at(-1)?.text !== preparationStatus" class="ai-assistant__current-stage">
+            {{ agentPermission ? 'Требуется подтверждение' : preparationStatus }}
+            <span
+              v-if="!agentPermission"
+              class="ai-assistant__thinking-dots"
+              aria-hidden="true"
+            >•••</span>
+          </span>
+          <small
+            v-if="agentProgressDetail"
+            class="ai-assistant__progress-detail"
+            aria-hidden="true"
+          >
+            {{ agentProgressDetail }}
+          </small>
         </div>
       </div>
     </div>
 
     <div
       v-if="
-        activeView === 'chat' && !!activeSession && isShowScrollToBottomButton
+        activeView !== 'tasks' && !!activeSession && isShowScrollToBottomButton
       "
       class="chat__message-bubble__scroll-indicators ai-assistant__scroll-indicators"
     >
@@ -309,10 +389,67 @@
         'chat__input emoji-font-host ai-assistant__composer',
         {
           'ai-assistant__composer--tasks': activeView === 'tasks',
+          'ai-assistant__composer--can-stop': canStopAgent,
           'ai-assistant__composer--thinking': isThinking
         }
       ]"
     >
+      <p
+        v-if="activeAgentChat?.pendingDirectory"
+        class="ai-assistant__thinking"
+        role="status"
+      >
+        Подключаю папку проекта…
+      </p>
+      <section
+        v-if="agentPermission"
+        class="ai-assistant__agent-approval"
+        aria-label="Запрос разрешения"
+      >
+        <strong>{{
+          agentPermission.toolCall.title || 'Действие агента'
+        }}</strong>
+        <small v-if="agentPermissionPath">{{ agentPermissionPath }}</small>
+        <details v-if="agentPermissionDiff?.newText != null">
+          <summary>Показать изменения</summary>
+          <pre>{{ agentPermissionDiff.newText }}</pre>
+        </details>
+        <div class="ai-assistant__approval">
+          <button
+            type="button"
+            class="ai-assistant__approval-reject"
+            @click="answerAgentPermission(false)"
+          >
+            Отклонить
+          </button>
+          <button
+            type="button"
+            class="ai-assistant__approval-confirm"
+            @click="answerAgentPermission(true)"
+          >
+            Разрешить один раз
+          </button>
+        </div>
+      </section>
+      <AiComposerSettings
+        ref="composerSettingsRef"
+        class="ai-assistant__editor"
+        :project="agentProjectSetting"
+        :models="composerModels"
+        :model="composerModel"
+        :efforts="composerEfforts"
+        :effort="composerEffort"
+        :apply-model="applyComposerModel"
+        :apply-effort="applyComposerEffort"
+        :directory-pending="isChoosingAgentDirectory"
+        :pending="activeView === 'agents' && activeAgentChat?.busy === 'config'"
+        :models-loading="!composerModels.length && (activeView === 'agents' ? agentModelsLoading : catalogLoading)"
+        :models-error="!composerModels.length ? (activeView === 'agents' ? agentModelsError : catalogError) : ''"
+        @choose-directory="openAgentDirectory"
+        @open="openComposerSettings"
+        @retry-models="openComposerSettings"
+        @error="reportComposerSettingsError"
+      />
       <div
         ref="iosPwaEditorHost"
         class="ai-assistant__editor"
@@ -325,7 +462,13 @@
           v-model="draft"
           :attachment-draft-key="composerKey"
           :active-attach-file="true"
-          :disable-send-on-enter="isThinking || isUploadingAttachments"
+          :active-send="activeView === 'agents' && !!activeForwardDraft"
+          :disable-send-on-enter="
+            isThinking ||
+            isUploadingAttachments ||
+            (activeView === 'agents' &&
+              (isChoosingAgentDirectory || !!activeAgentChat?.busy))
+          "
           @unmount-send="handleSend"
         >
           <template v-if="activeForwardDraft" #action>
@@ -433,63 +576,46 @@
                 </button>
               </div>
             </div>
-            <div
-              v-if="placement.response"
-              :key="`${placement.slot}-response`"
-              :class="[
-                'ai-assistant__response-control',
-                `ai-assistant__response-control--${placement.variant}`
-              ]"
+            <AiDictationButton
+              v-if="placement.variant === 'mobile'"
+              mobile
+              :disabled="dictationDisabled"
+              :label="dictationButtonLabel"
+              :phase="dictationPhase"
+              :failure="dictationFailure"
+              @toggle="toggleDictation"
+            />
+            <Button
+              v-if="placement.variant === 'mobile' && canStopAgent"
+              :type="ButtonTypeEnum.primary"
+              :size="SizesEnum.small"
+              class="toolbar-button mobile-buttons ai-assistant__stop-button"
+              title="Остановить ответ"
+              aria-label="Остановить ответ"
+              @click.stop="stopAgentResponse"
             >
-              <Button
-                :type="ButtonTypeEnum.ghost"
-                :size="SizesEnum.small"
-                :class="[
-                  'toolbar-button ai-assistant__response-trigger',
-                  `ai-assistant__response-trigger--${placement.variant}`,
-                  { 'mobile-buttons': placement.variant === 'mobile' }
-                ]"
-                :title="responseModeLabel"
-                :aria-label="responseModeLabel"
-                aria-haspopup="menu"
-                :aria-expanded="isResponseModeMenuOpen"
-                @click.stop="toggleResponseModeMenu"
-              >
-                <Icon
-                  :name="
-                    responseMode === 'advanced'
-                      ? IconNameEnum.lightbulbFilament
-                      : IconNameEnum.lightning
-                  "
-                />
-                <span>{{ responseModeLabel }}</span>
-              </Button>
-              <div
-                v-if="isResponseModeMenuOpen"
-                class="ai-assistant__response-menu"
-                role="menu"
-                aria-label="Режим ответа"
-              >
-                <button
-                  type="button"
-                  role="menuitemradio"
-                  :aria-checked="responseMode === 'quick'"
-                  @click="selectResponseMode('quick')"
-                >
-                  <Icon :name="IconNameEnum.lightning" />
-                  <span>Быстрый ответ</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitemradio"
-                  :aria-checked="responseMode === 'advanced'"
-                  @click="selectResponseMode('advanced')"
-                >
-                  <Icon :name="IconNameEnum.lightbulbFilament" />
-                  <span>Продуманный ответ</span>
-                </button>
-              </div>
-            </div>
+              <span class="ai-assistant__stop-square" aria-hidden="true"></span>
+            </Button>
+          </template>
+          <template #desktop-right-action>
+            <AiDictationButton
+              :disabled="dictationDisabled"
+              :label="dictationButtonLabel"
+              :phase="dictationPhase"
+              :failure="dictationFailure"
+              @toggle="toggleDictation"
+            />
+            <Button
+              v-if="canStopAgent"
+              :type="ButtonTypeEnum.primary"
+              :size="SizesEnum.small"
+              class="toolbar-button ai-assistant__stop-button"
+              title="Остановить ответ"
+              aria-label="Остановить ответ"
+              @click.stop="stopAgentResponse"
+            >
+              <span class="ai-assistant__stop-square" aria-hidden="true"></span>
+            </Button>
           </template>
         </ContentEditor>
       </div>
@@ -622,6 +748,19 @@ import {
   SizesEnum
 } from '@pksep/yui';
 import AiAvatar from './AiAvatar.vue';
+import AiComposerSettings from './AiComposerSettings.vue';
+import AiDictationButton from './AiDictationButton.vue';
+import { useSessionStorage } from '@vueuse/core';
+import AiAnswerMarkdown from './AiAnswerMarkdown.vue';
+import AgentWorkTimeline from './AgentWorkTimeline.vue';
+import type { AgentWorkEntry } from '../../types/agent-work';
+import { getAiErrorMessage } from '../../services/aiErrorMessages';
+import { fetchAiResponseCatalog } from '../../services/aiResponseModels';
+import {
+  agentChoices,
+  answerDesktopAgentPermission,
+  cancelDesktopAgentPrompt
+} from '../../composables/useDesktopAgentChats';
 import VoiceMessageIcon from './VoiceMessageIcon.vue';
 import ChatSummaryIcon from './ChatSummaryIcon.vue';
 import TasksSuggestionIcon from './TasksSuggestionIcon.vue';
@@ -631,7 +770,6 @@ import AIMessageContextMenu from './AIMessageContextMenu.vue';
 import AIActionPipeline from './AIActionPipeline.vue';
 import {
   type AiAssistantMessage,
-  type AiResponseMode,
   useAiAssistant
 } from '../../composables/useAiAssistant';
 import {
@@ -654,6 +792,17 @@ import { stageAiAttachments } from '../../services/aiAttachments';
 import { validateAiAttachments } from '../../services/aiAttachmentLimits';
 import { MediaType } from '@pksep/zod-shared-chat';
 import { VoiceConversation } from '../../services/voiceConversation';
+import {
+  Dictation,
+  type DictationFailure,
+  type DictationPhase
+} from '../../services/dictation';
+import {
+  getChatSDK,
+  getCurrentUserId,
+  getHasWebsocketConnection
+} from '../../services/useChat';
+import { getConfig } from '../../services/useConfig';
 import { VoiceActionFeedback } from '../../services/aiActionTaskPresentation';
 import { stripHtml } from '../../utils/stripHtml';
 import { copyMessageSelection } from '../../utils/copyMessageSelection';
@@ -665,6 +814,8 @@ import ForwardIcon from '../UI/ForwardIcon.vue';
 import ReplyIcon from '../UI/ReplyIcon.vue';
 import ForwardModal from '../Messages/ForwardModal.vue';
 import MessageBubbleFiles from '../Messages/MessageBubbleFiles.vue';
+import MessageBubble from '../Messages/MessageBubble.vue';
+import { revealAgentFile } from '../../services/desktop-agent-output';
 import MessageBubbleText from '../Messages/MessageBubbleText.vue';
 import PinnedMessageBanner from '../Messages/PinnedMessageBanner.vue';
 import { useMessageMedia } from '../Messages/composables/useMessageMedia';
@@ -685,20 +836,12 @@ const composerControlPlacements = [
   {
     slot: 'mobile-trailing-action',
     variant: 'mobile',
-    permission: true,
-    response: true
+    permission: true
   },
   {
     slot: 'desktop-left-action',
     variant: 'desktop',
-    permission: true,
-    response: false
-  },
-  {
-    slot: 'desktop-right-action',
-    variant: 'desktop',
-    permission: false,
-    response: true
+    permission: true
   }
 ] as const;
 
@@ -713,10 +856,29 @@ const getMessageHtml = (text: string): string =>
 const {
   sessions,
   activeView,
+  activeAgentChat,
+  preferredAgentModel,
+  preferredAgentEffort,
+  availableAgentModels,
+  availableAgentEffort,
+  agentModelsLoading,
+  agentModelsError,
+  refreshAgentModels,
+  isChoosingAgentDirectory,
+  chooseAgentDirectory,
+  setAssistantModel,
+  responseCatalog,
+  activeResponseModel,
+  modelSelection,
+  setChatEffort,
+  setAgentModel,
+  setAssistantEffort,
+  sendAgentMessage,
   activeSessionId,
   activeSession,
   pendingMessageNavigation,
   isThinking,
+  visibleMessages,
   preparationStatus,
   conversationError,
   taskBusy,
@@ -740,6 +902,220 @@ const {
   markSessionInactive,
   clearAll
 } = useAiAssistant();
+
+const agentShortcuts = [
+  { label: 'Найти файл', prompt: 'Найди в проекте файл ', icon: ChatSummaryIcon },
+  {
+    label: 'Изучить проект',
+    prompt: 'Объясни структуру проекта и с чего начать знакомство с кодом.',
+    icon: TasksSuggestionIcon
+  },
+  {
+    label: 'Разобрать ошибку',
+    prompt: 'Найди причину ошибки в проекте: ',
+    icon: ChatSummaryIcon
+  }
+];
+
+const showEmptyConversation = computed<boolean>(() =>
+  activeView.value !== 'tasks' &&
+  (!activeSession.value ||
+    (activeView.value === 'agents' &&
+      visibleMessages.value.length === 0 &&
+      !isThinking.value &&
+      !conversationError.value))
+);
+
+const applyAgentShortcut = (prompt: string): void => {
+  appendToDraft(prompt);
+  focusComposer();
+};
+
+const catalogLoading = ref(false);
+const catalogError = ref('');
+let catalogRequest: AbortController | undefined;
+
+async function refreshResponseModelNames(): Promise<void> {
+  if (activeView.value === 'agents' || catalogRequest) return;
+
+  const request = new AbortController();
+  catalogRequest = request;
+  catalogLoading.value = true;
+  catalogError.value = '';
+  try {
+    const catalog = await fetchAiResponseCatalog(request.signal);
+    if (!request.signal.aborted) responseCatalog.value = catalog;
+  } catch {
+    if (!request.signal.aborted) catalogError.value = 'Не удалось загрузить список моделей.';
+  } finally {
+    if (catalogRequest === request) {
+      catalogLoading.value = false;
+      catalogRequest = undefined;
+    }
+  }
+}
+
+watch([getCurrentUserId, () => getConfig().CHAT_MASTRA_URL], () => {
+  catalogRequest?.abort();
+  catalogRequest = undefined;
+  responseCatalog.value = undefined;
+  void refreshResponseModelNames();
+}, { immediate: true });
+watch([activeView, getHasWebsocketConnection], () => void refreshResponseModelNames());
+
+const composerModels = computed(() =>
+  activeView.value === 'agents' ? availableAgentModels.value :
+    (responseCatalog.value?.models ?? []).map(({ id, name }) => ({
+      value: id, name: name.replace(/^(GPT-\d+(?:\.\d+)?)-(?=[A-Za-z])/, '$1 ')
+    }))
+);
+const composerModel = computed<string>(() =>
+  activeView.value === 'agents' ? preferredAgentModel.value : activeResponseModel.value?.id ?? ''
+);
+const effortTranslations = new Map([
+  ['none', 'Без рассуждения'],
+  ['minimal', 'Минимальный'],
+  ['low', 'Лёгкий'],
+  ['default', 'Обычный'],
+  ['medium', 'Средний'],
+  ['high', 'Высокий'],
+  ['xhigh', 'Очень высокий'],
+  ['extra high', 'Очень высокий'],
+  ['max', 'Максимальный'],
+  ['maximum', 'Максимальный'],
+  ['off', 'Обычный'],
+  ['ultra', 'Ультра']
+]);
+const composerEfforts = computed(() => {
+  const choices = activeView.value === 'agents' ? agentChoices(availableAgentEffort.value) :
+    (activeResponseModel.value?.efforts ?? []).map(value => ({ value, name: value }));
+  return choices
+    .map(({ value, name }) => ({
+      value,
+      name: effortTranslations.get(name.toLowerCase()) ?? name
+    }))
+    .sort(
+      (a, b) => Number(b.value === 'default') - Number(a.value === 'default')
+    );
+});
+const composerEffort = computed<string>(() => {
+  if (activeView.value !== 'agents') return modelSelection.value?.effort ?? 'default';
+  const selected = preferredAgentEffort.value;
+  return composerEfforts.value.some(choice => choice.value === selected)
+    ? selected
+    : availableAgentEffort.value?.currentValue ?? 'default';
+});
+const agentProjectSetting = computed(() =>
+  activeView.value === 'agents'
+    ? {
+        directory:
+          activeAgentChat.value?.pendingDirectory ||
+          activeSession.value?.project?.directory ||
+          ''
+      }
+    : undefined
+);
+const agentPermission = computed(() => activeAgentChat.value?.permissions[0]);
+const canStopAgent = computed<boolean>(
+  () => activeView.value === 'agents' && !!activeAgentChat.value?.running
+);
+const agentElapsedMs = ref(0);
+const liveWorkEntries = computed<AgentWorkEntry[]>(() =>
+  Array.from(activeAgentChat.value?.workLog?.values() ?? [])
+);
+
+const agentProgressDetail = computed((): string => {
+  const chat = activeAgentChat.value;
+  if (!chat?.running || chat.startedAt == null || chat.lastProgressAt == null || agentPermission.value) {
+    return '';
+  }
+
+  const quietMs = chat.startedAt + agentElapsedMs.value - chat.lastProgressAt;
+  if (chat.toolTitle === 'Обдумываю запрос' && !liveWorkEntries.value.length) {
+    return 'Модель пока не прислала первое пояснение';
+  }
+  if (quietMs >= 15_000) {
+    return 'Жду продолжения ответа';
+  }
+  if (chat.receivedChars) return `Получено знаков: ${chat.receivedChars.toLocaleString('ru-RU')}`;
+
+  return '';
+});
+
+function formatAgentDuration(durationMs: number): string {
+  const seconds = Math.max(1, Math.floor(durationMs / 1_000));
+
+  const minutes = Math.floor(seconds / 60);
+  return minutes > 0 ? `${minutes} мин ${seconds % 60} с` : `${seconds} с`;
+}
+
+watch(
+  () => activeAgentChat.value?.startedAt,
+  (startedAt, _previous, onCleanup): void => {
+    if (startedAt == null) return;
+
+    const updateElapsed = (): void => {
+      agentElapsedMs.value = Math.max(0, Date.now() - startedAt);
+    };
+
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1_000);
+    onCleanup((): void => window.clearInterval(timer));
+  },
+  { immediate: true, flush: 'sync' }
+);
+
+const agentPermissionDiff = computed(() =>
+  agentPermission.value?.toolCall.content?.find(item => item.type === 'diff')
+);
+const agentPermissionPath = computed(
+  () =>
+    agentPermissionDiff.value?.path ??
+    agentPermission.value?.toolCall.locations?.[0]?.path
+);
+
+async function applyComposerModel(value: string): Promise<void> {
+  if (activeView.value === 'agents') {
+    await setAgentModel(value);
+    return;
+  }
+
+  setAssistantModel(value);
+}
+
+async function applyComposerEffort(value: string): Promise<void> {
+  if (activeView.value === 'agents') await setAssistantEffort(value);
+  else setChatEffort(value);
+}
+
+function reportComposerSettingsError(error: unknown): void {
+  showErrorNotification(
+    typeof error === 'string' ? error : getAiErrorMessage(error)
+  );
+}
+
+function openComposerSettings(): void {
+  isPermissionMenuOpen.value = false;
+  if (activeView.value === 'agents') void refreshAgentModels();
+  else void refreshResponseModelNames();
+}
+
+function openAgentDirectory(): void {
+  void chooseAgentDirectory().catch(reportComposerSettingsError);
+}
+
+function answerAgentPermission(allow: boolean): void {
+  const chat = activeAgentChat.value;
+  const permission = agentPermission.value;
+  if (chat && permission)
+    void answerDesktopAgentPermission(chat, permission.requestId, allow);
+}
+
+function stopAgentResponse(): void {
+  const chat = activeAgentChat.value;
+  if (chat)
+    void cancelDesktopAgentPrompt(chat).catch(reportComposerSettingsError);
+}
 
 // Каждый план показан в своём сообщении один раз, в последней сохранённой версии.
 // Незавершённые поручения остаются управляемыми, старые итоги — в истории чата.
@@ -783,7 +1159,9 @@ const isPinnedMessageUnpinModalOpen = ref(false);
 const isNearBottom = ref(true);
 const isVoiceMuted = ref(false);
 const isPermissionMenuOpen = ref(false);
-const isResponseModeMenuOpen = ref(false);
+const composerSettingsRef = ref<InstanceType<typeof AiComposerSettings> | null>(
+  null
+);
 const isUploadingAttachments = ref(false);
 const contextMessage = ref<{
   message: AiAssistantMessage;
@@ -804,8 +1182,127 @@ type ComposerDraft = {
 const composerKey = computed(() =>
   activeView.value === 'tasks'
     ? 'new-task'
-    : activeSessionId.value ?? 'new-chat'
+    : activeSessionId.value ??
+      (activeView.value === 'agents' ? 'new-agent' : 'new-chat')
 );
+const dictationPhase = ref<DictationPhase>();
+let dictation: Dictation | undefined;
+
+const dictationFailures = useSessionStorage<Record<string, DictationFailure>>(
+  'sep-chat:dictation-recovery',
+  {},
+  { flush: 'sync', writeDefaults: false }
+);
+const dictationKey = computed(() =>
+  JSON.stringify([
+    getConfig().CHAT_API_DOMAIN,
+    getCurrentUserId(),
+    activeView.value,
+    composerKey.value
+  ])
+);
+const dictationFailure = computed(
+  () => dictationFailures.value[dictationKey.value]
+);
+
+const dictationBusy = computed<boolean>(
+  () =>
+    dictationPhase.value === 'starting' ||
+    dictationPhase.value === 'finishing' ||
+    dictationPhase.value === 'polishing'
+);
+const dictationPressed = computed<boolean>(
+  () => dictationPhase.value === 'recording'
+);
+const dictationUnavailable = computed<boolean>(
+  () => !getHasWebsocketConnection()
+);
+const dictationDisabled = computed<boolean>(
+  () => dictationUnavailable.value || dictationBusy.value || isVoiceModeOpen.value
+);
+const dictationButtonLabel = computed<string>(() => {
+  if (isVoiceModeOpen.value) return 'Завершите голосовой разговор для диктовки';
+  if (dictationPhase.value === 'starting') return 'Подключаю диктовку';
+  if (dictationPhase.value === 'recording') return 'Завершить диктовку';
+  if (dictationBusy.value) return 'Обрабатываю диктовку';
+  if (dictationUnavailable.value) return 'Диктовка недоступна без связи с Чатом';
+
+  return 'Начать диктовку';
+});
+
+const appendToDraft = (text: string): void => {
+  const html = `<p>${getMessageHtml(text)}</p>`;
+  draft.value = stripHtml(draft.value).trim() ? draft.value + html : html;
+};
+
+const clearDictation = (): void => {
+  dictation?.cancel();
+  dictation = undefined;
+  dictationPhase.value = undefined;
+};
+
+const toggleDictation = (): void => {
+  if (dictationDisabled.value) return;
+  if (dictation) {
+    void dictation.finish();
+    return;
+  }
+
+  const socket = getChatSDK()?.getDictationSocket();
+  if (!socket) {
+    dictationFailures.value[dictationKey.value] = {
+      message: 'Диктовка недоступна без связи с Чатом.',
+      text: dictationFailure.value?.text ?? ''
+    };
+    return;
+  }
+
+  const key = dictationKey.value;
+  dictationPhase.value = 'starting';
+  const recording = new Dictation(socket, responseMode.value, {
+    phase: phase => {
+      dictationPhase.value = phase;
+    },
+    complete: (text, error): void => {
+      if (dictation !== recording) return;
+
+      clearDictation();
+      if (dictationKey.value !== key) return;
+
+      if (error) {
+        dictationFailures.value[key] = {
+          message: error,
+          text: text || dictationFailure.value?.text || ''
+        };
+      } else {
+        delete dictationFailures.value[key];
+      }
+      if (text) {
+        appendToDraft(text);
+        focusComposer();
+      }
+    }
+  });
+  dictation = recording;
+  void recording.start();
+};
+
+watch(dictationUnavailable, unavailable => {
+  if (
+    unavailable &&
+    (dictationPhase.value === 'starting' || dictationPressed.value)
+  )
+    dictation?.interrupt();
+});
+watch(dictationKey, clearDictation, { flush: 'sync' });
+watch(
+  isVoiceModeOpen,
+  open => {
+    if (open) clearDictation();
+  },
+  { flush: 'sync' }
+);
+
 const composerDrafts = new Map<string, ComposerDraft>();
 const composerSubmissions = new Map<string, { key: string }>();
 let selectingSubmissionSession: { key: string } | undefined;
@@ -882,7 +1379,7 @@ const currentPinnedMessagePreview = computed(() =>
 const getMessageOutputMedia = (message: AiAssistantMessage): IMedia[] =>
   (message.outputAttachments || []).map(attachment => ({
     id: attachment.id,
-    type: MediaType.File,
+    type: message.projectFiles?.length && attachment.contentType.startsWith('image/') ? MediaType.Image : MediaType.File,
     path: attachment.path,
     thumbnailPath: attachment.thumbnailPath,
     originName: attachment.name,
@@ -1045,9 +1542,6 @@ const permissionLabel = computed(() =>
     ? 'Запрашивать разрешение'
     : 'Автоматически подтверждать'
 );
-const responseModeLabel = computed(() =>
-  responseMode.value === 'advanced' ? 'Продуманный ответ' : 'Быстрый ответ'
-);
 const formatConversationDate = (timestamp?: number): string =>
   new Intl.DateTimeFormat('ru-RU', {
     day: 'numeric',
@@ -1192,20 +1686,20 @@ const handleExclusiveMenuClick = (event: MouseEvent): void => {
 
   if (target.closest('.attach-file-button')) {
     isPermissionMenuOpen.value = false;
-    isResponseModeMenuOpen.value = false;
+    composerSettingsRef.value?.close();
     closeEmojiPicker(root);
     return;
   }
 
   if (target.closest('.smile-button') && !target.closest('.emoji-picker')) {
     isPermissionMenuOpen.value = false;
-    isResponseModeMenuOpen.value = false;
+    composerSettingsRef.value?.close();
     closeAttachmentPopover(root);
     return;
   }
 
   if (target.closest('.ai-assistant__permission-trigger')) {
-    isResponseModeMenuOpen.value = false;
+    composerSettingsRef.value?.close();
     closeEmojiPicker(root);
     closeAttachmentPopover(root);
   }
@@ -1529,6 +2023,12 @@ const handleForwardTopic = async (topic: ITopic): Promise<void> => {
   if (!activeSessionId.value) return;
   const threadId = activeSessionId.value;
   const messages = [...forwardMessages.value];
+  if (activeSession.value?.kind === 'agent') {
+    openMessageDraft(topic, formatForwardDraft(messages));
+    closeForwardModal();
+    clearMessageSelection();
+    return;
+  }
   try {
     const { fetchAiConversationInfo } = await import(
       '../../services/aiConversationInfo'
@@ -1744,6 +2244,46 @@ const handleSend = async (
   composerSubmissions.set(attempt.key, attempt);
   isUploadingAttachments.value = true;
   try {
+    if (activeView.value === 'agents') {
+      if (
+        isChoosingAgentDirectory.value ||
+        activeAgentChat.value?.busy ||
+        isThinking.value
+      )
+        return;
+
+      if (!activeAgentChat.value?.connected && !activeSession.value?.project) {
+        const connected = await chooseAgentDirectory((activate): void => {
+          selectingSubmissionSession = attempt;
+          try {
+            activate();
+          } finally {
+            selectingSubmissionSession = undefined;
+          }
+        });
+        if (
+          !connected?.connected ||
+          !isAssistantMounted ||
+          activeView.value !== 'agents' ||
+          activeSessionId.value !== connected.id
+        )
+          return;
+      }
+
+      const text = submittedForwardDraft
+        ? [submittedForwardDraft.context, value].filter(Boolean).join('\n\n')
+        : value;
+      await sendAgentMessage(
+        text,
+        files,
+        submittedReply
+          ? { role: submittedReply.role, content: submittedReply.text }
+          : undefined,
+        onAccepted,
+        editedMessage?.id
+      );
+      return;
+    }
     const attachments = files.length > 0 ? await stageAiAttachments(files) : [];
     if (!isAssistantMounted || composerKey.value !== attempt.key) return;
     const replyTo = submittedReply
@@ -1790,7 +2330,9 @@ const handleSend = async (
     showErrorNotification(
       error instanceof Error
         ? error.message
-        : 'Не удалось подготовить вложение для AI'
+        : typeof error === 'string'
+          ? error
+          : 'Не удалось отправить сообщение.'
     );
   } finally {
     releaseBusy();
@@ -1823,19 +2365,8 @@ const selectPermission = (mode: 'ask' | 'automatic'): void => {
 };
 
 const togglePermissionMenu = (): void => {
-  isResponseModeMenuOpen.value = false;
+  composerSettingsRef.value?.close();
   isPermissionMenuOpen.value = !isPermissionMenuOpen.value;
-};
-
-const toggleResponseModeMenu = (): void => {
-  isPermissionMenuOpen.value = false;
-  isResponseModeMenuOpen.value = !isResponseModeMenuOpen.value;
-};
-
-const selectResponseMode = (mode: AiResponseMode): void => {
-  responseMode.value = mode;
-  isResponseModeMenuOpen.value = false;
-  focusComposer();
 };
 
 watch(
@@ -1858,7 +2389,7 @@ watch(
 
     const session = sessions.value.find(item => item.id === sessionId);
     if (session) {
-      selectSession(sessionId, false);
+      selectSession(sessionId);
       void scrollOpenedChatToBottom();
       return;
     }
@@ -1884,7 +2415,7 @@ watch(
 
 watch([activeSessionId, activeView], ([sessionId, view]) => {
   if (route.value.type !== RouteTypes.AI) return;
-  navigateToAI(view === 'chat' ? sessionId : null);
+  navigateToAI(view !== 'tasks' ? sessionId : null);
 });
 
 watch(
@@ -1924,9 +2455,14 @@ watch(
 
 watch(
   [
-    () => activeSession.value?.messages.length || 0,
+    () => visibleMessages.value.length,
+    () => visibleMessages.value.at(-1)?.text,
+    preparationStatus,
+    liveWorkEntries,
+    () => Boolean(agentProgressDetail.value),
     isThinking,
-    visibleActionTasks
+    visibleActionTasks,
+    conversationError
   ],
   () => {
     if (isNearBottom.value) void scrollToBottom();
@@ -1975,12 +2511,16 @@ watch(
 
 onMounted(() => {
   isAssistantMounted = true;
+  window.addEventListener('focus', refreshResponseModelNames);
   document.addEventListener('change', handleComposerFileChange, true);
   focusComposer();
 });
 
 onBeforeUnmount(() => {
+  clearDictation();
   isAssistantMounted = false;
+  window.removeEventListener('focus', refreshResponseModelNames);
+  catalogRequest?.abort();
   document.removeEventListener('change', handleComposerFileChange, true);
   if (composerFocusFrame !== null) {
     window.cancelAnimationFrame(composerFocusFrame);

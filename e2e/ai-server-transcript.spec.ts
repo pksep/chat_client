@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './fixtures/ai-history';
 
 test.setTimeout(90_000);
-const seed = async (page: Page, id: string) => {
+const seed = async (page: Page, id: string | null): Promise<void> => {
   await page.addInitScript(sessionId => {
     const url = 'http://127.0.0.1:65530';
     Object.defineProperty(navigator, 'standalone', {
@@ -30,22 +30,24 @@ const seed = async (page: Page, id: string) => {
         user: { id: 'local-ui-test-user', name: 'Тест' }
       })
     );
-    localStorage.setItem(
-      'sep:chat:ai-assistant:v1',
-      JSON.stringify({
-        sessions: [
-          {
-            id: sessionId,
-            title: 'Серверная переписка',
-            description: 'Тест',
-            time: '10:00',
-            messages: []
-          }
-        ],
-        tasks: [],
-        permissionMode: 'ask'
-      })
-    );
+    if (sessionId) {
+      localStorage.setItem(
+        'sep:chat:ai-assistant:v1',
+        JSON.stringify({
+          sessions: [
+            {
+              id: sessionId,
+              title: 'Серверная переписка',
+              description: 'Тест',
+              time: '10:00',
+              messages: []
+            }
+          ],
+          tasks: [],
+          permissionMode: 'ask'
+        })
+      );
+    }
   }, id);
 };
 const file = {
@@ -80,6 +82,142 @@ const answer = (page: Page, text: string) =>
     )
     .filter({ hasText: text });
 
+test('кодовые блоки в ответе сохраняют язык и копируют только исходный код', async ({ page }, testInfo): Promise<void> => {
+  const id = 'qa-code-blocks';
+  await seed(page, id);
+  await page.addInitScript((): void => {
+    localStorage.setItem('erp-theme-color-scheme', 'theme-dark');
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+      writeText: async (text: string): Promise<void> => { sessionStorage.setItem('copied-snippet', text); }
+    } });
+  });
+  const command = 'Get-ChildItem "$HOME\\.ssh\\*.pub" -Name';
+  const script = '# Комментарий\n    Get-Content "<sample> & 🐈" | Set-Clipboard';
+  const unhighlighted = 'entry:\n\t<sample> & &amp;';
+  const content = [
+    'Проверьте ключи в PowerShell.', '',
+    '1. Выведите список файлов.', '', '   ~~~powershell', '   ' + command, '   ~~~',
+    '2. Скопируйте содержимое.', '', '   ~~~ps1', ...script.split('\n').map(line => '   ' + line), '   ~~~',
+    '', '~~~custom', unhighlighted, '~~~', '', 'Имя файла: `id_ed25519.pub`.'
+  ].join('\n');
+  await page.route('**/conversations/**', route => route.fulfill({
+    json: new URL(route.request().url()).pathname.endsWith('/messages')
+      ? snapshot([message('code-answer', 'assistant', content)])
+      : { generation: 0, deleted: false, protocol: 1 }
+  }));
+  await page.goto('/ai/' + id);
+  const response = answer(page, 'Проверьте ключи в PowerShell.');
+  const blocks = response.locator('.ai-code-block');
+  await expect(blocks).toHaveCount(3, { timeout: 30000 });
+  await expect(response.locator('ol > li .ai-code-block')).toHaveCount(2);
+  await expect(blocks.locator('.ai-code-block__language')).toHaveText(['PowerShell', 'PowerShell', 'custom']);
+  const first = blocks.nth(0), second = blocks.nth(1);
+  await expect(first.locator('code .hljs-string')).toHaveCount(1);
+  expect(await first.locator('.hljs-string').evaluate(el =>
+    getComputedStyle(el).color !== getComputedStyle(el.closest('code')!).color
+  )).toBe(true);
+  await expect(first.locator('code')).toHaveText(command, { useInnerText: false });
+  expect(await second.locator('code').textContent()).toBe(script);
+  expect(await blocks.nth(2).locator('code').textContent()).toBe(unhighlighted);
+  await expect(blocks.nth(2).locator('code *')).toHaveCount(0);
+  await expect(response.locator('p > code')).toHaveText('id_ed25519.pub');
+  const copyButton = first.getByRole('button', { name: 'Копировать код' });
+  await expect(copyButton).toHaveText('');
+  await expect(copyButton.locator('svg')).toHaveCSS('width', '12px');
+  await expect(response.locator('ol')).toHaveCSS('list-style-position', 'inside');
+  await response.screenshot({ path: testInfo.outputPath('code-blocks.png') });
+  await second.getByRole('button', { name: 'Копировать код' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(second.getByRole('button', { name: 'Скопировано' })).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem('copied-snippet'))).toBe(script);
+  await first.getByRole('button', { name: 'Копировать код' }).click();
+  expect(await page.evaluate(() => sessionStorage.getItem('copied-snippet'))).toBe(command);
+  await blocks.nth(2).getByRole('button', { name: 'Копировать код' }).click();
+  expect(await page.evaluate(() => sessionStorage.getItem('copied-snippet'))).toBe(unhighlighted);
+});
+
+test('новый чат показывает запрос до завершения загрузки истории', async ({
+  page
+}): Promise<void> => {
+  await seed(page, null);
+
+  await page.route('**/users/me/access', route =>
+    route.fulfill({
+      json: {
+        userId: 'local-ui-test-user',
+        erpUserId: null,
+        erpRoleId: null,
+        access: { client: false, ai: true },
+        effective: { client: false, ai: true }
+      }
+    })
+  );
+
+  const input = 'Мои задачи на сегодня';
+  const output = 'Проверочный ответ';
+  const stored: ReturnType<typeof message>[] = [];
+  const history = Promise.withResolvers<void>();
+  const response = Promise.withResolvers<void>();
+  let runs = 0;
+
+  await page.route('**/conversations/**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/info')) return route.fulfill({ status: 404 });
+    await history.promise;
+
+    return route.fulfill({
+      json: path.endsWith('/messages')
+        ? snapshot(stored)
+        : { generation: 0, deleted: false, protocol: 1 }
+    });
+  });
+  await page.route('**/api/agents/generalAgent/stream*', async route => {
+    runs++;
+    const requestId = route.request().postDataJSON().requestContext.requestId;
+    await response.promise;
+    stored.push(
+      { ...message('saved-user', 'user', input), requestId },
+      { ...message('saved-answer', 'assistant', output), requestId }
+    );
+
+    return route.fulfill({
+      contentType: 'text/event-stream',
+      body: `data: ${JSON.stringify({ type: 'text-delta', payload: { text: output } })}\n\ndata: {"type":"finish"}\n\n`
+    });
+  });
+
+  await page.goto('/ai');
+  try {
+    await page.getByRole('button', { name: input, exact: true }).click();
+    const conversation = page.locator('.ai-assistant__conversation');
+    const status = conversation.getByRole('status');
+    await expect(answer(page, input)).toHaveCount(1);
+    await expect(status).toContainText('Загружаю историю');
+    await expect(status.locator('.ai-assistant__thinking-dots')).toHaveText('•••');
+    await expect(
+      conversation.locator('.ai-assistant__message--user + [role="status"]')
+    ).toBeVisible();
+    expect(runs).toBe(0);
+
+    history.resolve();
+    await expect.poll(() => runs).toBe(1);
+    await expect(answer(page, input)).toHaveCount(1);
+    await expect(status).toContainText('Подготавливаю ответ');
+
+    response.resolve();
+    await expect(answer(page, output)).toBeVisible();
+    await expect(answer(page, input)).toHaveCount(1);
+    await expect(status).toHaveCount(0);
+    await page.reload();
+    await expect(answer(page, input)).toHaveCount(1, { timeout: 30_000 });
+    await expect(answer(page, output)).toBeVisible();
+    expect(runs).toBe(1);
+  } finally {
+    history.resolve();
+    response.resolve();
+  }
+});
+
 test('смешанная история сохраняет порядок после генерации и перезагрузки', async ({
   page
 }): Promise<void> => {
@@ -112,7 +250,7 @@ test('смешанная история сохраняет порядок пос
     });
   });
   await page.goto(`/ai/${id}`);
-  await expect(page.locator('.ai-assistant__editor')).toBeVisible({
+  await expect(page.locator('.ai-assistant__editor [contenteditable=true]:visible')).toBeVisible({
     timeout: 30_000
   });
   await expect(page.locator('.ai-assistant__thinking')).toHaveCount(0);
@@ -686,11 +824,8 @@ for (const failSave of [false, true]) {
     await expect.poll(() => writes).toBe(1);
     if (failSave) {
       await expect(
-        page.getByText(
-          'Исправление не сохранено. Прежний запрос остался в чате.',
-          { exact: true }
-        )
-      ).toBeVisible();
+        page.locator('.ai-assistant__conversation').getByRole('alert')
+      ).toHaveText('Исправление не сохранено. Прежний запрос остался в чате.');
       await expect(answer(page, 'Старый вопрос')).toBeVisible();
       await expect(answer(page, 'Прежний ответ')).toBeVisible();
       expect(runs).toBe(0);

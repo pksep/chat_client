@@ -1,7 +1,18 @@
 <template>
-  <section class="clients-panel" data-testid="ClientsPanel">
+  <section
+    class="clients-panel"
+    :class="{
+      'clients-panel--widget-settings': showSettings && allowed && !isCollapse
+    }"
+    data-testid="ClientsPanel"
+  >
+    <ClientWidgetSettings
+      v-if="showSettings && allowed && !isCollapse"
+      :initial-sites="settingsSites"
+      @close="showSettings = false"
+    />
     <ChatFoldersPanel
-      v-if="isManagingFolders && !isCollapse"
+      v-else-if="isManagingFolders && !isCollapse"
       scope="clients"
       :mobile="isMobile"
       :topics="folderTopics"
@@ -38,6 +49,29 @@
       data-testid="Clients"
       @manage-folders="openFolderManager"
     >
+      <template #title-action>
+        <Tooltip
+          v-if="allowed"
+          class="clients-panel__settings-tooltip"
+          :hint="settingsHint"
+          :is-can-show="!canOpenSettings"
+          position="bottom-center"
+          type="black"
+          data-testid="Clients-WidgetSettingsTooltip"
+        >
+          <Button
+            class="clients-panel__settings"
+            :type="ButtonTypeEnum.ghost"
+            :size="SizesEnum.little"
+            :disabled="!canOpenSettings"
+            :aria-description="canOpenSettings ? undefined : settingsHint"
+            aria-label="Настройки виджета"
+            @click="openSettings"
+          >
+            <Icon :name="IconNameEnum.settings" :width="24" :height="24" />
+          </Button>
+        </Tooltip>
+      </template>
       <template v-if="isMobile" #folders>
         <ClientsFolderRail
           tabs
@@ -85,7 +119,12 @@
       </p>
     </template>
     <TopicList
-      v-if="!isManagingFolders && allowed && (loading || topics.length)"
+      v-if="
+        !showSettings &&
+        !isManagingFolders &&
+        allowed &&
+        (loading || topics.length)
+      "
       folder-scope="clients"
       :class="isMobile ? '' : 'menu__contact-list'"
       :topics="topics"
@@ -97,6 +136,7 @@
     />
     <MenuEmptyState
       v-if="
+        !showSettings &&
         !isManagingFolders &&
         allowed &&
         !loading &&
@@ -111,12 +151,21 @@
 </template>
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { IconNameEnum } from '@pksep/yui';
+import {
+  Button,
+  ButtonTypeEnum,
+  Icon,
+  IconNameEnum,
+  SizesEnum,
+  Tooltip
+} from '@pksep/yui';
 import {
   clientName,
   clientPlatform,
+  loadWidgetSites,
   useManagerInquiries,
-  type ManagerInquiry
+  type ManagerInquiry,
+  type WidgetSite
 } from '../../composables/useManagerInquiries';
 import { getTopicList, useTopics } from '../../composables/useTopics';
 import { getAuthUser } from '../../composables/useAuth';
@@ -132,14 +181,60 @@ import { useChatFolders } from '../../composables/useChatFolders';
 import { useChatListSelection } from '../../composables/useChatListSelection';
 import ClientsFolderRail from './ClientsFolderRail.vue';
 import ChatFoldersPanel from '../Menu/ChatFoldersPanel.vue';
+import ClientWidgetSettings from './ClientWidgetSettings.vue';
+
 const props = defineProps<{ isCollapse?: boolean; isMobile?: boolean }>();
-const { inquiries, allowed, loading: inquiriesLoading } = useManagerInquiries();
+const {
+  inquiries,
+  allowed,
+  loading: inquiriesLoading,
+  widgetSettingsAvailability
+} = useManagerInquiries();
+const showSettings = ref(false);
+const settingsSites = ref<WidgetSite[]>([]);
+const checkingSettings = ref(false);
+const canOpenSettings = computed(
+  () =>
+    widgetSettingsAvailability.value === 'available' && !checkingSettings.value
+);
+const settingsHint = computed(() =>
+  widgetSettingsAvailability.value === 'unavailable'
+    ? 'Сервер виджета недоступен'
+    : 'Проверяем связь с сервером виджета'
+);
+watch([allowed, () => props.isCollapse], ([canOpen, collapsed]): void => {
+  if (!canOpen || collapsed) showSettings.value = false;
+});
 const { loadingClientTopics } = useTopics();
 const loading = computed(
   () => inquiriesLoading.value || loadingClientTopics.value
 );
 const route = useUrlWatcher();
-const { setActiveSection } = useChatMenu();
+const { activeSection, setActiveSection } = useChatMenu();
+
+const openSettings = async (): Promise<void> => {
+  if (!canOpenSettings.value) return;
+  const actor = getAuthUser()?.id;
+  checkingSettings.value = true;
+
+  try {
+    const sites = await loadWidgetSites();
+    if (
+      getAuthUser()?.id !== actor ||
+      !allowed.value ||
+      props.isCollapse ||
+      activeSection.value !== 'clients' ||
+      widgetSettingsAvailability.value !== 'available'
+    )
+      return;
+    settingsSites.value = sites;
+    showSettings.value = true;
+  } catch {
+    // Проверка связи уже перевела кнопку в недоступное состояние.
+  } finally {
+    checkingSettings.value = false;
+  }
+};
 const {
   folders: clientFolders,
   activeFolderId,
@@ -151,6 +246,17 @@ const {
   closeFolderManager,
   loadFolders
 } = useChatFolders('clients');
+
+// Мобильные вкладки остаются в DOM: выход из раздела должен закрывать редактор.
+watch([activeSection, isManagingFolders], ([section, folders]): void => {
+  if (section !== 'clients' || folders) showSettings.value = false;
+});
+watch(
+  () => [route.value.type, route.value.id],
+  (): void => {
+    showSettings.value = false;
+  }
+);
 
 // Состав системной поддержки обновляется после появления нового клиентского чата.
 watch(
@@ -287,6 +393,28 @@ const openTopic = (topic: ITopic) => {
 }
 .clients-panel > .chat-folders-panel {
   flex: 1;
+}
+.mobile-list-container__section--clients .clients-panel--widget-settings {
+  box-sizing: border-box;
+  height: 100%;
+  padding-bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+}
+.clients-panel :deep(.clients-panel__settings-tooltip) {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  margin-inline-end: auto;
+}
+.clients-panel :deep(.clients-panel__settings.button-yui-kit) {
+  flex: none;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+}
+.clients-panel :deep(.clients-panel__settings:disabled) {
+  color: var(--text-disabled);
 }
 .clients-panel :deep(.chats-toolbar__filter-button svg),
 .clients-panel :deep(.chats-toolbar__filter-button .client-platform-icon) {

@@ -11,10 +11,24 @@
         <Icon :name="IconNameEnum.crossLarge" />
       </Button>
     </header>
-    <div class="ai-info__body">
+    <div class="ai-info__body" :aria-busy="loading">
       <div class="ai-info__avatar"><AiAvatar /></div>
-      <p class="ai-info__subtitle">СЭПи · ИИ-ассистент</p>
-      <p v-if="loading" role="status">Загрузка...</p>
+      <p class="ai-info__subtitle">СЭПи</p>
+      <div
+        v-if="loading"
+        class="ai-info__skeleton"
+        :data-testid="`${props.dataTestid}-Skeleton`"
+        aria-hidden="true"
+      >
+        <SkeletonBlock class="ai-info__skeleton-name" />
+        <div class="ai-info__actions">
+          <SkeletonBlock
+            v-for="index in 3"
+            :key="index"
+            class="ai-info__skeleton-action"
+          />
+        </div>
+      </div>
       <p
         v-else-if="error"
         role="alert"
@@ -22,13 +36,12 @@
       >
         {{ error }}
       </p>
-      <p v-else-if="!info">Информация появится после первого сообщения.</p>
-      <template v-if="info">
+      <template v-if="threadId">
         <form class="ai-info__name" @submit.prevent="saveTitle">
-          <label :for="`${props.dataTestid}-NameInput`">Название чата</label>
           <Input
-            :id="`${props.dataTestid}-NameInput`"
-            class="minor"
+            :input-id="`${props.dataTestid}-NameInput`"
+            aria-label="Название чата"
+            class="initial ai-info__title-input"
             :model-value="title"
             :maxlength="160"
             :disabled="busy"
@@ -36,11 +49,13 @@
             @update:model-value="setTitle"
           />
           <Button
-            v-if="title.trim() !== savedTitle"
-            :disabled="busy || !title.trim()"
-            :size="SizesEnum.small"
+            v-if="canSaveTitle"
+            class="menu__info-save-button"
+            :type="ButtonTypeEnum.primary"
+            :size="SizesEnum.little"
+            :disabled="busy"
             :data-testid="`${props.dataTestid}-SaveName`"
-            @click="saveTitle"
+            @click.prevent="saveTitle"
             >Сохранить</Button
           >
         </form>
@@ -50,12 +65,12 @@
             :size="SizesEnum.large"
             class="menu-info__secondary-button ai-info__action"
             :disabled="busy"
-            :aria-pressed="info.muted"
+            :aria-pressed="muted"
             :data-testid="`${props.dataTestid}-Mute`"
             @click="toggleMute"
           >
-            <component :is="info.muted ? MuteIcon : UnmuteIcon" /><span>{{
-              info.muted ? 'Звук выкл.' : 'Звук вкл.'
+            <component :is="muted ? MuteIcon : UnmuteIcon" /><span>{{
+              muted ? 'Звук выкл.' : 'Звук вкл.'
             }}</span>
           </Button>
           <Button
@@ -75,12 +90,13 @@
             ><MessageIcon /><span>Перейти в чат</span></Button
           >
         </div>
-        <ProfileAttachmentsPanel
-          v-if="attachments"
-          :source="attachments"
-          :data-testid="`${props.dataTestid}-Attachments`"
-        />
       </template>
+      <ProfileAttachmentsPanel
+        v-if="!loading && (threadId || !error)"
+        :key="threadId"
+        :source="attachments"
+        :data-testid="`${props.dataTestid}-Attachments`"
+      />
     </div>
   </section>
 </template>
@@ -97,20 +113,21 @@ import {
 } from '@pksep/yui';
 import AiAvatar from './AiAvatar.vue';
 import ProfileAttachmentsPanel from '../ProfileAttachmentsPanel.vue';
+import SkeletonBlock from '../UI/SkeletonBlock.vue';
 import CallIcon from '../CallModal/UI/CallIcon.vue';
 import MessageIcon from '../UI/MessageIcon.vue';
 import MuteIcon from '../UI/MuteIcon.vue';
 import UnmuteIcon from '../UI/UnmuteIcon.vue';
 import { useAiConversationInfo } from '../../composables/useAiConversationInfo';
 import { useAiAssistant } from '../../composables/useAiAssistant';
+import { loadDesktopAgentChat, type DesktopAgentChat } from '../../composables/useDesktopAgentChats';
 import { navigateToAI } from '../../composables/navigation';
 import { getAuthUser } from '../../composables/useAuth';
 import {
-  fetchAiConversationInfo,
   updateAiConversationInfo,
   type AiConversationInfo
 } from '../../services/aiConversationInfo';
-import { createAiAttachmentSource } from '../../services/aiConversationAttachments';
+import { createAgentAttachmentSource, createAiAttachmentSource } from '../../services/aiConversationAttachments';
 
 const props = withDefaults(
   defineProps<{ mobile?: boolean; dataTestid?: string }>(),
@@ -119,28 +136,74 @@ const props = withDefaults(
 const { source, close } = useAiConversationInfo();
 const assistant = useAiAssistant();
 const info = shallowRef<AiConversationInfo | null>(null);
+const agentHistory = shallowRef<DesktopAgentChat | null>(null);
+const fileUrls = new Map<File, string>();
+
+function localFileUrl(file: File): string {
+  const existing = fileUrls.get(file);
+  if (existing) return existing;
+
+  const url = URL.createObjectURL(file);
+  fileUrls.set(file, url);
+  return url;
+}
+
+function releaseFileUrls(): void {
+  for (const url of fileUrls.values()) URL.revokeObjectURL(url);
+  fileUrls.clear();
+}
 const title = ref('');
 const error = ref('');
 const loading = ref(false);
 const busy = ref(false);
 let revision = 0;
+const localSession = computed(() =>
+  source.value.localThreadId
+    ? assistant.sessions.value.find(
+        session =>
+          session.kind === 'agent' && session.id === source.value.localThreadId
+      )
+    : undefined
+);
+const threadId = computed(() => localSession.value?.id ?? info.value?.threadId);
+const muted = computed(
+  () => localSession.value?.muted ?? info.value?.muted ?? false
+);
 const savedTitle = computed(
   () =>
+    localSession.value?.title ||
     info.value?.title ||
     assistant.sessions.value.find(
       session => session.id === info.value?.threadId
     )?.title ||
     'СЭПи'
 );
-const attachments = computed(() =>
-  info.value
-    ? createAiAttachmentSource(info.value, (messageId): void => {
-        if (!info.value) return;
-        assistant.requestMessageNavigation(info.value.threadId, messageId);
-        openChat();
-      })
-    : undefined
-);
+const canSaveTitle = computed<boolean>(() => {
+  const name = title.value.trim();
+
+  return name.length > 0 && name !== savedTitle.value;
+});
+
+const attachments = computed<
+  ReturnType<typeof createAiAttachmentSource> | undefined
+>(previous => {
+  const local = localSession.value;
+  if (local?.agentOwnerId && agentHistory.value?.id === local.id) {
+    return createAgentAttachmentSource(local.id, local.agentOwnerId, agentHistory.value.messages, localFileUrl, messageId => {
+      assistant.requestMessageNavigation(local.id, messageId);
+      openChat();
+    });
+  }
+  const current = info.value;
+  if (!current) return;
+
+  const next = createAiAttachmentSource(current, (messageId): void => {
+    assistant.requestMessageNavigation(current.threadId, messageId);
+    openChat();
+  });
+
+  return previous?.key === next.key ? previous : next;
+});
 
 watch(
   () => getAuthUser()?.id,
@@ -159,16 +222,26 @@ watch(
   source,
   async (current): Promise<void> => {
     const request = ++revision;
+    agentHistory.value = null;
+    releaseFileUrls();
     info.value = null;
     error.value = '';
-    loading.value = Boolean(current.threadId);
+    loading.value = Boolean(current.request);
     busy.value = false;
-    if (!current.threadId) return;
     try {
-      const result = await fetchAiConversationInfo(
-        current.threadId,
-        current.expected
-      );
+      if (current.localThreadId) {
+        const local = localSession.value;
+        if (!local?.agentOwnerId) {
+          throw new Error('Локальный чат доступен только владельцу.');
+        }
+        title.value = savedTitle.value;
+        loading.value = true;
+        const history = await loadDesktopAgentChat(local.id, local.agentOwnerId, local.project ?? null);
+        if (request === revision) agentHistory.value = history;
+        return;
+      }
+      if (!current.request) return;
+      const result = await current.request;
       if (request !== revision) return;
       info.value = result;
       assistant.applyConversationInfo(result);
@@ -187,6 +260,11 @@ watch(
 );
 
 async function save(patch: { title?: string; muted?: boolean }): Promise<void> {
+  if (localSession.value) {
+    assistant.updateAgentConversation(localSession.value.id, patch);
+    title.value = savedTitle.value;
+    return;
+  }
   const current = info.value;
   if (!current || busy.value) return;
   const request = revision;
@@ -211,28 +289,31 @@ async function save(patch: { title?: string; muted?: boolean }): Promise<void> {
 }
 
 async function saveTitle(): Promise<void> {
-  if (title.value.trim()) await save({ title: title.value.trim() });
+  if (!canSaveTitle.value || busy.value) return;
+
+  await save({ title: title.value.trim() });
 }
 
 async function toggleMute(): Promise<void> {
-  if (info.value) await save({ muted: !info.value.muted });
+  if (threadId.value) await save({ muted: !muted.value });
 }
 
 function openChat(): void {
-  if (!info.value) return;
-  assistant.selectSession(info.value.threadId);
-  navigateToAI(info.value.threadId);
+  if (!threadId.value) return;
+  assistant.selectSession(threadId.value);
+  navigateToAI(threadId.value);
   close();
 }
 
 function call(): void {
-  if (!info.value) return;
+  if (!threadId.value) return;
   openChat();
   assistant.startVoiceCall();
 }
 
 onBeforeUnmount((): void => {
   revision++;
+  releaseFileUrls();
 });
 </script>
 
@@ -242,13 +323,13 @@ onBeforeUnmount((): void => {
   min-width: 0;
   height: 100%;
   overflow-y: auto;
-  color: var(--text-color);
+  color: var(--text-primary);
   &__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 12px 20px;
-    border-bottom: 1px solid var(--border-color, #8884);
+    border-bottom: 1px solid var(--border-table);
   }
   &__header h4 {
     flex: 1;
@@ -275,10 +356,29 @@ onBeforeUnmount((): void => {
     margin: 0;
   }
   &__name {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
     min-width: 0;
+  }
+  :deep(fieldset.input-yui-kit.initial.ai-info__title-input) {
+    min-height: 36px;
+    background-color: var(--table-surface-search, #f8f9fd);
+  }
+  &__skeleton {
+    display: grid;
+    gap: 8px;
+  }
+  &__skeleton-name,
+  &__skeleton-action {
+    border-radius: 6px;
+  }
+  &__skeleton-name {
+    height: 36px;
+    margin-bottom: 8px;
+  }
+  &__skeleton-action {
+    height: 68px;
   }
   &__actions {
     display: grid;

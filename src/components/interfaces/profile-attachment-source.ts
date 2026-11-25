@@ -10,6 +10,7 @@ export interface ProfileAttachmentItem {
 export interface ProfileAttachmentSource {
   key: string;
   showInChat?: (messageId: string) => void;
+  projectPath?: (media: IMedia) => string | undefined;
   load: (
     tab: 'media' | 'files',
     cursor: string | null

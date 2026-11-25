@@ -219,7 +219,7 @@ async function send(
 ) {
   const stay = page.getByRole('button', { name: 'Остаться в браузере' });
   if (await stay.isVisible().catch(() => false)) await stay.click();
-  const editor = page.locator('.ai-assistant__editor');
+  const editor = page.locator('.ai-assistant__editor:has([contenteditable])');
   await expect(editor).toBeVisible({ timeout: 30_000 });
   await editor.locator('[contenteditable="true"]').fill(input);
   await editor.locator('.toolbar-button.right:visible').click();

@@ -1,5 +1,6 @@
 import { notifyVoiceReply, type VoiceReplyOptions } from './voiceReply';
 import { actionTaskVoiceReply } from './aiActionTaskPresentation';
+import type { ResponseModelSelection } from './aiResponseModels';
 import type { AiSubmissionResult } from './aiSubmission';
 import {
   fetchWithAiAccess,
@@ -78,12 +79,18 @@ import { createMastraStreamLifecycle } from './mastraStreamLifecycle';
 
 type Message = AIMessage;
 
+interface MessageModelChoice {
+  mode: 'quick' | 'advanced';
+  selection?: ResponseModelSelection;
+}
+
 interface UseMastraOptions {
   agentId?: string;
   chatId?: string;
   baseUrl?: string;
   approvalMode?: Ref<'ask' | 'automatic'>;
   responseMode?: Ref<'quick' | 'advanced'>;
+  modelSelection?: Readonly<Ref<ResponseModelSelection | undefined>>;
   initializeServerHistory?: boolean;
 }
 
@@ -396,6 +403,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
   };
 
   const createRequestContext = (
+    modelChoice: MessageModelChoice,
     attachments: AiMessageAttachment[] = getActiveAttachments(),
     forceStrictApproval = false,
     explicitRequestId?: string,
@@ -404,6 +412,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
   ): RequestContext<unknown> => {
     const requestContext = new RequestContext<Record<string, unknown>>();
     requestContext.set('interactionMode', interactionMode);
+    if (modelChoice.selection) requestContext.set('modelSelection', modelChoice.selection);
     requestContext.set(
       'approvalMode',
       interactionMode !== 'voice' &&
@@ -412,10 +421,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
         ? 'automatic'
         : 'strict'
     );
-    requestContext.set(
-      'responseMode',
-      options.responseMode?.value === 'advanced' ? 'advanced' : 'quick'
-    );
+    requestContext.set('responseMode', modelChoice.mode);
     requestContext.set(
       'attachments',
       parseAiAttachmentReferences(attachments).map(
@@ -455,6 +461,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
   };
 
   const requestToolApproval = async (
+    modelChoice: MessageModelChoice,
     approval: PendingToolApproval,
     decision: Exclude<ApprovalDecision, null>,
     token: string,
@@ -489,8 +496,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
               !voice && options.approvalMode?.value === 'automatic'
                 ? 'automatic'
                 : 'strict',
-            responseMode:
-              options.responseMode?.value === 'advanced' ? 'advanced' : 'quick',
+            responseMode: modelChoice.mode,
+            ...(modelChoice.selection ? { modelSelection: modelChoice.selection } : {}),
             ...(chatId ? { threadId: chatId } : {}),
             ...(conversationGeneration !== undefined
               ? { conversationGeneration }
@@ -784,8 +791,14 @@ const useMastra = (options?: UseMastraOptions | false) => {
     modelInput?: string,
     preparedInput?: { requestId: string; generation: number },
     submission?: AiSubmissionObserver,
-    voice?: VoiceReplyOptions
+    voice?: VoiceReplyOptions,
+    localMessageId?: string
   ): Promise<void> => {
+    const modelChoice: MessageModelChoice = {
+      mode: options.responseMode?.value ?? 'quick',
+      selection: options.modelSelection?.value
+    };
+
     await requireAiAccess();
     if (disposed || !input.trim()) return;
 
@@ -902,7 +915,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
       appendUserMessage && !inferredApprovalDecision;
 
     if (shouldAppendUserMessage) {
-      const requestId = generateUUID();
+      const requestId = localMessageId ?? generateUUID();
       unsavedMessageIds.add(requestId);
       const userMessage: Message = {
         id: requestId,
@@ -1137,6 +1150,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
         try {
           stream = await requestToolApproval(
+            modelChoice,
             approval,
             approvalDecision,
             token,
@@ -1195,6 +1209,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
             {
               memory,
               requestContext: createRequestContext(
+                modelChoice,
                 requestAttachments,
                 true,
                 recoveryRequestId
@@ -1216,6 +1231,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
           {
             memory,
             requestContext: createRequestContext(
+              modelChoice,
               requestAttachments,
               false,
               preparedInput?.requestId,
@@ -1489,7 +1505,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
     replyTo?: AIMessageReference,
     modelInput?: string,
     onAccepted?: () => void,
-    voice?: VoiceReplyOptions
+    voice?: VoiceReplyOptions,
+    localMessageId?: string
   ): Promise<AiSubmissionResult> =>
     observeAiSubmission(
       submission =>
@@ -1504,7 +1521,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
           modelInput,
           undefined,
           submission,
-          voice
+          voice,
+          localMessageId
         ),
       onAccepted
     );

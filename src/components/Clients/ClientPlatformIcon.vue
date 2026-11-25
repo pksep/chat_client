@@ -1,9 +1,14 @@
 <template>
-  <Icon v-if="platform === 'ВКонтакте'" :name="IconNameEnum.socialVk" />
+  <Icon
+    v-if="platform === 'ВКонтакте'"
+    :name="IconNameEnum.socialVk"
+    :width="size"
+    :height="size"
+  />
   <svg
     v-else-if="platform === 'WhatsApp'"
-    width="24"
-    height="24"
+    :width="size ?? 24"
+    :height="size ?? 24"
     viewBox="0 0 24 24"
     aria-hidden="true"
   >
@@ -22,20 +27,22 @@
   <Icon
     v-else-if="platform === 'Telegram'"
     :name="IconNameEnum.socialTelegram"
+    :width="size"
+    :height="size"
   />
   <img
     v-else-if="platform === 'MAX'"
     :src="maxIconUrl"
     class="client-platform-icon"
-    width="24"
-    height="24"
+    :width="size ?? 24"
+    :height="size ?? 24"
     alt=""
     aria-hidden="true"
   />
   <svg
     v-else-if="platform === 'Авито'"
-    width="24"
-    height="24"
+    :width="size ?? 24"
+    :height="size ?? 24"
     viewBox="0 0 24 24"
     aria-hidden="true"
   >
@@ -46,8 +53,8 @@
   </svg>
   <svg
     v-else
-    width="24"
-    height="24"
+    :width="size ?? 24"
+    :height="size ?? 24"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -64,7 +71,7 @@ import { Icon, IconNameEnum } from '@pksep/yui';
 // Официальный значок MAX: https://go.max.ru/brandbook.
 import maxIconUrl from '../../assets/max-icon.svg';
 
-defineProps<{ platform: string }>();
+defineProps<{ platform: string; size?: number }>();
 </script>
 
 <style scoped>

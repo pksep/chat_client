@@ -96,6 +96,294 @@ test.beforeEach(async ({ page }): Promise<void> => {
   await page.route('**/manager/managers', route => route.fulfill({ json: [] }));
 });
 
+test('настройки виджета автоматически сохраняются при выходе, смене раздела и обновлении', async ({
+  page
+}): Promise<void> => {
+  test.setTimeout(90_000);
+  const config = {
+    initialMessage: '',
+    welcomeMessages: ['Узнать цену'],
+    socialLinks: { vk: '', avito: '', telegram: '', max: '' },
+    schedule: {
+      start: '08:00',
+      end: '18:00',
+      days: [1, 2, 3],
+      timezone: 'Europe/Moscow'
+    },
+    autoOpenDelayMs: null
+  };
+  const posts: unknown[] = [];
+  const siteSettings = new Map([
+    ['first', { version: 1, settings: config }],
+    [
+      'second',
+      {
+        version: 1,
+        settings: {
+          ...config,
+          initialMessage: 'Для второго сайта',
+          schedule: { ...config.schedule, days: [0, 1, 2, 3, 4, 6] }
+        }
+      }
+    ]
+  ]);
+  await page.route('**/users/me/access', route =>
+    route.fulfill({
+      json: {
+        userId: 'inquiry-test-user',
+        effective: { ai: false, client: true }
+      }
+    })
+  );
+  await page.route('**/manager/widget-sites', route =>
+    route.fulfill({
+      json: [
+        { id: 'first', name: 'Первый сайт' },
+        { id: 'second', name: 'Второй сайт' }
+      ]
+    })
+  );
+  await page.route('**/manager/widget-sites/*', route => {
+    const path = new URL(route.request().url()).pathname;
+    const id = path.split('/').at(-1) || '';
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON();
+      if (body.version !== siteSettings.get(id)?.version)
+        return route.fulfill({ status: 409, json: {} });
+      posts.push({ path, body });
+      const updated = { version: body.version + 1, settings: body.settings };
+      siteSettings.set(id, updated);
+
+      return route.fulfill({ json: updated });
+    }
+
+    return route.fulfill({ json: siteSettings.get(id) });
+  });
+
+  await page.goto('/');
+  await page
+    .locator('.menu-bottom-nav:visible [data-testid$="MenuBottomNav-Clients"]')
+    .click({ timeout: 30_000 });
+  const gear = page.getByRole('button', { name: 'Настройки виджета' });
+  await expect(gear).toBeVisible({ timeout: 30_000 });
+  await expect(gear).toBeEnabled({ timeout: 15_000 });
+  await expect(gear).toHaveCSS('width', '24px');
+  const clientsTitle = page.getByTestId('Clients-ChatsToolbar-Title');
+  const headerStyle = await clientsTitle.evaluate(element => {
+    const { fontSize, fontWeight, lineHeight } = getComputedStyle(element);
+
+    return { fontSize, fontWeight, lineHeight };
+  });
+  await gear.click();
+  const form = page.getByRole('region', { name: 'Настройки виджета' });
+  const title = form.getByRole('heading', { name: 'Настройки', exact: true });
+  await expect(title).toHaveCSS('font-size', headerStyle.fontSize);
+  await expect(title).toHaveCSS('font-weight', headerStyle.fontWeight);
+  await expect(title).toHaveCSS('line-height', headerStyle.lineHeight);
+  const greeting = form.getByRole('textbox', {
+    name: 'Приветственное сообщение'
+  });
+  await expect(greeting).toBeVisible();
+  await expect(greeting.locator('xpath=ancestor::fieldset[1]')).toHaveCSS(
+    'background-color',
+    'rgb(248, 249, 253)'
+  );
+  for (const heading of [
+    'Приветственное сообщение',
+    'Часы работы',
+    'Рабочие дни',
+    'Соцсети',
+    'Шаблоны сообщений'
+  ]) {
+    const label = form.getByText(heading, { exact: true });
+    await expect(label).toHaveCSS('font-size', '16px');
+    await expect(label).toHaveCSS('margin-top', '10px');
+    await expect(label).toHaveCSS('margin-bottom', '10px');
+  }
+  await expect(form.getByText('Europe/Moscow')).toHaveCount(0);
+  await expect(form.getByText('Открывать автоматически')).toHaveCount(0);
+  const addTemplate = form.getByRole('button', { name: 'Добавить шаблон' });
+  await expect(addTemplate).toHaveCSS('height', '30px');
+  const vk = form.getByText('ВКонтакте', { exact: true });
+  await expect(vk).toHaveCSS('font-size', '14px');
+  const vkSpacing = await vk.evaluate(element => {
+    const input = element.parentElement?.querySelector('fieldset');
+
+    return (
+      (input?.getBoundingClientRect().left ?? 0) -
+      element.getBoundingClientRect().right
+    );
+  });
+  expect(vkSpacing).toBeGreaterThanOrEqual(10);
+  await form.getByTestId('WidgetSettings-Site-SelectedText').click();
+  await page.getByTestId('WidgetSettings-Site-Options-1').click();
+  await expect(greeting).toHaveValue('Для второго сайта');
+  await greeting.fill('Здравствуйте!');
+  await form.getByRole('textbox', { name: 'Telegram' }).fill('https://t.me/qa');
+  const delay = form.getByTestId('WidgetSettings-Delay-Input');
+  await expect(delay).toHaveValue('0');
+  await delay.fill('2.5');
+  const panelContent = form.locator('.client-widget-settings__content');
+  const dayControl = form.getByTestId('WidgetSettings-Days-Current');
+  await expect(dayControl).toHaveCSS('height', '36px');
+  await dayControl.click();
+  const dayList = form.getByTestId('WidgetSettings-Days-OptionsList');
+  await expect(dayList).toBeVisible();
+  const layout = await panelContent.evaluate(element => {
+    const icons = Array.from(
+      element.querySelectorAll('.client-widget-settings__social-icon > *')
+    ).map(icon => {
+      const { width, height } = icon.getBoundingClientRect();
+
+      return [width, height];
+    });
+
+    return {
+      width: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      icons
+    };
+  });
+  expect(layout.scrollWidth).toBe(layout.width);
+  expect(layout.icons).toEqual(Array.from({ length: 4 }, () => [20, 20]));
+  expect((await dayList.boundingBox())?.width).toBeLessThan(layout.width);
+
+  await expect(dayList.getByRole('checkbox')).toHaveCount(7);
+  const monday = dayList.getByRole('checkbox', { name: 'Понедельник' });
+  const friday = dayList.getByRole('checkbox', { name: 'Пятница' });
+  await expect(monday).toBeChecked();
+  await expect(friday).not.toBeChecked();
+  await dayList.getByText('Понедельник', { exact: true }).click();
+  await friday.press('Space');
+  await expect(monday).not.toBeChecked();
+  await expect(friday).toBeChecked();
+  await expect(dayList).toBeVisible();
+  await title.click();
+  await form
+    .getByTestId('WidgetSettings-TimeStart')
+    .locator('.time-picker-select-content')
+    .click({ timeout: 10_000 });
+  await page
+    .locator('.time-picker__input_hour input:visible')
+    .fill('09', { timeout: 10_000 });
+  await page
+    .locator('.time-picker-actions')
+    .getByRole('button', { name: 'Сохранить' })
+    .click();
+  await addTemplate.click();
+  await form
+    .getByRole('textbox', { name: 'Шаблон 2' })
+    .fill('Поговорить с менеджером');
+  await expect(
+    form.getByRole('button', { name: 'Сохранить', exact: true })
+  ).toHaveCount(0);
+  expect(posts).toHaveLength(0);
+  const back = form.getByRole('button', { name: 'Назад к клиентам' });
+  await back.click();
+  await expect(gear).toBeVisible();
+  expect(posts).toEqual([
+    {
+      path: '/manager/widget-sites/second',
+      body: {
+        version: 1,
+        settings: {
+          ...config,
+          initialMessage: 'Здравствуйте!',
+          autoOpenDelayMs: 2500,
+          schedule: {
+            ...config.schedule,
+            start: '09:00',
+            days: [0, 2, 3, 4, 5, 6]
+          },
+          socialLinks: { ...config.socialLinks, telegram: 'https://t.me/qa' },
+          welcomeMessages: ['Узнать цену', 'Поговорить с менеджером']
+        }
+      }
+    }
+  ]);
+  await gear.click();
+  await expect(greeting).toHaveValue('');
+  await back.click();
+  await expect(gear).toBeVisible();
+  expect(posts).toHaveLength(1);
+
+  const nav = page.locator('.menu-bottom-nav:visible');
+  const clients = nav.locator('[data-testid$="MenuBottomNav-Clients"]');
+  await gear.click();
+  await greeting.fill('Выход через меню');
+  await delay.fill('1');
+  await delay.fill('0');
+  await nav.locator('[data-testid$="MenuBottomNav-Chats"]').click();
+  await expect(form).toHaveCount(0);
+  await expect
+    .poll(() => siteSettings.get('first')?.settings.initialMessage)
+    .toBe('Выход через меню');
+  expect(posts).toHaveLength(2);
+  expect(siteSettings.get('first')?.settings.autoOpenDelayMs).toBe(0);
+
+  await clients.click();
+  await gear.click();
+  await expect(greeting).toHaveValue('Выход через меню');
+  await greeting.fill('Выход через обновление');
+  await page.reload();
+  await expect
+    .poll(() => siteSettings.get('first')?.settings.initialMessage, {
+      timeout: 15_000
+    })
+    .toBe('Выход через обновление');
+  expect(posts).toHaveLength(3);
+});
+
+test('шестерёнка не открывает настройки без ответа Manager и оживает после восстановления', async ({
+  page
+}): Promise<void> => {
+  test.setTimeout(75_000);
+  await page.route('**/users/me/access', route =>
+    route.fulfill({
+      json: {
+        userId: 'inquiry-test-user',
+        effective: { ai: false, client: true }
+      }
+    })
+  );
+  let available = false;
+  await page.route('**/manager/widget-sites', route =>
+    available
+      ? route.fulfill({ json: [] })
+      : route.fulfill({ status: 503, json: {} })
+  );
+
+  await page.goto('/');
+  await page
+    .locator('.menu-bottom-nav:visible [data-testid$="MenuBottomNav-Clients"]')
+    .click({ timeout: 30_000 });
+  const gear = page.getByRole('button', { name: 'Настройки виджета' });
+  await expect(gear).toBeDisabled({ timeout: 30_000 });
+  await expect(gear).toHaveAttribute(
+    'aria-description',
+    'Сервер виджета недоступен'
+  );
+  await page.getByTestId('Clients-WidgetSettingsTooltip').hover();
+  await expect(page.locator('.tooltip-yui-kit__hint_show')).toHaveText(
+    'Сервер виджета недоступен'
+  );
+  await expect(
+    page.getByRole('region', { name: 'Настройки виджета' })
+  ).toHaveCount(0);
+
+  available = true;
+  await expect(gear).toBeEnabled({ timeout: 20_000 });
+  available = false;
+  await gear.click();
+  await expect(gear).toHaveAttribute(
+    'aria-description',
+    'Сервер виджета недоступен'
+  );
+  await expect(
+    page.getByRole('region', { name: 'Настройки виджета' })
+  ).toHaveCount(0);
+});
+
 for (const theme of ['light', 'dark']) {
   test(`плашки клиентов ограничены 9+ и остаются круглыми: ${theme}`, async ({
     page

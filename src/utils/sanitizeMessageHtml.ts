@@ -30,6 +30,23 @@ const MESSAGE_ALLOWED_ATTRIBUTES = [
   'data-yui-background-color',
   'start'
 ];
+const AI_MARKDOWN_TAGS = [
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'blockquote',
+  'pre',
+  'del',
+  'table',
+  'thead',
+  'tbody',
+  'tr',
+  'th',
+  'td'
+];
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MESSAGE_ALLOWED_COLORS = new Set([
@@ -156,7 +173,10 @@ const normalizeStyles = (element: HTMLElement): void => {
   }
 };
 
-const normalizeSafeAttributes = (template: HTMLTemplateElement): void => {
+const normalizeSafeAttributes = (
+  template: HTMLTemplateElement,
+  openWebLinksInNewTab: boolean
+): void => {
   template.content.querySelectorAll('[class]').forEach(normalizeClasses);
   template.content
     .querySelectorAll<HTMLElement>(
@@ -169,6 +189,8 @@ const normalizeSafeAttributes = (template: HTMLTemplateElement): void => {
 
     if (!href || !isSafeLink(href)) {
       anchor.removeAttribute('href');
+    } else if (openWebLinksInNewTab && /^https?:/i.test(href.trim())) {
+      anchor.setAttribute('target', '_blank');
     }
 
     if (anchor.getAttribute('target') === '_blank') {
@@ -196,9 +218,15 @@ const normalizeSafeAttributes = (template: HTMLTemplateElement): void => {
     });
 };
 
-export const sanitizeMessageHtml = (value?: string | null): string => {
+export const sanitizeMessageHtml = (
+  value?: string | null,
+  format?: 'ai-markdown'
+): string => {
   const sanitized = DOMPurify.sanitize(value || '', {
-    ALLOWED_TAGS: MESSAGE_ALLOWED_TAGS,
+    ALLOWED_TAGS:
+      format === 'ai-markdown'
+        ? [...MESSAGE_ALLOWED_TAGS, ...AI_MARKDOWN_TAGS]
+        : MESSAGE_ALLOWED_TAGS,
     ALLOWED_ATTR: MESSAGE_ALLOWED_ATTRIBUTES,
     ALLOW_ARIA_ATTR: false,
     ALLOW_DATA_ATTR: false,
@@ -224,7 +252,23 @@ export const sanitizeMessageHtml = (value?: string | null): string => {
   });
   const template = document.createElement('template');
   template.innerHTML = String(sanitized);
-  normalizeSafeAttributes(template);
+  normalizeSafeAttributes(template, format === 'ai-markdown');
+
+  if (
+    format === 'ai-markdown' &&
+    /[\u2013\u2014]/u.test(template.content.textContent ?? '')
+  ) {
+    const walker = document.createTreeWalker(
+      template.content,
+      NodeFilter.SHOW_TEXT
+    );
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!node.parentElement?.closest('code, blockquote')) {
+        node.textContent =
+          node.textContent?.replace(/[\u2013\u2014]/gu, '-') ?? '';
+      }
+    }
+  }
 
   return template.innerHTML;
 };

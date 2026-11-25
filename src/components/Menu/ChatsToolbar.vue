@@ -20,6 +20,8 @@
         {{ props.title }}
       </h4>
 
+      <slot v-if="!props.isCollapse" name="title-action" />
+
       <Button
         v-if="$slots.folders && !props.isCollapse"
         class="chats-toolbar__folders-button"

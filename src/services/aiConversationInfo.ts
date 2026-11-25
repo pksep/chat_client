@@ -46,13 +46,18 @@ export class AiConversationInfoError extends Error {
 const request = async (
   threadId: string,
   suffix: string,
-  input?: unknown
+  options?: { input?: unknown; signal?: AbortSignal }
 ): Promise<unknown> => {
   const base = getConfig()
     .CHAT_MASTRA_URL?.replace(/\/+$/, '')
     .replace(/\/api$/, '');
   const token = getAuthToken() || getStoredChatAccessToken();
   if (!base || !token) throw new Error('Подключение к ИИ недоступно.');
+  const timeout = AbortSignal.timeout(30_000);
+  const signal = options?.signal
+    ? AbortSignal.any([timeout, options.signal])
+    : timeout;
+  const input = options?.input;
   const response = await fetchWithAiAccess(
     `${base}/conversations/${encodeURIComponent(threadId)}/${suffix}`,
     {
@@ -63,7 +68,7 @@ const request = async (
       },
       ...(input === undefined ? {} : { body: JSON.stringify(input) }),
       cache: 'no-store',
-      signal: AbortSignal.timeout(30_000)
+      signal
     }
   );
   if (!response.ok) throw new AiConversationInfoError(response.status);
@@ -73,20 +78,21 @@ const request = async (
 
 export async function fetchAiConversationInfo(
   threadId: string,
-  expected?: AiConversationSource
+  expected?: AiConversationSource,
+  signal?: AbortSignal
 ): Promise<AiConversationInfo> {
   const params = expected
     ? `?${new URLSearchParams({ ownerId: expected.ownerId, organizationId: expected.organizationId })}`
     : '';
 
-  return parseInfo(await request(threadId, `info${params}`));
+  return parseInfo(await request(threadId, `info${params}`, { signal }));
 }
 
 export async function updateAiConversationInfo(
   threadId: string,
   patch: { generation: number; title?: string; muted?: boolean }
 ): Promise<AiConversationInfo> {
-  return parseInfo(await request(threadId, 'info', patch));
+  return parseInfo(await request(threadId, 'info', { input: patch }));
 }
 
 export async function fetchAiConversationMediaPage(

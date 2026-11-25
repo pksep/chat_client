@@ -37,7 +37,7 @@ export const extractAiOutputAttachments = (
   return result.slice(0, MAX_ATTACHMENTS_PER_EVENT);
 };
 
-const normalizeAttachment = (value: unknown): AiOutputAttachment | null => {
+export const normalizeAttachment = (value: unknown): AiOutputAttachment | null => {
   if (!value || typeof value !== 'object') return null;
   const record = value as Record<string, unknown>;
   const size = Number(record.size);

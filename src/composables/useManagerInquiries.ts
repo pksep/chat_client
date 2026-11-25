@@ -13,6 +13,14 @@ import type { ITopic, IUser } from '../components/interfaces/interfaces';
 import { useChatAccess } from './useChatAccess';
 import { hasInquiryTopicMarker } from '../utils/inquiry-message-visibility';
 import { recordErrorRequest } from '../services/error-notification-telemetry';
+import { generateUUID } from '../utils/generateUUID';
+import {
+  forgetWidgetSettingsDraft,
+  readWidgetSettingsDrafts,
+  rememberWidgetSettingsDraft,
+  serializeWidgetSettings,
+  type PendingWidgetSettings
+} from '../utils/widget-settings-drafts';
 
 export interface ManagerInquiry {
   id: string;
@@ -40,6 +48,12 @@ export interface ManagerOption {
   nickname?: string;
   avatarUrl?: string;
 }
+
+export interface WidgetSite {
+  id: string;
+  name: string;
+}
+
 export class ManagerRequestError extends Error {
   constructor(
     message: string,
@@ -54,11 +68,15 @@ const inquiries = ref<ManagerInquiry[]>([]);
 const managers = ref<ManagerOption[]>([]);
 const allowed = ref(false);
 const resolved = ref(false);
+const widgetSettingsAvailability = ref<
+  'checking' | 'available' | 'unavailable'
+>('checking');
 const { access: chatAccess, ready: isChatAccessReady } = useChatAccess();
 watch(
   [() => chatAccess.value.client, isChatAccessReady],
   ([granted, ready]): void => {
     generation++;
+    widgetSettingsAvailability.value = 'checking';
     resolved.value = ready && !granted;
     if (granted) {
       void refreshManagerInquiries();
@@ -103,6 +121,7 @@ const notifyRefreshError = (cause: unknown): void => {
 function revokeManagerAccess(): void {
   clearManagerRoutes();
   allowed.value = false;
+  widgetSettingsAvailability.value = 'checking';
   resolved.value = true;
   inquiries.value = [];
   managers.value = [];
@@ -110,7 +129,8 @@ function revokeManagerAccess(): void {
 
 export async function managerRequest<T>(
   path: string,
-  body?: unknown
+  body?: unknown,
+  options: { keepalive?: boolean; timeoutMs?: number } = {}
 ): Promise<T> {
   const base = getConfig().CHAT_API_DOMAIN?.replace(/\/+$/, '');
   const token = getAuthToken() || getStoredChatAccessToken();
@@ -126,6 +146,7 @@ export async function managerRequest<T>(
   const url = `${base}/manager/${path}`;
   const method = body === undefined ? 'GET' : 'POST';
   const startedAt = Date.now();
+  const timeoutMs = options.timeoutMs ?? 20_000;
   let response: Response;
   const recordFailure = (
     error: unknown,
@@ -136,7 +157,7 @@ export async function managerRequest<T>(
       url,
       method,
       elapsedMs: Date.now() - startedAt,
-      timeoutMs: 20000,
+      timeoutMs,
       httpStatus: response?.status,
       phase
     });
@@ -149,7 +170,8 @@ export async function managerRequest<T>(
         'Content-Type': 'application/json'
       },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(20000)
+      ...(options.keepalive ? { keepalive: true } : {}),
+      signal: AbortSignal.timeout(timeoutMs)
     });
     const data = await response.json().catch(error => {
       recordFailure(error, 'response_body');
@@ -188,11 +210,150 @@ export async function managerRequest<T>(
   }
 }
 
+let widgetSitesRequest:
+  | { generation: number; promise: Promise<WidgetSite[]> }
+  | undefined;
+
+/** Список сайтов подтверждает связь с Manager, а не только право в Чате. */
+export function loadWidgetSites(): Promise<WidgetSite[]> {
+  if (!allowed.value || !chatAccess.value.client)
+    return Promise.reject(new Error('Нет доступа к настройкам виджета'));
+  if (widgetSitesRequest?.generation === generation)
+    return widgetSitesRequest.promise;
+
+  const currentGeneration = generation;
+  const promise = managerRequest<WidgetSite[]>('widget-sites', undefined, {
+    timeoutMs: 5_000
+  })
+    .then((sites): WidgetSite[] => {
+      if (!Array.isArray(sites)) throw new Error('Некорректный список сайтов');
+      if (currentGeneration !== generation)
+        throw new Error('Подключение к Чату изменилось');
+      widgetSettingsAvailability.value = 'available';
+
+      return sites;
+    })
+    .catch((cause: unknown): never => {
+      if (currentGeneration === generation)
+        widgetSettingsAvailability.value = 'unavailable';
+
+      throw cause;
+    })
+    .finally((): void => {
+      if (widgetSitesRequest?.generation === currentGeneration)
+        widgetSitesRequest = undefined;
+    });
+  widgetSitesRequest = { generation: currentGeneration, promise };
+
+  return promise;
+}
+
 export function isClientTopic(topic?: ITopic | null): boolean {
   return (
     hasInquiryTopicMarker(topic) ||
     !!inquiries.value.find(item => item.topic_id === topic?.id)
   );
+}
+
+const pendingWidgetWrites = new Set<string>();
+const widgetSettingsRecovery = new Map<string, Promise<void>>();
+
+function getWidgetDraftKey(): string | undefined {
+  const userId = authedUser.value?.id;
+  const server = getConfig().CHAT_API_DOMAIN?.replace(/\/+$/, '');
+  if (!userId || !server) return undefined;
+
+  return JSON.stringify(['sep:widget-settings-draft', server, userId]);
+}
+
+function widgetSettingsPath(siteId: string): string {
+  return `widget-sites/${encodeURIComponent(siteId)}`;
+}
+
+export async function saveWidgetSettings<T>(
+  siteId: string,
+  body: PendingWidgetSettings['body']
+): Promise<T> {
+  const key = getWidgetDraftKey();
+  const id = generateUUID();
+  if (key) rememberWidgetSettingsDraft(key, { id, siteId, body });
+
+  pendingWidgetWrites.add(id);
+  try {
+    const keepalive =
+      new TextEncoder().encode(JSON.stringify(body)).length <= 60_000;
+    const updated = await managerRequest<T>(widgetSettingsPath(siteId), body, {
+      keepalive
+    });
+    if (key) forgetWidgetSettingsDraft(key, id);
+
+    return updated;
+  } catch (cause) {
+    if (
+      key &&
+      cause instanceof ManagerRequestError &&
+      [400, 403, 404, 409].includes(cause.status)
+    )
+      forgetWidgetSettingsDraft(key, id);
+    throw cause;
+  } finally {
+    pendingWidgetWrites.delete(id);
+  }
+}
+
+export function recoverWidgetSettings(): Promise<void> {
+  const key = getWidgetDraftKey();
+  if (!key || !allowed.value || !chatAccess.value.client)
+    return Promise.resolve();
+  const recovery = widgetSettingsRecovery.get(key);
+  if (recovery) return recovery;
+  const drafts = readWidgetSettingsDrafts(key).filter(
+    draft => !pendingWidgetWrites.has(draft.id)
+  );
+  if (!drafts.length) return Promise.resolve();
+
+  const pending = (async (): Promise<void> => {
+    for (const draft of drafts) {
+      if (
+        key !== getWidgetDraftKey() ||
+        !allowed.value ||
+        !chatAccess.value.client
+      )
+        return;
+      const path = widgetSettingsPath(draft.siteId);
+      try {
+        await managerRequest(path, draft.body);
+        forgetWidgetSettingsDraft(key, draft.id);
+      } catch (cause) {
+        if (
+          !(cause instanceof ManagerRequestError) ||
+          ![400, 403, 404, 409].includes(cause.status)
+        )
+          continue;
+        if (cause.status === 409 && key === getWidgetDraftKey()) {
+          const current = await managerRequest<{ settings: unknown }>(
+            path
+          ).catch(() => null);
+          if (!current) continue;
+          if (
+            serializeWidgetSettings(current.settings) ===
+            serializeWidgetSettings(draft.body.settings)
+          ) {
+            forgetWidgetSettingsDraft(key, draft.id);
+            continue;
+          }
+        }
+        forgetWidgetSettingsDraft(key, draft.id);
+        if (key === getWidgetDraftKey())
+          showErrorNotification(
+            'Не удалось восстановить автосохранение виджета. Проверьте настройки.'
+          );
+      }
+    }
+  })().finally(() => widgetSettingsRecovery.delete(key));
+  widgetSettingsRecovery.set(key, pending);
+
+  return pending;
 }
 export const clientName = (item: ManagerInquiry): string => {
   const name = item.contacts?.name || item.name || 'Клиент';
@@ -237,18 +398,24 @@ export async function refreshManagerInquiries(): Promise<void> {
   const currentGeneration = generation;
   loading.value = !inquiries.value.length;
   refreshPromise = (async () => {
+    let accessChecked = false;
+
     try {
       const access = await managerRequest<{ allowed: boolean }>('access');
       if (currentGeneration !== generation) return;
+      accessChecked = true;
       allowed.value = access.allowed;
       resolved.value = true;
       if (!access.allowed) {
+        widgetSettingsAvailability.value = 'checking';
         clearManagerRoutes();
         inquiries.value = [];
         managers.value = [];
         lastRefreshError = '';
         return;
       }
+      void loadWidgetSites().catch((): void => {});
+      void recoverWidgetSettings();
       const rows: ManagerInquiry[] = [];
       for (let page = 1; ; page++) {
         const batch = await managerRequest<ManagerInquiry[]>(
@@ -279,6 +446,7 @@ export async function refreshManagerInquiries(): Promise<void> {
         return;
       }
 
+      if (!accessChecked) widgetSettingsAvailability.value = 'unavailable';
       notifyRefreshError(cause);
     } finally {
       if (currentGeneration === generation) loading.value = false;
@@ -332,6 +500,7 @@ export function useManagerInboxSubscription() {
         managers.value = [];
         allowed.value = false;
         resolved.value = false;
+        widgetSettingsAvailability.value = 'checking';
         lastRefreshError = '';
         void (refreshPromise || Promise.resolve()).then(
           refreshManagerInquiries
@@ -364,6 +533,7 @@ export function useManagerInboxSubscription() {
     managers.value = [];
     allowed.value = false;
     resolved.value = false;
+    widgetSettingsAvailability.value = 'checking';
   });
 }
 
@@ -375,6 +545,9 @@ export function useManagerInquiries() {
       () => chatAccess.value.client && (!resolved.value || allowed.value)
     ),
     resolved,
+    widgetSettingsAvailability: computed(
+      () => widgetSettingsAvailability.value
+    ),
     loading,
     byTopic: computed(
       () => new Map(inquiries.value.map(item => [item.topic_id, item]))

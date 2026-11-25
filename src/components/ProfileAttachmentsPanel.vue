@@ -113,7 +113,7 @@
               {{ getShortName(item.media.originName || 'Файл') }}
             </span>
             <span class="profile-attachments__file-properties">
-              <span class="profile-attachments__file-size">
+              <span v-if="item.media.size || item.media.localPath || !source?.projectPath?.(item.media)" class="profile-attachments__file-size">
                 {{ getFormatFileSize(item.media.size) }}
               </span>
               <time
@@ -150,7 +150,10 @@
       class="profile-attachments__load-more"
       :data-testid="`${props.dataTestid}-LoadMore`"
     >
-      <span v-if="isHistoryLoading">Загрузка...</span>
+      <template v-if="isHistoryLoading">
+        <SkeletonBlock v-if="source" class="profile-attachments__skeleton" />
+        <span v-else>Загрузка...</span>
+      </template>
     </div>
 
     <Teleport
@@ -187,7 +190,7 @@
         @unmount-close="closeAttachmentContextMenu"
       >
         <Button
-          v-if="canShowNativeFileInFolder(contextMenuItem.media)"
+          v-if="source?.projectPath?.(contextMenuItem.media) || canShowNativeFileInFolder(contextMenuItem.media)"
           :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           :data-testid="`${props.dataTestid}-ShowInFolderButton`"
@@ -316,6 +319,7 @@ import { useMessageMedia } from './Messages/composables/useMessageMedia';
 import ForwardModal from './Messages/ForwardModal.vue';
 import ConfirmModal from './UI/ConfirmModal.vue';
 import FileIcon from './UI/FileIcon.vue';
+import SkeletonBlock from './UI/SkeletonBlock.vue';
 import ForwardIcon from './UI/ForwardIcon.vue';
 import PlayIcon from './UI/PlayIcon.vue';
 
@@ -469,6 +473,12 @@ const showAttachmentContextMenu = (
 const handleShowInFolder = async (): Promise<void> => {
   const media = contextMenuItem.value?.media;
   closeAttachmentContextMenu();
+  const projectPath = media && props.source?.projectPath?.(media);
+  if (projectPath) {
+    const { revealAgentFile } = await import('../services/desktop-agent-output');
+    await revealAgentFile(projectPath);
+    return;
+  }
   if (media) await showNativeFileInFolder(media);
 };
 
@@ -1347,6 +1357,7 @@ const buildSliderItem = (initialMedia: IMedia) =>
       path: sliderPath,
       fallbackPath,
       name,
+      mediaType: media.type === MediaType.Video ? 'video' : media.type === MediaType.Image ? 'image' : undefined,
       downloadPath
     };
   });
@@ -1369,6 +1380,19 @@ const openSlider = async (
 
   if (!selectedMedia) {
     return;
+  }
+
+  if (!selectedMedia.path) {
+    const projectPath = props.source?.projectPath?.(selectedMedia);
+    if (!selectedMedia.localPath && projectPath) {
+      const { revealAgentFile } = await import('../services/desktop-agent-output');
+      await revealAgentFile(projectPath);
+      return;
+    }
+    if (selectedMedia.localPath && selectedMedia.type === MediaType.File) {
+      triggerBrowserDownload(selectedMedia.localPath, selectedMedia.originName);
+      return;
+    }
   }
 
   if (isInquiryFile(selectedMedia.path)) {
@@ -1658,6 +1682,12 @@ const getMediaLabel = (media: IMedia): string =>
 .profile-attachments__context-menu {
   z-index: 2100;
   min-width: 190px;
+}
+
+.profile-attachments__skeleton {
+  width: 100%;
+  height: 28px;
+  border-radius: 6px;
 }
 
 .profile-attachments__scroll-month {

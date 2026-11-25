@@ -830,6 +830,13 @@ export class ChatSDK {
     };
   }
 
+  getDictationSocket(): Pick<
+    Socket,
+    'connected' | 'on' | 'off' | 'emit' | 'timeout'
+  > | null {
+    return this.socket?.connected ? this.socket : null;
+  }
+
   connect(): Promise<void> {
     if (this.socket?.connected) return Promise.resolve();
     if (this.connectionPromise) {

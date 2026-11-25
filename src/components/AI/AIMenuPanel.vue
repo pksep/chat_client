@@ -144,6 +144,16 @@
       aria-label="Разделы ИИ"
     >
       <button
+        v-if="hasDesktopAgentTab"
+        type="button"
+        :class="{ 'ai-menu-panel__tab--active': activeTab === 'agents' }"
+        role="tab"
+        :aria-selected="activeTab === 'agents'"
+        @click="handleTab('agents')"
+      >
+        Агенты
+      </button>
+      <button
         type="button"
         :class="{ 'ai-menu-panel__tab--active': activeTab === 'chats' }"
         role="tab"
@@ -228,7 +238,7 @@
         </nav>
       </template>
 
-      <template v-else-if="activeTab === 'chats' && filteredSessions.length">
+      <template v-else-if="activeTab !== 'tasks' && filteredSessions.length">
         <template v-for="session in filteredSessions" :key="session.id">
           <article
             :class="[
@@ -257,7 +267,7 @@
                 <Tooltip
                   v-if="backgroundActivityStatusBySessionId[session.id]"
                   :hint="
-                    getActivityStatusLabel(
+                    getAiActivityStatusLabel(
                       backgroundActivityStatusBySessionId[session.id]
                     )
                   "
@@ -272,7 +282,7 @@
                       `ai-menu-panel__activity-status--${backgroundActivityStatusBySessionId[session.id]}`
                     ]"
                     :aria-label="
-                      getActivityStatusLabel(
+                      getAiActivityStatusLabel(
                         backgroundActivityStatusBySessionId[session.id]
                       )
                     "
@@ -445,7 +455,7 @@
         :text="
           query.trim()
             ? 'Ничего не найдено'
-            : activeTab === 'chats'
+            : activeTab !== 'tasks'
               ? 'Здесь будут чаты'
               : 'Здесь будут задачи'
         "
@@ -589,6 +599,7 @@ import { useContextMenu } from '../../composables/useContextMenu';
 import {
   type AiAssistantActivity,
   type AiAssistantActivityStatus,
+  getAiActivityStatusLabel,
   type AiAssistantTab,
   useAiAssistant
 } from '../../composables/useAiAssistant';
@@ -637,6 +648,7 @@ const {
   sessions,
   tasks,
   activeTab,
+  hasDesktopAgentTab,
   activeSessionId,
   backgroundActivities,
   startNewSession,
@@ -708,7 +720,7 @@ const taskMenuId = (taskId: string): string => `task:${taskId}`;
 
 /** Подсвечивает сессию, которая фактически открыта в AI-ассистенте. */
 const isSessionActive = (sessionId: string): boolean =>
-  activeTab.value === 'chats' && activeSessionId.value === sessionId;
+  activeTab.value !== 'tasks' && activeSessionId.value === sessionId;
 
 const isTaskActive = (sessionId?: string): boolean =>
   activeTab.value === 'tasks' &&
@@ -731,14 +743,6 @@ const backgroundActivityBySessionId = computed(
       backgroundActivities.value.map(activity => [activity.sessionId, activity])
     )
 );
-
-const getActivityStatusLabel = (
-  status: AiAssistantActivityStatus | undefined
-): string => {
-  if (status === 'running') return 'Выполняется';
-  if (status === 'success') return 'Успешно завершено';
-  return 'Требуется внимание';
-};
 
 const normalizedQuery = computed(() =>
   query.value.trim().toLocaleLowerCase('ru-RU')
@@ -766,8 +770,11 @@ const taskSessions = computed(() =>
 );
 
 const filteredSessions = computed(() => {
-  const items = chatSessions.value.filter(session =>
-    isInSelectedFolder({ type: 'session', id: session.id })
+  const items = chatSessions.value.filter(
+    session =>
+      (props.isCollapse ||
+        (session.kind === 'agent') === (activeTab.value === 'agents')) &&
+      isInSelectedFolder({ type: 'session', id: session.id })
   );
   if (!normalizedQuery.value) return items;
   return items.filter(session =>
@@ -848,7 +855,7 @@ const getCollapsedItemActivity = (
     description: activity.description,
     status: activity.status,
     activityStatus: activity.status,
-    statusLabel: getActivityStatusLabel(activity.status)
+    statusLabel: getAiActivityStatusLabel(activity.status)
   };
 };
 
@@ -1016,7 +1023,7 @@ const openAssistant = (sessionId: string | null = null): void => {
 const handleNewSession = (): void => {
   closeActivePopover(createMenuId);
   selectedCollapsedTaskId.value = null;
-  startNewSession();
+  startNewSession(activeTab.value === 'agents' ? 'agent' : 'chat');
   openAssistant();
 };
 

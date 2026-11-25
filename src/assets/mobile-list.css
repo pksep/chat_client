@@ -56,6 +56,7 @@
 }
 
 .mobile-list-container__section--chats,
+.mobile-list-container__section--ai,
 .mobile-list-container__section--clients {
   overflow-x: hidden;
   overflow-y: auto;

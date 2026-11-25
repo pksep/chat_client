@@ -402,6 +402,9 @@ const hasBackgroundActivities = computed(
   () => backgroundActivityCount.value > 0
 );
 const backgroundActivityStatus = computed(() => {
+  if (backgroundActivities.value.some(activity => activity.status === 'error'))
+    return 'error';
+
   if (
     backgroundActivities.value.some(activity => activity.status === 'attention')
   ) {
@@ -420,6 +423,8 @@ const getBackgroundActivityStatusLabel = (
 ): string => {
   if (status === 'running') return 'ИИ выполняет задачу';
   if (status === 'success') return 'Задача ИИ выполнена';
+  if (status === 'error') return 'Ошибка ИИ';
+
   return 'Задача ИИ требует внимания';
 };
 

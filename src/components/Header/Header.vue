@@ -49,7 +49,15 @@
         type="button"
         class="chat__header-profile chat__header-ai-assistant"
         aria-label="Информация об ИИ-чате"
-        @click="openAiInfo(aiAssistantSessionId)"
+        @pointerenter="preloadAiInfo"
+        @focus="preloadAiInfo"
+        @click="
+          openAiInfo(
+            aiAssistantSessionId,
+            undefined,
+            aiAssistantSession?.kind === 'agent'
+          )
+        "
         :data-testid="`${props.dataTestid}-Header-AIAssistant`"
       >
         <span
@@ -179,7 +187,7 @@
           v-else-if="showHeaderCallAction"
           class="chat__header__icon"
           :data-testid="`${props.dataTestid}-Header-CallIcon`"
-          @click.stop="handleCallAction"
+          @click.stop="handleCall"
         />
         <Icon
           v-if="getHeaderContextMenuOptions.length"
@@ -640,6 +648,7 @@ const UserInfoPanel = defineAsyncComponent(
 
 const {
   activeTitle: aiAssistantTitle,
+  activeView: aiAssistantView,
   activeSessionId: aiAssistantSessionId,
   activeSession: aiAssistantSession,
   activeTask: aiAssistantTask,
@@ -651,12 +660,15 @@ const {
   isVoiceModeOpen: isAiVoiceCallActive,
   isVoiceModalVisible: isAiVoiceCallModalVisible,
   voiceCallStartedAt: aiVoiceCallStartedAt,
-  startVoiceCall: startAiVoiceCall,
   showVoiceCall: showAiVoiceCall,
   deleteSession: deleteAiAssistantSession
 } = useAiAssistant();
 
 const { open: openAiInfo } = useAiConversationInfo();
+
+function preloadAiInfo(): void {
+  void import('../AI/AiConversationInfoPanel.vue').catch((): void => {});
+}
 
 const { getSelectedTopic } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
@@ -912,10 +924,6 @@ const hasPendingCallForCurrentTopic = computed(
   () => !!currentPendingCall.value
 );
 const showHeaderCallAction = computed(() => {
-  if (route.value.type === RouteTypes.AI) {
-    return !isCallActive.value && !isAiVoiceCallActive.value;
-  }
-
   return (
     (route.value.type === RouteTypes.DIALOGS ||
       route.value.type === RouteTypes.GROUP) &&
@@ -1368,16 +1376,6 @@ const handleCall = async () => {
   await startLiveKitCall(state.calledUser, route.value.id);
 };
 
-const handleCallAction = async (): Promise<void> => {
-  if (isExternalInquiry.value) return;
-  if (route.value.type === RouteTypes.AI) {
-    startAiVoiceCall();
-    return;
-  }
-
-  await handleCall();
-};
-
 const handleHeaderCallClick = async () => {
   if (showAiVoiceCallBanner.value) {
     navigateToAI(aiAssistantSessionId.value);
@@ -1562,7 +1560,9 @@ const getHeaderContextMenuOptions = computed(() => {
           value: 'Создать чат',
           customIcon: 'createChat',
           function: () => {
-            startNewAiSession();
+            startNewAiSession(
+              aiAssistantView.value === 'agents' ? 'agent' : 'chat'
+            );
             navigateToAI();
           }
         },

@@ -10,9 +10,12 @@
       :push-key="notification.key"
       :description="notification.description"
       :type="notification.type"
+      :timeout="0"
       :data-testid="props.dataTestid"
       role="alert"
       @click="handleNotificationClick($event, notification.key)"
+      @pointerenter="pauseNotificationTimeout(notification.key)"
+      @pointerleave="resumeNotificationTimeout(notification.key)"
       @close="closeNotification(notification.key)"
     />
   </Teleport>
@@ -33,7 +36,12 @@ import { useNotifications } from '../../composables/useNotifications';
 const props = withDefaults(defineProps<{ dataTestid?: string }>(), {
   dataTestid: 'Notification'
 });
-const { state, closeNotification } = useNotifications();
+const {
+  state,
+  closeNotification,
+  pauseNotificationTimeout,
+  resumeNotificationTimeout
+} = useNotifications();
 const target = shallowRef<HTMLElement | string>('body');
 const notificationRefs = ref<{ showPopover: () => void }[]>([]);
 let dialogs: HTMLDialogElement[] = [];
@@ -126,5 +134,7 @@ const getNotificationStyle = (index: number) => ({
 
 .app-notification-stack__item :deep(.notification-yui-kit) {
   box-shadow: none;
+  -webkit-user-select: text;
+  user-select: text;
 }
 </style>

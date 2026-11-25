@@ -40,7 +40,9 @@ test('панель сохраняет название и звук, загруж
       return route.fulfill({ json: saved });
     }
     if (url.pathname.endsWith('/messages')) {
-      after.push(url.searchParams.get('after') || '0');
+      if (url.searchParams.get('limit') === '30') {
+        after.push(url.searchParams.get('after') || '0');
+      }
       return route.fulfill({
         json: {
           protocol: 1,
@@ -98,7 +100,7 @@ test('панель сохраняет название и звук, загруж
   );
   await panel.getByTestId('AiConversationInfo-Attachments-Tab-files').click();
   await expect(panel).toContainText('Архив.txt');
-  expect(after).toContain('30');
+  expect(after).toEqual(['0', '30']);
   await page.reload();
   await expect(header).toBeVisible();
   await expect(header).toContainText('Личный план');
@@ -110,6 +112,105 @@ test('панель сохраняет название и звук, загруж
   await panel.getByTestId('AiConversationInfo-OpenChat').click();
   await expect(panel).toHaveCount(0);
   expect(page.url()).toContain(`/ai/${threadId}`);
+});
+
+test('панель открывается со скелетоном и использует фон поля поиска из настроек', async ({
+  page
+}): Promise<void> => {
+  const metadata = Promise.withResolvers<void>();
+  const media = Promise.withResolvers<void>();
+
+  await page.route('**/conversations/**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/info')) {
+      await metadata.promise;
+
+      return route.fulfill({ json: info });
+    }
+    if (path.endsWith('/messages')) await media.promise;
+
+    return route.fulfill({
+      json: {
+        generation: 0,
+        deleted: false,
+        protocol: 1,
+        messages: [],
+        tasks: [],
+        incompleteMessages: [],
+        nextCursor: null
+      }
+    });
+  });
+
+  await page.goto(fixture);
+  await page.locator('main').evaluate(element => {
+    element.style.setProperty('--table-surface-search', '#f8f9fd');
+  });
+  try {
+    await page.getByRole('button', { name: 'Информация об ИИ-чате' }).click();
+    const panel = page.getByTestId('AiConversationInfo');
+    const skeleton = panel.getByTestId('AiConversationInfo-Skeleton');
+    await expect(skeleton).toBeVisible();
+    await expect(panel.getByText('Загрузка...')).toHaveCount(0);
+    await expect(panel.getByRole('textbox')).toHaveCount(0);
+
+    metadata.resolve();
+    await expect(skeleton).toHaveCount(0);
+    await expect(
+      panel.getByRole('textbox', { name: 'Название чата' })
+    ).toBeVisible();
+    await expect(panel.getByText('СЭПи', { exact: true })).toBeVisible();
+    await expect(panel.getByText('ИИ-ассистент')).toHaveCount(0);
+    await expect(panel.locator('fieldset.ai-info__title-input')).toHaveCSS(
+      'background-color',
+      'rgb(248, 249, 253)'
+    );
+    await expect(panel.locator('.profile-attachments__skeleton')).toBeVisible();
+    await expect(panel.getByText('Загрузка...')).toHaveCount(0);
+
+    media.resolve();
+    await expect(panel.locator('.profile-attachments__skeleton')).toHaveCount(
+      0
+    );
+  } finally {
+    metadata.resolve();
+    media.resolve();
+  }
+});
+
+test('в новом ИИ-чате до отправки сообщения доступны пустые вкладки вложений', async ({
+  page
+}): Promise<void> => {
+  const historyRequests: string[] = [];
+  page.on('request', request => {
+    if (new URL(request.url()).pathname.includes('/conversations/')) {
+      historyRequests.push(request.url());
+    }
+  });
+
+  await page.goto(`${fixture}?empty`);
+  await page.getByRole('button', { name: 'Информация об ИИ-чате' }).click();
+  const panel = page.getByTestId('AiConversationInfo');
+  await expect(panel.getByRole('tab', { name: 'Медиа' })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await expect(panel.getByText('Нет медиа', { exact: true })).toBeVisible();
+  await panel.getByRole('tab', { name: 'Файлы' }).click();
+  await expect(panel.getByText('Нет файлов', { exact: true })).toBeVisible();
+  await expect(panel.getByText(/после первого сообщения/)).toHaveCount(0);
+
+  await page.locator('main.chat-container').evaluate(element => {
+    element.classList.replace('theme-light', 'theme-dark');
+  });
+  await expect(
+    page.getByRole('heading', { name: 'Информация о чате' })
+  ).toHaveCSS('color', 'rgb(255, 255, 255)');
+  await expect(panel.getByText('СЭПи', { exact: true })).toHaveCSS(
+    'color',
+    'rgb(255, 255, 255)'
+  );
+  expect(historyRequests).toEqual([]);
 });
 
 test('клик по автору чужой пересылки не открывает историю и действия', async ({

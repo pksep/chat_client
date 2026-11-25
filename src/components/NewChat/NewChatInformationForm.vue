@@ -6,6 +6,7 @@
         input-id="name"
         aria-label="Название группы"
         class="initial"
+        :class="{ 'menu-info__chat-name': !props.creating }"
         placeholder="Название"
         :model-value="newName"
         :disabled="!props.creating && !!currentGroup && !currentGroup.isAdmin"

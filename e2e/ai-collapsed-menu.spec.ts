@@ -6,6 +6,14 @@ const TASK_SESSION_ID = 'collapsed-menu-task-chat';
 const TASK_DRAFT_SESSION_ID = 'collapsed-menu-task-draft';
 
 test.beforeEach(async ({ page }, testInfo) => {
+  await page.route('**/users/me/access', route =>
+    route.fulfill({
+      json: {
+        userId: 'local-ui-test-user',
+        effective: { client: true, ai: true }
+      }
+    })
+  );
   await page.route('**/automations', route =>
     route.fulfill({
       status: 503,
@@ -187,6 +195,115 @@ test('после перезагрузки оба меню восстанавли
   await expect(
     page.locator('.menu-bottom-nav__ai-status--success')
   ).toBeVisible();
+});
+
+test('внимание не выглядит ошибкой, а просмотр сбрасывает метку чата в обоих меню', async ({
+  page
+}, testInfo): Promise<void> => {
+  test.skip(testInfo.project.name !== 'chromium-desktop');
+  test.setTimeout(120_000);
+
+  await page.route(`**/conversations/${SECOND_CHAT_SESSION_ID}`, route =>
+    route.fulfill({ status: 503, json: { message: 'Ошибка загрузки истории' } })
+  );
+  await page.route(`**/action-tasks/${CHAT_SESSION_ID}`, route =>
+    route.fulfill({
+      json: {
+        tasks: [
+          {
+            id: 'qa-plan',
+            requestId: 'qa-request',
+            title: 'Подтверди создание задачи',
+            status: 'waiting_approval',
+            digest: '0'.repeat(64),
+            revision: 1,
+            version: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            completed: 0,
+            approved: false,
+            steps: []
+          }
+        ]
+      }
+    })
+  );
+  await page.goto('/ai');
+
+  const sidebar = page.getByTestId('AI-MenuPanel');
+  await expect(sidebar).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('#startup-shell')).toHaveCount(0);
+  await page.evaluate(
+    ids => {
+      const key = 'sep:chat:ai-assistant:v1';
+      const state = JSON.parse(localStorage.getItem(key) || '{}');
+      state.activitiesOwnerId = 'local-ui-test-user';
+      state.activities = state.sessions
+        .filter((session: { id: string }) => ids.includes(session.id))
+        .map((session: { id: string; title: string }) => ({
+          sessionId: session.id,
+          title: session.title,
+          description: 'Проверка меток',
+          status: 'running',
+          requestId: 'qa-request',
+          isBackground: true,
+          updatedAt: Date.now()
+        }));
+      localStorage.setItem(key, JSON.stringify(state));
+      sessionStorage.setItem('menu-collapse', 'false');
+    },
+    [CHAT_SESSION_ID, SECOND_CHAT_SESSION_ID]
+  );
+  await page.reload();
+
+  const footer = page.locator('.menu-bottom-nav__ai-control');
+  const count = footer.locator('.menu-bottom-nav__unread-count');
+  const status = footer.locator('.menu-bottom-nav__ai-status');
+  const approval = sidebar.locator(
+    '.ai-menu-panel__activity-status--attention'
+  );
+  const error = sidebar.locator('.ai-menu-panel__activity-status--error');
+
+  await expect(count).toHaveText('2', { timeout: 30_000 });
+  await expect(approval).toHaveCSS('background-color', 'rgb(255, 184, 51)');
+  await expect(error).toBeVisible();
+  await expect(status).toHaveAttribute('aria-label', 'Ошибка ИИ');
+
+  await sidebar.getByRole('button', { name: /Второй рабочий чат/ }).click();
+  await expect(error).toHaveCount(0);
+  await expect(count).toHaveText('1');
+  await expect(status).toHaveCSS('background-color', 'rgb(255, 184, 51)');
+  await expect(status).toHaveAttribute(
+    'aria-label',
+    'Задача ИИ требует внимания'
+  );
+
+  await footer
+    .getByRole('button', { name: 'Показать фоновые задачи ИИ' })
+    .click();
+  await page
+    .getByTestId('AI-ActivityPanel')
+    .getByRole('button', { name: 'Рабочий чат. Требуется внимание' })
+    .click();
+  await expect(approval).toHaveCount(0);
+  await expect(count).toHaveCount(0);
+  await expect(status).toHaveCount(0);
+  const confirm = page.getByRole('button', {
+    name: 'Подтвердить',
+    exact: true
+  });
+  await expect(confirm).toBeVisible();
+
+  await page.reload();
+  await expect(
+    sidebar.getByRole('button', { name: /Второй рабочий чат/ })
+  ).toBeVisible({
+    timeout: 30_000
+  });
+  await expect(confirm).toBeVisible({ timeout: 30_000 });
+  await expect(error).toHaveCount(0);
+  await expect(approval).toHaveCount(0);
+  await expect(status).toHaveCount(0);
 });
 
 test('показывает задачи и AI-чаты единым списком в свёрнутом меню', async ({
@@ -1048,4 +1165,264 @@ test('показывает чистый индикатор работы и тё�
   } finally {
     releaseStream?.();
   }
+});
+
+test('вкладка агентов по умолчанию в Tauri, а ссылка на чат открывает диалог', async ({
+  page
+}, testInfo): Promise<void> => {
+  test.skip(testInfo.project.use.isMobile, 'Проверка настольной панели ИИ');
+  await page.addInitScript((): void => {
+    sessionStorage.setItem('menu-collapse', 'false');
+    const model = {
+      id: 'model',
+      category: 'model',
+      currentValue: 'opencode-go/deepseek-v4.1-flash',
+      options: [
+        {
+          value: 'opencode-go/deepseek-v4.1-flash',
+          name: 'DeepSeek V4.1 Flash'
+        },
+        { value: 'opencode-go/deepseek-v4-pro', name: 'DeepSeek V4 Pro' }
+      ]
+    };
+    const effort = {
+      id: 'effort',
+      category: 'thought_level',
+      currentValue: 'default',
+      options: [
+        { value: 'default', name: 'Default' },
+        { value: 'high', name: 'High' }
+      ]
+    };
+    let promptResult = '';
+    let pushEvent: ((event: unknown) => void) | undefined;
+    let finishPrompt: ((value: unknown) => void) | undefined;
+    Object.defineProperties(window, {
+      isTauri: { value: true, configurable: true },
+      __TAURI_INTERNALS__: {
+        value: {
+          metadata: {
+            currentWindow: { label: 'main' },
+            currentWebview: { label: 'main' }
+          },
+          invoke: async (
+            command: string,
+            args: {
+              events?: { onmessage: (event: unknown) => void };
+              value?: string;
+              preferredModel?: string;
+              allow?: boolean;
+              configId?: string;
+              attachments?: { name: string; mimeType: string; text?: string }[];
+            } = {}
+          ): Promise<unknown> => {
+            if (command === 'desktop_agent_pick_directory') {
+              pushEvent = args.events?.onmessage;
+              if (args.preferredModel) model.currentValue = args.preferredModel;
+              return {
+                directory: 'C:/Projects/Example',
+                configOptions: structuredClone([model, effort])
+              };
+            }
+            if (command === 'desktop_agent_configure') {
+              if (args.configId === 'model')
+                model.currentValue = args.value ?? '';
+              if (args.configId === 'effort')
+                effort.currentValue = args.value ?? '';
+              return structuredClone([model, effort]);
+            }
+            if (command === 'desktop_agent_prompt') {
+              const file = args.attachments?.[0];
+              promptResult =
+                file?.name === 'example.txt' && file.mimeType === 'text/plain'
+                  ? file.text ?? ''
+                  : 'Файл записан';
+              return new Promise<unknown>(resolve => {
+                finishPrompt = resolve;
+                pushEvent?.({
+                  type: 'permission',
+                  requestId: '1',
+                  toolCall: { title: 'Создать test.txt' }
+                });
+              });
+            }
+            if (command === 'desktop_agent_answer_permission' && args.allow) {
+              pushEvent?.({
+                type: 'update',
+                update: {
+                  sessionUpdate: 'agent_message_chunk',
+                  content: { type: 'text', text: promptResult }
+                }
+              });
+              finishPrompt?.({ stopReason: 'end_turn' });
+            }
+            return 0;
+          },
+          transformCallback: (): number => 0,
+          unregisterCallback: (): void => {}
+        },
+        configurable: true
+      }
+    });
+  });
+
+  await page.goto('/ai');
+
+  const tabs = page.getByRole('tablist', { name: 'Разделы ИИ' });
+  const agentTab = tabs.getByRole('tab', { name: 'Агенты' });
+  const chatsTab = tabs.getByRole('tab', { name: 'Чаты' });
+  const agents = page.getByTestId('AI-Assistant-Agents');
+  const editor = page.locator('.ai-assistant__composer');
+
+  await expect(tabs.getByRole('tab')).toHaveText(['Агенты', 'Чаты', 'Задачи'], {
+    timeout: 20_000
+  });
+  await expect(agentTab).toHaveAttribute('aria-selected', 'true');
+  await expect(agents).toBeVisible();
+  await expect(editor).toBeHidden();
+  await expect(agents.getByText('Быстрый ответ')).toHaveCount(0);
+  const permission = agents.getByRole('button', {
+    name: 'Запрашивать разрешение'
+  });
+  await expect(permission).toBeVisible();
+
+  const agentEditor = agents.locator('.editor-component');
+  const project = agents.getByLabel('Панель проекта');
+  await expect(project).toBeVisible();
+  await expect(agentEditor.getByLabel('Панель проекта')).toHaveCount(0);
+  await expect(
+    agentEditor.locator('.attach-file-button:visible')
+  ).toBeVisible();
+
+  await expect(project.getByRole('button')).toHaveCount(2);
+  const folder = project.getByRole('button', { name: 'Выбрать папку проекта' });
+  const modelButton = project.getByRole('button', {
+    name: /^Модель и уровень рассуждения/
+  });
+  const settings = project.getByRole('dialog', {
+    name: 'Модель и уровень рассуждения'
+  });
+  const modelPicker = project.getByRole('dialog', { name: 'Выбор модели' });
+  const pickModel = settings.getByRole('button', { name: /^Выбрать модель/ });
+  const slider = settings.getByRole('slider', { name: 'Уровень рассуждения' });
+  await modelButton.click();
+  await expect(slider).toBeDisabled();
+  await expect(
+    settings.getByRole('button', { name: 'DeepSeek V4 Pro', exact: true })
+  ).toHaveCount(0);
+  await pickModel.click();
+  await expect(modelPicker).toBeVisible();
+  await expect(project.getByRole('slider')).toHaveCount(0);
+  await modelPicker
+    .getByRole('button', { name: 'Назад к уровню рассуждения' })
+    .press('Escape');
+  await expect(pickModel).toBeFocused();
+  await pickModel.click();
+  await modelPicker.getByRole('button', { name: 'DeepSeek V4 Pro' }).click();
+  await expect(settings).toBeVisible();
+  await expect(modelButton).toHaveAccessibleName(/DeepSeek V4 Pro, Обычный/);
+  await folder.click();
+  await expect(
+    project.getByRole('button', { name: 'Сменить папку проекта' })
+  ).toContainText('Example');
+
+  await modelButton.click();
+  await pickModel.click();
+  await expect(
+    modelPicker.getByRole('button', { name: 'DeepSeek V4 Pro' })
+  ).toHaveAttribute('aria-pressed', 'true');
+  await modelPicker
+    .getByRole('button', { name: 'DeepSeek V4.1 Flash' })
+    .click();
+  await expect(modelPicker).toBeHidden();
+  await expect(modelButton).toHaveAccessibleName(
+    /DeepSeek V4\.1 Flash, Обычный/
+  );
+  await expect(slider).toBeEnabled();
+  await slider.evaluate((input: HTMLInputElement): void => {
+    input.value = '1';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(slider).toHaveAttribute('aria-valuetext', 'Высокий');
+  await expect(modelButton).toHaveAccessibleName(
+    /DeepSeek V4\.1 Flash, Обычный/
+  );
+  await slider.dispatchEvent('change');
+  await expect(modelButton).toHaveAccessibleName(
+    /DeepSeek V4\.1 Flash, Высокий/
+  );
+  await expect(settings).toBeVisible();
+  await slider.press('Escape');
+  await expect(settings).toBeHidden();
+
+  const prompt = agents.locator('[contenteditable=true]');
+  await prompt.fill('Создай тестовый файл');
+  await prompt.press('Enter');
+  await expect(agents.getByText('Создай тестовый файл')).toBeVisible();
+  await expect(agents.getByText('Создать test.txt')).toBeVisible();
+  await agents.getByRole('button', { name: 'Разрешить один раз' }).click();
+  await expect(agents.getByText('Файл записан')).toBeVisible();
+  await expect(agents.getByLabel('Запрос разрешения')).toHaveCount(0);
+
+  await permission.click();
+  await agents
+    .getByRole('menuitemradio', { name: 'Автоматически подтверждать' })
+    .click();
+  await expect(
+    agents.getByRole('button', { name: 'Автоматически подтверждать' })
+  ).toBeVisible();
+
+  await agentEditor.locator('.attach-file-button:visible').click();
+  const picker = page.waitForEvent('filechooser');
+  await agentEditor
+    .locator('.attach-file-popover .popover-yui-kit__content:visible')
+    .getByText('Файл', { exact: true })
+    .click();
+  await (
+    await picker
+  ).setFiles({
+    name: 'example.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('Текст получен из вложения')
+  });
+  const attachment = page.locator('.attach-modal-container');
+  await expect(
+    attachment.getByText('example.txt', { exact: true })
+  ).toBeVisible();
+  await attachment.locator('button.toolbar-button.right').click();
+  await expect(agents.getByText('Текст получен из вложения')).toBeVisible();
+  await expect(agents.getByLabel('Запрос разрешения')).toHaveCount(0);
+
+  await chatsTab.click();
+  await expect(chatsTab).toHaveAttribute('aria-selected', 'true');
+  await expect(editor).toBeVisible();
+
+  await agentTab.click();
+  await expect(agents).toBeVisible();
+  await expect(editor).toBeHidden();
+
+  await page.goto(`/ai/${CHAT_SESSION_ID}`);
+  await expect(chatsTab).toHaveAttribute('aria-selected', 'true');
+  await expect(
+    page.locator('[data-testid$="-Header-AIAssistantTitle"]')
+  ).toHaveText('Рабочий чат');
+  await expect(editor).toBeVisible();
+});
+
+test('в браузере раздел ИИ открывает чаты без вкладки агентов', async ({
+  page
+}, testInfo): Promise<void> => {
+  test.skip(testInfo.project.use.isMobile, 'Проверка настольной панели ИИ');
+  await page.addInitScript((): void => {
+    sessionStorage.setItem('menu-collapse', 'false');
+  });
+  await page.goto('/ai');
+
+  const tabs = page.getByRole('tablist', { name: 'Разделы ИИ' });
+
+  await expect(tabs.getByRole('tab')).toHaveText(['Чаты', 'Задачи']);
+  await expect(tabs.getByRole('tab', { name: 'Чаты' })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
 });

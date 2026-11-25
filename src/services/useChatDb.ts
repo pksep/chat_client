@@ -116,6 +116,7 @@ class ChatDB {
 
       const serializableMessage = {
         ...msg,
+        localFiles: undefined,
         ...(attachments ? { attachments } : {}),
         ...(outputAttachments ? { outputAttachments } : {}),
         timestamp: msg.timestamp
@@ -124,7 +125,12 @@ class ChatDB {
       };
 
       // IndexedDB не клонирует реактивные Proxy после восстановления истории.
-      return JSON.parse(JSON.stringify(serializableMessage)) as Message;
+      const copy: Message = JSON.parse(JSON.stringify(serializableMessage));
+      if (msg.localFiles?.length) {
+        copy.localFiles = msg.localFiles.map(entry => ({ ...entry }));
+      }
+
+      return copy;
     });
     const data = {
       chatId,
