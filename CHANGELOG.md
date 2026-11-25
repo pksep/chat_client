@@ -1,3 +1,31 @@
+# [1.57.0](https://github.com/pksep/chat_client/compare/v1.56.3...v1.57.0) (2026-11-25)
+
+
+### Bug Fixes
+
+* **ai:** keep mixed conversation history in chronological order ([01515c5](https://github.com/pksep/chat_client/commit/01515c53220bfe711680bda93a3834ea9fb6dd88))
+* **ai:** keep welcome shortcuts inside narrow chat panes ([c976b9a](https://github.com/pksep/chat_client/commit/c976b9a540a6e6496dae3bc930123d54fa818e62))
+* **ai:** preserve user prompts when server replies are incomplete ([03285c7](https://github.com/pksep/chat_client/commit/03285c799e03557e8358792c250a9030a58ed791))
+* **ai:** restore execution status in menus after reload ([8c34d4e](https://github.com/pksep/chat_client/commit/8c34d4e50ce8c820e33ebc8f0d13f335909fb012))
+* keep the mobile AI folder strip within the menu width ([7c2e682](https://github.com/pksep/chat_client/commit/7c2e682486c1defcdf2cac25d64a0ddc5b66996b))
+* **menu:** keep unread badges circular and verify the 9+ cap ([5a4b665](https://github.com/pksep/chat_client/commit/5a4b66525c2b1e0cd15aed1776a9fb74a71425c3))
+* reject invalid cached server configuration [skip ci] ([8acd3d7](https://github.com/pksep/chat_client/commit/8acd3d7d01dbccbefb0244866e1349913cabe751))
+* **tauri:** preserve screen share clarity ([#507](https://github.com/pksep/chat_client/issues/507)) [skip ci] ([a7af78e](https://github.com/pksep/chat_client/commit/a7af78ea408612c10044ff563a9fe1befade716d))
+* **tauri:** preserve screen share clarity across call views ([3348564](https://github.com/pksep/chat_client/commit/3348564eee5e208c117d17a6e15ea7fe0f5d4671))
+* **ui:** center navigation unread counters ([a187659](https://github.com/pksep/chat_client/commit/a1876594b5c83320d3fc33d2abb059c63a97d36e))
+* use the current call action in the pinned conversation header ([d944e26](https://github.com/pksep/chat_client/commit/d944e266b9c555f66df1c7aa9df759090995d84b))
+
+
+### Features
+
+* add private AI chat information and attachments panel ([9aced81](https://github.com/pksep/chat_client/commit/9aced81bdc8f5f756ec323d8b08d45a8e33fcbdb))
+* **ai:** integrate the desktop agent, model picker and dictation ([bfcc599](https://github.com/pksep/chat_client/commit/bfcc5994ea0411b7f84ea44c5a3b12aa28701ddf))
+* **ai:** show task attribute and work log approvals ([d1c45ff](https://github.com/pksep/chat_client/commit/d1c45ffca403994ac38f0a4758a9f8927f97e522))
+* **ai:** support responsive voice conversations and spoken action results ([415c8a6](https://github.com/pksep/chat_client/commit/415c8a63f72d8bb26fa270ed5535b6a1be5dcea8))
+* merge reviewed AI updates and preserve desktop state ([#481](https://github.com/pksep/chat_client/issues/481)) [skip ci] ([db95d9a](https://github.com/pksep/chat_client/commit/db95d9a18da8603c6ade3df291a0de1af271cd0e))
+* organize AI chats and tasks in shared folder menu ([534ffa9](https://github.com/pksep/chat_client/commit/534ffa97ad4cd3e403236d9ce401d5fe9c4b3b4b))
+* show WhatsApp inquiries and reply limits in clients ([12fbb9a](https://github.com/pksep/chat_client/commit/12fbb9a47fe9c2f73669002323f861465a65865e))
+
 ## [1.56.2](https://github.com/pksep/chat_client/compare/v1.56.1...v1.56.2) (2026-11-25)
 
 
