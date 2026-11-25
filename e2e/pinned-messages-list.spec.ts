@@ -374,6 +374,7 @@ test('переход к оригиналу закрывает список', asy
     .getByText('По заказу № 2847:', { exact: false })
     .click();
   await expect(page.getByTestId('PinnedList')).toHaveCount(0);
+  await expect(page.locator('.chat__message-navigation-overlay')).toBeHidden();
   await expect(
     page
       .locator(
