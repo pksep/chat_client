@@ -262,6 +262,7 @@ type ScrollToMessagePayload =
       quoteText?: string;
       quoteOccurrenceIndex?: number;
       allowOptimisticTarget?: boolean;
+      shortTransition?: boolean;
       scrollBehavior?: MessageScrollBehavior;
     };
 

@@ -1,7 +1,58 @@
 import { test, expect, type Page } from '@playwright/test';
+import { writeFile } from 'node:fs/promises';
 import { createPinFixtureApi } from './fixtures/pinned-messages-api';
 
 const fixture = '/e2e/fixtures/pinned-messages.html';
+
+test.afterEach(async ({ page }, testInfo) => {
+  if (testInfo.status === testInfo.expectedStatus) return;
+  const screenshotPath = testInfo.outputPath('pin-layout.png');
+  await page.screenshot({ path: screenshotPath });
+  await testInfo.attach('pin-layout', { path: screenshotPath });
+  const layoutPath = testInfo.outputPath('pin-layout.json');
+  await writeFile(
+    layoutPath,
+    JSON.stringify(
+      await page.evaluate(() => ({
+        viewport: {
+          width: innerWidth,
+          height: innerHeight,
+          x: scrollX,
+          y: scrollY
+        },
+        elements: [
+          ...document.querySelectorAll(
+            '.chat, .chat__message-viewport, .chat__message-wrapper, .chat__message-bubble, .chat__message-navigation-overlay, .pinned-list, [data-message-id="01f0a010-7ff7-4e7b-b97b-000000000000"]'
+          )
+        ].map(element => {
+          const style = getComputedStyle(element);
+          return {
+            class: element.className,
+            bounds: element.getBoundingClientRect().toJSON(),
+            scrollTop: element.scrollTop,
+            scrollHeight: element.scrollHeight,
+            clientHeight: element.clientHeight,
+            display: style.display,
+            visibility: style.visibility,
+            overflow: style.overflow,
+            transform: style.transform,
+            gridRows: style.gridTemplateRows,
+            gridRow: style.gridRow,
+            animation: style.animation,
+            animations: element.getAnimations().map(animation => ({
+              playState: animation.playState,
+              currentTime: animation.currentTime
+            }))
+          };
+        })
+      })),
+      null,
+      2
+    )
+  );
+  await testInfo.attach('pin-layout', { path: layoutPath });
+});
+
 const isNarrow = (page: Page) => (page.viewportSize()?.width || 1000) <= 768;
 const noteAction = async (
   page: Page,
@@ -65,7 +116,21 @@ test('иконка открывает хронологический списо�
   const original = page.locator(
     '[data-testid$="-MessageList-UserMessagesWrapper"]'
   );
-  const before = await original.evaluate(element => element.scrollTop);
+  const anchor = await original.evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    const message = [
+      ...element.querySelectorAll<HTMLElement>('[data-message-id]')
+    ].find(row => {
+      const rect = row.getBoundingClientRect();
+      return rect.bottom > bounds.top && rect.top < bounds.bottom;
+    });
+    if (!message)
+      throw new Error('Нет видимого сообщения для проверки возврата');
+    return {
+      id: message.dataset.messageId,
+      top: message.getBoundingClientRect().top - bounds.top
+    };
+  });
   await page.getByTestId('Pinned-Messages-ListButton').click();
   await expect(page.getByTestId('PinnedList')).toBeVisible();
   await expect(page.getByTestId('PinnedList-Header')).toContainText(
@@ -93,10 +158,20 @@ test('иконка открывает хронологический списо�
   await page.getByRole('button', { name: 'Назад в переписку' }).click();
   await expect(page.getByTestId('PinnedList')).toHaveCount(0);
   await expect(editor).toHaveText('Черновик не потерять');
-  expect(await original.evaluate(element => element.scrollTop)).toBeCloseTo(
-    before,
-    0
-  );
+  // Полученные заметки меняют высоту истории, но видимое сообщение остаётся на месте.
+  const anchoredMessage = original
+    .locator(`[data-message-id="${anchor.id}"]`)
+    .first();
+  await expect(anchoredMessage).toBeInViewport();
+  await expect
+    .poll(() =>
+      anchoredMessage.evaluate(
+        message =>
+          message.getBoundingClientRect().top -
+          message.closest('.chat__message-wrapper')!.getBoundingClientRect().top
+      )
+    )
+    .toBeCloseTo(anchor.top, 0);
   expect(errors).toEqual([]);
 });
 
@@ -291,7 +366,7 @@ test('конфликт версии возвращает подтверждён�
   expect(errors).toEqual([]);
 });
 
-test('переход к оригиналу закрывает список', async ({ page }) => {
+test('переход к оригиналу закрывает список', async ({ page }, testInfo) => {
   const errors = await openPinnedFixture(page);
   await page.getByTestId('Pinned-Messages-ListButton').click();
   await page
@@ -299,6 +374,7 @@ test('переход к оригиналу закрывает список', asy
     .getByText('По заказу № 2847:', { exact: false })
     .click();
   await expect(page.getByTestId('PinnedList')).toHaveCount(0);
+  await expect(page.locator('.chat__message-navigation-overlay')).toBeHidden();
   await expect(
     page
       .locator(
@@ -307,6 +383,10 @@ test('переход к оригиналу закрывает список', asy
       .filter({ hasText: 'По заказу № 2847' })
       .first()
   ).toBeInViewport();
+  await page.screenshot({
+    path: testInfo.outputPath('pin-navigation.png'),
+    animations: 'disabled'
+  });
   expect(errors).toEqual([]);
 });
 
