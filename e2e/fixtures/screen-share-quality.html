@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>СЭП Чат — проверка чёткости</title>
+  </head>
+  <body>
+    <h1>Синтетическая демонстрация 1280×720</h1>
+    <button id="start">Начать локальную проверку</button
+    ><button id="resize">Большое изображение / миниатюра</button>
+    <canvas
+      id="source"
+      width="1280"
+      height="720"
+      style="width: 640px; height: 360px"
+    ></canvas>
+    <video
+      id="remote"
+      autoplay
+      muted
+      playsinline
+      style="width: 640px; height: 360px"
+    ></video>
+    <pre id="result"></pre>
+    <script type="module" src="/e2e/fixtures/screen-share-quality.ts"></script>
+  </body>
+</html>

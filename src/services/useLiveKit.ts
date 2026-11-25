@@ -60,6 +60,11 @@ import {
 } from '../utils/groupCallInviteUrl';
 import { isTauri as isTauriRuntime } from '@tauri-apps/api/core';
 import {
+  applyDesktopScreenShareSubscription,
+  getScreenSharePublishDefaults,
+  getScreenSharePublishingQuality
+} from './call-screen-share-quality';
+import {
   pendingDesktopCallInvite,
   presentBrowserCallInviteChoice
 } from './useDesktopCallLinks';
@@ -571,15 +576,7 @@ const SCREEN_SHARE_CAPTURE_DEFAULTS = {
   surfaceSwitching: 'include' as const,
   systemAudio: 'exclude' as const
 };
-const SCREEN_SHARE_PUBLISH_DEFAULTS = {
-  degradationPreference: 'balanced' as RTCDegradationPreference,
-  simulcast: true,
-  screenShareEncoding: ScreenSharePresets.original.encoding,
-  screenShareSimulcastLayers: [
-    ScreenSharePresets.h360fps3,
-    ScreenSharePresets.h720fps5
-  ]
-};
+const SCREEN_SHARE_PUBLISH_DEFAULTS = getScreenSharePublishDefaults(false);
 const LIVEKIT_RECONNECT_POLICY: ReconnectPolicy = {
   nextRetryDelayInMs(context: ReconnectContext): number {
     const retryDelays = [0, 300, 1200, 2700, 4800, 7000];
@@ -3148,6 +3145,11 @@ const applyRemoteVideoSubscriptionPreferences = (
     return;
   }
 
+  if (
+    applyDesktopScreenShareSubscription(publication, isTauriRuntime(), source)
+  )
+    return;
+
   publication.setEnabled(true);
   const constrainedQuality = getConstrainedVideoQuality(
     state.connectionQuality
@@ -3218,7 +3220,11 @@ const setLocalVideoPublishingQuality = (
       publication.source === Track.Source.Camera ||
       publication.source === Track.Source.ScreenShare
     ) {
-      publication.videoTrack?.setPublishingQuality(maxQuality);
+      publication.videoTrack?.setPublishingQuality(
+        publication.source === Track.Source.ScreenShare
+          ? getScreenSharePublishingQuality(isTauriRuntime(), maxQuality)
+          : maxQuality
+      );
     }
   });
 
@@ -3228,7 +3234,10 @@ const setLocalVideoPublishingQuality = (
     recordCallTelemetryEvent('call.media_quality.changed', {
       reason,
       maxVideoQuality: maxQuality,
-      maxScreenShareQuality: maxQuality,
+      maxScreenShareQuality: getScreenSharePublishingQuality(
+        isTauriRuntime(),
+        maxQuality
+      ),
       connectionQuality: state.connectionQuality
     });
   }
@@ -7277,7 +7286,7 @@ const recoverLocalScreenSharePublication = (
         }
       } else {
         await activeRoom.localParticipant.publishTrack(recoverableTrack, {
-          ...SCREEN_SHARE_PUBLISH_DEFAULTS,
+          ...getScreenSharePublishDefaults(isTauriRuntime()),
           source: Track.Source.ScreenShare,
           name: Track.Source.ScreenShare,
           stream: Track.Source.ScreenShare
@@ -7511,7 +7520,7 @@ const toggleScreenShareInternal = async (
         rememberLocalScreenShareTrack(track);
         if (!track) throw new Error('Не получен захват экрана');
         await activeRoom.localParticipant.publishTrack(track, {
-          ...SCREEN_SHARE_PUBLISH_DEFAULTS,
+          ...getScreenSharePublishDefaults(isTauriRuntime()),
           source: Track.Source.ScreenShare
         });
       } else {
