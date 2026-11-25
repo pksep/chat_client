@@ -491,7 +491,7 @@
   align-items: center;
   height: 44px;
   width: 100%;
-  background-color: var(--table-surface-search);
+  background-color: var(--surface-input-secondary);
   border-radius: 5px;
   padding: 10px 15px;
 }
@@ -1044,6 +1044,21 @@ dialog.menu-profile__wallpaper-modal > .modal-yui-kit__modal-content {
 .menu-profile__logout__icon {
   color: var(--text-secondary);
   transition: 0.2s ease-in-out;
+}
+
+@media (hover: hover) {
+  .menu-profile__logout:hover:not(:disabled) {
+    background-color: var(--action-secondary-hover-bg) !important;
+  }
+
+  .menu-profile__logout:hover:not(:disabled) .menu-profile__logout__icon {
+    color: inherit;
+  }
+}
+
+.menu-profile__logout:focus-visible {
+  outline: 2px solid var(--text-link);
+  outline-offset: 2px;
 }
 
 .menu-profile__logout:active .menu-profile__logout__icon {

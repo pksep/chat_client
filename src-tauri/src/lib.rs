@@ -645,6 +645,7 @@ pub fn run() {
             desktop_files::desktop_file_register_source,
             desktop_files::desktop_file_status,
             desktop_files::desktop_file_download,
+            desktop_files::desktop_file_cancel_download,
             desktop_files::desktop_file_save,
             desktop_files::desktop_file_open,
             desktop_files::desktop_update_prepare,
