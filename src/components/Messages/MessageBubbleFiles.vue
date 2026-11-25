@@ -57,7 +57,15 @@
             :data-testid="`${props.dataTestid}-FileContainer`"
           >
             <span class="message-content__file-icon">
+              <FileDownloadProgressButton
+                v-if="canCancelNativeFileDownload(media)"
+                :percent="getFileIconPercent(media)"
+                :file-name="media.originName || 'файл'"
+                :is-me-sender="props.isMeSender"
+                :cancel="() => cancelNativeFileDownload(media)"
+              />
               <FileIcon
+                v-else
                 :is-me-sender="props.isMeSender"
                 :dataTestid="`${props.dataTestid}-FileIcon`"
                 :is-loaded="isFileIconLoaded(media)"
@@ -204,6 +212,7 @@ import type { IMessageBubbleProps } from './interface/interface';
 import { MediaType } from '@pksep/zod-shared-chat';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import FileIcon from '../UI/FileIcon.vue';
+import FileDownloadProgressButton from '../UI/FileDownloadProgressButton.vue';
 import UploadProgressText from '../UI/UploadProgressText.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import MessageEmojies from './MessageEmojies.vue';
@@ -223,6 +232,8 @@ import { MessageStatus } from '../../services/useChatSDK/types';
 import type { IMedia } from '../interfaces/interfaces';
 import {
   getNativeFileDownloadState,
+  canCancelNativeFileDownload,
+  cancelNativeFileDownload,
   isNativeFileDownloadSupported,
   isNativeFileMediaSupported,
   refreshNativeFileDownloadStatus
@@ -350,11 +361,13 @@ const shouldUseNativeFileState = (media: IMedia): boolean =>
 
 const isNativeFileDownloading = (media: IMedia): boolean =>
   shouldUseNativeFileState(media) &&
-  getNativeFileDownloadState(media).phase === 'downloading';
+  ['downloading', 'cancelling'].includes(
+    getNativeFileDownloadState(media).phase
+  );
 
 const isNativeFileBusy = (media: IMedia): boolean =>
   shouldUseNativeFileState(media) &&
-  ['checking', 'downloading', 'opening'].includes(
+  ['checking', 'downloading', 'cancelling', 'opening'].includes(
     getNativeFileDownloadState(media).phase
   );
 

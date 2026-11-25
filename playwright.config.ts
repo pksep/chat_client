@@ -44,7 +44,10 @@ export default defineConfig({
       name: 'webkit-desktop',
       testMatch: [
         'macos-desktop.spec.ts',
+        'macos-form-styles.spec.ts',
+        'pinned-messages-list.spec.ts',
         'desktop-shell.spec.ts',
+        'file-download-cancel.spec.ts',
         'telemetry-location.spec.ts',
         'desktop-app-download.spec.ts',
         'message-reaction-picker-position.spec.ts',

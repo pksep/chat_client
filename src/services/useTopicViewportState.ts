@@ -1,4 +1,5 @@
 import { shallowRef } from 'vue';
+import { pinnedMessagesViewTopicId } from './pinned-messages-view';
 
 const topicNearBottomState = new Map<string, boolean>();
 const topicMessageVisibilityCheckers = new Map<
@@ -22,6 +23,7 @@ export const clearTopicNearBottomState = (topicId: string): void => {
 };
 
 export const getIsTopicNearBottom = (topicId: string): boolean =>
+  pinnedMessagesViewTopicId.value !== topicId &&
   topicNearBottomState.get(topicId) === true;
 
 export const setTopicMessageVisibilityChecker = (
@@ -38,7 +40,9 @@ export const clearTopicMessageVisibilityChecker = (topicId: string): void => {
 export const getIsTopicMessageVisible = (
   topicId: string,
   messageId: string
-): boolean => topicMessageVisibilityCheckers.get(topicId)?.(messageId) === true;
+): boolean =>
+  pinnedMessagesViewTopicId.value !== topicId &&
+  topicMessageVisibilityCheckers.get(topicId)?.(messageId) === true;
 
 export const requestTopicReactionJump = (
   topicId: string,

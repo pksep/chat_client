@@ -2,6 +2,7 @@
   <section
     :class="[
       'chat',
+      { 'chat--pinned-open': isPinnedListOpen },
       {
         'chat--mobile-route': isMobile,
         'chat--call-topic-route': route.type === RouteTypes.CALL,
@@ -11,6 +12,13 @@
     :data-testid="`${props.dataTestid}-Chat-Container`"
     @animationend="handleMobileRouteAnimationEnd"
   >
+    <PinnedMessagesPanel
+      v-if="isPinnedListOpen"
+      :key="route.id"
+      :topic-id="route.id"
+      @navigate="navigateFromPinnedList"
+      @open-sticker-pack="messageListRef?.openStickerPack?.($event)"
+    />
     <div
       v-if="chatAccess.ai && (isAiRoute || isAiVoiceCallActive)"
       v-show="isAiRoute"
@@ -49,12 +57,14 @@
           v-if="shouldShowPinnedMessages"
           :topic-id="pinnedMessagesTopicId"
           :viewport-snapshot="messageViewportSnapshot"
+          :inert="isPinnedListOpen || undefined"
           @unmount-set-selected-message="scrollToMessage"
         />
         <MessageList
           v-if="isMobileMessageListMounted"
           ref="messageListRef"
           :defer-content-render="false"
+          :suspended="isPinnedListOpen"
           :baseUrl="props.baseUrl"
           :contact="props.contact"
           :user="authUser"
@@ -71,11 +81,13 @@
         v-if="shouldShowPinnedMessages"
         :topic-id="pinnedMessagesTopicId"
         :viewport-snapshot="messageViewportSnapshot"
+        :inert="isPinnedListOpen || undefined"
         @unmount-set-selected-message="scrollToMessage"
       />
       <MessageList
         v-if="hasActiveChatRoute"
         ref="messageListRef"
+        :suspended="isPinnedListOpen"
         :baseUrl="props.baseUrl"
         :contact="props.contact"
         :user="authUser"
@@ -121,6 +133,16 @@ import UnselectedTopicIcon from './UI/Icons/UnselectedTopicIcon.vue';
 import { loadMessageList } from '../utils/load-message-list';
 import { navigateToDefault } from '../composables/navigation';
 import { useChatMenu } from '../composables/useChatMenu';
+import PinnedMessagesPanel from './Messages/PinnedMessagesPanel.vue';
+import {
+  pinnedMessagesViewTopicId,
+  closePinnedMessagesView
+} from '../services/pinned-messages-view';
+import '../assets/pinned-list.css';
+import {
+  useBackButtonHandler,
+  BackButtonPriority
+} from '../composables/useBackButton';
 
 const MessageList = defineAsyncComponent(loadMessageList);
 const AIAssistant = defineAsyncComponent(() => import('./AI/AIAssistant.vue'));
@@ -144,6 +166,17 @@ const messageListRef = useTemplateRef<any>('messageListRef');
 const aiAssistantRef = useTemplateRef<any>('aiAssistantRef');
 
 const route = useUrlWatcher();
+const isPinnedListOpen = computed(
+  () => !!route.value.id && pinnedMessagesViewTopicId.value === route.value.id
+);
+useBackButtonHandler(
+  () => isPinnedListOpen.value,
+  closePinnedMessagesView,
+  BackButtonPriority.overlay
+);
+watch(() => route.value.id, closePinnedMessagesView);
+watch(() => authUser.value?.id, closePinnedMessagesView);
+onBeforeUnmount(closePinnedMessagesView);
 const { setActiveSection } = useChatMenu();
 const { isVoiceModeOpen: isAiVoiceCallActive } = useAiAssistant();
 const { access: chatAccess, ready: isChatAccessReady } = useChatAccess();
@@ -234,6 +267,12 @@ type ScrollToMessagePayload =
 
 const scrollToMessage = (payload: ScrollToMessagePayload) => {
   messageListRef.value?.scrollToMessage(payload);
+};
+
+const navigateFromPinnedList = async (payload: unknown) => {
+  closePinnedMessagesView();
+  await import('vue').then(({ nextTick }) => nextTick());
+  scrollToMessage(payload as ScrollToMessagePayload);
 };
 
 const handleViewportSnapshotChange = (

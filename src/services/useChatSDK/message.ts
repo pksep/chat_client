@@ -2,6 +2,12 @@ import { Message, Topic, Media } from '@pksep/zod-shared-chat';
 import { Reqi } from '@pksep/reqi';
 import { readJson } from './read-json';
 import { CHAT_CONTENT_REQUEST_TIMEOUT_MS } from '../../utils/network-timeout';
+import { withNetworkTimeout } from '../../utils/network-timeout';
+import type {
+  PinComment,
+  PinCommentAck,
+  PinCommentCommand
+} from '../pin-comments';
 import {
   SearchParams,
   PaginatedResponse,
@@ -70,6 +76,13 @@ export interface ChatMessageInterface {
     limit?: number;
   }): Promise<CallHistoryResponse>;
   getPinnedMessages(topicId: string): Promise<Message[]>;
+  getPinComments(
+    topicId: string
+  ): Promise<{ version: number; comments: PinComment[] }>;
+  sendPinCommentCommand(
+    topicId: string,
+    command: PinCommentCommand
+  ): Promise<PinCommentAck>;
   getAroundMessage(messageId: string): Promise<Message[]>;
 }
 
@@ -304,6 +317,28 @@ export class ChatMessage implements ChatMessageInterface {
         `Failed to fetch pinned messages: ${(error as Error).message}`
       );
     }
+  }
+
+  getPinComments(
+    topicId: string
+  ): Promise<{ version: number; comments: PinComment[] }> {
+    return readJson(this.reqi, `/messages/topic/${topicId}/pin-comments`, {
+      reusePending: false
+    });
+  }
+
+  sendPinCommentCommand(
+    topicId: string,
+    command: PinCommentCommand
+  ): Promise<PinCommentAck> {
+    return withNetworkTimeout(async signal => {
+      const response = await this.reqi.post(
+        `/messages/topic/${topicId}/pin-comments/commands`,
+        command,
+        { parsed: false, requset: { signal } }
+      );
+      return (await response.json()) as PinCommentAck;
+    }, 20_000);
   }
 
   async getAroundMessage(messageId: string): Promise<Message[]> {

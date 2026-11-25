@@ -14,6 +14,7 @@ type NativeDownloadPhase =
   | 'opening'
   | 'not-downloaded'
   | 'downloading'
+  | 'cancelling'
   | 'downloaded'
   | 'error';
 
@@ -29,6 +30,10 @@ const nativeFileDownloadStates = reactive<
   Record<string, NativeFileDownloadState>
 >({});
 const pendingNativeDownloads = new Map<string, Promise<boolean>>();
+const nativeDownloadAttempts = new Map<
+  string,
+  { key: string; requestId: string; cancelled: boolean; started: boolean }
+>();
 const pendingNativeChecks = new Map<string, Promise<boolean>>();
 const pendingNativeOpens = new Map<string, Promise<boolean>>();
 const pendingNativeClicks = new Map<string, Promise<boolean>>();
@@ -110,13 +115,21 @@ const ensureNativeProgressListener = async () => {
 
   nativeProgressListenerPromise = nativeFileBridge()
     .addListener('fileDownloadProgress', payload => {
-      const currentState = nativeFileDownloadStates[payload.requestId];
+      const attempt = [...nativeDownloadAttempts.values()].find(
+        item => item.requestId === payload.requestId
+      );
+      const key = attempt?.key ?? payload.requestId;
+      if (attempt?.cancelled && isTauri()) {
+        void TauriFile.cancelDownload(attempt.requestId).catch(() => undefined);
+        return;
+      }
+      const currentState = nativeFileDownloadStates[key];
 
       if (!currentState || currentState.phase !== 'downloading') {
         return;
       }
 
-      nativeFileDownloadStates[payload.requestId] = {
+      nativeFileDownloadStates[key] = {
         ...currentState,
         phase: 'downloading',
         percent:
@@ -159,7 +172,10 @@ export const refreshNativeFileDownloadStatus = async (
   }
 
   const current = nativeFileDownloadStates[key];
-  if (current?.phase === 'downloading' || current?.phase === 'opening')
+  if (
+    current &&
+    ['downloading', 'cancelling', 'opening'].includes(current.phase)
+  )
     return Boolean(current.localUri);
   const pending = pendingNativeChecks.get(key);
   if (pending) return pending;
@@ -235,12 +251,27 @@ export const downloadNativeFileToDownloads = async (
     percent: null
   };
 
-  const download = (async () => {
-    await ensureNativeProgressListener();
+  const attempt = {
+    key,
+    requestId: isTauri() ? crypto.randomUUID() : key,
+    cancelled: false,
+    started: false
+  };
+  nativeDownloadAttempts.set(key, attempt);
 
+  const download = (async () => {
     try {
+      await ensureNativeProgressListener();
+      if (attempt.cancelled) {
+        nativeFileDownloadStates[key] = {
+          phase: 'not-downloaded',
+          percent: null
+        };
+        return false;
+      }
+      attempt.started = true;
       const downloadedFile = await nativeFileBridge().downloadFileToDownloads({
-        requestId: key,
+        requestId: attempt.requestId,
         ...getNativeFileOptions(media)
       });
 
@@ -255,19 +286,54 @@ export const downloadNativeFileToDownloads = async (
 
       return true;
     } catch (error) {
-      console.warn('Failed to download native file:', error);
+      const cancelled =
+        (error as { code?: string })?.code === 'FILE_DOWNLOAD_CANCELLED';
+      if (!cancelled) console.warn('Failed to download native file:', error);
       nativeFileDownloadStates[key] = {
-        phase: 'error',
+        phase: cancelled ? 'not-downloaded' : 'error',
         percent: null
       };
       return false;
     } finally {
       pendingNativeDownloads.delete(key);
+      nativeDownloadAttempts.delete(key);
     }
   })();
 
   pendingNativeDownloads.set(key, download);
   return download;
+};
+
+export const canCancelNativeFileDownload = (media: IMedia): boolean =>
+  isTauri() &&
+  ['downloading', 'cancelling'].includes(
+    getNativeFileDownloadState(media).phase
+  );
+
+export const cancelNativeFileDownload = async (
+  media: IMedia
+): Promise<void> => {
+  const key = getNativeFileKey(media);
+  const attempt = nativeDownloadAttempts.get(key);
+  if (!isTauri() || !attempt) return;
+  attempt.cancelled = true;
+  nativeFileDownloadStates[key] = {
+    ...nativeFileDownloadStates[key],
+    phase: 'cancelling'
+  };
+  try {
+    if (attempt.started) await TauriFile.cancelDownload(attempt.requestId);
+    await pendingNativeDownloads.get(key);
+  } catch (error) {
+    attempt.cancelled = false;
+    if (nativeDownloadAttempts.get(key) === attempt) {
+      nativeFileDownloadStates[key] = {
+        ...nativeFileDownloadStates[key],
+        phase: 'downloading'
+      };
+    }
+    throw error;
+  }
 };
 
 export const openDownloadedNativeFile = async (
@@ -357,7 +423,8 @@ export const handleNativeFileClick = async (
   if (pending) return pending;
   const click = (async () => {
     let state = getNativeFileDownloadState(media);
-    if (state.phase === 'downloading' || state.phase === 'opening') return true;
+    if (['downloading', 'cancelling', 'opening'].includes(state.phase))
+      return true;
     const startedAt = performance.now();
     const traceId = createTelemetryTraceId('file-open');
     recordTelemetryEvent({

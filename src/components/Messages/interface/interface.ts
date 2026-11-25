@@ -43,6 +43,8 @@ export interface IMessageBubbleProps {
   selectionTestId?: string;
   continuesWithNext?: boolean;
   continuesFromPrevious?: boolean;
+  pinListMode?: boolean;
+  animationsPaused?: boolean;
 }
 
 export interface IMessageContextMenu extends IMessageBubbleProps {
