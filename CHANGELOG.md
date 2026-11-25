@@ -1,3 +1,12 @@
+## [1.56.2](https://github.com/pksep/chat_client/compare/v1.56.1...v1.56.2) (2026-11-25)
+
+
+### Bug Fixes
+
+* **calls:** adapt participant cards and quick controls to window size [skip ci] ([182fa6d](https://github.com/pksep/chat_client/commit/182fa6d4bf5f99fedfcb888f7ad0fe2145e24fa9))
+* **deploy:** use matching SSH credentials and update web version [skip ci] ([5629601](https://github.com/pksep/chat_client/commit/56296018cfec9380c0005198d00e87f359efa757))
+* **ui:** align pinned views and desktop dialogs [skip ci] ([5b5da3a](https://github.com/pksep/chat_client/commit/5b5da3ac073f5661d692238f725c1eb8f41ff41e))
+
 ## [1.56.1](https://github.com/pksep/chat_client/compare/v1.56.0...v1.56.1) (2026-11-25)
 
 
