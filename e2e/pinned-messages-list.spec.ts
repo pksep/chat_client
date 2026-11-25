@@ -2,6 +2,55 @@ import { test, expect, type Page } from '@playwright/test';
 import { createPinFixtureApi } from './fixtures/pinned-messages-api';
 
 const fixture = '/e2e/fixtures/pinned-messages.html';
+
+test.afterEach(async ({ page }, testInfo) => {
+  if (testInfo.status === testInfo.expectedStatus) return;
+  await testInfo.attach('pin-layout.png', {
+    body: await page.screenshot(),
+    contentType: 'image/png'
+  });
+  await testInfo.attach('pin-layout.json', {
+    body: JSON.stringify(
+      await page.evaluate(() => ({
+        viewport: {
+          width: innerWidth,
+          height: innerHeight,
+          x: scrollX,
+          y: scrollY
+        },
+        elements: [
+          ...document.querySelectorAll(
+            '.chat, .chat__message-viewport, .chat__message-wrapper, .chat__message-bubble, .chat__message-navigation-overlay, .pinned-list, [data-message-id="01f0a010-7ff7-4e7b-b97b-000000000000"]'
+          )
+        ].map(element => {
+          const style = getComputedStyle(element);
+          return {
+            class: element.className,
+            bounds: element.getBoundingClientRect().toJSON(),
+            scrollTop: element.scrollTop,
+            scrollHeight: element.scrollHeight,
+            clientHeight: element.clientHeight,
+            display: style.display,
+            visibility: style.visibility,
+            overflow: style.overflow,
+            transform: style.transform,
+            gridRows: style.gridTemplateRows,
+            gridRow: style.gridRow,
+            animation: style.animation,
+            animations: element.getAnimations().map(animation => ({
+              playState: animation.playState,
+              currentTime: animation.currentTime
+            }))
+          };
+        })
+      })),
+      null,
+      2
+    ),
+    contentType: 'application/json'
+  });
+});
+
 const isNarrow = (page: Page) => (page.viewportSize()?.width || 1000) <= 768;
 const noteAction = async (
   page: Page,

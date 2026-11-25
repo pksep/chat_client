@@ -32,6 +32,11 @@ on:
       - 'nginx.conf'
       - 'Dockerfile'
   workflow_dispatch:
+    inputs:
+      ui_only:
+        description: 'Run macOS WebKit UI checks without building installers'
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -46,6 +51,7 @@ env:
 
 jobs:
   build:
+    if: inputs.ui_only != true
     name: Package ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
@@ -124,4 +130,30 @@ jobs:
             src-tauri/target/**/release/bundle/appimage/*.AppImage
             src-tauri/target/**/release/bundle/dmg/*.dmg
           if-no-files-found: error
+          retention-days: 7
+
+  macos-ui:
+    name: WebKit UI (${{ matrix.os }})
+    if: github.event_name == 'workflow_dispatch' && inputs.ui_only == true
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-15-intel]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install webkit
+      - name: Verify dialog layout and pinned navigation
+        run: bunx playwright test e2e/creation-modal-desktop.spec.ts e2e/forward-modal-desktop.spec.ts e2e/macos-desktop.spec.ts e2e/macos-form-styles.spec.ts e2e/file-download-cancel.spec.ts e2e/pinned-messages-list.spec.ts --project=webkit-desktop --workers=1 --reporter=line --trace=retain-on-failure --output=test-results/dialog-layout
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: webkit-ui-${{ matrix.os }}
+          path: test-results/
+          if-no-files-found: ignore
           retention-days: 7
