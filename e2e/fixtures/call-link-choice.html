@@ -3,15 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Выбор приложения для приглашения</title>
+    <title>Открытие СЭП Чата</title>
   </head>
   <body>
-    <div id="app"></div>
+    <p>СЭП Чат в браузере</p>
+    <a id="retry" href="sepchat://open">Открыть приложение</a>
     <script type="module">
-      import { createApp } from 'vue';
-      import Prompt from '/src/components/Menu/DesktopCallInvitePrompt.vue';
-      import '/src/assets/chat-container.css';
-      createApp(Prompt).mount('#app');
+      import { initDesktopCallLinks } from '/src/services/useDesktopCallLinks.ts';
+      initDesktopCallLinks();
+      window.appLinksReady = true;
     </script>
   </body>
 </html>

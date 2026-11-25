@@ -1,0 +1,47 @@
+diff --git a/node_modules/@pksep/yui/.bun-tag-7b9e57f2dd6466b1 b/.bun-tag-7b9e57f2dd6466b1
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/dist/sep-yui.mjs b/dist/sep-yui.mjs
+index 237a4b0119319a49fdfc364e3d967fd661d221ea..0999b74adfef36a63bfa11ac69f722b54762e9ec 100644
+--- a/dist/sep-yui.mjs
++++ b/dist/sep-yui.mjs
+@@ -10826,7 +10826,7 @@ const aAg = ["data-testid"], dAg = ["data-testid"], cAg = ["open", "data-testid"
+     dataTestid: { default: "Tooltip" }
+   },
+   setup(C) {
+-    const g = C, I = CSS.supports("top", "anchor(bottom)"), e = Kb(), t = gg(() => `--anchor-tooltip-${e}`), i = K(null), n = K(null), A = Tg({
++    const g = C, I = () => CSS.supports("top", "anchor(bottom)") && !(i.value && i.value.closest("dialog.attach-modal-container--image-editor, dialog.image-attachment-editor__confirm-modal")), e = Kb(), t = gg(() => `--anchor-tooltip-${e}`), i = K(null), n = K(null), A = Tg({
+       isShow: !1
+     }), l = gg(
+       () => g.isCanShow && (g.isShow || A.isShow)
+@@ -10878,18 +10878,18 @@ const aAg = ["data-testid"], dAg = ["data-testid"], cAg = ["open", "data-testid"
+           "--tooltip-height": "0",
+           "--hint-visibility": "visible"
+         };
+-        I || (x["--hint-top"] = "0", x["--hint-left"] = "0");
++        I() || (x["--hint-top"] = "0", x["--hint-left"] = "0");
+         const Q = i.value.getBoundingClientRect(), og = n.value.getBoundingClientRect();
+         let lg = Q.top, Gg = Q.left;
+         const Sg = i.value.closest("dialog");
+-        if (Sg) {
++        if (Sg && !Sg.matches(".attach-modal-container--image-editor, .image-attachment-editor__confirm-modal")) {
+           const pg = Sg.getBoundingClientRect();
+           lg = Q.top - pg.top, Gg = Q.left - pg.left;
+           const Zg = Sg.scrollTop, Yg = Sg.scrollLeft;
+           lg += Zg, Gg += Yg;
+         }
+         const fg = Q.width, Ng = Q.height, Jg = og.width, Dg = og.height;
+-        I || (x["--hint-top"] = `${lg}px`, x["--hint-left"] = `${Gg}px`), x["--tooltip-width"] = `${fg}px`, x["--tooltip-height"] = `${Ng}px`, x["--hint-measured-width"] = `${Jg}px`, x["--hint-height"] = `${Dg}px`, n.value && ZC(x, n.value);
++        I() || (x["--hint-top"] = `${lg}px`, x["--hint-left"] = `${Gg}px`), x["--tooltip-width"] = `${fg}px`, x["--tooltip-height"] = `${Ng}px`, x["--hint-measured-width"] = `${Jg}px`, x["--hint-height"] = `${Dg}px`, n.value && ZC(x, n.value);
+       });
+     }, h = () => {
+       requestAnimationFrame(() => {
+@@ -10950,7 +10950,7 @@ const aAg = ["data-testid"], dAg = ["data-testid"], cAg = ["open", "data-testid"
+         u();
+       }
+     })), y), D = () => {
+-      I || V || (window.addEventListener("scroll", u, !0), window.addEventListener("resize", u), V = !0);
++      I() || V || (window.addEventListener("scroll", u, !0), window.addEventListener("resize", u), V = !0);
+     }, T = () => {
+       V && (window.removeEventListener("scroll", u, !0), window.removeEventListener("resize", u), V = !1);
+     }, L = () => {

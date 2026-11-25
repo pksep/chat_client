@@ -3,8 +3,23 @@ import { expect, test, type Page } from '@playwright/test';
 const invite = 'callRoom=choice-room&callInvite=signed%2Btoken%2F%3D';
 const fixture = '/e2e/fixtures/call-link-choice.html';
 
-async function isolatedChoice(page: Page, query = invite) {
-  // Только локальные синтетические ссылки; SDK и звонки не подключаются.
+const isolatedChoice = async (page: Page, query = invite): Promise<void> => {
+  await page.addInitScript(() => {
+    const win = window as any;
+    win.nativeLinks = [];
+    win.browserFocused = true;
+    win.choiceSDK = { isConnected: () => true };
+    Object.defineProperty(document, 'hasFocus', {
+      configurable: true,
+      value: () => win.browserFocused
+    });
+    const click = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () {
+      if (/^(sepchat|intent):/.test(this.href)) win.nativeLinks.push(this.href);
+      else click.call(this);
+    };
+  });
+  await page.clock.install();
   await page.route('**/src/services/useChat.ts*', route =>
     route.fulfill({
       contentType: 'application/javascript',
@@ -18,179 +33,137 @@ async function isolatedChoice(page: Page, query = invite) {
     })
   );
   await page.goto(`${fixture}?${query}`);
-  await expect(page.getByTestId('DesktopCallInvitePrompt')).toBeVisible();
-}
+  await expect
+    .poll(() => page.evaluate(() => (window as any).appLinksReady))
+    .toBe(true);
+};
 
-for (const theme of ['light', 'dark']) {
-  test(`выбор ${theme}: узкий экран, фокус и отсутствие автоматического запуска`, async ({
-    page
-  }, info) => {
-    await page.setViewportSize({ width: 280, height: 568 });
-    const protocols: string[] = [];
-    page.on('request', request => {
-      if (/^(sepchat|intent):/.test(request.url()))
-        protocols.push(request.url());
-    });
-    await isolatedChoice(page);
-    await page.evaluate(theme => {
-      document.documentElement.dataset.theme = theme;
-      document.documentElement.className = `theme-${theme}`;
-    }, theme);
-    const prompt = page.getByTestId('DesktopCallInvitePrompt');
-    await expect(prompt).toBeFocused();
-    const bounds = await prompt.boundingBox();
-    expect(bounds!.x).toBeGreaterThanOrEqual(0);
-    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(280);
-    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(568);
-    const download = prompt.getByRole('link', { name: 'Скачать приложение' });
-    const android = await page.evaluate(() =>
-      /Android/i.test(navigator.userAgent)
-    );
-    await expect(download).toHaveAttribute(
-      'href',
-      android
-        ? 'https://pksep.github.io/sep-chat-ui/android/'
-        : 'https://github.com/pksep/chat_client/releases/latest'
-    );
-    await page.keyboard.press('Shift+Tab');
-    await expect(download).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(
-      prompt.getByRole('link', { name: 'Продолжить в приложении' })
-    ).toBeFocused();
-    expect(protocols).toEqual([]);
-    await prompt.screenshot({
-      path: info.outputPath(`call-choice-${theme}.png`)
-    });
-  });
-}
-
-test('выбор браузера восстанавливает звонок только после нажатия и сохраняется после входа', async ({
+test('обычный вход предлагает приложение системным протоколом без своей модалки', async ({
   page
 }) => {
-  await page.addInitScript(() => {
-    (window as any).choiceSDK = { isConnected: () => true };
-  });
-  await isolatedChoice(page, `${invite}&organization=old&callAppFallback=1`);
+  await isolatedChoice(page, '');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const android = await page.evaluate(() =>
+    /Android/i.test(navigator.userAgent)
+  );
+  const links = await page.evaluate(() => (window as any).nativeLinks);
+  expect(links).toHaveLength(1);
+  expect(links[0]).toMatch(
+    android ? /^intent:\/\/chat\.pksep\.ru\// : /^sepchat:\/\/open$/
+  );
+  await page.reload();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).appLinksReady))
+    .toBe(true);
+  expect(await page.evaluate(() => (window as any).nativeLinks)).toEqual([]);
+});
+
+test('ERP явно открывает приложение после выбора веба, ERP-токен остаётся в HTTPS', async ({
+  page
+}) => {
+  await isolatedChoice(page, 'appClient=web');
+  expect(await page.evaluate(() => (window as any).nativeLinks)).toEqual([]);
+  await page.goto(
+    `${fixture}?appClient=app&token=erp-secret&organization=https%3A%2F%2Ferp.example.test`
+  );
+  await expect
+    .poll(() => page.evaluate(() => (window as any).nativeLinks.length))
+    .toBe(1);
+  const target = await page.evaluate(() => (window as any).nativeLinks[0]);
+  expect(target).not.toContain('erp-secret');
+  expect(target).toContain('organization=');
+  expect(new URL(page.url()).searchParams.get('token')).toBe('erp-secret');
+  expect(new URL(page.url()).searchParams.get('appClient')).toBeNull();
+});
+
+test('для звонка передаётся приглашение; отмена системного запроса продолжает веб-звонок', async ({
+  page
+}) => {
+  await isolatedChoice(page);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const target = await page.evaluate(() => (window as any).nativeLinks[0]);
+  expect(target).toContain('callRoom=choice-room');
+  expect(target).toContain('callInvite=signed%2Btoken%2F%3D');
   expect(
     await page.evaluate(() => (window as any).restoredInvites)
   ).toBeUndefined();
-  await page.getByRole('button', { name: 'Остаться в браузере' }).click();
+  await page.clock.fastForward(2500);
   await expect
     .poll(() => page.evaluate(() => (window as any).restoredInvites?.length))
     .toBe(1);
-  const url = new URL(page.url());
-  expect(url.searchParams.get('callClient')).toBe('web');
-  expect(url.searchParams.has('callAppFallback')).toBe(false);
-  const authorization = await page.evaluate(async () => {
-    const { buildGroupCallInviteAuthorizationUrl } = await import(
-      '/src/utils/groupCallInviteUrl.ts'
-    );
-    return buildGroupCallInviteAuthorizationUrl(location.href);
-  });
-  expect(new URL(authorization).search).toBe(url.search);
+  expect(new URL(page.url()).searchParams.get('callClient')).toBe('web');
   await page.reload();
-  await expect(page.getByTestId('DesktopCallInvitePrompt')).toBeHidden();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).appLinksReady))
+    .toBe(true);
+  expect(await page.evaluate(() => (window as any).nativeLinks)).toEqual([]);
 });
 
-test('новое приглашение и переход назад показывают новый выбор, старая организация удаляется', async ({
+test('открытый системный запрос не подключает второй звонок в вебе', async ({
+  page
+}) => {
+  await isolatedChoice(page);
+  await page.evaluate(() => {
+    (window as any).browserFocused = false;
+    window.dispatchEvent(new Event('blur'));
+  });
+  await page.clock.fastForward(10_000);
+  expect(
+    await page.evaluate(() => (window as any).restoredInvites)
+  ).toBeUndefined();
+  await page.evaluate(() => {
+    (window as any).browserFocused = true;
+    window.dispatchEvent(new Event('focus'));
+  });
+  await page.clock.fastForward(500);
+  await expect
+    .poll(() => page.evaluate(() => (window as any).restoredInvites?.length))
+    .toBe(1);
+});
+
+test('при уходе в приложение веб не подключает параллельный звонок', async ({
+  page
+}) => {
+  await isolatedChoice(page);
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'hidden'
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.clock.fastForward(10_000);
+  expect(
+    await page.evaluate(() => (window as any).restoredInvites)
+  ).toBeUndefined();
+});
+
+test('новая ссылка отменяет ожидание старой и не наследует организацию', async ({
   page
 }) => {
   await isolatedChoice(page, `${invite}&organization=old`);
-  await page.getByRole('button', { name: 'Остаться в браузере' }).click();
   await page.evaluate(() => {
     history.pushState({}, '', '?callRoom=next-room&callInvite=next-token');
     window.dispatchEvent(new PopStateEvent('popstate'));
   });
-  const prompt = page.getByTestId('DesktopCallInvitePrompt');
-  await expect(prompt).toBeVisible();
-  await expect(
-    prompt.getByRole('link', { name: 'Продолжить в приложении' })
-  ).toHaveAttribute('href', /callRoom=next-room/);
-  await page.getByRole('button', { name: 'Остаться в браузере' }).click();
+  const links = await page.evaluate(() => (window as any).nativeLinks);
+  expect(links).toHaveLength(2);
+  expect(links[1]).toContain('callRoom=next-room');
+  expect(links[1]).not.toContain('organization');
+  await page.clock.fastForward(2500);
+  expect(new URL(page.url()).searchParams.get('callRoom')).toBe('next-room');
   expect(new URL(page.url()).searchParams.has('organization')).toBe(false);
-  await page.goBack();
-  await expect(prompt).toBeHidden();
-  await page.evaluate(() => {
-    history.pushState({}, '', '?callRoom=third-room&callInvite=third-token');
-    window.dispatchEvent(new PopStateEvent('popstate'));
-  });
-  await expect(prompt).toBeVisible();
 });
 
-test('нажатие ссылки внутри чата показывает выбор без запроса предпросмотра', async ({
-  page
-}) => {
-  await page.goto('/e2e/fixtures/call-download.html');
-  const result = await page.evaluate(async () => {
-    const { openGroupCallInviteUrl } = await import(
-      '/src/services/useLiveKit.ts'
-    );
-    const { pendingDesktopCallInvite } = await import(
-      '/src/services/useDesktopCallLinks.ts'
-    );
-    const { invitedGroupCall } = await import('/src/services/useCallState.ts');
-    const accepted = await openGroupCallInviteUrl(
-      'https://chat.pksep.ru/?callRoom=in-chat&callInvite=synthetic',
-      { allowTrustedOrigin: true }
-    );
-    return {
-      accepted,
-      target: pendingDesktopCallInvite.value,
-      joined: invitedGroupCall.value
-    };
-  });
-  expect(result.accepted).toBe(true);
-  expect(result.target).toContain('callRoom=in-chat');
-  expect(result.joined).toBeNull();
-});
-
-test('запоздалый ответ старого приглашения не открывает звонок и не стирает новую ссылку', async ({
-  page
-}) => {
-  await page.goto(
-    '/e2e/fixtures/call-download.html?callRoom=old&callInvite=old-token&callClient=web'
-  );
-  const result = await page.evaluate(async () => {
-    const { ChatSDK } = await import('/src/services/useChatSDK/index.ts');
-    ChatSDK.prototype.connect = () => new Promise<void>(() => {});
-    const { initializeChat, getChatSDK } = await import(
-      '/src/services/useChat.ts'
-    );
-    await initializeChat({
-      userId: 'me',
-      token: 'synthetic',
-      apiUrl: location.origin,
-      wsUrl: 'ws://127.0.0.1:65530'
+test('iPhone сохраняет веб/PWA без desktop-протокола', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)'
     });
-    let finish: (preview: null) => void;
-    (getChatSDK() as any).getGroupCallInvitePreview = () =>
-      new Promise(resolve => {
-        finish = resolve;
-      });
-    const { hydrateInvitedGroupCallFromUrl } = await import(
-      '/src/services/useLiveKit.ts'
-    );
-    const pending = hydrateInvitedGroupCallFromUrl();
-    history.replaceState({}, '', '?callRoom=new&callInvite=new-token');
-    window.dispatchEvent(new PopStateEvent('popstate'));
-    finish!(null);
-    const accepted = await pending;
-    const { pendingDesktopCallInvite } = await import(
-      '/src/services/useDesktopCallLinks.ts'
-    );
-    const { invitedGroupCall } = await import('/src/services/useCallState.ts');
-    return {
-      accepted,
-      target: pendingDesktopCallInvite.value,
-      joined: invitedGroupCall.value,
-      search: location.search
-    };
   });
-  expect(result.accepted).toBe(false);
-  expect(result.target).toContain('callRoom=new');
-  expect(result.search).toContain('callInvite=new-token');
-  expect(result.joined).toBeNull();
+  await isolatedChoice(page);
+  expect(await page.evaluate(() => (window as any).nativeLinks)).toEqual([]);
 });
 
 test('новое приглашение восстанавливается, пока запрос прежнего ещё выполняется', async ({

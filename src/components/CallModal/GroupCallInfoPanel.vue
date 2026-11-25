@@ -290,6 +290,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useDesktopCallWindowContext } from '../Desktop/call-window-context';
 import {
   Button,
   ButtonTypeEnum,
@@ -310,6 +311,8 @@ import CachedAvatar from '../UI/CachedAvatar.vue';
 import LinkIcon from '../UI/LinkIcon.vue';
 import MessageIcon from '../UI/MessageIcon.vue';
 import MobileModal from '../UI/MobileModal.vue';
+
+const callWindow = useDesktopCallWindowContext();
 
 const props = defineProps<{
   open: boolean;
@@ -397,6 +400,7 @@ const handleOpenUserInfo = (user?: IUser): void => {
     return;
   }
 
+  void callWindow?.showMain();
   openUserInfo(user, null, () => {
     void props.onOpenChat?.();
     emits('close');

@@ -101,6 +101,14 @@
         @navigate-message="handleNavigateMessage"
         @set-slider="setSliderElement"
       />
+      <PinCommentActions
+        v-if="
+          !props.pinListMode && props.topicId && props.messageId && hasPinNotes
+        "
+        :topic-id="props.topicId"
+        :message-id="props.messageId"
+        :outgoing="props.isMeSender"
+      />
     </div>
     <SliderModal
       v-if="sliderElements.length > 0"
@@ -115,6 +123,7 @@
 
     <Teleport v-if="isContextMenuOpen" to="body">
       <MessageContextMenu
+        v-if="props.pinListMode || pinnedMessagesViewTopicId !== props.topicId"
         :is-open="isOpen"
         :position="position"
         :message-id="props.messageId"
@@ -127,12 +136,14 @@
         :media="props.media"
         :context-media-id="contextMediaId"
         :is-pin="props.isPin"
+        :pin-list-mode="props.pinListMode"
         :data-testid="dataTestid"
         @unmount-edit-message-id="emits('unmount-edit-message-id', $event)"
         @unmount-reply-message-id="emits('unmount-reply-message-id', $event)"
         @unmount-forward-message="emits('unmount-forward-message', $event)"
         @unmount-retry-message-id="emits('unmount-retry-message-id', $event)"
         @unmount-download-message-media="handleDownloadMessageMedia"
+        @unmount-navigate-original="emits('unmount-navigate-original')"
       />
     </Teleport>
   </div>
@@ -156,6 +167,7 @@ import { createLiveSliderItem } from '../../utils/live-slider-item';
 import { MediaType } from '@pksep/zod-shared-chat';
 import { IMedia } from '../interfaces/interfaces';
 import MessageContextMenu from './MessageContextMenu.vue';
+import { pinnedMessagesViewTopicId } from '../../services/pinned-messages-view';
 import MessageBubbleText from './MessageBubbleText.vue';
 import MessageQuickReply from './MessageQuickReply.vue';
 import MessageBubbleSticker from './MessageBubbleSticker.vue';
@@ -163,6 +175,8 @@ import { getMessageSticker } from '../../utils/stickers';
 import { hasExternalMessageChannel } from '../../utils/managerMessageChannel';
 import MessageBubbleFiles from './MessageBubbleFiles.vue';
 import MessageBubbleMedia from './MessageBubbleMedia.vue';
+import PinCommentActions from './PinCommentActions.vue';
+import { pinComments } from '../../services/usePinComments';
 import { useMessageMedia } from './composables/useMessageMedia';
 import { isMessageSelectionModeForTopic } from '../../composables/useSelectedMessages';
 import {
@@ -202,6 +216,13 @@ const props = withDefaults(defineProps<IMessageBubbleProps>(), {
   dataTestid: () => 'MessageBubble',
   media: () => []
 });
+const hasPinNotes = computed(
+  () =>
+    props.isPin ||
+    (props.topicId &&
+      props.messageId &&
+      pinComments.pending(props.topicId, props.messageId))
+);
 
 // Прочтение другим менеджером не подтверждает прочтение клиентом площадки.
 const hasExternalChannel = computed(() => {
@@ -215,7 +236,8 @@ const emits = defineEmits([
   'unmount-retry-message-id',
   'unmount-navigate-message-id',
   'open-sticker-pack',
-  'toggle-selection'
+  'toggle-selection',
+  'unmount-navigate-original'
 ]);
 
 const messageArticlesStyles = computed(() => ({
@@ -237,6 +259,7 @@ const isCallTopicDefaultMessageEx = computed(() =>
 );
 const canReplyToMessage = computed(
   () =>
+    !props.pinListMode &&
     !props.isSelectionMode &&
     !props.loader &&
     !!props.messageId &&
@@ -524,24 +547,31 @@ const startLongPress = (event: PointerEvent) => {
 };
 
 const handleToggleSelection = () => {
-  if (!props.isSelectionMode) {
-    return;
-  }
-
-  emits('toggle-selection');
+  if (props.isSelectionMode) emits('toggle-selection');
 };
 
-const handleMessageClick = () => {
-  if (!props.isSelectionMode) {
+const handleMessageClick = (event?: MouseEvent) => {
+  if (props.isSelectionMode) {
+    emits('toggle-selection');
     return;
   }
-
-  emits('toggle-selection');
+  if (props.pinListMode) {
+    const target = event?.target;
+    if (
+      !(target instanceof Element) ||
+      !target.closest(
+        'button, a, input, textarea, video, audio, img, canvas, [role="button"], .message-reference-block, .message-sticker__image, .message__article__file, .message-content__file, .message__article__media'
+      )
+    )
+      emits('unmount-navigate-original');
+    return;
+  }
 };
 
 const handleStickerClick = () => {
   if (props.isSelectionMode) handleMessageClick();
   else if (sticker.value?.pack) emits('open-sticker-pack', sticker.value.pack);
+  else if (props.pinListMode) emits('unmount-navigate-original');
 };
 
 const handleDoubleClick = (event: MouseEvent): void => {

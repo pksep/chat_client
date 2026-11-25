@@ -3,6 +3,7 @@ import { MessageTypeEnum } from '@pksep/yui';
 import { registerTauriUploadedFile } from './tauri-upload-files';
 import { ChatSDK } from './useChatSDK';
 import { createReconnectRefreshCoordinator } from './reconnect-refresh';
+import { pinComments } from './usePinComments';
 import { createNetworkReachabilityCheck } from './network-reachability';
 import { createNativeNetworkChangeHandler } from './native-network-change';
 import { recordActiveUploadSnapshots } from './upload-request-telemetry';
@@ -554,9 +555,11 @@ const setupChatListeners = (): void => {
     }
 
     if (!isDuplicateMessage && isIncomingFromAnotherUser) {
-      const updateIncomingNotifications = () => {
+      const updateIncomingNotifications = (nativeWindowActive = true) => {
         const isCurrentTopicActivelyVisible =
-          route.value.id === message.topicId && getIsAppActivelyVisible();
+          nativeWindowActive &&
+          route.value.id === message.topicId &&
+          getIsAppActivelyVisible();
 
         if (isCurrentTopicActivelyVisible) {
           void clearTopicNotifications(message.topicId);
@@ -606,12 +609,12 @@ const setupChatListeners = (): void => {
         const receivingUserId = currentUserId.value;
         // WebView может сохранять focus до события minimize: не подавляем toast
         // последнего чата по устаревшему снимку видимости.
-        void syncTauriWindowState().then(() => {
+        void syncTauriWindowState().then(nativeWindowActive => {
           if (
             chatSDK === receivingSDK &&
             currentUserId.value === receivingUserId
           )
-            updateIncomingNotifications();
+            updateIncomingNotifications(nativeWindowActive);
         });
       } else updateIncomingNotifications();
     }
@@ -781,7 +784,10 @@ const setupChatListeners = (): void => {
       }
       void upsertCallHistoryMessage(payload.data);
       if (payload.type === 'PIN') {
-        void fetchPinnedMessagesForTopic(payload.data.topicId);
+        pinComments.invalidate(payload.data.topicId);
+        void fetchPinnedMessagesForTopic(payload.data.topicId).then(() => {
+          void pinComments.refresh(payload.data.topicId);
+        });
       }
       const { updateLocalLastMessageTopic } = useTopics();
       updateLocalLastMessageTopic(payload.data.topicId);
@@ -2602,6 +2608,7 @@ export const initializeChat = async (options: {
     wsUrl: options.wsUrl,
     token: options.token
   });
+  pinComments.reset();
   // Нативный callback также обнаруживает смену сети при прежнем типе подключения.
   void setupNativeNetworkDiagnostics();
   networkReachabilityCheck.invalidate();
@@ -3021,6 +3028,13 @@ export const togglePinMessageChat = async (params: {
   messageId?: string;
   scope?: 'ALL' | 'SELF';
 }): Promise<void> => {
+  if (
+    params.messageId &&
+    pinComments.pending(params.topicId, params.messageId)
+  ) {
+    showErrorNotification('Сначала дождитесь сохранения комментария');
+    return;
+  }
   const sdk = getChatSDK();
 
   try {

@@ -1,6 +1,7 @@
 <template>
-  <div
+  <MenuDesktopAppVisibility
     v-if="isDesktopBrowser"
+    @hide="clearLaunchAttempt"
     :class="[
       'menu-native-app',
       { 'menu-native-app--collapse': props.isCollapse }
@@ -37,20 +38,22 @@
         }}</span
       >
     </a>
-  </div>
+  </MenuDesktopAppVisibility>
 </template>
 
 <script setup lang="ts">
 import { Capacitor } from '@capacitor/core';
 import { isTauri } from '@tauri-apps/api/core';
-import { onMounted, onBeforeUnmount, ref, useTemplateRef } from 'vue';
+import { onBeforeUnmount, ref, useTemplateRef } from 'vue';
 import { onClickOutside, onKeyStroke } from '@vueuse/core';
 import { Icon, IconNameEnum } from '@pksep/yui';
+import MenuDesktopAppVisibility from './MenuDesktopAppVisibility.vue';
 import {
   DESKTOP_APP_OPEN_URL,
   DESKTOP_APP_DOWNLOAD_PAGE_URL,
   desktopBrowserPlatform
 } from '../../utils/desktop-app-downloads';
+import { launchNativeApp } from '../../utils/native-app-launch';
 
 const props = withDefaults(
   defineProps<{ isCollapse?: boolean; dataTestid?: string }>(),
@@ -63,10 +66,10 @@ const isDesktopBrowser =
 const trigger = useTemplateRef<HTMLAnchorElement>('trigger');
 const launchPending = ref(false);
 let launchAttemptActive = false;
-let launchTimer: ReturnType<typeof setTimeout> | undefined;
+let cancelLaunch: (() => void) | undefined;
 const clearLaunchAttempt = () => {
-  clearTimeout(launchTimer);
-  launchTimer = undefined;
+  cancelLaunch?.();
+  cancelLaunch = undefined;
   launchPending.value = false;
   launchAttemptActive = false;
 };
@@ -80,19 +83,6 @@ const openDownloadWebsite = () => {
   link.click();
   link.remove();
 };
-const finishLaunchAttempt = () => {
-  launchTimer = undefined;
-  launchPending.value = false;
-  // Браузер не раскрывает наличие Tauri: продолжаем переход, если вкладка активна.
-  if (
-    !launchAttemptActive ||
-    document.visibilityState !== 'visible' ||
-    !document.hasFocus()
-  )
-    return;
-  clearLaunchAttempt();
-  openDownloadWebsite();
-};
 const handleAction = (event: MouseEvent) => {
   if (launchPending.value) {
     event.preventDefault();
@@ -101,35 +91,23 @@ const handleAction = (event: MouseEvent) => {
   clearLaunchAttempt();
   launchAttemptActive = true;
   launchPending.value = true;
-  launchTimer = setTimeout(finishLaunchAttempt, 2000);
-};
-const handleFocus = () => {
-  // Системное окно об отсутствии обработчика тоже забирает фокус.
-  // После его закрытия продолжаем переход на страницу загрузки.
-  if (launchAttemptActive && launchTimer === undefined)
-    launchTimer = setTimeout(finishLaunchAttempt, 300);
-};
-const handleBlur = () => {
-  launchPending.value = false;
-};
-const handleVisibility = () => {
-  if (document.visibilityState === 'hidden') clearLaunchAttempt();
+  cancelLaunch = launchNativeApp(DESKTOP_APP_OPEN_URL, {
+    navigate: false,
+    onFallback: () => {
+      clearLaunchAttempt();
+      openDownloadWebsite();
+    },
+    onOpened: clearLaunchAttempt,
+    onBlur: () => {
+      launchPending.value = false;
+    }
+  });
 };
 onClickOutside(trigger, clearLaunchAttempt);
 onKeyStroke('Escape', () => {
   if (launchAttemptActive) clearLaunchAttempt();
 });
-onMounted(() => {
-  window.addEventListener('focus', handleFocus);
-  window.addEventListener('blur', handleBlur);
-  document.addEventListener('visibilitychange', handleVisibility);
-});
-onBeforeUnmount(() => {
-  clearLaunchAttempt();
-  window.removeEventListener('focus', handleFocus);
-  window.removeEventListener('blur', handleBlur);
-  document.removeEventListener('visibilitychange', handleVisibility);
-});
+onBeforeUnmount(clearLaunchAttempt);
 </script>
 
 <style scoped>

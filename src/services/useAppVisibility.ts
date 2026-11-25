@@ -1,12 +1,16 @@
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
-import { invoke } from '@tauri-apps/api/core';
+import {
+  isDesktopWindowActive,
+  readDesktopWindowState
+} from './desktop-window-state';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ref } from 'vue';
 import { isTauriRuntime } from './useTauriNotifications';
 
 interface TauriWindowStatePayload {
+  label?: string;
   focused?: boolean;
   minimized?: boolean;
   visible?: boolean;
@@ -192,26 +196,26 @@ const ensureCapacitorAppStateTracking = (): void => {
   });
 };
 
-export const syncTauriWindowState = async (): Promise<void> => {
+export const syncTauriWindowState = async (): Promise<boolean> => {
   if (!isTauriRuntime()) {
     applyTauriWindowState({
       focused: true,
       minimized: false,
       visible: true
     });
-    return;
+    return true;
   }
 
   try {
     const revision = tauriWindowStateRevision;
     const request = ++tauriWindowStateRequest;
-    const state = await invoke<TauriWindowStatePayload>('desktop_window_state');
+    const state = await readDesktopWindowState('main');
     // Событие скрытия/фокуса новее снимка, который ещё находился в IPC.
     if (
       revision !== tauriWindowStateRevision ||
       request !== tauriWindowStateRequest
     )
-      return;
+      return isDesktopWindowActive(state);
     if (
       typeof state?.visible === 'boolean' &&
       typeof state?.focused === 'boolean' &&
@@ -219,8 +223,11 @@ export const syncTauriWindowState = async (): Promise<void> => {
     ) {
       applyTauriWindowState(state);
     }
+    return isDesktopWindowActive(state);
   } catch (error) {
+    markTauriWindowInactive();
     console.warn('Failed to resolve Tauri window state:', error);
+    return false;
   }
 };
 
@@ -235,6 +242,7 @@ export const ensureTauriWindowStateTracking = (): void => {
   const appWindow = getCurrentWindow();
 
   void listen<TauriWindowStatePayload>(TAURI_WINDOW_STATE_EVENT, event => {
+    if (event.payload?.label && event.payload.label !== 'main') return;
     applyTauriWindowState(event.payload || {});
   })
     .then(() => syncTauriWindowState())
@@ -243,7 +251,7 @@ export const ensureTauriWindowStateTracking = (): void => {
     });
 
   void appWindow.onFocusChanged(({ payload: focused }) => {
-    applyTauriWindowState({ focused });
+    if (!focused) markTauriWindowInactive();
     void syncTauriWindowState();
   });
 
@@ -261,6 +269,7 @@ export const ensureTauriWindowStateTracking = (): void => {
   });
 
   document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') markTauriWindowInactive();
     void syncTauriWindowState();
   });
 

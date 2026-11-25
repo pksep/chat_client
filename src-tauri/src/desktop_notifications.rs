@@ -38,6 +38,16 @@ pub fn build_toast_xml(title: &str, body: Option<&str>, payload: &str) -> String
             r#"duration="long" scenario="incomingCall""#,
             format!("<actions>{actions}</actions><audio silent=\"true\"/>"),
         )
+    } else if data.as_ref().is_some_and(|data| {
+        data.get("type").and_then(|value| value.as_str()) == Some("call_activity")
+            && data.get("kind").and_then(|value| value.as_str()) == Some("hand")
+            && data.get("soundPlayed").and_then(|value| value.as_bool()) == Some(true)
+    }) {
+        // Короткий сигнал уже прозвучал в звонке, системный звук не дублируем.
+        (
+            r#"duration="long""#,
+            r#"<audio silent="true"/>"#.to_string(),
+        )
     } else if data.as_ref().is_some_and(is_message_notification) {
         let mut data = data.unwrap();
         let actions = [

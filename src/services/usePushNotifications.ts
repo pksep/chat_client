@@ -965,6 +965,13 @@ const initializePushNotifications = async () => {
 
   if (
     await initTauriNotifications(payload => {
+      if (payload.type === 'call_activity') {
+        void import('./useCallState').then(call => {
+          if (call.open.value && call.roomId.value === payload.roomId)
+            call.requestCallPresentation();
+        });
+        return;
+      }
       if (isDesktopMessageAction(payload)) {
         void import('./desktop-notification-actions').then(
           ({ handleDesktopNotificationAction }) =>

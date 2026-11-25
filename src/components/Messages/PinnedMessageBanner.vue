@@ -10,6 +10,16 @@
         <p :key="props.previewKey" v-emoji>{{ props.previewText }}</p>
       </div>
       <Button
+        v-if="props.showList"
+        :type="ButtonTypeEnum.ghost"
+        :size="SizesEnum.little"
+        aria-label="Список закреплённых сообщений"
+        :data-testid="`${props.dataTestid}-ListButton`"
+        @click.stop="emit('open-list')"
+      >
+        <PinnedListIcon style="color: var(--text-brand)" />
+      </Button>
+      <Button
         :type="ButtonTypeEnum.ghost"
         :size="SizesEnum.little"
         :data-testid="`${props.dataTestid}-CloseButton`"
@@ -29,6 +39,7 @@ import {
   IconNameEnum,
   SizesEnum
 } from '@pksep/yui';
+import PinnedListIcon from '../UI/PinnedListIcon.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -36,6 +47,7 @@ const props = withDefaults(
     previewKey?: string;
     title?: string;
     dataTestid?: string;
+    showList?: boolean;
   }>(),
   {
     previewKey: '',
@@ -47,5 +59,6 @@ const props = withDefaults(
 const emit = defineEmits<{
   (event: 'navigate'): void;
   (event: 'request-unpin'): void;
+  (event: 'open-list'): void;
 }>();
 </script>

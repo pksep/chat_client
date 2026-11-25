@@ -1,4 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
+import { ref } from 'vue';
 
 export const DESKTOP_PERMISSION_STORAGE_KEY = 'chat.desktop.permissions.v1';
 export const desktopWebviewPermissions = [
@@ -7,15 +8,36 @@ export const desktopWebviewPermissions = [
   'geolocation',
   'clipboard-read'
 ] as const;
-type DesktopPermission =
+export type DesktopPermission =
   | (typeof desktopWebviewPermissions)[number]
-  | 'notifications';
+  | 'notifications'
+  | 'screen-capture';
 type PermissionChoice = 'granted' | 'denied' | 'requested';
 type Preferences = Partial<Record<DesktopPermission, PermissionChoice>>;
 const permissions: DesktopPermission[] = [
   ...desktopWebviewPermissions,
-  'notifications'
+  'notifications',
+  'screen-capture'
 ];
+const preferencesRevision = ref(0);
+
+export const desktopPermissionStorageWarning = ref('');
+let nativePreferences: Preferences | null = null;
+let nativeStoreAvailable = false;
+let initialization: Promise<void> | null = null;
+let writes = Promise.resolve();
+
+const sanitizePreferences = (saved: unknown): Preferences => {
+  const result: Preferences = {};
+  if (!saved || typeof saved !== 'object') return result;
+  for (const permission of permissions) {
+    const choice = (saved as Preferences)[permission];
+    if (choice && ['granted', 'denied', 'requested'].includes(choice)) {
+      result[permission] = choice;
+    }
+  }
+  return result;
+};
 
 const readPreferences = (): Preferences => {
   if (!isTauri()) return {};
@@ -23,48 +45,120 @@ const readPreferences = (): Preferences => {
     const saved = JSON.parse(
       localStorage.getItem(DESKTOP_PERMISSION_STORAGE_KEY) || '{}'
     );
-    const result: Preferences = {};
-    for (const permission of permissions) {
-      if (['granted', 'denied', 'requested'].includes(saved?.[permission])) {
-        result[permission] = saved[permission];
-      }
-    }
-    return result;
+    return sanitizePreferences(saved);
   } catch {
     return {};
   }
 };
 
-export const getDesktopPermissionChoice = (permission: DesktopPermission) =>
-  readPreferences()[permission];
-
-export const resetDesktopPermissionChoices = (): boolean => {
-  if (!isTauri()) return false;
+const mirrorPreferences = (choices: Preferences): boolean => {
   try {
-    localStorage.setItem(DESKTOP_PERMISSION_STORAGE_KEY, '{}');
+    localStorage.setItem(
+      DESKTOP_PERMISSION_STORAGE_KEY,
+      JSON.stringify(choices)
+    );
     return true;
   } catch {
     return false;
   }
 };
 
-export const saveDesktopPermissionChoice = (
-  permission: DesktopPermission,
-  choice: PermissionChoice
-): void => {
-  if (!isTauri()) return;
+const storageFailed = () => {
+  desktopPermissionStorageWarning.value =
+    'Не удалось сохранить разрешения. Проверьте свободное место на диске: после перезапуска запрос доступа может повториться.';
+};
+
+const persist = (operation: () => Promise<void>) => {
+  const pending = writes.then(operation);
+  writes = pending.catch(() => undefined);
+  return pending;
+};
+
+export const initializeDesktopPermissionPreferences = (): Promise<void> => {
+  if (!isTauri()) return Promise.resolve();
+  initialization ??= (async () => {
+    const legacy = readPreferences();
+    try {
+      const saved = await invoke<Preferences>(
+        'desktop_load_permission_preferences',
+        { legacy }
+      );
+      nativeStoreAvailable = !!saved && typeof saved === 'object';
+      nativePreferences = nativeStoreAvailable
+        ? sanitizePreferences(saved)
+        : null;
+      if (nativePreferences) mirrorPreferences(nativePreferences);
+      desktopPermissionStorageWarning.value = '';
+    } catch (error) {
+      // Старые оболочки поддерживают только хранилище WebView.
+      nativeStoreAvailable = !/command\b.*\bnot found|unknown command/i.test(
+        String(error)
+      );
+      nativePreferences = null;
+      if (nativeStoreAvailable) storageFailed();
+    }
+  })().finally(() => {
+    initialization = null;
+    preferencesRevision.value += 1;
+  });
+  return initialization;
+};
+
+export const getDesktopPermissionChoice = (permission: DesktopPermission) => {
+  // Список в профиле обновляется после загрузки, выдачи и сброса разрешений.
+  void preferencesRevision.value;
+  return isTauri()
+    ? (nativePreferences ?? readPreferences())[permission]
+    : undefined;
+};
+
+export const resetDesktopPermissionChoices = async (): Promise<boolean> => {
+  if (!isTauri()) return false;
   try {
-    localStorage.setItem(
-      DESKTOP_PERMISSION_STORAGE_KEY,
-      JSON.stringify({ ...readPreferences(), [permission]: choice })
-    );
+    if (nativeStoreAvailable) {
+      await persist(() => invoke('desktop_reset_permission_preferences'));
+    }
+    const mirrored = mirrorPreferences({});
+    if (!mirrored && !nativeStoreAvailable)
+      throw new Error('Хранилище недоступно');
+    nativePreferences = nativeStoreAvailable ? {} : null;
+    preferencesRevision.value += 1;
+    desktopPermissionStorageWarning.value = '';
+    return true;
   } catch {
-    // Недоступное хранилище не должно прерывать звонок или вставку.
+    storageFailed();
+    return false;
   }
 };
 
+export const saveDesktopPermissionChoice = async (
+  permission: DesktopPermission,
+  choice: PermissionChoice
+): Promise<void> => {
+  if (!isTauri()) return;
+  const previous = nativePreferences ?? readPreferences();
+  if (previous[permission] === choice) return;
+  const updated = { ...previous, [permission]: choice };
+  const mirrored = mirrorPreferences(updated);
+  if (nativeStoreAvailable) nativePreferences = updated;
+  preferencesRevision.value += 1;
+  try {
+    if (nativeStoreAvailable) {
+      await persist(() =>
+        invoke('desktop_save_permission_choice', { permission, choice })
+      );
+    } else if (!mirrored) throw new Error('Хранилище недоступно');
+  } catch {
+    // Ошибка записи не должна прерывать текущий звонок или вставку.
+    storageFailed();
+  }
+};
+
+export const flushDesktopPermissionPreferences = () => writes;
+
 export const restoreDesktopWebviewPermissions = async (): Promise<void> => {
   if (!isTauri()) return;
+  await initializeDesktopPermissionPreferences();
   const granted = desktopWebviewPermissions.filter(
     permission => getDesktopPermissionChoice(permission) === 'granted'
   );
@@ -92,8 +186,18 @@ export const installDesktopClipboardPermissions = (): (() => void) => {
     const original = clipboard[method];
     if (!original) continue;
     const wrapped = async (...args: unknown[]) => {
+      if (getDesktopPermissionChoice('clipboard-read') === 'denied')
+        throw new DOMException(
+          'Чтение буфера обмена запрещено в настройках СЭП Чата',
+          'NotAllowedError'
+        );
       const value = await Reflect.apply(original, clipboard, args);
-      saveDesktopPermissionChoice('clipboard-read', 'granted');
+      if (getDesktopPermissionChoice('clipboard-read') === 'denied')
+        throw new DOMException(
+          'Доступ к буферу обмена отозван',
+          'NotAllowedError'
+        );
+      await saveDesktopPermissionChoice('clipboard-read', 'granted');
       return value;
     };
     try {

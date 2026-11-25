@@ -56,8 +56,7 @@
       :class="[
         'message-context-menu__emoji-picker',
         {
-          'message-context-menu__emoji-picker--ready': emojiPickerReady,
-          [`message-context-menu__emoji-picker--origin-${emojiPickerOrigin}`]: true
+          'message-context-menu__emoji-picker--ready': emojiPickerReady
         }
       ]"
       v-on-click-outside="toggleShowEmojies"
@@ -156,6 +155,19 @@
             </Button>
           </div>
         </div>
+
+        <Button
+          v-if="props.pinListMode"
+          :type="ButtonTypeEnum.popover"
+          :size="SizesEnum.small"
+          @click.stop="
+            handleClosePopover();
+            emits('unmount-navigate-original');
+          "
+          :data-testid="`${props.dataTestid}-MessageBubble-ShowOriginalButton`"
+        >
+          <Icon :name="IconNameEnum.chevronRight" /> Показать в чате
+        </Button>
 
         <Button
           :type="ButtonTypeEnum.popover"
@@ -318,6 +330,9 @@
     description="Вы уверены, что хотите закрепить это сообщение?"
     scope-label="Закрепить у всех в чате"
     :pin-for-everyone="pinForEveryone"
+    :comments-enabled="pinCommentState.support === 'available'"
+    v-model:comment="pinCommentText"
+    :error="pinCommentError"
     @update:pin-for-everyone="pinForEveryone = $event"
     @unmount-close="handleClosePinModal"
     @unmount-confirm="handleConfirmPinMessage"
@@ -348,6 +363,7 @@
 </template>
 
 <script setup lang="ts">
+import { usePinComments } from '../../services/usePinComments';
 import {
   BackButtonPriority,
   useBackButtonHandler
@@ -432,6 +448,7 @@ import {
   editMessageFromLocal,
   deleteMessageFromLocal,
   getMessagesByTopicId,
+  getPinnedMessagesByTopicId,
   isMessagePinnedOnlyForMe,
   pinMessageOnlyForMe,
   unpinLocalMessageForMe
@@ -451,14 +468,24 @@ const emits = defineEmits([
   'unmount-reply-message-id',
   'unmount-forward-message',
   'unmount-retry-message-id',
-  'unmount-download-message-media'
+  'unmount-download-message-media',
+  'unmount-navigate-original'
 ]);
 
 const quickReactonList = computed(() => ['❤️', '🔥', '👍', '😂', '👌', '😭']);
 const { state: isMobile } = useResizeState(MAX_W_MD);
-const messages = computed(() =>
-  props.topicId ? getMessagesByTopicId(props.topicId) : []
-);
+const messages = computed(() => {
+  if (!props.topicId) return [];
+  const loaded = getMessagesByTopicId(props.topicId);
+  if (!props.pinListMode) return loaded;
+  const loadedIds = new Set(loaded.map(message => message.id));
+  return [
+    ...loaded,
+    ...getPinnedMessagesByTopicId(props.topicId).filter(
+      message => !loadedIds.has(message.id)
+    )
+  ];
+});
 const currentTopic = computed(() =>
   props.topicId ? getSelectedTopic(props.topicId) : undefined
 );
@@ -725,6 +752,20 @@ const deleteModalDescription = computed(() =>
 
 const deleteModalOpen = ref(false);
 const pinModalOpen = ref(false);
+const pinCommentText = ref('');
+const pinCommentError = ref('');
+watch(
+  [() => getAuthUser()?.id, () => props.topicId],
+  () => {
+    pinCommentText.value = '';
+    pinCommentError.value = '';
+    pinModalOpen.value = false;
+  },
+  { flush: 'sync' }
+);
+const { state: pinCommentState, pinComments } = usePinComments(
+  () => props.topicId || ''
+);
 const pinForEveryone = ref(false);
 const unpinModalOpen = ref(false);
 const forwardModalOpen = ref(false);
@@ -747,18 +788,10 @@ const reactionsPositionReady = ref(false);
 const showEmojies = ref(false);
 const emojiPickerReady = ref(false);
 const emojiPickerPosition = ref<{ x: number; y: number } | null>(null);
-const emojiPickerOrigin = ref<
-  'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
->('bottom-right');
 const showReadDetails = ref(false);
 let readDetailsHoverTimeout: ReturnType<typeof setTimeout> | null = null;
 let reactionLayoutObserver: ResizeObserver | null = null;
 let emojiPickerRevealFrame: number | null = null;
-
-const EMOJI_PICKER_WIDTH = 359;
-const EMOJI_PICKER_HEIGHT = 382;
-const EMOJI_PICKER_VIEWPORT_GAP = 8;
-const EMOJI_PICKER_TRIGGER_GAP = 5;
 
 const contextMenuPosition = computed(() =>
   showEmojies.value && emojiPickerPosition.value
@@ -785,53 +818,15 @@ const preserveComposerFocus = (event: Event) => {
 };
 
 const setEmojiPickerPosition = (trigger: HTMLElement): void => {
-  const triggerRect = trigger.getBoundingClientRect();
-  const viewport = getVisibleViewport();
-  const pickerWidth = Math.min(
-    EMOJI_PICKER_WIDTH,
-    viewport.width - EMOJI_PICKER_VIEWPORT_GAP * 2
-  );
-  const pickerHeight = Math.min(
-    EMOJI_PICKER_HEIGHT,
-    viewport.height - EMOJI_PICKER_VIEWPORT_GAP * 2
-  );
-  const canOpenLeft =
-    triggerRect.right - pickerWidth >=
-    viewport.left + EMOJI_PICKER_VIEWPORT_GAP;
-  const canOpenAbove =
-    triggerRect.top - EMOJI_PICKER_TRIGGER_GAP - pickerHeight >=
-    viewport.top + EMOJI_PICKER_VIEWPORT_GAP;
-  const opensLeft =
-    canOpenLeft ||
-    triggerRect.left + pickerWidth > viewport.right - EMOJI_PICKER_VIEWPORT_GAP;
-  const opensAbove =
-    canOpenAbove ||
-    triggerRect.bottom + EMOJI_PICKER_TRIGGER_GAP + pickerHeight >
-      viewport.bottom - EMOJI_PICKER_VIEWPORT_GAP;
-  const preferredX = opensLeft
-    ? triggerRect.right - pickerWidth
-    : triggerRect.left;
-  const preferredY = opensAbove
-    ? triggerRect.top - EMOJI_PICKER_TRIGGER_GAP - pickerHeight
-    : triggerRect.bottom + EMOJI_PICKER_TRIGGER_GAP;
+  const menu = trigger.closest('.message-context-menu');
+  if (!menu) return;
 
+  const menuRect = menu.getBoundingClientRect();
+  // Панель заменяет меню; ContextMenu подвинет её только при нехватке места.
   emojiPickerPosition.value = {
-    x: Math.min(
-      Math.max(viewport.left + EMOJI_PICKER_VIEWPORT_GAP, preferredX),
-      viewport.right - EMOJI_PICKER_VIEWPORT_GAP - pickerWidth
-    ),
-    y: Math.min(
-      Math.max(viewport.top + EMOJI_PICKER_VIEWPORT_GAP, preferredY),
-      viewport.bottom - EMOJI_PICKER_VIEWPORT_GAP - pickerHeight
-    )
+    x: menuRect.left,
+    y: menuRect.top
   };
-  emojiPickerOrigin.value = opensAbove
-    ? opensLeft
-      ? 'bottom-right'
-      : 'bottom-left'
-    : opensLeft
-      ? 'top-right'
-      : 'top-left';
 };
 
 const resolveElement = (
@@ -1030,6 +1025,8 @@ const handleCloseUnpinModal = () => {
 };
 
 const handleOpenPinModal = () => {
+  pinCommentError.value = '';
+  if (props.topicId) void pinComments.refresh(props.topicId);
   pinForEveryone.value = true;
   pinModalOpen.value = true;
 };
@@ -1186,6 +1183,29 @@ const handlePinMessage = async () => {
 };
 
 const handleConfirmPinMessage = async () => {
+  if (
+    pinCommentState.value.support === 'available' &&
+    pinCommentText.value.trim()
+  ) {
+    try {
+      pinComments.pin(
+        props.topicId,
+        props.messageId,
+        pinForEveryone.value ? 'ALL' : 'SELF',
+        pinCommentText.value
+      );
+      pinCommentText.value = '';
+      handleClosePinModal();
+      handleClosePopover();
+    } catch (error) {
+      pinCommentError.value = (error as Error).message;
+    }
+    return;
+  }
+  if (pinComments.pending(props.topicId, props.messageId)) {
+    pinCommentError.value = 'Сначала дождитесь сохранения комментария';
+    return;
+  }
   if (pinForEveryone.value) {
     await togglePinMessageChat({
       messageId: props.messageId,
@@ -1206,6 +1226,7 @@ const handleConfirmPinMessage = async () => {
 };
 
 const handleConfirmUnpinMessage = async () => {
+  if (pinComments.pending(props.topicId, props.messageId)) return;
   if (currentMessage.value?.isPin && !isPinnedOnlyForMe.value) {
     editMessageFromLocal(props.topicId, {
       ...currentMessage.value,

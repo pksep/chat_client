@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { watch } from 'vue';
 import {
   Geolocation,
   type PermissionStatus as NativePermissionStatus
@@ -34,10 +35,20 @@ const clearLocation = (nextStatus: string): void => {
 
 export const getTelemetryLocationContext = (): Record<string, unknown> => ({
   device:
-    deviceLocation && Date.now() - sampledAt <= MAX_AGE_MS
-      ? deviceLocation
-      : { status: status === 'resolved' ? 'not_sampled' : status }
+    getDesktopPermissionChoice('geolocation') === 'denied'
+      ? { status: 'denied' }
+      : deviceLocation && Date.now() - sampledAt <= MAX_AGE_MS
+        ? deviceLocation
+        : { status: status === 'resolved' ? 'not_sampled' : status }
 });
+
+watch(
+  () => getDesktopPermissionChoice('geolocation'),
+  choice => {
+    if (choice === 'denied') clearLocation('denied');
+  },
+  { flush: 'sync' }
+);
 
 const isGranted = (permission: Partial<NativePermissionStatus>): boolean =>
   permission.location === 'granted' || permission.coarseLocation === 'granted';
@@ -56,6 +67,10 @@ const getBrowserPermission = async (): Promise<PermissionState | undefined> => {
           clearLocation(
             permission.state === 'denied' ? 'denied' : 'permission_required'
           );
+          void saveDesktopPermissionChoice(
+            'geolocation',
+            permission.state === 'denied' ? 'denied' : 'requested'
+          );
         }
       };
     }
@@ -66,6 +81,10 @@ const getBrowserPermission = async (): Promise<PermissionState | undefined> => {
 };
 
 const refreshLocation = (requestPermission: boolean): Promise<void> => {
+  if (getDesktopPermissionChoice('geolocation') === 'denied') {
+    if (status !== 'denied') clearLocation('denied');
+    return Promise.resolve();
+  }
   if (
     typeof document !== 'undefined' &&
     document.visibilityState === 'hidden'
@@ -109,7 +128,7 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
       }
       if (!isGranted(permission)) {
         if (permission.location === 'denied') {
-          saveDesktopPermissionChoice('geolocation', 'denied');
+          await saveDesktopPermissionChoice('geolocation', 'denied');
         }
         clearLocation(
           permission.location === 'denied' ? 'denied' : 'permission_required'
@@ -121,14 +140,18 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
       lastAttemptAt = Date.now();
       const currentGeneration = generation;
       if (!getDesktopPermissionChoice('geolocation')) {
-        saveDesktopPermissionChoice('geolocation', 'requested');
+        await saveDesktopPermissionChoice('geolocation', 'requested');
       }
       const position = await Geolocation.getCurrentPosition({
         enableHighAccuracy: permission.location === 'granted',
         timeout: 10_000,
         maximumAge: MAX_AGE_MS
       });
-      if (currentGeneration !== generation) return;
+      if (
+        currentGeneration !== generation ||
+        getDesktopPermissionChoice('geolocation') === 'denied'
+      )
+        return;
       const { latitude, longitude, accuracy } = position.coords;
       if (
         !Number.isFinite(latitude) ||
@@ -142,8 +165,9 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
       ) {
         throw new Error('Не удалось получить актуальную геолокацию.');
       }
+      await saveDesktopPermissionChoice('geolocation', 'granted');
+      if (currentGeneration !== generation) return;
       sampledAt = position.timestamp;
-      saveDesktopPermissionChoice('geolocation', 'granted');
       status = 'resolved';
       deviceLocation = {
         source: 'device',
@@ -155,7 +179,7 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
       };
     } catch (error) {
       const denied = Number(error?.code) === 1;
-      if (denied) saveDesktopPermissionChoice('geolocation', 'denied');
+      if (denied) await saveDesktopPermissionChoice('geolocation', 'denied');
       clearLocation(denied ? 'denied' : 'unavailable');
     }
   })().finally(() => {

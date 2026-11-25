@@ -58,6 +58,7 @@
         v-else-if="props.sticker.format === 'tgs'"
         :src="props.sticker.src"
         :label="props.sticker.label"
+        :playing="!props.animationsPaused"
         class="message-sticker__animation"
         :class="{ 'message-sticker__animation--loaded': imageLoaded }"
         :aria-hidden="!imageLoaded"
@@ -72,7 +73,8 @@
         :aria-label="props.sticker.label"
         width="220"
         height="220"
-        autoplay
+        :autoplay="!props.animationsPaused"
+        ref="stickerVideo"
         muted
         loop
         playsinline
@@ -126,6 +128,14 @@ import StickerTgsAnimation from './StickerTgsAnimation.vue';
 import { prepareStickerPicker } from '../../services/sticker-catalog';
 
 const props = defineProps<IMessageBubbleProps & { sticker: ChatStickerItem }>();
+const stickerVideo = ref<HTMLVideoElement | null>(null);
+watch(
+  () => props.animationsPaused,
+  paused => {
+    if (paused) stickerVideo.value?.pause();
+    else void stickerVideo.value?.play().catch(() => undefined);
+  }
+);
 const emit = defineEmits(['navigate-message', 'activate']);
 const canOpenPack = computed(
   () => !!props.sticker.pack && !props.isSelectionMode

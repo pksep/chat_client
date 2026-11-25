@@ -4,6 +4,7 @@
     class="call-modal"
     :class="{
       'call-modal--hidden': !isCallModalVisible,
+      'call-modal--compact-controls': compactControls,
       'call-modal--topic-hover': isCallBackdropOverTopic
     }"
     @click.stop="handleCallModalBackdropClick"
@@ -11,10 +12,10 @@
     @mouseleave="clearCallBackdropTopicHover"
   >
     <div
+      ref="callContainer"
       class="call-modal__container"
       :class="{
-        'call-modal__container--full-screen':
-          liveKitState.isFullScreen || isMobile,
+        'call-modal__container--full-screen': isFullscreen || isMobile,
         'call-modal__container--status-notice': isStatusCallNotice,
         'call-modal__container--busy-notice': isBusyCallNotice
       }"
@@ -27,9 +28,9 @@
             class="call-modal__control-button call-modal__control-button--action"
             title="Fullscreen"
             aria-label="Fullscreen"
-            @click="liveKitState.isFullScreen = !liveKitState.isFullScreen"
+            @click="toggleFullscreen"
           >
-            <FullscreenIcon v-if="!liveKitState.isFullScreen" />
+            <FullscreenIcon v-if="!isFullscreen" />
             <MinimizeIcon v-else />
           </button>
           <button
@@ -98,6 +99,7 @@
               @click.stop
             >
               <Button
+                v-if="!showQuickScreenShare"
                 class="call-modal__mobile-actions-item"
                 :type="ButtonTypeEnum.popover"
                 :size="SizesEnum.little"
@@ -114,6 +116,7 @@
                 }}</span>
               </Button>
               <Button
+                v-if="!showQuickRecording"
                 class="call-modal__mobile-actions-item"
                 :class="{
                   'call-modal__mobile-actions-item--recording':
@@ -288,8 +291,8 @@
                 @click="handleToggleMic"
               >
                 <MicIcon
-                  :audio-level="liveKitState.audioLevel"
-                  :is-speaking="liveKitState.isSpeaking"
+                  :audio-level="microphoneLevel"
+                  :is-speaking="microphoneSpeaking"
                 />
               </button>
               <button
@@ -380,7 +383,7 @@
             </div>
 
             <button
-              v-if="isMobile && isBusyCallNotice"
+              v-if="isMobile && isBusyCallNotice && !showQuickScreenShare"
               class="call-modal__control-button call-modal__control-button_alter call-modal__control-button__inactive"
               type="button"
               disabled
@@ -391,8 +394,9 @@
             </button>
 
             <Tooltip
-              v-if="!isMobile && !Capacitor.isNativePlatform()"
+              v-if="showQuickScreenShare"
               :hint="screenShareButtonTooltip"
+              :is-can-show="!isMobile"
               data-testid="CallModal-CallControls-ScreenShareTooltip"
               position="top-center"
               type="black"
@@ -413,8 +417,9 @@
             </Tooltip>
 
             <Tooltip
-              v-if="!isMobile"
+              v-if="showQuickRecording"
               :hint="summaryRecordButtonTooltip"
+              :is-can-show="!isMobile"
               data-testid="CallModal-CallControls-RecordingTooltip"
               position="top-center"
               type="black"
@@ -517,6 +522,57 @@
               </div>
 
               <div class="call-modal__video-overlay-actions">
+                <div v-if="isMobile" class="call-modal__mobile-actions">
+                  <button
+                    class="call-modal__control-button call-modal__control-button--action"
+                    type="button"
+                    aria-label="Открыть меню звонка"
+                    @click.stop="toggleMobileCallActionsMenu"
+                  >
+                    <CallMoreIcon />
+                  </button>
+                  <div
+                    v-if="state.mobileCallActionsOpen"
+                    class="call-modal__mobile-actions-menu"
+                    @click.stop
+                  >
+                    <Button
+                      v-if="!showQuickScreenShare"
+                      class="call-modal__mobile-actions-item"
+                      :type="ButtonTypeEnum.popover"
+                      :size="SizesEnum.little"
+                      :disabled="
+                        isBusyNoticeVisible || isScreenShareUnavailableOnMobile
+                      "
+                      @click="handleMobileScreenShareAction"
+                    >
+                      <ScreenShareIcon /><span>{{
+                        liveKitState.isScreenSharingActive
+                          ? 'Выключить демонстрацию'
+                          : 'Включить демонстрацию'
+                      }}</span>
+                    </Button>
+                    <Button
+                      v-if="!showQuickRecording"
+                      class="call-modal__mobile-actions-item"
+                      :type="ButtonTypeEnum.popover"
+                      :size="SizesEnum.little"
+                      :disabled="isSummaryRecordButtonDisabled"
+                      @click="handleSummaryRecordingAction"
+                    >
+                      <ScreenRecordIcon /><span>{{
+                        summaryRecordButtonLabel
+                      }}</span>
+                    </Button>
+                    <Button
+                      class="call-modal__mobile-actions-item"
+                      :type="ButtonTypeEnum.popover"
+                      :size="SizesEnum.little"
+                      @click="handleOpenMobileCallSettings"
+                      ><GroupInfoIcon /><span>Настройки</span></Button
+                    >
+                  </div>
+                </div>
                 <button
                   v-if="!isCallFullscreenTouchMode && !isMobile"
                   class="call-modal__control-button call-modal__control-button--action"
@@ -608,8 +664,8 @@
                 @click="handleToggleMic"
               >
                 <MicIcon
-                  :audio-level="liveKitState.audioLevel"
-                  :is-speaking="liveKitState.isSpeaking"
+                  :audio-level="microphoneLevel"
+                  :is-speaking="microphoneSpeaking"
                 />
               </button>
               <button
@@ -649,12 +705,9 @@
             </Tooltip>
 
             <Tooltip
-              v-if="
-                !isCallFullscreenTouchMode &&
-                !isMobile &&
-                !Capacitor.isNativePlatform()
-              "
+              v-if="showQuickScreenShare"
               :hint="screenShareButtonTooltip"
+              :is-can-show="!isCallFullscreenTouchMode && !isMobile"
               data-testid="CallModal-Overlay-ScreenShareTooltip"
               position="top-center"
               type="black"
@@ -715,8 +768,9 @@
             </div>
 
             <Tooltip
-              v-if="!isCallFullscreenTouchMode && !isMobile"
+              v-if="showQuickRecording"
               :hint="summaryRecordButtonTooltip"
+              :is-can-show="!isCallFullscreenTouchMode && !isMobile"
               data-testid="CallModal-Overlay-RecordingTooltip"
               position="top-center"
               type="black"
@@ -806,6 +860,7 @@ import {
   Tooltip
 } from '@pksep/yui';
 import { Capacitor } from '@capacitor/core';
+import { useDesktopCallWindowContext } from '../Desktop/call-window-context';
 import { MAX_W_MD } from '../../utils/constants';
 import { useResizeState } from '../../composables/useResizeState';
 import CachedAvatar from '../UI/CachedAvatar.vue';
@@ -885,7 +940,38 @@ import {
   stopCallSummaryRecording
 } from '../../services/useCallSummaries';
 
-const { state: isMobile } = useResizeState(MAX_W_MD);
+const callWindow = useDesktopCallWindowContext();
+const renderWindow = callWindow?.renderWindow || window;
+const renderDocument = renderWindow.document;
+const callContainer = ref<HTMLElement | null>(null);
+const controlsWidth = ref(0);
+watch(callContainer, (element, _, onCleanup) => {
+  if (!element) return;
+  const observer = new renderWindow.ResizeObserver(([entry]) => {
+    controlsWidth.value = entry.contentRect.width;
+  });
+  observer.observe(element);
+  onCleanup(() => observer.disconnect());
+});
+const { state: mainIsMobile } = useResizeState(MAX_W_MD);
+const isMobile = computed(() =>
+  callWindow
+    ? callWindow.width.value <= parseFloat(MAX_W_MD)
+    : mainIsMobile.value
+);
+const isFullscreen = computed(
+  () => callWindow?.fullscreen.value ?? liveKitState.isFullScreen
+);
+const microphoneLevel = computed(
+  () => callWindow?.microphoneLevel.value ?? liveKitState.audioLevel
+);
+const microphoneSpeaking = computed(
+  () => callWindow?.microphoneSpeaking.value ?? liveKitState.isSpeaking
+);
+const toggleFullscreen = () => {
+  if (callWindow) void callWindow.toggleFullscreen();
+  else liveKitState.isFullScreen = !liveKitState.isFullScreen;
+};
 const { getSelectedTopic } = useTopics();
 const {
   callBackgroundPreviewItems,
@@ -897,12 +983,14 @@ type LiveKitModule = typeof import('../../services/useLiveKit');
 const loadLiveKit = () => import('../../services/useLiveKit');
 
 const acceptCall = async () => {
+  if (callWindow?.actions.acceptCall) return callWindow.actions.acceptCall();
   const { acceptCall: acceptLiveKitCall } = await loadLiveKit();
 
   return acceptLiveKitCall();
 };
 
 const leaveCall = async () => {
+  if (callWindow?.actions.leaveCall) return callWindow.actions.leaveCall();
   const { leaveCall: leaveLiveKitCall } = await loadLiveKit();
 
   return leaveLiveKitCall();
@@ -945,24 +1033,30 @@ const toggleHandRaise = async () => {
 };
 
 const toggleMic = async () => {
+  if (callWindow?.actions.toggleMic) return callWindow.actions.toggleMic();
   const { toggleMic: toggleLiveKitMic } = await loadLiveKit();
 
   return toggleLiveKitMic();
 };
 
 const toggleScreenShare = async () => {
+  if (callWindow?.actions.toggleScreenShare)
+    return callWindow.actions.toggleScreenShare();
   const { toggleScreenShare: toggleLiveKitScreenShare } = await loadLiveKit();
 
   return toggleLiveKitScreenShare();
 };
 
 const switchCamera = async () => {
+  if (callWindow?.actions.switchCamera)
+    return callWindow.actions.switchCamera();
   const { switchCamera: switchLiveKitCamera } = await loadLiveKit();
 
   return switchLiveKitCamera();
 };
 
 const toggleVideo = async () => {
+  if (callWindow?.actions.toggleVideo) return callWindow.actions.toggleVideo();
   const { toggleVideo: toggleLiveKitVideo } = await loadLiveKit();
 
   return toggleLiveKitVideo();
@@ -990,7 +1084,36 @@ const focusedParticipantIdentity = ref<string | null>(null);
 const hasManualParticipantSelection = ref(false);
 const shouldSkipInitialParticipantAutofocus = ref(true);
 const isStageVideoOverlayVisible = ref(false);
+let videoOwnsNativeFullscreen = false;
+watch(
+  isStageVideoOverlayVisible,
+  visible => {
+    if (!callWindow) return;
+    if (visible) {
+      videoOwnsNativeFullscreen = !callWindow.fullscreen.value;
+      if (videoOwnsNativeFullscreen) {
+        void callWindow.setFullscreen(true).catch(error => {
+          console.warn('Не удалось открыть видео на весь экран:', error);
+        });
+      }
+    } else if (videoOwnsNativeFullscreen) {
+      videoOwnsNativeFullscreen = false;
+      void callWindow.setFullscreen(false).catch(error => {
+        console.warn('Не удалось выйти из полноэкранного видео:', error);
+      });
+    }
+  },
+  { flush: 'sync' }
+);
 const isVideoOverlayControlsVisible = ref(false);
+if (callWindow) {
+  watch(callWindow.fullscreen, (fullscreen, wasFullscreen) => {
+    if (wasFullscreen && !fullscreen && isStageVideoOverlayVisible.value) {
+      videoOwnsNativeFullscreen = false;
+      closeStageVideoOverlay();
+    }
+  });
+}
 const isCallBackdropOverTopic = ref(false);
 const videoOverlayRegion = ref<'top' | 'bottom' | null>(null);
 const CALL_MODAL_TOPIC_HOVER_CLASS = 'contact-list__item--call-modal-hover';
@@ -1292,7 +1415,7 @@ const bindMediaGestureTransform = (
   surface.addEventListener('touchmove', handleTouchMove, touchListenerOptions);
   surface.addEventListener('touchend', handleTouchEnd, touchListenerOptions);
   surface.addEventListener('touchcancel', handleTouchCancel);
-  window.addEventListener('resize', handleResize);
+  renderWindow.addEventListener('resize', handleResize);
   resetMediaGestureTransform(element);
 
   return () => {
@@ -1300,7 +1423,7 @@ const bindMediaGestureTransform = (
     surface.removeEventListener('touchmove', handleTouchMove);
     surface.removeEventListener('touchend', handleTouchEnd);
     surface.removeEventListener('touchcancel', handleTouchCancel);
-    window.removeEventListener('resize', handleResize);
+    renderWindow.removeEventListener('resize', handleResize);
     resetMediaGestureTransform(element);
   };
 };
@@ -1381,18 +1504,38 @@ const bindFocusedScreenShareFitClass = (video: HTMLVideoElement | null) => {
   update();
 };
 const maxParticipantsPerPage = computed(() =>
-  isMobile.value ? 4 : liveKitState.isFullScreen ? 9 : 6
+  isMobile.value ? 4 : isFullscreen.value ? 9 : 6
 );
 const isScreenShareUnavailableOnMobile = computed(() => {
+  // Захват из дочернего WKWebView выполняет нативный контроллер звонка.
+  if (callWindow) return false;
   if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
     return false;
   }
 
   return (
     typeof navigator === 'undefined' ||
-    !window.isSecureContext ||
+    !renderWindow.isSecureContext ||
     typeof navigator.mediaDevices?.getDisplayMedia !== 'function'
   );
+});
+const quickControlsFit = (count: number) =>
+  controlsWidth.value >= count * 40 + (count - 1) * 8 + 20;
+const baseControlCount = 4 + Number(Capacitor.isNativePlatform());
+const showQuickScreenShare = computed(
+  () =>
+    !isScreenShareUnavailableOnMobile.value &&
+    quickControlsFit(baseControlCount + 1)
+);
+const showQuickRecording = computed(() =>
+  quickControlsFit(baseControlCount + Number(showQuickScreenShare.value) + 1)
+);
+const compactControls = computed(() => {
+  const count =
+    baseControlCount +
+    Number(showQuickScreenShare.value) +
+    Number(showQuickRecording.value);
+  return controlsWidth.value < count * 50 + (count - 1) * 8 + 20;
 });
 const state = ref({
   openGroupInfoModal: false,
@@ -1400,8 +1543,8 @@ const state = ref({
 });
 const activeReactionPopover = ref<'main' | 'overlay' | null>(null);
 const activeAudioOutputMenu = ref<'main' | 'overlay' | null>(null);
-let reactionPopoverCloseTimeout: ReturnType<typeof setTimeout> | null = null;
-let reactionLongPressTimeout: ReturnType<typeof setTimeout> | null = null;
+let reactionPopoverCloseTimeout: number | null = null;
+let reactionLongPressTimeout: number | null = null;
 let didOpenReactionPopoverByLongPress = false;
 let lastReactionTouchAt = 0;
 const incomingCallLabel = 'Входящий звонок';
@@ -1520,7 +1663,7 @@ const syncMediaElementStream = (
 };
 
 const resumeRemoteAudioPlayback = () => {
-  if (document.hidden) return;
+  if (renderDocument.hidden) return;
   Object.values(remoteAudioRefs.value).forEach(audio => {
     if (!audio?.srcObject || !audio.paused) {
       return;
@@ -1874,10 +2017,8 @@ const summaryRecordButtonLabel = computed(() => {
 
   return canStopSummaryRecording.value ? 'Остановить запись' : 'Идёт запись';
 });
-const summaryRecordButtonTooltip = computed(() =>
-  isAnySummaryRecording.value
-    ? 'Идет запись экрана'
-    : summaryRecordButtonLabel.value
+const summaryRecordButtonTooltip = computed(
+  () => summaryRecordButtonLabel.value
 );
 const microphoneButtonTooltip = computed(() =>
   liveKitState.isMicActive ? 'Выключить микрофон' : 'Включить микрофон'
@@ -1930,8 +2071,8 @@ const localParticipantView = computed(() => {
       isHandRaised: liveKitState.isHandRaised,
       activeReaction: liveKitState.activeReaction,
       activeReactionExpiresAt: liveKitState.activeReactionExpiresAt,
-      isSpeaking: liveKitState.isSpeaking,
-      audioLevel: liveKitState.audioLevel,
+      isSpeaking: microphoneSpeaking.value,
+      audioLevel: microphoneLevel.value,
       isMicActive: liveKitState.isMicActive,
       connectionQuality: liveKitState.connectionQuality,
       backgroundPlaceholderStyle: localCallBackgroundPlaceholderStyle.value
@@ -1969,8 +2110,8 @@ const localParticipantDisplayViews = computed(() => {
       isHandRaised: liveKitState.isHandRaised,
       activeReaction: liveKitState.activeReaction,
       activeReactionExpiresAt: liveKitState.activeReactionExpiresAt,
-      isSpeaking: liveKitState.isSpeaking,
-      audioLevel: liveKitState.audioLevel,
+      isSpeaking: microphoneSpeaking.value,
+      audioLevel: microphoneLevel.value,
       isMicActive: liveKitState.isMicActive,
       connectionQuality: liveKitState.connectionQuality,
       backgroundPlaceholderStyle: localCallBackgroundPlaceholderStyle.value
@@ -2571,14 +2712,17 @@ watch(
 );
 
 onMounted(() => {
-  window.addEventListener('pointerdown', resumeRemoteAudioPlayback, true);
-  window.addEventListener('keydown', resumeRemoteAudioPlayback, true);
-  document.addEventListener('visibilitychange', resumeRemoteAudioPlayback);
-  window.addEventListener('pageshow', resumeRemoteAudioPlayback);
-  window.addEventListener('keydown', handleCallModalKeydown, true);
+  renderWindow.addEventListener('pointerdown', resumeRemoteAudioPlayback, true);
+  renderWindow.addEventListener('keydown', resumeRemoteAudioPlayback, true);
+  renderDocument.addEventListener(
+    'visibilitychange',
+    resumeRemoteAudioPlayback
+  );
+  renderWindow.addEventListener('pageshow', resumeRemoteAudioPlayback);
+  renderWindow.addEventListener('keydown', handleCallModalKeydown, true);
 
-  if (typeof ResizeObserver !== 'undefined') {
-    remoteVideoResizeObserver = new ResizeObserver(entries => {
+  if (typeof renderWindow.ResizeObserver !== 'undefined') {
+    remoteVideoResizeObserver = new renderWindow.ResizeObserver(entries => {
       entries.forEach(entry => {
         const binding = observedRemoteVideoBindings.get(
           entry.target as HTMLVideoElement
@@ -2601,11 +2745,18 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener('pointerdown', resumeRemoteAudioPlayback, true);
-  window.removeEventListener('keydown', resumeRemoteAudioPlayback, true);
-  document.removeEventListener('visibilitychange', resumeRemoteAudioPlayback);
-  window.removeEventListener('pageshow', resumeRemoteAudioPlayback);
-  window.removeEventListener('keydown', handleCallModalKeydown, true);
+  renderWindow.removeEventListener(
+    'pointerdown',
+    resumeRemoteAudioPlayback,
+    true
+  );
+  renderWindow.removeEventListener('keydown', resumeRemoteAudioPlayback, true);
+  renderDocument.removeEventListener(
+    'visibilitychange',
+    resumeRemoteAudioPlayback
+  );
+  renderWindow.removeEventListener('pageshow', resumeRemoteAudioPlayback);
+  renderWindow.removeEventListener('keydown', handleCallModalKeydown, true);
   clearCallBackdropTopicHover();
   remoteVideoResizeObserver?.disconnect();
   remoteVideoResizeObserver = null;
@@ -2771,7 +2922,7 @@ const closeStageVideoOverlay = () => {
 };
 
 const getVideoOverlayRegion = (clientY: number) => {
-  const viewportHeight = window.innerHeight || 1;
+  const viewportHeight = renderWindow.innerHeight || 1;
   const cursorYRatio = clientY / viewportHeight;
 
   if (cursorYRatio <= 0.35) {
@@ -2823,6 +2974,7 @@ useBackButtonHandler(
 );
 
 const getElementBehindCallModal = (event: MouseEvent): Element | null => {
+  if (callWindow) return null;
   const modalElement = event.currentTarget as HTMLElement | null;
 
   if (!modalElement) {
@@ -2831,7 +2983,10 @@ const getElementBehindCallModal = (event: MouseEvent): Element | null => {
 
   const previousPointerEvents = modalElement.style.pointerEvents;
   modalElement.style.pointerEvents = 'none';
-  const targetElement = document.elementFromPoint(event.clientX, event.clientY);
+  const targetElement = renderDocument.elementFromPoint(
+    event.clientX,
+    event.clientY
+  );
   modalElement.style.pointerEvents = previousPointerEvents;
 
   if (!targetElement || modalElement.contains(targetElement)) {
@@ -2892,7 +3047,7 @@ const forwardClickToTopicBehindCallModal = (
     new MouseEvent('click', {
       bubbles: true,
       cancelable: true,
-      view: window,
+      view: renderWindow,
       detail: event.detail,
       screenX: event.screenX,
       screenY: event.screenY,
@@ -2928,6 +3083,8 @@ const handleCallModalBackdropMouseMove = (event: MouseEvent) => {
 };
 
 const handleCallModalKeydown = (event: KeyboardEvent) => {
+  if (callWindow && renderDocument.querySelector('dialog:modal')) return;
+  if (callWindow?.contextMenuOpen.value) return;
   if (
     event.key !== 'Escape' ||
     !isCallOpen.value ||
@@ -2940,11 +3097,18 @@ const handleCallModalKeydown = (event: KeyboardEvent) => {
   event.stopPropagation();
   event.stopImmediatePropagation();
 
+  if (callWindow && state.value.openGroupInfoModal) {
+    state.value.openGroupInfoModal = false;
+    return;
+  }
   if (isStageVideoOverlayVisible.value) {
     closeStageVideoOverlay();
     return;
   }
-
+  if (callWindow?.fullscreen.value) {
+    void callWindow.toggleFullscreen();
+    return;
+  }
   if (liveKitState.isFullScreen && !isMobile.value) {
     liveKitState.isFullScreen = false;
     return;
@@ -3048,7 +3212,8 @@ const handleOpenGroupInfoChat = (): boolean => {
   }
 
   state.value.openGroupInfoModal = false;
-  isCallModalVisible.value = false;
+  if (!callWindow) isCallModalVisible.value = false;
+  void callWindow?.showMain();
 
   return true;
 };
@@ -3095,14 +3260,14 @@ const handleSummaryRecordingAction = async () => {
 
 const clearReactionPopoverCloseTimeout = () => {
   if (reactionPopoverCloseTimeout) {
-    clearTimeout(reactionPopoverCloseTimeout);
+    renderWindow.clearTimeout(reactionPopoverCloseTimeout);
     reactionPopoverCloseTimeout = null;
   }
 };
 
 const clearReactionLongPressTimeout = () => {
   if (reactionLongPressTimeout) {
-    clearTimeout(reactionLongPressTimeout);
+    renderWindow.clearTimeout(reactionLongPressTimeout);
     reactionLongPressTimeout = null;
   }
 };
@@ -3120,7 +3285,7 @@ const openReactionPopover = (target: 'main' | 'overlay') => {
 
 const scheduleReactionPopoverClose = () => {
   clearReactionPopoverCloseTimeout();
-  reactionPopoverCloseTimeout = setTimeout(() => {
+  reactionPopoverCloseTimeout = renderWindow.setTimeout(() => {
     activeReactionPopover.value = null;
     reactionPopoverCloseTimeout = null;
   }, 120);
@@ -3173,7 +3338,7 @@ const beginReactionLongPress = (target: 'main' | 'overlay') => {
   lastReactionTouchAt = Date.now();
   clearReactionLongPressTimeout();
   didOpenReactionPopoverByLongPress = false;
-  reactionLongPressTimeout = setTimeout(() => {
+  reactionLongPressTimeout = renderWindow.setTimeout(() => {
     didOpenReactionPopoverByLongPress = true;
     openReactionPopover(target);
     reactionLongPressTimeout = null;

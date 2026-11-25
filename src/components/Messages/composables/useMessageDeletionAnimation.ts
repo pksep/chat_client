@@ -80,7 +80,8 @@ interface DeletionGhost {
 export function useMessageDeletionAnimation(
   root: Ref<HTMLElement | null>,
   messages: () => IMessage[],
-  topicId: () => string
+  topicId: () => string,
+  suspended: () => boolean = () => false
 ): void {
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const ghosts: DeletionGhost[] = [];
@@ -310,6 +311,7 @@ export function useMessageDeletionAnimation(
 
   watch(messages, (current, previous) => {
     if (
+      suspended() ||
       !root.value ||
       !previous?.length ||
       document.hidden ||
@@ -358,5 +360,6 @@ export function useMessageDeletionAnimation(
   });
 
   watch(topicId, cleanup, { flush: 'sync' });
+  watch(suspended, cleanup, { flush: 'sync' });
   onBeforeUnmount(cleanup);
 }

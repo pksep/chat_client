@@ -4,15 +4,23 @@ let granted = false;
 let answer = 'denied';
 let requests = 0;
 let checks = 0;
+let nativePermission: boolean | null = null;
+let nativeCheckFailed = false;
+let deferredCheck: (() => Promise<boolean>) | null = null;
 const storage = new Map<string, string>();
 mock.module('@tauri-apps/api/core', () => ({
   isTauri: () => true,
-  invoke: async () => {}
+  invoke: async (command: string) => {
+    if (nativeCheckFailed) throw new Error('Element not found. (0x80070490)');
+    return command === 'desktop_notification_permission'
+      ? nativePermission
+      : null;
+  }
 }));
 mock.module('@tauri-apps/plugin-notification', () => ({
   isPermissionGranted: async () => {
     checks++;
-    return granted;
+    return deferredCheck ? deferredCheck() : granted;
   },
   requestPermission: async () => {
     requests++;
@@ -29,16 +37,22 @@ Object.defineProperty(globalThis, 'localStorage', {
 const { ensureDesktopNotificationPermission: ensure } = await import(
   '../src/services/desktop-notification-permissions'
 );
-const { getDesktopPermissionChoice } = await import(
-  '../src/services/desktop-permission-preferences'
-);
+const {
+  getDesktopPermissionChoice,
+  saveDesktopPermissionChoice,
+  initializeDesktopPermissionPreferences
+} = await import('../src/services/desktop-permission-preferences');
 
-beforeEach(() => {
+beforeEach(async () => {
   granted = false;
   answer = 'denied';
   requests = 0;
   checks = 0;
+  nativePermission = null;
+  nativeCheckFailed = false;
   storage.clear();
+  deferredCheck = null;
+  await initializeDesktopPermissionPreferences();
 });
 
 test('отказ сохраняется и не вызывает новый запрос при следующей инициализации', async () => {
@@ -48,10 +62,11 @@ test('отказ сохраняется и не вызывает новый за
   expect(getDesktopPermissionChoice('notifications')).toBe('denied');
 });
 
-test('разрешение, включённое в ОС после отказа, обнаруживается без запроса', async () => {
+test('сохранённый отказ требует явного включения в профиле даже после разрешения ОС', async () => {
   await ensure();
   granted = true;
-  expect(await ensure()).toBe(true);
+  expect(await ensure()).toBe(false);
+  expect(await ensure({ interactive: true })).toBe(true);
   expect(requests).toBe(1);
   expect(getDesktopPermissionChoice('notifications')).toBe('granted');
 });
@@ -81,4 +96,48 @@ test('закрытый системный диалог не запрашивае
   await ensure();
   expect(requests).toBe(1);
   expect(getDesktopPermissionChoice('notifications')).toBe('requested');
+});
+
+test('системный запрет Windows обнаруживается даже когда плагин сообщает о разрешении', async () => {
+  granted = true;
+  nativePermission = false;
+  expect(await ensure()).toBe(false);
+  expect(requests).toBe(0);
+  expect(checks).toBe(0);
+  expect(getDesktopPermissionChoice('notifications')).toBe('denied');
+  nativePermission = true;
+  expect(await ensure({ interactive: true })).toBe(true);
+  expect(requests).toBe(0);
+});
+
+test('отключение уведомлений во время проверки ОС не заменяется старым согласием', async () => {
+  let checked!: (granted: boolean) => void;
+  let started!: () => void;
+  const checking = new Promise<void>(resolve => {
+    started = resolve;
+  });
+  deferredCheck = () =>
+    new Promise(resolve => {
+      checked = resolve;
+      started();
+    });
+  const pending = ensure();
+  await checking;
+  await saveDesktopPermissionChoice('notifications', 'denied');
+  checked(true);
+  expect(await pending).toBe(false);
+  expect(getDesktopPermissionChoice('notifications')).toBe('denied');
+});
+
+test('ошибка регистрации Windows отличается от отсутствующей команды старой оболочки', async () => {
+  nativeCheckFailed = true;
+  granted = true;
+  await ensure();
+  const { desktopNotificationCheckFailed } = await import(
+    '../src/services/desktop-notification-permissions'
+  );
+  expect(desktopNotificationCheckFailed.value).toBe(true);
+  nativeCheckFailed = false;
+  await ensure();
+  expect(desktopNotificationCheckFailed.value).toBe(false);
 });

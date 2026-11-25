@@ -1,5 +1,5 @@
 <template>
-  <Teleport to="body">
+  <Teleport :to="desktopOverlayTarget">
     <dialog
       ref="dialog"
       class="desktop-media-permission"
@@ -18,13 +18,40 @@
         <Icon :name="IconNameEnum.closeTag" />
       </button>
       <span class="desktop-media-permission__icon" aria-hidden="true">
-        <VideoIcon v-if="needsCamera" />
+        <ScreenShareIcon v-if="needsScreenCapture" />
+        <VideoIcon v-else-if="needsCamera" />
         <MicIcon v-else />
       </span>
       <h2 id="desktop-media-permission-title">{{ title }}</h2>
       <p id="desktop-media-permission-description">
         {{ description }}
       </p>
+      <ul
+        class="desktop-media-permission__list"
+        aria-label="Запрашиваемые разрешения"
+      >
+        <li v-if="needsScreenCapture">
+          <ScreenShareIcon aria-hidden="true" />
+          <span
+            ><strong>Демонстрация экрана</strong
+            ><span>Показ выбранного экрана или окна во время звонка</span></span
+          >
+          <span class="desktop-media-permission__status">Нужен доступ</span>
+        </li>
+        <li v-if="needsMicrophone">
+          <MicIcon aria-hidden="true" />
+          <span
+            ><strong>Микрофон</strong
+            ><span>Звонки и голосовые сообщения</span></span
+          >
+          <span class="desktop-media-permission__status">Нужен доступ</span>
+        </li>
+        <li v-if="needsCamera">
+          <VideoIcon aria-hidden="true" />
+          <span><strong>Камера</strong><span>Видео во время звонка</span></span>
+          <span class="desktop-media-permission__status">Нужен доступ</span>
+        </li>
+      </ul>
       <div class="desktop-media-permission__actions">
         <Button
           :type="ButtonTypeEnum.secondary"
@@ -48,6 +75,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { desktopOverlayTarget } from '../../services/desktop-overlay-target';
 import {
   Button,
   ButtonTypeEnum,
@@ -57,12 +85,16 @@ import {
 } from '@pksep/yui';
 import MicIcon from '../CallModal/UI/MicIcon.vue';
 import VideoIcon from '../CallModal/UI/VideoIcon.vue';
+import ScreenShareIcon from '../CallModal/UI/ScreenShareIcon.vue';
 import {
   desktopMediaPermissionRequest,
   resolveDesktopMediaPermission
 } from '../../services/desktop-media-permissions';
 
 const dialog = ref<HTMLDialogElement>();
+const needsScreenCapture = computed(() =>
+  desktopMediaPermissionRequest.value?.permissions.includes('screen-capture')
+);
 const needsCamera = computed(() =>
   desktopMediaPermissionRequest.value?.permissions.includes('camera')
 );
@@ -70,18 +102,33 @@ const needsMicrophone = computed(() =>
   desktopMediaPermissionRequest.value?.permissions.includes('microphone')
 );
 const title = computed(() =>
-  needsCamera.value && needsMicrophone.value
-    ? 'Разрешить доступ к камере и микрофону?'
-    : needsCamera.value
-      ? 'Разрешить доступ к камере?'
-      : 'Разрешить доступ к микрофону?'
+  needsScreenCapture.value
+    ? 'Разрешить демонстрацию экрана?'
+    : needsCamera.value && needsMicrophone.value
+      ? 'Разрешить доступ к камере и микрофону?'
+      : needsCamera.value
+        ? 'Разрешить доступ к камере?'
+        : 'Разрешить доступ к микрофону?'
 );
 const description = computed(() =>
-  needsCamera.value && needsMicrophone.value
-    ? 'СЭП Чат использует камеру и микрофон для видеозвонков. Вы сможете выключить их в любой момент.'
-    : needsCamera.value
-      ? 'СЭП Чат использует камеру для видеозвонков. Вы сможете выключить её в любой момент.'
-      : 'СЭП Чат использует микрофон для звонков и голосовых сообщений. Вы сможете выключить его в любой момент.'
+  needsScreenCapture.value
+    ? 'Вы выберете экран или окно, которое увидят участники звонка. Демонстрацию можно остановить в любой момент.'
+    : needsCamera.value && needsMicrophone.value
+      ? 'СЭП Чат использует камеру и микрофон для видеозвонков. Вы сможете выключить их в любой момент.'
+      : needsCamera.value
+        ? 'СЭП Чат использует камеру для видеозвонков. Вы сможете выключить её в любой момент.'
+        : 'СЭП Чат использует микрофон для звонков и голосовых сообщений. Вы сможете выключить его в любой момент.'
+);
+
+watch(
+  desktopOverlayTarget,
+  async () => {
+    dialog.value?.close();
+    await nextTick();
+    if (desktopMediaPermissionRequest.value && !dialog.value?.open)
+      dialog.value?.showModal();
+  },
+  { flush: 'sync' }
 );
 
 watch(
@@ -191,6 +238,43 @@ p {
   gap: 10px;
   width: 100%;
   margin-top: 8px;
+}
+
+.desktop-media-permission__list {
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.desktop-media-permission__list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-table);
+  font-size: 13px;
+}
+.desktop-media-permission__list li > svg {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  color: var(--text-secondary);
+}
+.desktop-media-permission__list li > span:first-of-type {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.desktop-media-permission__list strong {
+  font-size: 14px;
+}
+.desktop-media-permission__list span span {
+  color: var(--text-secondary);
+}
+.desktop-media-permission__status {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--text-secondary);
 }
 
 .desktop-media-permission__actions :deep(button) {

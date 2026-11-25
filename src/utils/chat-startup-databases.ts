@@ -19,10 +19,11 @@ const schemas: Record<string, DatabaseSchema> = {
     }
   },
   'chat-topic-messages-db': {
-    version: 6,
+    version: 7,
     stores: {
       topicMessages: 'cacheKey',
       pinnedMessages: 'cacheKey',
+      pinCommentTopics: 'cacheKey',
       pendingUploads: 'cacheKey',
       pendingUploadMeta: 'cacheKey',
       pendingUploadChunks: ['cacheKey', 'chunkIndex']

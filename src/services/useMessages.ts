@@ -26,6 +26,7 @@ import { isTopicMuted } from '../composables/useTopics';
 import { useGroup } from '../composables/useGroup';
 import { useUrlWatcher } from '../composables/navigation';
 import { authedUser, getChatAuthSession } from '../composables/useAuth';
+import { getConfig } from './useConfig';
 import { takeNativeStartupHistory } from './native-startup-history';
 import {
   clearCachedTopicMessages,
@@ -144,6 +145,20 @@ const applyKnownReadReceipts = (
 const fullMessagesStore = shallowReactive<Record<string, IMessage[]>>({});
 const messagesStore = shallowReactive<Record<string, IMessage[]>>({});
 const pinnedMessagesStore = shallowReactive<Record<string, IMessage[]>>({});
+let pinnedMessagesOwner = '';
+const pinnedMessageRevisions = new Map<string, number>();
+const ensurePinnedMessagesOwner = (): string => {
+  const owner = authedUser.value?.id || getChatAuthSession()?.user?.id || '';
+  const scope = `${getConfig().CHAT_API_DOMAIN || ''}:${owner}`;
+  if (scope !== pinnedMessagesOwner) {
+    Object.keys(pinnedMessagesStore).forEach(
+      topicId => delete pinnedMessagesStore[topicId]
+    );
+    pinnedMessageRevisions.clear();
+    pinnedMessagesOwner = scope;
+  }
+  return owner;
+};
 export const latestMessageArrival = shallowRef<IMessage | null>(null);
 const MAX_ACTIVE_TOPIC_MESSAGES = 250;
 const INITIAL_TOPIC_WINDOW_MESSAGES = 100;
@@ -1973,6 +1988,11 @@ export const fetchPinnedMessagesForTopic = async (
 ): Promise<IMessage[]> => {
   if (!topicId) return [];
 
+  const owner = ensurePinnedMessagesOwner();
+  const sdkAtStart = getChatSDK();
+  const isCurrentOwner = () =>
+    ensurePinnedMessagesOwner() === owner && getChatSDK() === sdkAtStart;
+
   const recentFetch = recentPinnedFetches.get(topicId);
   if (
     opts?.maxAgeMs &&
@@ -1982,11 +2002,17 @@ export const fetchPinnedMessagesForTopic = async (
     return getPinnedMessagesByTopicId(topicId);
   }
 
+  const beforeCacheRevision = pinnedMessageRevisions.get(topicId) || 0;
   const cachedMessages = pinnedMessagesStore[topicId]
     ? null
-    : await loadCachedPinnedMessages(topicId);
+    : await loadCachedPinnedMessages(topicId, owner);
 
-  if (cachedMessages) {
+  if (!isCurrentOwner()) return [];
+
+  if (
+    cachedMessages &&
+    (pinnedMessageRevisions.get(topicId) || 0) === beforeCacheRevision
+  ) {
     savePinnedMessagesToLocal(topicId, cachedMessages, {
       skipCache: true
     });
@@ -1995,7 +2021,12 @@ export const fetchPinnedMessagesForTopic = async (
   try {
     const sdk = getChatSDK();
     if (!sdk) return getPinnedMessagesByTopicId(topicId);
+    const revision = pinnedMessageRevisions.get(topicId) || 0;
     const messages = await sdk.getPinnedMessages(topicId);
+
+    if (!isCurrentOwner()) return [];
+    if ((pinnedMessageRevisions.get(topicId) || 0) !== revision)
+      return getPinnedMessagesByTopicId(topicId);
 
     savePinnedMessagesToLocal(topicId, messages);
     recentPinnedFetches.set(topicId, { sdk, fetchedAt: Date.now() });
@@ -2424,6 +2455,19 @@ export const editMessageFromLocal = (
 ): void => {
   recordInitialHistoryChange(topicId, message);
   const existingMessages = getFullMessagesByTopicId(topicId);
+  const pinned = getPinnedMessagesByTopicId(topicId);
+  const pinnedOriginal = pinned.find(value => value.id === message.id);
+  if (
+    pinnedOriginal &&
+    (!('isPin' in message) || message.isPin === pinnedOriginal.isPin)
+  ) {
+    savePinnedMessagesToLocal(
+      topicId,
+      pinned.map(value =>
+        value.id === message.id ? { ...value, ...message } : value
+      )
+    );
+  }
 
   const updateMessage = (msg: IMessage): IMessage => {
     let isEdit = msg.isEdit;
@@ -3293,7 +3337,18 @@ export const savePinnedMessagesToLocal = (
   messages: IMessage[],
   opts: { skipCache?: boolean } = {}
 ): void => {
+  ensurePinnedMessagesOwner();
+  messages = messages.filter(
+    message =>
+      message.topicId === topicId &&
+      !message.deletedAt &&
+      !isDeletedMessageForTopic(topicId, message)
+  );
   pinnedMessagesStore[topicId] = messages;
+  pinnedMessageRevisions.set(
+    topicId,
+    (pinnedMessageRevisions.get(topicId) || 0) + 1
+  );
 
   if (!opts.skipCache) {
     void saveCachedPinnedMessages(topicId, messages);
@@ -3301,6 +3356,7 @@ export const savePinnedMessagesToLocal = (
 };
 
 export const getPinnedMessagesByTopicId = (topicId: string): IMessage[] => {
+  ensurePinnedMessagesOwner();
   return pinnedMessagesStore[topicId] || [];
 };
 

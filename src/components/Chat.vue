@@ -2,6 +2,7 @@
   <section
     :class="[
       'chat',
+      { 'chat--pinned-open': isPinnedListOpen },
       {
         'chat--mobile-route': isMobile,
         'chat--call-topic-route': route.type === RouteTypes.CALL,
@@ -11,6 +12,15 @@
     :data-testid="`${props.dataTestid}-Chat-Container`"
     @animationend="handleMobileRouteAnimationEnd"
   >
+    <PinnedMessagesPanel
+      v-if="isPinnedListOpen"
+      :key="route.id"
+      :topic-id="route.id"
+      @navigate="navigateFromPinnedList"
+      @composer-action="handlePinnedComposerAction"
+      @forward-message="handlePinnedForwardMessage"
+      @open-sticker-pack="messageListRef?.openStickerPack?.($event)"
+    />
     <div
       v-if="chatAccess.ai && (isAiRoute || isAiVoiceCallActive)"
       v-show="isAiRoute"
@@ -49,12 +59,14 @@
           v-if="shouldShowPinnedMessages"
           :topic-id="pinnedMessagesTopicId"
           :viewport-snapshot="messageViewportSnapshot"
+          :inert="isPinnedListOpen || undefined"
           @unmount-set-selected-message="scrollToMessage"
         />
         <MessageList
           v-if="isMobileMessageListMounted"
           ref="messageListRef"
           :defer-content-render="false"
+          :suspended="isPinnedListOpen"
           :baseUrl="props.baseUrl"
           :contact="props.contact"
           :user="authUser"
@@ -71,11 +83,13 @@
         v-if="shouldShowPinnedMessages"
         :topic-id="pinnedMessagesTopicId"
         :viewport-snapshot="messageViewportSnapshot"
+        :inert="isPinnedListOpen || undefined"
         @unmount-set-selected-message="scrollToMessage"
       />
       <MessageList
         v-if="hasActiveChatRoute"
         ref="messageListRef"
+        :suspended="isPinnedListOpen"
         :baseUrl="props.baseUrl"
         :contact="props.contact"
         :user="authUser"
@@ -96,6 +110,7 @@ import {
   computed,
   defineAsyncComponent,
   onBeforeUnmount,
+  nextTick,
   ref,
   useTemplateRef,
   watch
@@ -121,6 +136,18 @@ import UnselectedTopicIcon from './UI/Icons/UnselectedTopicIcon.vue';
 import { loadMessageList } from '../utils/load-message-list';
 import { navigateToDefault } from '../composables/navigation';
 import { useChatMenu } from '../composables/useChatMenu';
+import PinnedMessagesPanel from './Messages/PinnedMessagesPanel.vue';
+import type { PinnedMessageComposerAction } from '../types/pinned-message-action';
+import type { ITopic } from './interfaces/interfaces';
+import {
+  pinnedMessagesViewTopicId,
+  closePinnedMessagesView
+} from '../services/pinned-messages-view';
+import '../assets/pinned-list.css';
+import {
+  useBackButtonHandler,
+  BackButtonPriority
+} from '../composables/useBackButton';
 
 const MessageList = defineAsyncComponent(loadMessageList);
 const AIAssistant = defineAsyncComponent(() => import('./AI/AIAssistant.vue'));
@@ -144,6 +171,17 @@ const messageListRef = useTemplateRef<any>('messageListRef');
 const aiAssistantRef = useTemplateRef<any>('aiAssistantRef');
 
 const route = useUrlWatcher();
+const isPinnedListOpen = computed(
+  () => !!route.value.id && pinnedMessagesViewTopicId.value === route.value.id
+);
+useBackButtonHandler(
+  () => isPinnedListOpen.value,
+  closePinnedMessagesView,
+  BackButtonPriority.overlay
+);
+watch(() => route.value.id, closePinnedMessagesView);
+watch(() => authUser.value?.id, closePinnedMessagesView);
+onBeforeUnmount(closePinnedMessagesView);
 const { setActiveSection } = useChatMenu();
 const { isVoiceModeOpen: isAiVoiceCallActive } = useAiAssistant();
 const { access: chatAccess, ready: isChatAccessReady } = useChatAccess();
@@ -229,11 +267,61 @@ type ScrollToMessagePayload =
       quoteText?: string;
       quoteOccurrenceIndex?: number;
       allowOptimisticTarget?: boolean;
+      shortTransition?: boolean;
       scrollBehavior?: MessageScrollBehavior;
     };
 
 const scrollToMessage = (payload: ScrollToMessagePayload) => {
-  messageListRef.value?.scrollToMessage(payload);
+  return messageListRef.value?.scrollToMessage(payload);
+};
+
+const navigateFromPinnedList = async (payload: unknown) => {
+  closePinnedMessagesView();
+  await nextTick();
+  return scrollToMessage(payload as ScrollToMessagePayload);
+};
+
+const handlePinnedComposerAction = async (
+  action: PinnedMessageComposerAction
+) => {
+  const ownerId = authUser.value?.id;
+  closePinnedMessagesView();
+  await nextTick();
+  if (
+    route.value.id !== action.message.topicId ||
+    authUser.value?.id !== ownerId
+  ) {
+    return;
+  }
+  if (action.kind === 'edit')
+    messageListRef.value?.handleSetEditMessage(
+      action.message.id,
+      action.message
+    );
+  else
+    messageListRef.value?.handleSetReplyMessage({
+      messageId: action.message.id,
+      message: action.message,
+      quoteText: action.quoteText,
+      quoteOccurrenceIndex: action.quoteOccurrenceIndex
+    });
+  void scrollToMessage({
+    message: action.message,
+    allowOptimisticTarget: true,
+    shortTransition: true,
+    scrollBehavior: 'smooth'
+  })?.catch(error =>
+    console.warn('Не удалось показать исходное сообщение:', error)
+  );
+};
+
+const handlePinnedForwardMessage = async (payload: {
+  message: IMessage;
+  topic: ITopic;
+}) => {
+  closePinnedMessagesView();
+  await nextTick();
+  messageListRef.value?.handleSetForwardMessage(payload);
 };
 
 const handleViewportSnapshotChange = (

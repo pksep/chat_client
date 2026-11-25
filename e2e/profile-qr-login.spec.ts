@@ -3,7 +3,7 @@ import { createAndroidPerformanceServer } from './fixtures/android-performance-s
 import { SHORT_QR_LOGIN_ENABLED } from '../src/services/qr-login-settings';
 
 const trigger = (page: Page) =>
-  page.getByRole('button', { name: 'Авторизоваться через QR' });
+  page.getByRole('button', { name: /^(Войти по QR|Авторизоваться через QR)$/ });
 const popover = (page: Page) =>
   page.getByRole('dialog', { name: 'Вход по QR-коду' });
 const image = (page: Page) =>
@@ -77,6 +77,39 @@ const expectProfileLoginUrl = (
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/**', route => route.fulfill({ json: [] }));
   await page.route('**/api/v2/auth/qr', route => fulfillQr(page, route));
+});
+
+test('статус рядом с именем использует тултип проекта и сохраняет открытие меню', async ({
+  page
+}) => {
+  await page.goto('/e2e/fixtures/profile-qr-login.html?theme=light');
+  const status = page.locator('.menu-profile__identity-status');
+  await expect(status).toBeVisible();
+  await expect(status).not.toHaveAttribute('title');
+  const name = page.locator('.menu-profile__identity-name');
+  const identity = (await name.boundingBox())!;
+  const header = (await page.locator('.menu-profile__header').boundingBox())!;
+  const icon = (await status.boundingBox())!;
+  expect((identity.x + icon.x + icon.width) / 2).toBeCloseTo(
+    header.x + header.width / 2,
+    0
+  );
+  expect(icon.x - identity.x - identity.width).toBeCloseTo(5, 1);
+  await status.hover();
+  await expect(
+    page
+      .locator('.tooltip-yui-kit__hint_show')
+      .filter({ hasText: 'Установить статус' })
+  ).toBeVisible();
+  await status.click();
+  await expect(page.locator('.menu-profile__status-menu')).toBeVisible();
+  await expect(
+    page
+      .locator('.tooltip-yui-kit__hint_show')
+      .filter({ hasText: 'Установить статус' })
+  ).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.menu-profile__status-menu')).toHaveCount(0);
 });
 
 test('QR использует текущую сессию; окно в центре; повтор берёт текущий токен', async ({

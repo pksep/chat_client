@@ -2,6 +2,69 @@ import { expect, test } from '@playwright/test';
 
 test.use({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' });
 
+test('фокус второго окна и ошибка IPC не делают свёрнутый чат активным', async ({
+  page
+}) => {
+  await page.goto('/e2e/fixtures/call-download.html');
+  const result = await page.evaluate(async () => {
+    (window as any).isTauri = true;
+    Object.defineProperty(document, 'hasFocus', { value: () => true });
+    const { mockIPC, mockWindows } = await import(
+      '/node_modules/@tauri-apps/api/mocks.js'
+    );
+    const { emit } = await import('/node_modules/@tauri-apps/api/event.js');
+    let fail = false;
+    let minimized = true;
+    mockWindows('main');
+    mockIPC(
+      command => {
+        if (command === 'desktop_window_state') {
+          if (fail) throw new Error('IPC недоступен');
+          return { label: 'main', focused: true, visible: true, minimized };
+        }
+        return null;
+      },
+      { shouldMockEvents: true }
+    );
+    const visibility = await import('/src/services/useAppVisibility.ts');
+    visibility.ensureTauriWindowStateTracking();
+    await visibility.syncTauriWindowState();
+    await emit('sep-chat://window-state', {
+      label: 'call',
+      focused: true,
+      visible: true,
+      minimized: false
+    });
+    const afterCallFocus = visibility.getIsAppActivelyVisible();
+    minimized = false;
+    await visibility.syncTauriWindowState();
+    const restored = visibility.getIsAppActivelyVisible();
+    await emit('sep-chat://window-state', {
+      label: 'call',
+      focused: false,
+      visible: false,
+      minimized: true
+    });
+    const afterCallMinimize = visibility.getIsAppActivelyVisible();
+    fail = true;
+    const nativeActiveOnFailure = await visibility.syncTauriWindowState();
+    return {
+      afterCallFocus,
+      restored,
+      afterCallMinimize,
+      nativeActiveOnFailure,
+      afterFailure: visibility.getIsAppActivelyVisible()
+    };
+  });
+  expect(result).toEqual({
+    afterCallFocus: false,
+    restored: true,
+    afterCallMinimize: true,
+    nativeActiveOnFailure: false,
+    afterFailure: false
+  });
+});
+
 test('последний чат уведомляет после minimize даже до события окна и очередного опроса', async ({
   page
 }) => {

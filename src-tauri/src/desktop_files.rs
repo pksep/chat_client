@@ -3,8 +3,14 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
+    collections::HashMap,
+    future::{poll_fn, Future},
     path::{Path, PathBuf},
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicU8, AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
+    task::Poll,
     time::{Duration, Instant},
 };
 use tauri::{AppHandle, Emitter, Manager, Runtime};
@@ -50,6 +56,86 @@ fn guess_mime_type(path: &Path) -> String {
 }
 
 static ACTIVE_FILE_WRITES: AtomicUsize = AtomicUsize::new(0);
+
+#[derive(Default)]
+pub struct DesktopFileDownloads(Mutex<HashMap<String, Arc<DownloadCancellation>>>);
+
+#[derive(Default)]
+struct DownloadCancellation {
+    // 0 — загрузка, 1 — отменена, 2 — все байты сохранены.
+    state: AtomicU8,
+    changed: tokio::sync::Notify,
+}
+
+impl DownloadCancellation {
+    fn cancel(&self) -> bool {
+        if self
+            .state
+            .compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            self.changed.notify_waiters();
+            true
+        } else {
+            self.state.load(Ordering::SeqCst) == 1
+        }
+    }
+
+    fn complete(&self) -> Result<(), FileError> {
+        self.state
+            .compare_exchange(0, 2, Ordering::SeqCst, Ordering::SeqCst)
+            .map(|_| ())
+            .map_err(|_| error("FILE_DOWNLOAD_CANCELLED", "Скачивание отменено"))
+    }
+}
+
+async fn cancellable_download<T>(
+    cancellation: &DownloadCancellation,
+    transfer: impl Future<Output = Result<T, FileError>>,
+) -> Result<T, FileError> {
+    let mut transfer = std::pin::pin!(transfer);
+    let mut changed = std::pin::pin!(cancellation.changed.notified());
+    poll_fn(|context| {
+        if cancellation.state.load(Ordering::SeqCst) == 1
+            || changed.as_mut().poll(context).is_ready()
+        {
+            Poll::Ready(Err(error("FILE_DOWNLOAD_CANCELLED", "Скачивание отменено")))
+        } else {
+            transfer.as_mut().poll(context)
+        }
+    })
+    .await
+}
+
+fn ensure_downloads<R: Runtime>(app: &AppHandle<R>) {
+    if app.try_state::<DesktopFileDownloads>().is_none() {
+        app.manage(DesktopFileDownloads::default());
+    }
+}
+
+struct DownloadRegistration<R: Runtime> {
+    app: AppHandle<R>,
+    request_id: String,
+}
+
+impl<R: Runtime> Drop for DownloadRegistration<R> {
+    fn drop(&mut self) {
+        if let Ok(mut downloads) = self.app.state::<DesktopFileDownloads>().0.lock() {
+            downloads.remove(&self.request_id);
+        }
+    }
+}
+
+#[tauri::command]
+pub fn desktop_file_cancel_download<R: Runtime>(app: AppHandle<R>, request_id: String) -> bool {
+    ensure_downloads(&app);
+    app.state::<DesktopFileDownloads>()
+        .0
+        .lock()
+        .ok()
+        .and_then(|downloads| downloads.get(&request_id).cloned())
+        .is_some_and(|download| download.cancel())
+}
 
 struct ActiveFileWrite;
 impl ActiveFileWrite {
@@ -471,7 +557,39 @@ pub async fn desktop_file_download<R: Runtime>(
     options: FileOptions,
 ) -> Result<FileStatus, FileError> {
     let _active = ActiveFileWrite::begin();
+    ensure_downloads(&app);
+    let request_id = options
+        .request_id
+        .clone()
+        .unwrap_or(file_key(&options.url)?);
+    let cancellation = Arc::new(DownloadCancellation::default());
+    {
+        let state = app.state::<DesktopFileDownloads>();
+        let mut downloads = state
+            .0
+            .lock()
+            .map_err(|_| error("FILE_REQUEST", "Не удалось начать скачивание"))?;
+        if downloads.contains_key(&request_id) {
+            return Err(error("FILE_REQUEST", "Скачивание уже выполняется"));
+        }
+        downloads.insert(request_id.clone(), cancellation.clone());
+    }
+    let _registration = DownloadRegistration {
+        app: app.clone(),
+        request_id: request_id.clone(),
+    };
+    // Подтверждаем регистрацию до ожидания HTTP-заголовков, чтобы отменить можно было сразу.
+    let _ = app.emit(
+        "sep-chat://file-download-progress",
+        DownloadProgress {
+            request_id: request_id.clone(),
+            bytes_downloaded: 0,
+            total_bytes: 0,
+            percent: None,
+        },
+    );
     if let Some(file) = saved_file(&app, &options).await? {
+        cancellation.complete()?;
         return Ok(file.into());
     }
     let record_path = record_path(&app, &options)?;
@@ -480,12 +598,15 @@ pub async fn desktop_file_download<R: Runtime>(
         .timeout(Duration::from_secs(3600))
         .build()
         .map_err(|e| error("FILE_NETWORK", e.to_string()))?;
-    let mut response = client
-        .get(&options.url)
-        .send()
-        .await
-        .and_then(|response| response.error_for_status())
-        .map_err(|e| error("FILE_NETWORK", format!("Не удалось скачать файл: {e}")))?;
+    let mut response = cancellable_download(&cancellation, async {
+        client
+            .get(&options.url)
+            .send()
+            .await
+            .and_then(|response| response.error_for_status())
+            .map_err(|e| error("FILE_NETWORK", format!("Не удалось скачать файл: {e}")))
+    })
+    .await?;
     let total = response.content_length().or(options.size).unwrap_or(0);
     let directory = app
         .path()
@@ -495,10 +616,9 @@ pub async fn desktop_file_download<R: Runtime>(
     tokio::fs::create_dir_all(&directory).await?;
     let name = safe_file_name(options.file_name.as_deref().unwrap_or("file"));
     let (path, mut output) = create_download(&directory, &name).await?;
-    let request_id = options.request_id.clone().unwrap_or_default();
     let mut received = 0_u64;
     let mut last_progress = Instant::now() - Duration::from_secs(1);
-    let transfer: Result<(), FileError> = async {
+    let transfer: Result<(), FileError> = cancellable_download(&cancellation, async {
         while let Some(chunk) = response
             .chunk()
             .await
@@ -534,8 +654,9 @@ pub async fn desktop_file_download<R: Runtime>(
             ));
         }
         Ok(())
-    }
-    .await;
+    })
+    .await
+    .and_then(|_| cancellation.complete());
     drop(output);
     if let Err(e) = transfer {
         let _ = tokio::fs::remove_file(&path).await;
@@ -745,7 +866,9 @@ mod tests {
             .await
             .unwrap();
             std::fs::write(&original, b"other").unwrap();
-            std::fs::OpenOptions::new().write(true).open(&original)
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(&original)
                 .unwrap()
                 .set_modified(std::time::SystemTime::now() + Duration::from_secs(1))
                 .unwrap();
@@ -869,6 +992,119 @@ mod tests {
             .await
             .unwrap();
         });
+    }
+
+    #[test]
+    fn cancellation_interrupts_headers_and_body_cleans_partial_file_and_allows_retry() {
+        for send_partial_body in [false, true] {
+            let app = tauri::test::mock_builder()
+                .build(tauri::test::mock_context(tauri::test::noop_assets()))
+                .unwrap();
+            let handle = app.handle().clone();
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let url = format!(
+                "http://{}/media/object/cancel-test",
+                listener.local_addr().unwrap()
+            );
+            let (ready, started) = tokio::sync::oneshot::channel();
+            let server = std::thread::spawn(move || {
+                let (mut connection, _) = listener.accept().unwrap();
+                connection
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut request = [0_u8; 4096];
+                connection.read(&mut request).unwrap();
+                if send_partial_body {
+                    connection.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4096\r\nConnection: close\r\n\r\npartial").unwrap();
+                    connection.flush().unwrap();
+                }
+                ready.send(()).unwrap();
+                let disconnected = loop {
+                    match connection.read(&mut request) {
+                        Ok(0) => break true,
+                        Ok(_) => continue,
+                        Err(_) => break false,
+                    }
+                };
+                drop(connection);
+                listener.set_nonblocking(true).unwrap();
+                let deadline = Instant::now() + Duration::from_secs(5);
+                loop {
+                    if let Ok((mut retry, _)) = listener.accept() {
+                        retry
+                            .set_read_timeout(Some(Duration::from_secs(5)))
+                            .unwrap();
+                        retry.read(&mut request).unwrap();
+                        retry.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4096\r\nConnection: close\r\n\r\n").unwrap();
+                        retry.write_all(&vec![b'a'; 4096]).unwrap();
+                        break;
+                    }
+                    assert!(
+                        Instant::now() < deadline,
+                        "Повторное скачивание не началось"
+                    );
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                disconnected
+            });
+            let name = format!(
+                "sep-cancel-{}.txt",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            );
+            let partial = handle
+                .path()
+                .download_dir()
+                .unwrap()
+                .join("SEP Chat")
+                .join(&name);
+            tauri::async_runtime::block_on(async {
+                let mut initial = options(&url, 4096);
+                initial.file_name = Some(name.clone());
+                let request_id = initial.request_id.clone().unwrap();
+                let initial_app = handle.clone();
+                let download = tauri::async_runtime::spawn(async move {
+                    desktop_file_download(initial_app, initial).await
+                });
+                started.await.unwrap();
+                if send_partial_body {
+                    let deadline = Instant::now() + Duration::from_secs(5);
+                    while !tokio::fs::metadata(&partial)
+                        .await
+                        .is_ok_and(|file| file.len() > 0)
+                    {
+                        assert!(Instant::now() < deadline, "Не появился недокачанный файл");
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                }
+                assert!(desktop_file_cancel_download(
+                    handle.clone(),
+                    request_id.clone()
+                ));
+                let failure = tokio::time::timeout(Duration::from_secs(5), download)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .err()
+                    .unwrap();
+                assert_eq!(failure.code, "FILE_DOWNLOAD_CANCELLED");
+                assert!(!partial.exists());
+                assert!(!record_path(&handle, &options(&url, 4096)).unwrap().exists());
+                assert!(!desktop_file_cancel_download(handle.clone(), request_id));
+                let mut retry = options(&url, 4096);
+                retry.file_name = Some(name.clone());
+                let file = desktop_file_download(handle.clone(), retry).await.unwrap();
+                assert_eq!(file.file_name, name);
+                assert_eq!(tokio::fs::read(&file.path).await.unwrap(), vec![b'a'; 4096]);
+                tokio::fs::remove_file(&file.path).await.unwrap();
+                tokio::fs::remove_file(record_path(&handle, &options(&url, 4096)).unwrap())
+                    .await
+                    .unwrap();
+            });
+            assert!(server.join().unwrap(), "Отмена не закрыла HTTP-соединение");
+        }
     }
 
     #[test]

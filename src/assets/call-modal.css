@@ -160,6 +160,27 @@
   }
 }
 
+.call-modal--compact-controls
+  .call-modal__control-button-wrapper--call-controls {
+  height: 60px;
+  gap: 0;
+}
+.call-modal--compact-controls
+  .call-modal__control-button-wrapper--call-controls
+  .call-modal__control-button {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  padding: 8px !important;
+}
+.call-modal--compact-controls
+  .call-modal__control-button-wrapper--call-controls
+  .call-modal__control-button
+  svg {
+  width: 26px;
+  height: 26px;
+}
+
 .call-modal__control-button:disabled {
   cursor: default;
   transform: none;
@@ -434,6 +455,19 @@ body .tooltip-yui-kit__hint[data-testid^='CallModal-'][data-testid$='Tooltip'] {
   text-align: left;
 }
 
+.call-modal__group-info-text p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.call-modal__group-info-text span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .call-modal__group-actions {
   position: relative;
   flex: 0 0 auto;
@@ -451,7 +485,8 @@ body .tooltip-yui-kit__hint[data-testid^='CallModal-'][data-testid$='Tooltip'] {
   position: absolute;
   top: calc(100% + 12px);
   right: 0;
-  min-width: 270px;
+  width: min(270px, calc(100vw - 24px));
+  min-width: 0;
   padding: 10px;
   border-radius: 15px;
   background: var(--surface-overlay);
