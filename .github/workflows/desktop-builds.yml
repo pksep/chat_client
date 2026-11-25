@@ -265,6 +265,7 @@ jobs:
             test-results/**/error-context.md
             test-results/**/trace.zip
             test-results/**/pin-layout.*
+            test-results/**/pin-navigation.png
           if-no-files-found: ignore
           retention-days: 7
       - uses: actions/upload-artifact@v4

@@ -366,7 +366,7 @@ test('конфликт версии возвращает подтверждён�
   expect(errors).toEqual([]);
 });
 
-test('переход к оригиналу закрывает список', async ({ page }) => {
+test('переход к оригиналу закрывает список', async ({ page }, testInfo) => {
   const errors = await openPinnedFixture(page);
   await page.getByTestId('Pinned-Messages-ListButton').click();
   await page
@@ -382,6 +382,7 @@ test('переход к оригиналу закрывает список', asy
       .filter({ hasText: 'По заказу № 2847' })
       .first()
   ).toBeInViewport();
+  await page.screenshot({ path: testInfo.outputPath('pin-navigation.png') });
   expect(errors).toEqual([]);
 });
 
