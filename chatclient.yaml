@@ -3,10 +3,10 @@
   cycles: 1
   deleted: 8
   inserted: 8
-  seconds: 334.156603323
+  seconds: 380.077493058
   version: 0.60.0
   what: judges-summary
-  when: 2026-11-25 10:32:30.044557246 Z
+  when: 2026-11-25 20:16:08.511163903 Z
 - _id: 1
   _job: 22088240971
   _time: 2026-02-17 06:25:36.183556345 Z
@@ -27687,13 +27687,37 @@
   what: assessment
   when: 2026-11-25 01:07:47.708271313 Z
 - _id: 1593
-  _job: 45594920965
-  _time: 2026-11-25 10:27:03.317455510 Z
+  _job: 45692081680
+  _time: 2026-11-25 20:09:56.739405060 Z
   _version: 0.19.6/0.60.0/0.17.11
   earliest_issue_was_found: 1
-  events_were_scanned: 28208183910
+  events_were_scanned: 28250023644
   latest_issue_was_found: 72
   min_pull_was_found: 484
   repository: 1053332035
   what: iterate
   where: github
+- _id: 1594
+  _job: 45692081680
+  _time: 2026-11-25 20:09:59.058116842 Z
+  _version: 0.19.6/0.60.0/0.17.11
+  branch: ai-task-creation-recovery
+  comments: 2
+  comments_appreciated: 0
+  comments_by_author: 0
+  comments_by_reviewers: 2
+  comments_resolved: 0
+  comments_to_code: 0
+  details: Apparently, pksep/chat_client#481 has been "pull-was-merged".
+  failed_builds: 0
+  files: 124
+  hoc: 16956
+  is_human: 1
+  issue: 481
+  repository: 1053332035
+  succeeded_builds: 5
+  suggestions: 0
+  what: pull-was-merged
+  when: 2026-11-25 13:54:34.000000000 Z
+  where: github
+  who: 93074025
