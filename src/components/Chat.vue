@@ -17,6 +17,8 @@
       :key="route.id"
       :topic-id="route.id"
       @navigate="navigateFromPinnedList"
+      @composer-action="handlePinnedComposerAction"
+      @forward-message="handlePinnedForwardMessage"
       @open-sticker-pack="messageListRef?.openStickerPack?.($event)"
     />
     <div
@@ -108,6 +110,7 @@ import {
   computed,
   defineAsyncComponent,
   onBeforeUnmount,
+  nextTick,
   ref,
   useTemplateRef,
   watch
@@ -134,6 +137,8 @@ import { loadMessageList } from '../utils/load-message-list';
 import { navigateToDefault } from '../composables/navigation';
 import { useChatMenu } from '../composables/useChatMenu';
 import PinnedMessagesPanel from './Messages/PinnedMessagesPanel.vue';
+import type { PinnedMessageComposerAction } from '../types/pinned-message-action';
+import type { ITopic } from './interfaces/interfaces';
 import {
   pinnedMessagesViewTopicId,
   closePinnedMessagesView
@@ -267,13 +272,56 @@ type ScrollToMessagePayload =
     };
 
 const scrollToMessage = (payload: ScrollToMessagePayload) => {
-  messageListRef.value?.scrollToMessage(payload);
+  return messageListRef.value?.scrollToMessage(payload);
 };
 
 const navigateFromPinnedList = async (payload: unknown) => {
   closePinnedMessagesView();
-  await import('vue').then(({ nextTick }) => nextTick());
-  scrollToMessage(payload as ScrollToMessagePayload);
+  await nextTick();
+  return scrollToMessage(payload as ScrollToMessagePayload);
+};
+
+const handlePinnedComposerAction = async (
+  action: PinnedMessageComposerAction
+) => {
+  const ownerId = authUser.value?.id;
+  closePinnedMessagesView();
+  await nextTick();
+  if (
+    route.value.id !== action.message.topicId ||
+    authUser.value?.id !== ownerId
+  ) {
+    return;
+  }
+  if (action.kind === 'edit')
+    messageListRef.value?.handleSetEditMessage(
+      action.message.id,
+      action.message
+    );
+  else
+    messageListRef.value?.handleSetReplyMessage({
+      messageId: action.message.id,
+      message: action.message,
+      quoteText: action.quoteText,
+      quoteOccurrenceIndex: action.quoteOccurrenceIndex
+    });
+  void scrollToMessage({
+    message: action.message,
+    allowOptimisticTarget: true,
+    shortTransition: true,
+    scrollBehavior: 'smooth'
+  })?.catch(error =>
+    console.warn('Не удалось показать исходное сообщение:', error)
+  );
+};
+
+const handlePinnedForwardMessage = async (payload: {
+  message: IMessage;
+  topic: ITopic;
+}) => {
+  closePinnedMessagesView();
+  await nextTick();
+  messageListRef.value?.handleSetForwardMessage(payload);
 };
 
 const handleViewportSnapshotChange = (

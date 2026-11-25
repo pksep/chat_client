@@ -5187,6 +5187,9 @@ watch(
 defineExpose({
   handleClear: clearAiMessages,
   scrollToMessage: handleScrollToMessage,
+  handleSetEditMessage,
+  handleSetReplyMessage,
+  handleSetForwardMessage,
   openStickerPack: (pack: string) =>
     messageListInputRef.value?.openStickerPack?.(pack)
 });

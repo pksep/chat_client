@@ -157,6 +157,19 @@
         </div>
 
         <Button
+          v-if="props.pinListMode"
+          :type="ButtonTypeEnum.popover"
+          :size="SizesEnum.small"
+          @click.stop="
+            handleClosePopover();
+            emits('unmount-navigate-original');
+          "
+          :data-testid="`${props.dataTestid}-MessageBubble-ShowOriginalButton`"
+        >
+          <Icon :name="IconNameEnum.chevronRight" /> Показать в чате
+        </Button>
+
+        <Button
           :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           @click.stop="handleReplyMessage"
@@ -435,6 +448,7 @@ import {
   editMessageFromLocal,
   deleteMessageFromLocal,
   getMessagesByTopicId,
+  getPinnedMessagesByTopicId,
   isMessagePinnedOnlyForMe,
   pinMessageOnlyForMe,
   unpinLocalMessageForMe
@@ -454,14 +468,24 @@ const emits = defineEmits([
   'unmount-reply-message-id',
   'unmount-forward-message',
   'unmount-retry-message-id',
-  'unmount-download-message-media'
+  'unmount-download-message-media',
+  'unmount-navigate-original'
 ]);
 
 const quickReactonList = computed(() => ['❤️', '🔥', '👍', '😂', '👌', '😭']);
 const { state: isMobile } = useResizeState(MAX_W_MD);
-const messages = computed(() =>
-  props.topicId ? getMessagesByTopicId(props.topicId) : []
-);
+const messages = computed(() => {
+  if (!props.topicId) return [];
+  const loaded = getMessagesByTopicId(props.topicId);
+  if (!props.pinListMode) return loaded;
+  const loadedIds = new Set(loaded.map(message => message.id));
+  return [
+    ...loaded,
+    ...getPinnedMessagesByTopicId(props.topicId).filter(
+      message => !loadedIds.has(message.id)
+    )
+  ];
+});
 const currentTopic = computed(() =>
   props.topicId ? getSelectedTopic(props.topicId) : undefined
 );

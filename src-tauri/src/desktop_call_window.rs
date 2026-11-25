@@ -64,7 +64,22 @@ pub fn create_main_window<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> 
         .find(|window| window.label == "main")
         .ok_or_else(|| tauri::Error::WindowNotFound)?;
     let handle = app.handle().clone();
-    let window = native_chrome(WebviewWindowBuilder::from_config(app, config)?)
+    let main_builder = WebviewWindowBuilder::from_config(app, config)?;
+    #[cfg(target_os = "macos")]
+    let main_builder = {
+        let main_thread = objc2::MainThreadMarker::new()
+            .expect("Основное окно создаётся в главном потоке AppKit");
+        let configuration = unsafe { objc2_web_kit::WKWebViewConfiguration::new(main_thread) };
+        // WebKit блокирует окно входящего звонка без user activation. Настройка
+        // применяется до создания WKWebView; configuration у готового view — копия.
+        unsafe {
+            configuration
+                .preferences()
+                .setJavaScriptCanOpenWindowsAutomatically(true);
+        }
+        main_builder.with_webview_configuration(configuration)
+    };
+    let window = native_chrome(main_builder)
         .on_new_window(move |url, features| {
             // Только собственная пустая поверхность: никакой загрузки внешнего сайта
             // и второго экземпляра приложения/RTC-контроллера.

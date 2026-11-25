@@ -9,6 +9,7 @@ type ReplyMessagePayload =
   | string
   | {
       messageId?: string;
+      message?: IMessage;
       quoteText?: string;
       quoteOccurrenceIndex?: number;
     }
@@ -33,10 +34,11 @@ export function useMessageActions(
     clearPendingForwardMessages();
   };
 
-  const handleSetEditMessage = (messageId?: string) => {
+  const handleSetEditMessage = (messageId?: string, fallback?: IMessage) => {
     clearSellectedMessage();
     state.editMessage = messageId
-      ? state.messages.find(m => m.id === messageId) || null
+      ? state.messages.find(m => m.id === messageId) ||
+        (fallback?.id === messageId ? fallback : null)
       : null;
 
     inputText.value = state.editMessage?.text || '';
@@ -52,7 +54,10 @@ export function useMessageActions(
     const quoteOccurrenceIndex =
       typeof payload === 'string' ? undefined : payload?.quoteOccurrenceIndex;
     const message = messageId
-      ? state.messages.find(m => m.id === messageId) || null
+      ? state.messages.find(m => m.id === messageId) ||
+        (typeof payload === 'object' && payload?.message?.id === messageId
+          ? payload.message
+          : null)
       : null;
 
     state.replyMessage =

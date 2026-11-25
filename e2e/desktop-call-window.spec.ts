@@ -1,6 +1,12 @@
 import { installTauriCallWindowMock } from './fixtures/tauri-call-window-mock';
-import { expect, test } from '@playwright/test';
+import { devices, expect, test } from '@playwright/test';
 test.use({
+  // Отдельное окно Tauri использует размеры настольного экрана.
+  viewport: { width: 1280, height: 800 },
+  screen: { width: 1280, height: 800 },
+  isMobile: false,
+  hasTouch: false,
+  userAgent: devices['Desktop Chrome'].userAgent,
   launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] }
 });
 
@@ -63,7 +69,7 @@ test('Tauri: отдельная поверхность, управление о�
   ).toBeLessThan(250);
   expect(reports.find(item => item.step === 'compact-incoming')).toMatchObject({
     passed: true,
-    size: { width: 700, height: 606 }
+    size: { width: 960, height: 720 }
   });
   expect(reports.find(item => item.step === 'lifecycle')).toMatchObject({
     endCount: 1,
@@ -117,6 +123,11 @@ test('Tauri: отдельная поверхность, управление о�
     .filter(item => item !== page && !item.isClosed())
     .at(-1)!;
   await popup.bringToFront();
+  await page.evaluate(() => (window as any).callWindowFixture.showSixParticipants());
+  await expect(popup.locator('.call-modal__remote-grid--six .call-modal__remote-tile')).toHaveCount(6);
+  await expect(popup.locator('.call-modal__pagination')).toHaveCount(0);
+  for (const tile of await popup.locator('.call-modal__remote-tile').all())
+    await expect(tile).toBeInViewport();
   await expect(
     popup
       .getByRole('button', { name: 'Включить микрофон', exact: true })

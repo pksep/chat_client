@@ -89,6 +89,46 @@ export function createPinFixtureApi() {
     body?: unknown
   ): { status: number; json: unknown } => {
     requests.push({ method, path, body });
+    if (method === 'POST' && path.endsWith('/fixture/toggle-pin')) {
+      const command = body as { messageId: string; scope?: string };
+      const message = rows.find(row => row.id === command.messageId);
+      if (!message) return { status: 404, json: {} };
+      const pinned = !(command.scope === 'SELF' ? message.isPinnedForMe : message.isPinnedForAll);
+      message.isPin = pinned;
+      message.isPinnedForMe = pinned;
+      if (command.scope !== 'SELF') message.isPinnedForAll = pinned;
+      message.isPinnedOnlyMe = pinned && command.scope === 'SELF';
+      if (!pinned) comments = comments.filter(comment => comment.messageId !== message.id);
+      return { status: 200, json: { message, pins: rows.filter(row => row.isPin && !row.deletedAt) } };
+    }
+    if (path.endsWith('/topics'))
+      return { status: 200, json: { data: [{
+        id: pinFixtureTopic, type: 'DM', name: 'Иванов И.И.',
+        user: { id: pinFixturePeer, initials: 'Иванов И.И.', name: 'Иван', surname: 'Иванов' },
+        info: { unreadCount: 0 }, lastMessage: rows.at(-1)
+      }], meta: { total: 1, page: 1, limit: 100, totalPages: 1 } } };
+    if (path.endsWith('/users'))
+      return { status: 200, json: { data: [{ id: pinFixturePeer, initials: 'Иванов И.И.', name: 'Иван', surname: 'Иванов' }],
+        meta: { total: 1, page: 1, limit: 100, totalPages: 1 } } };
+    const edit = path.match(/\/topics\/[^/]+\/messages\/([^/]+)$/);
+    if (method === 'PATCH' && edit) {
+      const message = rows.find(row => row.id === edit[1]);
+      if (!message) return { status: 404, json: {} };
+      message.text = (body as { content: string }).content;
+      message.updatedAt = new Date();
+      return { status: 200, json: structuredClone(message) };
+    }
+    const deletion = path.match(/\/messages\/topic\/[^/]+\/([^/]+)$/);
+    if (method === 'DELETE' && deletion) {
+      const message = rows.find(row => row.id === deletion[1]);
+      if (!message) return { status: 404, json: {} };
+      message.deletedAt = new Date();
+      message.isPin = false;
+      comments = comments.filter(comment => comment.messageId !== message.id);
+      return { status: 200, json: { success: true } };
+    }
+    if (method === 'POST' && path.endsWith('/reactions'))
+      return { status: 200, json: { success: true } };
     if (path.endsWith('/pin-comments/commands')) {
       const command = body as PinCommentCommand;
       const previous = acks.get(command.commandId);

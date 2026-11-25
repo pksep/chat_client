@@ -1,4 +1,5 @@
 import { createApp, h, nextTick, ref, watch } from 'vue';
+import '@fontsource-variable/inter';
 import { createPinia } from 'pinia';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { openDesktopCallWindow } from '../../src/services/desktop-call-window';
@@ -273,10 +274,10 @@ const verify = async () => {
     await native.scaleFactor()
   );
   if (
-    Math.abs(incomingSize.width - 700) > 1 ||
-    Math.abs(incomingSize.height - 606) > 1
+    Math.abs(incomingSize.width - 960) > 1 ||
+    Math.abs(incomingSize.height - 720) > 1
   )
-    throw new Error('Размер звонка отличается от веб-модалки с учётом шапки');
+    throw new Error('Окно звонка не открылось с настольным размером');
   const answer = doc.querySelector<HTMLButtonElement>(
     '.call-modal__control-button--answer'
   )!;
@@ -734,8 +735,21 @@ const verify = async () => {
   call.remoteParticipants.value = [];
   await report({ step: 'complete', passed: true, preview: true });
 };
+const showSixParticipants = () => {
+  call.isIncoming.value = false;
+  call.remoteParticipants.value = Array.from({ length: 5 }, (_, index) => ({
+    identity: `local-review-${index}`, name: `Участник ${index + 1}`,
+    videoStream: null, cameraStream: null, screenShareStream: null, audioStream: null,
+    isVideoActive: false, isScreenShareActive: false, isHandRaised: false,
+    activeReaction: null, activeReactionExpiresAt: null, isSpeaking: false,
+    audioLevel: 0, isMicActive: false, connectionQuality: 'excellent'
+  }));
+};
 try {
-  await verify();
+  if (new URLSearchParams(location.search).has('review')) {
+    showSixParticipants();
+    await open();
+  } else await verify();
 } catch (error) {
   await report({
     passed: false,
@@ -749,6 +763,7 @@ Object.assign(window, {
       return host;
     },
     open,
-    useMicrophone
+    useMicrophone,
+    showSixParticipants
   }
 });

@@ -49,31 +49,12 @@ import {
 } from './desktop-window-state';
 
 let lifecycle: Promise<unknown> = Promise.resolve();
-const measureWebCallDialog = () => {
-  const surface = document.createElement('div');
-  surface.className = 'call-modal';
-  surface.setAttribute('aria-hidden', 'true');
-  surface.style.cssText = 'visibility:hidden;pointer-events:none';
-  const dialog = document.createElement('div');
-  dialog.className = 'call-modal__container';
-  surface.append(dialog);
-  document.body.append(surface);
-  try {
-    const bounds = dialog.getBoundingClientRect();
-    const titlebarHeight =
-      parseFloat(
-        getComputedStyle(document.documentElement).getPropertyValue(
-          '--desktop-titlebar-height'
-        )
-      ) || 0;
-    return new LogicalSize(
-      Math.ceil(bounds.width),
-      Math.ceil(bounds.height + titlebarHeight)
-    );
-  } finally {
-    surface.remove();
-  }
-};
+const initialCallWindowSize = () =>
+  // Самостоятельное окно сразу показывает сетку на шесть участников.
+  new LogicalSize(
+    Math.min(960, window.screen.availWidth || 960),
+    Math.min(720, window.screen.availHeight || 720)
+  );
 const exclusive = <T>(operation: () => Promise<T>): Promise<T> => {
   const result = lifecycle.then(operation, operation);
   lifecycle = result.catch(() => {});
@@ -176,7 +157,7 @@ export async function openDesktopCallWindow(options: {
       .catch(error =>
         console.warn('Не удалось подготовить движок звонка:', error)
       );
-    const initialSize = measureWebCallDialog();
+    const initialSize = initialCallWindowSize();
     const popup = window.open(
       'about:blank#sep-chat-call',
       'sep-chat-call',
@@ -185,7 +166,7 @@ export async function openDesktopCallWindow(options: {
     if (!popup) throw new Error('Не удалось открыть отдельное окно звонка');
     const host = popup as CallRenderWindow;
     const nativeWindow = new TauriWindow('call');
-    const childDocument = host.document;
+    let childDocument: Document | undefined;
     const unlisten: UnlistenFn[] = [];
     let alive = true;
     let closing = false;
@@ -223,7 +204,7 @@ export async function openDesktopCallWindow(options: {
       if (checkClosed) clearInterval(checkClosed);
       unlisten.splice(0).forEach(dispose => dispose());
       // Сначала возвращаем живые диалоги в основной документ, затем уничтожаем окно.
-      if (desktopOverlayTarget.value === childDocument.body) {
+      if (childDocument && desktopOverlayTarget.value === childDocument.body) {
         desktopOverlayTarget.value = 'body';
         await nextTick();
       }
@@ -245,6 +226,7 @@ export async function openDesktopCallWindow(options: {
         return null;
       }
       const doc = host.document;
+      childDocument = doc;
       await nativeWindow.setSize(initialSize);
       await nativeWindow.center();
       const preventContextMenu = (event: Event) => event.preventDefault();

@@ -130,5 +130,8 @@
       "@babel/plugin-transform-private-methods"
     ]
   },
-  "packageManager": "bun@1.3.14"
+  "packageManager": "bun@1.3.14",
+  "patchedDependencies": {
+    "@pksep/yui@0.1.353": "patches/@pksep%2Fyui@0.1.353.patch"
+  }
 }

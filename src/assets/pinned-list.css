@@ -17,6 +17,31 @@
   display: flex;
   justify-content: center;
 }
+.chat-container--wallpaper .pinned-list {
+  background: transparent;
+}
+.pinned-list__selection {
+  position: sticky;
+  top: -15px;
+  display: flex;
+  align-items: center;
+  z-index: 9;
+  background: var(--surface-main);
+}
+.pinned-list__selection .selected-messages {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  padding: 8px 0;
+}
+.pinned-list__selection > button {
+  border: 0;
+  padding: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 24px;
+  cursor: pointer;
+}
 :is([data-theme='dark'], .theme-dark) .pinned-list .date-divider > span {
   background: #5d6573;
 }
@@ -88,8 +113,8 @@
   border-right: 1px solid var(--text-brand);
 }
 .pin-note__card {
-  padding: 10px 12px 7px;
-  border: 1px solid var(--text-brand);
+  padding: 12px 14px 9px;
+  border: 1px solid #9cbeff;
   border-radius: 14px;
   background: var(--surface-input-primary);
 }
@@ -107,9 +132,14 @@
   margin-bottom: 5px;
 }
 .pin-note__author {
-  font-size: 12px;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 17px;
+  font-weight: 500;
   color: var(--text-brand);
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .pin-note__actions {
   margin-left: auto;
@@ -133,17 +163,36 @@
 .pin-note__text {
   margin: 0;
   font-size: 14px;
-  line-height: 19px;
+  line-height: 17px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;
 }
-.pin-note__time {
+.pin-note__body {
+  font-size: 14px;
+  line-height: 17px;
+}
+.pin-note__body::after {
+  content: '';
   display: block;
+  clear: both;
+}
+.pin-note__body--multiline .pin-note__text {
+  display: block;
+  line-height: 22px;
+}
+.pin-note__time {
+  float: right;
+  margin: 3px 0 0 10px;
+  white-space: nowrap;
   text-align: right;
   color: var(--text-secondary);
-  font-size: 10px;
-  line-height: 15px;
+  font-size: 12px;
+  line-height: 14px;
+}
+.pin-note__body--multiline .pin-note__time {
+  display: block;
+  float: none;
   margin-top: 5px;
 }
 .pin-note__menu {
@@ -210,9 +259,10 @@
   display: grid;
   place-items: center;
   min-height: 32px;
-  min-width: 28px;
+  min-width: 32px;
 }
 .pinned-list-header__back {
+  min-width: 28px !important;
   color: var(--text-brand) !important;
 }
 .pinned-list-header__identity {
@@ -235,6 +285,7 @@
 }
 .pinned-list-header h3 {
   font-size: 16px;
+  line-height: 19px;
   font-weight: 700;
   margin: 0;
   overflow: hidden;
@@ -243,8 +294,9 @@
 }
 .pinned-list-header p {
   font-size: 12px;
+  line-height: 15px;
   color: var(--text-secondary);
-  margin: 3px 0 0;
+  margin: 0;
 }
 .chat__header-wrapper--pinned > :not(.pinned-list-header) {
   display: none !important;
@@ -266,25 +318,59 @@
 }
 @media (width <= 768px) {
   .pinned-list {
-    padding: 10px;
+    padding: 15px;
+    scrollbar-gutter: auto;
+    scrollbar-width: none;
+  }
+  .pinned-list::-webkit-scrollbar {
+    display: none;
+  }
+  .pinned-list .date-divider {
+    margin-bottom: 15px;
+  }
+  .pinned-list__item {
+    margin-bottom: 15px;
   }
   .pinned-list__item > .message {
-    max-width: 95%;
+    width: 100%;
+    max-width: 100%;
+    hyphens: none;
+  }
+  .pinned-list__item > .message:not(.message--selection-active) {
+    gap: 0;
+  }
+  .pinned-list__item--outgoing .message__content__articles:has(.message__article__text) {
+    max-width: calc(100% - 5px);
   }
   .pin-note {
-    min-width: min(280px, 80%);
-    max-width: calc(100% - 30px);
+    margin: 5px 0 0 35px;
+    width: calc(100% - 82px);
+    min-width: 0;
+    max-width: calc(100% - 35px);
+  }
+  .pin-note--outgoing {
+    margin-left: 0;
+    margin-right: 35px;
+  }
+  .pin-note::before {
+    top: -5px;
+    height: 41px;
+    border-color: #9cbeff;
+    opacity: 1;
   }
   .pin-note__actions {
     display: none;
-  }
-  .pin-note__card {
-    padding: 10px;
   }
   .pin-note-dialog {
     max-width: calc(100vw - 24px);
   }
   .pinned-list-header__back {
     color: var(--text-primary) !important;
+  }
+  .pinned-list-header {
+    padding-inline: 10px;
+  }
+  .pinned-list-header button:not(.pinned-list-header__back) {
+    color: var(--text-disabled);
   }
 }

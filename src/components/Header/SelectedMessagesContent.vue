@@ -10,6 +10,7 @@
     >
       <Button
         class="selected-messages-content__action selected-messages-content__action--danger"
+        aria-label="Удалить"
         :style="{ visibility: isDeletableMessages ? 'visible' : 'hidden' }"
         :type="ButtonTypeEnum.outline"
         :size="SizesEnum.small"
@@ -29,6 +30,7 @@
 
       <Button
         class="selected-messages-content__action"
+        aria-label="Переслать"
         :type="ButtonTypeEnum.outline"
         :size="SizesEnum.small"
         :data-testid="`${props.dataTestid}-SelectedMessages-ForwardButton`"
@@ -89,7 +91,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   dataTestid: 'Header'
 });
-const emit = defineEmits(['heightChange']);
+const emit = defineEmits(['heightChange', 'forward']);
 
 const route = useUrlWatcher();
 const selectedMessagesRef = useTemplateRef('selectedMessagesRef');
@@ -177,6 +179,7 @@ const handleForwardSelectedMessages = async (topic: ITopic): Promise<void> => {
 
   try {
     openForwardDraft(topic, selectedMessages.value);
+    emit('forward');
   } finally {
     clearSelectedMessages();
   }
@@ -189,6 +192,7 @@ const handleForwardSelectedMessagesToAi = (
 
   try {
     openAiForwardDraft(session, selectedMessages.value);
+    emit('forward');
   } finally {
     clearSelectedMessages();
   }

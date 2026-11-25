@@ -3,6 +3,91 @@ import { writeFile } from 'node:fs/promises';
 import { createPinFixtureApi } from './fixtures/pinned-messages-api';
 
 const fixture = '/e2e/fixtures/pinned-messages.html';
+test.setTimeout(90_000);
+
+async function openPinnedMenu(page: Page, index = 1) {
+  await page.getByTestId('Pinned-Messages-ListButton').click();
+  const bubble = page.getByTestId('PinnedList').locator('.message').nth(index);
+  await bubble.scrollIntoViewIfNeeded();
+  await bubble.click({ button: 'right' });
+  await expect(page.locator('.message-context-menu:visible')).toBeVisible();
+  return page.locator('.message-context-menu:visible');
+}
+
+test('меню закрепления сохраняет обычные действия и открывает исходное сообщение', async ({ page }) => {
+  const errors = await openPinnedFixture(page);
+  const menu = await openPinnedMenu(page);
+  for (const label of ['Показать в чате', 'Ответить', 'Переслать', 'Редактировать', 'Копировать текст', 'Открепить', 'Выбрать', 'Данные', 'Удалить'])
+    await expect(menu.getByRole('button', { name: label, exact: true })).toBeVisible();
+  await menu.getByRole('button', { name: 'Показать в чате', exact: true }).click();
+  await expect(page.getByTestId('PinnedList')).toHaveCount(0);
+  await expect(page.locator('[data-message-id="01f0a010-7ff7-4e7b-b97b-000000000001"]').first()).toBeInViewport();
+  expect(errors).toEqual([]);
+});
+
+for (const action of ['Ответить', 'Редактировать'] as const) {
+  test(`действие «${action}» из закреплений открывает обычный composer с сообщением`, async ({ page }) => {
+    const errors = await openPinnedFixture(page);
+    const menu = await openPinnedMenu(page);
+    const button = menu.getByRole('button', { name: action, exact: true });
+    await expect(button).toBeVisible();
+    await button.press('Enter');
+    await expect(page.getByTestId('PinnedList')).toHaveCount(0);
+    if (action === 'Редактировать') {
+      await expect(page.getByRole('heading', { name: 'Редактирование', exact: true })).toBeVisible();
+      await expect(page.locator('.tiptap').first()).toContainText('120 корпусов');
+    } else {
+      await expect(page.getByRole('heading', { name: /В ответ/ })).toBeVisible();
+      await expect(page.locator('.chat__input__action').filter({ has: page.getByRole('heading', { name: /В ответ/ }) })).toContainText('120 корпусов');
+    }
+    expect(errors).toEqual([]);
+  });
+}
+
+test('выбор нескольких закреплений и пересылка в тот же чат закрывают список', async ({ page }) => {
+  const errors = await openPinnedFixture(page);
+  const menu = await openPinnedMenu(page);
+  await menu.getByRole('button', { name: 'Выбрать', exact: true }).click();
+  const selection = page.getByTestId('PinnedList-Selection-SelectedMessages');
+  await expect(selection).toContainText('Выбрано 1');
+  await page.getByTestId('PinnedList').locator('.message').first().click();
+  await expect(selection).toContainText('Выбрано 2');
+  await selection.getByRole('button', { name: 'Переслать', exact: true }).click();
+  await page.locator('.message-forward-modal:visible .contact-selector__item').first().click();
+  await expect(page.getByTestId('PinnedList')).toHaveCount(0);
+  await expect(page.locator('.chat__input__action').first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('фон чата виден внутри закреплений', async ({ page }) => {
+  await openPinnedFixture(page);
+  await page.getByTestId('Pinned-Messages-ListButton').click();
+  await expect(page.getByTestId('PinnedList')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(page.locator('.pin-fixture')).toHaveCSS('background-image', /repeating-linear-gradient/);
+});
+
+test('редактирование старого закрепления не ждёт загрузки исходной истории', async ({ page }) => {
+  const api = createPinFixtureApi();
+  const old = { ...api.rows[1], id: '01f0a010-7ff7-4e7b-b97b-000000000999',
+    text: 'Старое закрепление вне загруженной истории', createdAt: new Date(2020, 1, 1) };
+  const execute = api.execute;
+  api.execute = (method, path, body) => {
+    const response = execute(method, path, body);
+    return path.endsWith('/pinned') ? { status: 200, json: [old, ...api.rows.filter(row => row.isPin)] } : response;
+  };
+  const errors = await openPinnedFixture(page, { api });
+  await page.route(`**/messages/${old.id}/around*`, async route => {
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    await route.fulfill({ json: [old] });
+  });
+  await page.getByTestId('Pinned-Messages-ListButton').click();
+  const bubble = page.locator(`[data-message-id="${old.id}"]`).first();
+  await bubble.click({ button: 'right' });
+  await page.locator('.message-context-menu:visible').getByRole('button', { name: 'Редактировать', exact: true }).press('Enter');
+  await expect(page.getByRole('heading', { name: 'Редактирование', exact: true })).toBeVisible();
+  await expect(page.locator('.tiptap').first()).toContainText(old.text);
+  expect(errors).toEqual([]);
+});
 
 test.afterEach(async ({ page }, testInfo) => {
   if (testInfo.status === testInfo.expectedStatus) return;
@@ -102,7 +187,8 @@ export async function openPinnedFixture(
   await expect
     .poll(() => page.evaluate(() => (window as any).pins?.ready))
     .toBe(true);
-  await expect(page.getByTestId('Pinned-Messages')).toBeVisible();
+  expect(errors).toEqual([]);
+  await expect(page.getByTestId('Pinned-Messages')).toBeVisible({ timeout: 20_000 });
   return errors;
 }
 

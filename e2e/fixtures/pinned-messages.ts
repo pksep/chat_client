@@ -32,6 +32,7 @@ import type {
   IUser
 } from '../../src/components/interfaces/interfaces';
 import '@pksep/yui/styles';
+import '@fontsource-variable/inter';
 import '../../src/assets/globals.css';
 import '../../src/assets/chat-container.css';
 import '../../src/assets/chat.css';
@@ -52,14 +53,14 @@ const user = {
 } as IUser;
 const peer = {
   id: peerId,
-  initials: 'Петров П.П.',
-  name: 'Пётр',
-  surname: 'Петров'
+  initials: 'Иванов И.И.',
+  name: 'Иван',
+  surname: 'Иванов'
 } as IUser;
 const rows = makePinFixtureRows();
 const base = location.origin + '/pin-fixture-api';
 authedUser.value = user;
-setConfig({ CHAT_API_DOMAIN: base });
+setConfig({ CHAT_API_DOMAIN: base, CHAT_PATH_TO_FILE_CDN: location.origin });
 ChatSDK.prototype.connect = () => new Promise<void>(() => {});
 await initializeChat({
   userId: ownerId,
@@ -68,6 +69,20 @@ await initializeChat({
   wsUrl: 'ws://127.0.0.1:65530'
 });
 const sdk = getChatSDK();
+const sendFixtureEvent = sdk.sendWebSocketEvent.bind(sdk);
+sdk.sendWebSocketEvent = (event, payload) => {
+  if (event === 'togglePinMessage') {
+    void fetch(base + '/fixture/toggle-pin', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    }).then(response => response.json()).then(({ message, pins }) => {
+      editMessageFromLocal(topicId, message);
+      savePinnedMessagesToLocal(topicId, pins, { skipCache: true });
+    });
+    return;
+  }
+  if (event === 'togglePresence') return;
+  return sendFixtureEvent(event, payload);
+};
 const defaultPins = rows.filter(row => row.isPin);
 // Настоящий SDK/Reqi обращается только к локальному синтетическому серверу/route.
 (window as any).pinFixtureSeed = { rows, ownerId, peerId, topicId, id };
@@ -92,8 +107,8 @@ const app = createApp({
     h(
       'main',
       {
-        class: 'pin-fixture',
-        style: 'height:100dvh;display:flex;flex-direction:column'
+        class: 'pin-fixture chat-container--wallpaper',
+        style: 'height:100dvh;display:flex;flex-direction:column;background:repeating-linear-gradient(135deg,#e8f0fc,#e8f0fc 24px,#e1ebfa 24px,#e1ebfa 48px)'
       },
       [
         ...(isTauri() ? [h(DesktopTitleBar)] : []),

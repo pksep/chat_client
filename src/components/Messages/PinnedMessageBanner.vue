@@ -17,19 +17,7 @@
         :data-testid="`${props.dataTestid}-ListButton`"
         @click.stop="emit('open-list')"
       >
-        <svg
-          width="22"
-          height="22"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="var(--text-brand)"
-          stroke-width="1.5"
-          aria-hidden="true"
-        >
-          <path
-            d="M13 21H7a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v6M7 7h7M7 11h7M7 15h4M17 13v6m4-6v6m-5-6h6m-5 6h4l1 2h-6l1-2Z"
-          />
-        </svg>
+        <PinnedListIcon style="color: var(--text-brand)" />
       </Button>
       <Button
         :type="ButtonTypeEnum.ghost"
@@ -51,6 +39,7 @@ import {
   IconNameEnum,
   SizesEnum
 } from '@pksep/yui';
+import PinnedListIcon from '../UI/PinnedListIcon.vue';
 
 const props = withDefaults(
   defineProps<{

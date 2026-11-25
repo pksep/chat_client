@@ -19,6 +19,18 @@
       {{ state.error }} <button @click="refresh">Повторить</button>
     </div>
     <PinCommentNotices :topic-id="topicId" />
+    <div v-if="isSelectionMode" class="pinned-list__selection">
+      <SelectedMessagesContent
+        data-testid="PinnedList-Selection"
+        @forward="closePinnedMessagesView"
+      />
+      <button
+        aria-label="Отменить выбор сообщений"
+        @click="clearSelectedMessages"
+      >
+        ×
+      </button>
+    </div>
     <template v-for="(message, index) in visibleMessages" :key="message.id">
       <div
         v-if="index === 0 || day(message) !== day(visibleMessages[index - 1])"
@@ -42,6 +54,10 @@
           :is-me-sender="isOwn(message)"
           :is-dialog="getSelectedTopic(topicId)?.type !== 'GROUP'"
           :is-pin="true"
+          :auth-user-id="authedUser?.id"
+          :message-status="message.status"
+          :is-selection-mode="isSelectionMode"
+          :is-selected="isMessageSelected(message.id)"
           :is-mobile="isMobile"
           :time="time(message)"
           :sender="message.senderUser?.initials"
@@ -52,6 +68,12 @@
           :pin-list-mode="true"
           :data-testid="`PinnedList-Message-${message.id}`"
           @unmount-navigate-original="navigate(message)"
+          @toggle-selection="toggleSelectedMessage(topicId, message)"
+          @unmount-edit-message-id="
+            emit('composer-action', { kind: 'edit', message })
+          "
+          @unmount-reply-message-id="reply(message, $event)"
+          @unmount-forward-message="emit('forward-message', $event)"
           @unmount-navigate-message-id="emit('navigate', $event)"
           @open-sticker-pack="emit('open-sticker-pack', $event)"
         />
@@ -72,7 +94,8 @@
   </section>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { closeActivePopover } from '../../composables/useContextMenu';
 import { closePinnedMessagesView } from '../../services/pinned-messages-view';
 import { authedUser } from '../../composables/useAuth';
 import { getSelectedTopic } from '../../composables/useTopics';
@@ -83,7 +106,15 @@ import {
   getPinnedMessagesByTopicId
 } from '../../services/useMessages';
 import { usePinComments } from '../../services/usePinComments';
-import type { IMessage } from '../interfaces/interfaces';
+import type { IMessage, ITopic } from '../interfaces/interfaces';
+import type { PinnedMessageComposerAction } from '../../types/pinned-message-action';
+import {
+  isMessageSelectionModeForTopic,
+  isMessageSelected,
+  toggleSelectedMessage,
+  clearSelectedMessages
+} from '../../composables/useSelectedMessages';
+import SelectedMessagesContent from '../Header/SelectedMessagesContent.vue';
 import MessageBubble from './MessageBubble.vue';
 import PinCommentActions from './PinCommentActions.vue';
 import PinCommentNotices from './PinCommentNotices.vue';
@@ -91,7 +122,23 @@ const props = defineProps<{ topicId: string }>();
 const emit = defineEmits<{
   navigate: [message: IMessage | unknown];
   'open-sticker-pack': [pack: string];
+  'composer-action': [action: PinnedMessageComposerAction];
+  'forward-message': [payload: { message: IMessage; topic: ITopic }];
 }>();
+const isSelectionMode = computed(() =>
+  isMessageSelectionModeForTopic(props.topicId)
+);
+const reply = (
+  message: IMessage,
+  payload: { quoteText?: string; quoteOccurrenceIndex?: number }
+) => {
+  emit('composer-action', {
+    kind: 'reply',
+    message,
+    quoteText: payload.quoteText,
+    quoteOccurrenceIndex: payload.quoteOccurrenceIndex
+  });
+};
 const { state, pinComments } = usePinComments(() => props.topicId);
 const { state: isMobile } = useResizeState(MAX_W_MD);
 const loading = ref(false);
@@ -143,4 +190,5 @@ onMounted(() => {
   panel.value?.focus({ preventScroll: true });
   void refresh();
 });
+onBeforeUnmount(() => closeActivePopover());
 </script>
