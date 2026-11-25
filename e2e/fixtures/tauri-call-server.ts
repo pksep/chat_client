@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 
 // Только локальный LiveKit --dev с вымышленными участниками.
-const origin = 'http://localhost:5173';
+const origin = process.env.LOCAL_CALL_ORIGIN || 'http://localhost:5173';
 const reports: unknown[] = [];
 const commands = new Map<string, string[]>();
 const encode = (value: unknown) =>
