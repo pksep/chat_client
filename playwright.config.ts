@@ -45,6 +45,7 @@ export default defineConfig({
       testMatch: [
         'macos-desktop.spec.ts',
         'macos-form-styles.spec.ts',
+        'pinned-messages-list.spec.ts',
         'desktop-shell.spec.ts',
         'file-download-cancel.spec.ts',
         'telemetry-location.spec.ts',
