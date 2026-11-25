@@ -69,6 +69,11 @@
   overflow: visible;
 }
 
+.mobile-list-container__section--ai .chat-folder-rail--tabs {
+  width: 100%;
+  margin-inline: 0;
+}
+
 .mobile-list-container__section--chats .contact-list,
 .mobile-list-container__section--clients .contact-list {
   max-height: none;

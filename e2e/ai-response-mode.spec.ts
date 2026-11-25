@@ -14,7 +14,10 @@ const prepareAiSession = async (page: Page): Promise<void> => {
       CHAT_ERP_URL: organizationUrl
   };
 
-  await page.route(organizationUrl + '/config', route => route.fulfill({ json: config }));
+  await page.route(organizationUrl + '/config', route => route.fulfill({
+    contentType: 'text/plain',
+    body: Object.entries(config).map(([key, value]) => 'VITE_' + key + '=' + value).join('\n')
+  }));
   await page.route(organizationUrl + '/auth/session', route => route.fulfill({ json: user }));
   await page.addInitScript(({ organizationUrl, config, user }): void => {
     sessionStorage.setItem('menu-collapse', 'false');
@@ -52,7 +55,8 @@ test('раздел агентов доступен только в настол�
     });
   });
   await page.setViewportSize({ width: 1100, height: 800 });
-  await page.goto('/ai' + organizationQuery);
+  await page.goto('/' + organizationQuery);
+  await page.locator('[data-testid$="MenuBottomNav-AI"]:visible').click();
   const tabs = page.getByRole('tablist', { name: 'Разделы ИИ' });
   const agents = tabs.getByRole('tab', { name: 'Агенты' });
   await expect(tabs).toBeVisible({ timeout: 60_000 });
