@@ -124,7 +124,13 @@ const time = (message: IMessage) =>
     hour: '2-digit',
     minute: '2-digit'
   });
-const navigate = (message: IMessage) => emit('navigate', message);
+const navigate = (message: IMessage) =>
+  emit('navigate', {
+    message,
+    allowOptimisticTarget: true,
+    shortTransition: true,
+    scrollBehavior: 'smooth'
+  });
 const refresh = async () => {
   loading.value = true;
   await Promise.all([
