@@ -249,9 +249,7 @@
 .chat__header-wrapper--pinned > :not(.pinned-list-header) {
   display: none !important;
 }
-/* WebKit не восстанавливает прокрутку после inert/visibility на display: contents. */
-.chat--pinned-open > :not(.pinned-list, .chat__message-viewport),
-.chat--pinned-open .chat__message-viewport > * {
+.chat--pinned-open > :not(.pinned-list) {
   visibility: hidden;
   pointer-events: none;
 }
@@ -259,7 +257,7 @@
   overflow-anchor: none;
   scroll-behavior: auto;
 }
-.chat--pinned-open .chat__mobile-route-view > :not(.chat__message-viewport) {
+.chat--pinned-open .chat__mobile-route-view > * {
   visibility: hidden;
   pointer-events: none;
 }

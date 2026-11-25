@@ -14,6 +14,7 @@ test.afterEach(async ({ page }, testInfo) => {
     layoutPath,
     JSON.stringify(
       await page.evaluate(() => ({
+        scrollCalls: (window as any).pinNavigationScrollCalls,
         viewport: {
           width: innerWidth,
           height: innerHeight,
@@ -368,6 +369,47 @@ test('конфликт версии возвращает подтверждён�
 
 test('переход к оригиналу закрывает список', async ({ page }, testInfo) => {
   const errors = await openPinnedFixture(page);
+  if (process.env.PIN_NAV_DIAGNOSTICS === '1') {
+    await page.evaluate(() => {
+      const calls: unknown[] = [];
+      (window as any).pinNavigationScrollCalls = calls;
+      const record = (element: Element, operation: string, value: unknown) => {
+        if (!element.classList.contains('chat__message-wrapper')) return;
+        calls.push({
+          time: performance.now(),
+          operation,
+          value,
+          top: element.scrollTop,
+          height: element.scrollHeight,
+          stack: new Error().stack
+        });
+      };
+      const scrollTo = Element.prototype.scrollTo;
+      Element.prototype.scrollTo = function (...args: any[]) {
+        record(this, 'scrollTo', args);
+        return (scrollTo as any).apply(this, args);
+      };
+      const top = Object.getOwnPropertyDescriptor(
+        Element.prototype,
+        'scrollTop'
+      )!;
+      Object.defineProperty(Element.prototype, 'scrollTop', {
+        ...top,
+        set(value) {
+          record(this, 'scrollTop', value);
+          top.set!.call(this, value);
+        }
+      });
+      document.addEventListener(
+        'scroll',
+        event => {
+          if (event.target instanceof Element)
+            record(event.target, 'scroll-event', null);
+        },
+        true
+      );
+    });
+  }
   await page.getByTestId('Pinned-Messages-ListButton').click();
   await page
     .getByTestId('PinnedList')

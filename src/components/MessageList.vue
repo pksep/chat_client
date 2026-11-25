@@ -1,6 +1,7 @@
 <template>
   <div
     class="chat__message-viewport"
+    :inert="props.suspended || undefined"
     :aria-hidden="props.suspended || undefined"
   >
     <div
@@ -13,7 +14,6 @@
         }
       ]"
       ref="chatWrapperRef"
-      :inert="props.suspended || undefined"
       v-if="isAiRoute"
       :style="chatMessageWrapperStyle"
       @pointerdown.capture="preserveMobileMessageInputFocus"
@@ -120,7 +120,6 @@
       ]"
       v-if="!isAiRoute && !isDefaultRoute"
       ref="chatWrapperRef"
-      :inert="props.suspended || undefined"
       :style="chatMessageWrapperStyle"
       @vue:mounted="scrollToBottom"
       @pointerdown.capture="preserveMobileMessageInputFocus"
