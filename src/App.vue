@@ -82,6 +82,7 @@ import { useThemeStore } from './stores/theme';
 import { persistDesktopRecovery } from './services/desktop-recovery';
 import {
   fetchOrganizationConfig,
+  isOrganizationConfig,
   organizationConfigErrorMessage
 } from './utils/organization-config';
 import { isBotUser } from './utils/bot';
@@ -638,7 +639,7 @@ const loadRemoteConfig = async (options?: {
   } catch (error) {
     console.error(error);
 
-    if (options?.fallbackConfig) {
+    if (isOrganizationConfig(options?.fallbackConfig)) {
       serverUrl.value = normalizedUrl;
       setLastOrganization(normalizedUrl);
       isAddingNewOrganization.value = false;

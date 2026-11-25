@@ -7,6 +7,17 @@ export class OrganizationConfigError extends Error {
   }
 }
 
+export function isOrganizationConfig(
+  config: Partial<IChatContainerConfig> | null | undefined
+): config is IChatContainerConfig {
+  try {
+    const api = new URL(config?.CHAT_API_DOMAIN || '');
+    return ['https:', 'http:'].includes(api.protocol);
+  } catch {
+    return false;
+  }
+}
+
 export async function fetchOrganizationConfig(
   url: string,
   parse: (text: string) => Partial<IChatContainerConfig>
@@ -20,10 +31,7 @@ export async function fetchOrganizationConfig(
     }
     const config = parse(await response.text());
     // SPA fallback и чужой сайт тоже могут вернуть HTTP 200.
-    try {
-      const api = new URL(config.CHAT_API_DOMAIN || '');
-      if (!['https:', 'http:'].includes(api.protocol)) throw new Error();
-    } catch {
+    if (!isOrganizationConfig(config)) {
       throw new OrganizationConfigError('not-found');
     }
     return config;

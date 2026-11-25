@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from 'bun:test';
 import {
   fetchOrganizationConfig,
+  isOrganizationConfig,
   OrganizationConfigError,
   organizationConfigErrorMessage
 } from '../src/utils/organization-config';
@@ -13,6 +14,14 @@ const parse = (body: string) => ({
   CHAT_API_DOMAIN: body.startsWith('VITE_CHAT_API_DOMAIN=')
     ? body.slice(21)
     : undefined
+});
+
+test('пустая конфигурация старой неверной организации не используется как offline fallback', () => {
+  expect(isOrganizationConfig({})).toBe(false);
+  expect(isOrganizationConfig(undefined)).toBe(false);
+  expect(
+    isOrganizationConfig({ CHAT_API_DOMAIN: 'https://api.fixture.invalid/api' })
+  ).toBe(true);
 });
 
 test('не сохраняет HTML fallback и отсутствующий сервер как организацию', async () => {

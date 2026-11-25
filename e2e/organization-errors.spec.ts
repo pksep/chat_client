@@ -23,3 +23,17 @@ for (const [status, body, message] of [
     await expect(page.getByPlaceholder('Введите ссылку')).toHaveValue('https://missing.fixture.invalid');
   });
 }
+
+test('старая неверная организация не открывает вход с пустой конфигурацией', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('chat_runtime_organizations', JSON.stringify([
+      { url: 'https://missing.fixture.invalid', config: {} }
+    ]));
+  });
+  await page.route('https://missing.fixture.invalid/config', route => route.fulfill({
+    status: 404, headers: { 'Access-Control-Allow-Origin': '*' }
+  }));
+  await page.goto('/?organization=https%3A%2F%2Fmissing.fixture.invalid');
+  await expect(page.getByText('Сервер по этой ссылке не найден. Проверьте адрес.', { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Введите корпоративную ссылку', { exact: true })).toBeVisible();
+});
