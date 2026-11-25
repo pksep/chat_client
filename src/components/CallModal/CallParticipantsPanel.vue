@@ -251,7 +251,8 @@ const suppressSwipeClick = (event: MouseEvent) => {
   grid-template-rows: repeat(2, minmax(0, 1fr));
   grid-auto-rows: minmax(0, 1fr);
 }
-.call-modal__remote-grid.call-modal__remote-grid--group-duo .call-modal__remote-tile {
+.call-modal__remote-grid.call-modal__remote-grid--group-duo
+  .call-modal__remote-tile {
   min-height: 0;
 }
 @container call-participants (min-aspect-ratio: 1 / 1) {
