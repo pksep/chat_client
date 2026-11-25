@@ -254,7 +254,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           bunx playwright install webkit
-          bunx playwright test e2e/creation-modal-desktop.spec.ts e2e/forward-modal-desktop.spec.ts e2e/macos-desktop.spec.ts e2e/macos-form-styles.spec.ts e2e/image-editor-desktop.spec.ts e2e/file-download-cancel.spec.ts e2e/pinned-messages-list.spec.ts --project=webkit-desktop --workers=1 --reporter=line --output=test-results/dialog-layout
+          bunx playwright test e2e/creation-modal-desktop.spec.ts e2e/forward-modal-desktop.spec.ts e2e/macos-desktop.spec.ts e2e/macos-form-styles.spec.ts e2e/image-editor-desktop.spec.ts e2e/file-download-cancel.spec.ts e2e/pinned-messages-list.spec.ts e2e/compact-call-layout.spec.ts --project=webkit-desktop --workers=1 --reporter=line --output=test-results/dialog-layout
       - uses: actions/upload-artifact@v4
         if: always() && runner.os == 'macOS'
         with:

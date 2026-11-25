@@ -9,7 +9,9 @@ async function openPinnedMenu(page: Page, index = 1) {
   await page.getByTestId('Pinned-Messages-ListButton').click();
   const bubble = page.getByTestId('PinnedList').locator('.message').nth(index);
   await bubble.scrollIntoViewIfNeeded();
-  await bubble.click({ button: 'right' });
+  // В macOS WebKit правый клик по тексту сам выделяет слово и открывает ответ на фрагмент.
+  // Здесь проверяется обычное меню без выделения, поэтому нажимаем на край строки.
+  await bubble.click({ button: 'right', position: { x: 8, y: 8 } });
   await expect(page.locator('.message-context-menu:visible')).toBeVisible();
   return page.locator('.message-context-menu:visible');
 }
