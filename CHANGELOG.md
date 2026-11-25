@@ -1,3 +1,10 @@
+## [1.56.1](https://github.com/pksep/chat_client/compare/v1.56.0...v1.56.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* **chat-561:** open original pinned messages reliably on macOS ([#506](https://github.com/pksep/chat_client/issues/506)) ([6cb1d74](https://github.com/pksep/chat_client/commit/6cb1d746c881a8f3aa442739ffb4b6b60cdd4f0a))
+
 # [1.56.0](https://github.com/pksep/chat_client/compare/v1.55.0...v1.56.0) (2026-11-25)
 
 
