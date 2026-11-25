@@ -1,3 +1,16 @@
+# [1.56.0](https://github.com/pksep/chat_client/compare/v1.55.0...v1.56.0) (2026-11-25)
+
+
+### Bug Fixes
+
+* **chat-561:** center pinned dates with classic scrollbars ([21bbd9a](https://github.com/pksep/chat_client/commit/21bbd9a06c5eab1bf3214e469e7a33d32f257b89))
+* **desktop:** cancel file downloads and keep macOS forms compact ([bf1786e](https://github.com/pksep/chat_client/commit/bf1786ef3f835c29e3435f4d0f9ccd786c920701))
+
+
+### Features
+
+* **chat-561:** add pinned messages list and pin comments ([a162e7e](https://github.com/pksep/chat_client/commit/a162e7eda92a1313e0b1b75e0562f5799a58fdc7))
+
 # [1.55.0](https://github.com/pksep/chat_client/compare/v1.54.2...v1.55.0) (2026-11-24)
 
 
