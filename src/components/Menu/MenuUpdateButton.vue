@@ -37,7 +37,9 @@
       <Icon
         v-else
         :name="
-          isUpdateDownloaded ? IconNameEnum.checkCircle : IconNameEnum.download
+          isUpdateDownloaded && !isDesktopApp
+            ? IconNameEnum.checkCircle
+            : IconNameEnum.download
         "
         class="menu-update-button__icon"
         aria-hidden="true"
