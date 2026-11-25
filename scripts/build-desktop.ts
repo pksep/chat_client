@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { writeDesktopConfig } from './desktop-release';
+import { buildPiSidecar, piAgentBundlePath } from './build-pi-sidecar';
 
 const version = process.env.DESKTOP_VERSION;
 const args = process.argv.slice(2);
@@ -19,11 +20,13 @@ if (
 }
 const config = '.codex/desktop-release.config.json';
 await writeDesktopConfig(config, version);
+buildPiSidecar(args);
+const value = JSON.parse(await readFile(config, 'utf8'));
+value.bundle.externalBin = [piAgentBundlePath];
 if (bootstrap) {
-  const value = JSON.parse(await readFile(config, 'utf8'));
   value.bundle.createUpdaterArtifacts = false;
-  await writeFile(config, JSON.stringify(value));
 }
+await writeFile(config, JSON.stringify(value));
 const code = await new Promise<number | null>((resolve, reject) => {
   const child = spawn(
     process.execPath,

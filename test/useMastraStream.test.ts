@@ -193,6 +193,152 @@ afterEach(() => {
 });
 
 describe('useMastra stream lifecycle', () => {
+  test('кнопка подтверждения сохраняет голосовой контекст и озвучивает результат', async (): Promise<void> => {
+    const stream = createControlledStream();
+    const request = spyOn(globalThis, 'fetch').mockResolvedValue(
+      stream.response
+    );
+    const runtime = createRuntime();
+    runtime.pendingApproval.value = {
+      runId: 'run',
+      toolCallId: 'tool',
+      toolName: 'create',
+      args: {}
+    };
+    const text = mock((_text: string): void => {});
+    try {
+      const approving = runtime.resolveToolApproval(
+        'approve',
+        undefined,
+        undefined,
+        undefined,
+        {
+          interactionMode: 'voice',
+          onText: text,
+          onReset: (): void => {}
+        }
+      );
+      await waitFor(() => request.mock.calls.length === 1);
+      const body = JSON.parse(String(request.mock.calls[0][1]?.body));
+      expect(body.requestContext.interactionMode).toBe('voice');
+      expect(body.requestContext.approvalMode).toBe('strict');
+      expect(body.toolCallId).toBe('tool');
+      stream.push({ type: 'text-delta', payload: { text: 'Сборка создана.' } });
+      stream.push({ type: 'finish' });
+      stream.close();
+      await expect(approving).resolves.toMatchObject({
+        accepted: true,
+        responseText: 'Сборка создана.'
+      });
+      expect(text.mock.calls).toEqual([['Сборка создана.']]);
+    } finally {
+      request.mockRestore();
+    }
+  });
+
+  test('сохраняет ответ, даже если обработчик озвучки выбросил ошибку', async (): Promise<void> => {
+    streamFactory = () =>
+      new Response(
+        'data: {"type":"text-delta","payload":{"text":"Ответ сохранён."}}\n\n' +
+          'data: {"type":"finish"}\n\n',
+        { headers: { 'Content-Type': 'text/event-stream' } }
+      );
+    const runtime = createRuntime();
+    const result = await runtime.sendMessage(
+      'Ответь',
+      undefined,
+      undefined,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      {
+        interactionMode: 'voice',
+        onText: (): void => {
+          throw new Error('Audio unavailable');
+        },
+        onReset: (): void => {
+          throw new Error('Audio unavailable');
+        }
+      }
+    );
+
+    expect(result).toMatchObject({
+      accepted: true,
+      responseText: 'Ответ сохранён.'
+    });
+    expect(savedHistories.at(-1)?.at(-1)?.content).toBe('Ответ сохранён.');
+  });
+
+  test('передаёт голосу только публичный текст до завершения ответа', async (): Promise<void> => {
+    const stream = createControlledStream();
+    streamFactory = () => stream.response;
+    const runtime = createRuntime();
+    const text = mock((_value: string): void => {});
+    const sending = runtime.sendMessage(
+      'Найди задачу',
+      undefined,
+      undefined,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      {
+        interactionMode: 'voice',
+        onText: text,
+        onReset: (): void => {}
+      }
+    );
+    await waitFor(() => Boolean(sdkSignal));
+    stream.push({
+      type: 'reasoning-delta',
+      payload: { text: 'internal reasoning' }
+    });
+    stream.push({
+      type: 'tool-result',
+      payload: { result: 'private payload' }
+    });
+    stream.push({ type: 'text-delta', payload: { text: 'Нашёл задачу. ' } });
+    await waitFor(() => text.mock.calls.length === 1);
+    expect(text.mock.calls[0]).toEqual(['Нашёл задачу. ']);
+    expect(sdkSignal?.aborted).toBe(false);
+    stream.push({ type: 'finish' });
+    stream.close();
+    await expect(sending).resolves.toMatchObject({ accepted: true });
+  });
+
+  test('голосовое да не вызывает подтверждение операции', async (): Promise<void> => {
+    const stream = createControlledStream();
+    streamFactory = () => stream.response;
+    const runtime = createRuntime();
+    runtime.pendingApproval.value = {
+      runId: 'run',
+      toolCallId: 'tool',
+      toolName: 'create',
+      args: {}
+    };
+    const sending = runtime.sendMessage(
+      'да',
+      undefined,
+      undefined,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      {
+        interactionMode: 'voice',
+        onText: (): void => {},
+        onReset: (): void => {}
+      }
+    );
+    await expect(sending).resolves.toMatchObject({
+      accepted: true,
+      responseText:
+        'Сейчас ожидается решение по действию. Выберите «Подтвердить» или «Отменить» на карточке.'
+    });
+    expect(sdkSignal).toBeUndefined();
+  });
+
   test('буферизует текст, сохраняет его с debounce и не пишет loading-placeholder', async () => {
     const stream = createControlledStream();
     streamFactory = () => stream.response;

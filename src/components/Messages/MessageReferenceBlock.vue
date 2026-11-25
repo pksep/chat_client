@@ -1,11 +1,19 @@
 <template>
   <div
-    v-if="props.forwardUser || shouldRenderReply"
+    v-if="aiSource || props.forwardUser || shouldRenderReply"
     class="message-reference-block"
     :class="{ 'message-reference-block--outgoing': props.isMeSender }"
   >
+    <button
+      v-if="aiSource"
+      type="button"
+      class="message-reference-forward message-reference-forward--interactive message-reference-forward--ai"
+      @click.stop="openAiInfo(aiSource.threadId, aiSource)"
+    >
+      Переслано: от СЭПи
+    </button>
     <div
-      v-if="props.forwardUser"
+      v-else-if="props.forwardUser"
       :class="[
         'message-reference-forward',
         {
@@ -83,6 +91,9 @@ import { useMessageMedia } from './composables/useMessageMedia';
 import type { IMessageBubbleProps } from './interface/interface';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import { getMessageReplyQuoteText } from '../../utils/messageReplyQuote';
+import { parseMessageEx } from '../../utils/messageReplyQuote';
+import { aiConversationSourceSchema } from '../../services/aiConversationSource';
+import { useAiConversationInfo } from '../../composables/useAiConversationInfo';
 
 const props = defineProps<{
   forwardUser?: IMessageBubbleProps['forwardUser'];
@@ -96,6 +107,14 @@ const props = defineProps<{
 defineEmits(['navigate-message']);
 
 const { getFullMediaPath } = useMessageMedia();
+const { open: openAiInfo } = useAiConversationInfo();
+const aiSource = computed(() => {
+  const result = aiConversationSourceSchema.safeParse(
+    parseMessageEx(props.messageEx).aiSource
+  );
+
+  return result.success ? result.data : null;
+});
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
 
 const replyPreviewMedia = computed(() => {
@@ -213,6 +232,14 @@ const replyText = computed(() => {
 </script>
 
 <style scoped>
+.message-reference-forward--ai {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
 .message-reference-forward--interactive,
 .message-reference-reply__author--interactive {
   cursor: pointer;

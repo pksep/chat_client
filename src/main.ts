@@ -17,6 +17,7 @@ import { installDesktopMediaPermissions } from './services/desktop-media-permiss
 import { installDesktopClipboardPermissions } from './services/desktop-permission-preferences';
 import { initDesktopScreenCapture } from './services/desktop-screen-capture';
 import { installDesktopCallControls } from './services/desktop-call-controls';
+import { restoreDesktopRecovery } from './services/desktop-recovery';
 
 performance.mark('chat-startup:modules-ready');
 const disposeIosPwaViewport = initIosPwaViewport();
@@ -226,6 +227,7 @@ const mountApp = async (): Promise<void> => {
     preferSystemFont: Capacitor.getPlatform() === 'android'
   });
 
+  await restoreDesktopRecovery();
   const app = createApp(App);
 
   const piniaStore = createPinia();

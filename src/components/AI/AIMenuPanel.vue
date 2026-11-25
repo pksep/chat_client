@@ -1,9 +1,39 @@
 <template>
+  <ChatFoldersPanel
+    v-if="isManagingAiFolders && !props.isCollapse"
+    scope="ai"
+    :topics="[]"
+    :choices="folderChoices"
+    :folders="aiFolders"
+    :loading="isFoldersLoading"
+    :mobile="isMobile"
+    :selected-folder-id="activeAiFolderId"
+    @close="closeFolderManager"
+    @select-folder="selectAiFolder"
+    @select-choice="handleFolderChoiceSelect"
+  >
+    <template v-if="isMobile" #folders>
+      <ChatFolderRail
+        mobile
+        scope="ai"
+        :folders="aiFolders"
+        :topics="[]"
+        :selected-folder-id="activeAiFolderId"
+        is-active
+        is-managing
+        all-label="Все"
+        @select="selectAiFolder"
+        @manage="closeFolderManager"
+      />
+    </template>
+  </ChatFoldersPanel>
   <section
+    v-else
     :class="[
       'ai-menu-panel',
       {
         'ai-menu-panel--searching': !props.isCollapse && query.trim(),
+        'ai-menu-panel--with-folders': isMobile && !props.isCollapse,
         'ai-menu-panel--collapse': props.isCollapse
       }
     ]"
@@ -19,7 +49,20 @@
         }
       ]"
     >
-      <h2 v-if="!props.isCollapse">ИИ-Ассистент</h2>
+      <h2 v-if="!props.isCollapse">
+        {{ activeAiFolder?.name || 'ИИ-Ассистент' }}
+      </h2>
+      <Button
+        v-if="isMobile && !props.isCollapse"
+        class="chats-toolbar__folders-button"
+        :type="ButtonTypeEnum.secondary"
+        :size="SizesEnum.little"
+        aria-label="Открыть папки"
+        data-testid="AI-MenuPanel-FoldersButton"
+        @click="openFolderManager"
+      >
+        <span class="chat-folder-rail__manage-icon" aria-hidden="true" />
+      </Button>
       <Button
         v-if="props.isCollapse"
         class="ai-menu-panel__collapsed-create chats-toolbar__create-button"
@@ -72,6 +115,20 @@
       </Teleport>
     </MenuSectionHeading>
 
+    <ChatFolderRail
+      v-if="isMobile && !props.isCollapse"
+      mobile
+      tabs
+      scope="ai"
+      :folders="aiFolders"
+      :topics="[]"
+      :selected-folder-id="activeAiFolderId"
+      is-active
+      :is-managing="false"
+      @select="selectAiFolder"
+      @manage="openFolderManager"
+    />
+
     <div v-if="!props.isCollapse" class="ai-menu-panel__search-shell">
       <MenuSearch
         class="ai-menu-panel__search"
@@ -86,6 +143,16 @@
       role="tablist"
       aria-label="Разделы ИИ"
     >
+      <button
+        v-if="hasDesktopAgentTab"
+        type="button"
+        :class="{ 'ai-menu-panel__tab--active': activeTab === 'agents' }"
+        role="tab"
+        :aria-selected="activeTab === 'agents'"
+        @click="handleTab('agents')"
+      >
+        Агенты
+      </button>
       <button
         type="button"
         :class="{ 'ai-menu-panel__tab--active': activeTab === 'chats' }"
@@ -153,6 +220,13 @@
                   :height="24"
                   class="ai-menu-panel__collapsed-icon"
                 />
+                <span
+                  v-if="item.activityStatus"
+                  :class="[
+                    'ai-menu-panel__activity-status',
+                    `ai-menu-panel__activity-status--${item.activityStatus}`
+                  ]"
+                ></span>
               </span>
             </button>
             <span
@@ -164,7 +238,7 @@
         </nav>
       </template>
 
-      <template v-else-if="activeTab === 'chats' && filteredSessions.length">
+      <template v-else-if="activeTab !== 'tasks' && filteredSessions.length">
         <template v-for="session in filteredSessions" :key="session.id">
           <article
             :class="[
@@ -193,7 +267,7 @@
                 <Tooltip
                   v-if="backgroundActivityStatusBySessionId[session.id]"
                   :hint="
-                    getActivityStatusLabel(
+                    getAiActivityStatusLabel(
                       backgroundActivityStatusBySessionId[session.id]
                     )
                   "
@@ -208,7 +282,7 @@
                       `ai-menu-panel__activity-status--${backgroundActivityStatusBySessionId[session.id]}`
                     ]"
                     :aria-label="
-                      getActivityStatusLabel(
+                      getAiActivityStatusLabel(
                         backgroundActivityStatusBySessionId[session.id]
                       )
                     "
@@ -224,13 +298,13 @@
               </span>
             </button>
             <Teleport to="body">
-              <ContextMenu
-                :visible="!!isOpen[sessionMenuId(session.id)]"
+              <TopicFolderContextMenu
+                scope="ai"
+                :ai-item="{ type: 'session', id: session.id }"
+                v-if="!!isOpen[sessionMenuId(session.id)]"
                 :position="position"
                 :data-testid="`AI-MenuPanel-SessionContext-${session.id}`"
-                @unmount-close="
-                  () => closeActivePopover(sessionMenuId(session.id))
-                "
+                @close="() => closeActivePopover(sessionMenuId(session.id))"
               >
                 <Button
                   :type="ButtonTypeEnum.popover"
@@ -259,7 +333,7 @@
                   <Icon :name="IconNameEnum.deleteSmall" />
                   Удалить чат
                 </Button>
-              </ContextMenu>
+              </TopicFolderContextMenu>
             </Teleport>
           </article>
 
@@ -381,7 +455,7 @@
         :text="
           query.trim()
             ? 'Ничего не найдено'
-            : activeTab === 'chats'
+            : activeTab !== 'tasks'
               ? 'Здесь будут чаты'
               : 'Здесь будут задачи'
         "
@@ -391,13 +465,14 @@
   </section>
 
   <Teleport to="body">
-    <ContextMenu
-      v-for="task in tasks"
+    <TopicFolderContextMenu
+      scope="ai"
+      :ai-item="automationFolderItem(task)"
+      v-for="task in tasks.filter(item => isOpen[taskMenuId(item.id)])"
       :key="taskMenuId(task.id)"
-      :visible="!!isOpen[taskMenuId(task.id)]"
       :position="position"
       :data-testid="`AI-MenuPanel-TaskContext-${task.id}`"
-      @unmount-close="() => closeActivePopover(taskMenuId(task.id))"
+      @close="() => closeActivePopover(taskMenuId(task.id))"
     >
       <Button
         :type="ButtonTypeEnum.popover"
@@ -429,14 +504,17 @@
         <Icon :name="IconNameEnum.deleteSmall" />
         Удалить автоматизацию
       </Button>
-    </ContextMenu>
-    <ContextMenu
-      v-for="session in taskSessions"
+    </TopicFolderContextMenu>
+    <TopicFolderContextMenu
+      scope="ai"
+      :ai-item="{ type: 'session', id: session.id }"
+      v-for="session in taskSessions.filter(
+        item => isOpen[sessionMenuId(item.id)]
+      )"
       :key="sessionMenuId(session.id)"
-      :visible="!!isOpen[sessionMenuId(session.id)]"
       :position="position"
       :data-testid="`AI-MenuPanel-TaskSessionContext-${session.id}`"
-      @unmount-close="() => closeActivePopover(sessionMenuId(session.id))"
+      @close="() => closeActivePopover(sessionMenuId(session.id))"
     >
       <Button
         :type="ButtonTypeEnum.popover"
@@ -455,7 +533,7 @@
         <Icon :name="IconNameEnum.deleteSmall" />
         Удалить задачу
       </Button>
-    </ContextMenu>
+    </TopicFolderContextMenu>
     <ContextMenu
       :visible="props.isCollapse && !!collapsedPreviewItem"
       :position="collapsedPreviewPosition"
@@ -493,7 +571,21 @@
 import MenuSearch from '../UI/MenuSearch.vue';
 import { vMenuListPress } from '../../directives/menu-list-press';
 import MenuSectionHeading from '../UI/MenuSectionHeading.vue';
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useChatFolders } from '../../composables/useChatFolders';
+import { useResizeState } from '../../composables/useResizeState';
+import { MAX_W_MD } from '../../utils/constants';
+import {
+  automationFolderItem,
+  folderContainsAiItem
+} from '../../utils/ai-folder';
+import type {
+  AiFolderChoice,
+  AiFolderItem
+} from '../../services/useChatSDK/chat-folder';
+import ChatFoldersPanel from '../Menu/ChatFoldersPanel.vue';
+import ChatFolderRail from '../Menu/ChatFolderRail.vue';
+import TopicFolderContextMenu from '../ContactList/TopicFolderContextMenu.vue';
 import {
   Button,
   ButtonTypeEnum,
@@ -507,6 +599,7 @@ import { useContextMenu } from '../../composables/useContextMenu';
 import {
   type AiAssistantActivity,
   type AiAssistantActivityStatus,
+  getAiActivityStatusLabel,
   type AiAssistantTab,
   useAiAssistant
 } from '../../composables/useAiAssistant';
@@ -537,6 +630,7 @@ type CollapsedAiMenuItem =
       description: string;
       status: AiAssistantActivityStatus;
       statusLabel: string;
+      activityStatus?: AiAssistantActivityStatus;
       sessionId?: string;
       taskId?: string;
     }
@@ -547,12 +641,14 @@ type CollapsedAiMenuItem =
       description: string;
       status: AiAssistantActivityStatus;
       statusLabel: string;
+      activityStatus?: AiAssistantActivityStatus;
     };
 
 const {
   sessions,
   tasks,
   activeTab,
+  hasDesktopAgentTab,
   activeSessionId,
   backgroundActivities,
   startNewSession,
@@ -570,6 +666,39 @@ const {
 } = useAiAssistant();
 
 const query = ref('');
+const { state: isMobile } = useResizeState(MAX_W_MD);
+const {
+  folders: aiFolders,
+  activeFolderId: activeAiFolderId,
+  activeFolder: activeAiFolder,
+  isManagingFolders: isManagingAiFolders,
+  isLoading: isFoldersLoading,
+  loadFolders,
+  selectFolder: selectAiFolder,
+  openFolderManager,
+  closeFolderManager
+} = useChatFolders('ai');
+onMounted(() => {
+  void loadFolders();
+});
+watch(activeAiFolderId, () => {
+  query.value = '';
+});
+
+const isInSelectedFolder = (item: AiFolderItem): boolean =>
+  !activeAiFolder.value || folderContainsAiItem(activeAiFolder.value, item);
+
+const handleFolderChoiceSelect = (item: AiFolderChoice): void => {
+  if (item.kind === 'chats') handleSelectSession(item.id);
+  else {
+    const automation = tasks.value.find(task => {
+      const ref = automationFolderItem(task);
+      return ref.type === item.type && ref.id === item.id;
+    });
+    if (automation) handleSelectTask(automation.id);
+    else handleSelectTaskSession(item.id);
+  }
+};
 const pendingDeleteSessionId = ref<string | null>(null);
 const pendingDeleteIsTask = computed(() =>
   sessions.value.some(
@@ -591,7 +720,7 @@ const taskMenuId = (taskId: string): string => `task:${taskId}`;
 
 /** Подсвечивает сессию, которая фактически открыта в AI-ассистенте. */
 const isSessionActive = (sessionId: string): boolean =>
-  activeTab.value === 'chats' && activeSessionId.value === sessionId;
+  activeTab.value !== 'tasks' && activeSessionId.value === sessionId;
 
 const isTaskActive = (sessionId?: string): boolean =>
   activeTab.value === 'tasks' &&
@@ -614,14 +743,6 @@ const backgroundActivityBySessionId = computed(
       backgroundActivities.value.map(activity => [activity.sessionId, activity])
     )
 );
-
-const getActivityStatusLabel = (
-  status: AiAssistantActivityStatus | undefined
-): string => {
-  if (status === 'running') return 'Выполняется';
-  if (status === 'success') return 'Успешно завершено';
-  return 'Требуется внимание';
-};
 
 const normalizedQuery = computed(() =>
   query.value.trim().toLocaleLowerCase('ru-RU')
@@ -649,29 +770,63 @@ const taskSessions = computed(() =>
 );
 
 const filteredSessions = computed(() => {
-  if (!normalizedQuery.value) return chatSessions.value;
-  return chatSessions.value.filter(session =>
+  const items = chatSessions.value.filter(
+    session =>
+      (props.isCollapse ||
+        (session.kind === 'agent') === (activeTab.value === 'agents')) &&
+      isInSelectedFolder({ type: 'session', id: session.id })
+  );
+  if (!normalizedQuery.value) return items;
+  return items.filter(session =>
     `${session.title} ${session.description}`
       .toLocaleLowerCase('ru-RU')
       .includes(normalizedQuery.value)
   );
 });
 const filteredTasks = computed(() => {
-  if (!normalizedQuery.value) return tasks.value;
-  return tasks.value.filter(task =>
+  const items = tasks.value.filter(task =>
+    isInSelectedFolder(automationFolderItem(task))
+  );
+  if (!normalizedQuery.value) return items;
+  return items.filter(task =>
     `${task.title} ${task.description}`
       .toLocaleLowerCase('ru-RU')
       .includes(normalizedQuery.value)
   );
 });
 const filteredTaskSessions = computed(() => {
-  if (!normalizedQuery.value) return taskSessions.value;
-  return taskSessions.value.filter(session =>
+  const items = taskSessions.value.filter(session =>
+    isInSelectedFolder({ type: 'session', id: session.id })
+  );
+  if (!normalizedQuery.value) return items;
+  return items.filter(session =>
     `${session.title} ${session.description}`
       .toLocaleLowerCase('ru-RU')
       .includes(normalizedQuery.value)
   );
 });
+const folderChoices = computed<AiFolderChoice[]>(() => [
+  ...chatSessions.value.map(session => ({
+    type: 'session' as const,
+    id: session.id,
+    title: session.title,
+    description: session.description,
+    kind: 'chats' as const
+  })),
+  ...taskSessions.value.map(session => ({
+    type: 'session' as const,
+    id: session.id,
+    title: session.title,
+    description: session.description,
+    kind: 'tasks' as const
+  })),
+  ...tasks.value.map(task => ({
+    ...automationFolderItem(task),
+    title: task.title,
+    description: task.description,
+    kind: 'tasks' as const
+  }))
+]);
 const formatTaskTime = (timestamp?: number | null): string => {
   if (!timestamp) return '';
   return new Intl.DateTimeFormat('ru-RU', {
@@ -689,7 +844,7 @@ const getCollapsedItemActivity = (
     status: AiAssistantActivityStatus;
     statusLabel: string;
   }
-): typeof fallback => {
+): typeof fallback & { activityStatus?: AiAssistantActivityStatus } => {
   const activity = sessionId
     ? backgroundActivityBySessionId.value.get(sessionId)
     : undefined;
@@ -699,12 +854,13 @@ const getCollapsedItemActivity = (
   return {
     description: activity.description,
     status: activity.status,
-    statusLabel: getActivityStatusLabel(activity.status)
+    activityStatus: activity.status,
+    statusLabel: getAiActivityStatusLabel(activity.status)
   };
 };
 
 const collapsedItems = computed<CollapsedAiMenuItem[]>(() => [
-  ...tasks.value.map(task => ({
+  ...filteredTasks.value.map(task => ({
     kind: 'task' as const,
     id: task.id,
     taskId: task.id,
@@ -716,7 +872,7 @@ const collapsedItems = computed<CollapsedAiMenuItem[]>(() => [
     }),
     ...(task.sessionId ? { sessionId: task.sessionId } : {})
   })),
-  ...taskSessions.value.map(session => ({
+  ...filteredTaskSessions.value.map(session => ({
     kind: 'task' as const,
     id: `session:${session.id}`,
     title: session.title,
@@ -727,7 +883,7 @@ const collapsedItems = computed<CollapsedAiMenuItem[]>(() => [
     }),
     sessionId: session.id
   })),
-  ...chatSessions.value.map(session => ({
+  ...filteredSessions.value.map(session => ({
     kind: 'chat' as const,
     id: session.id,
     title: session.title,
@@ -867,7 +1023,7 @@ const openAssistant = (sessionId: string | null = null): void => {
 const handleNewSession = (): void => {
   closeActivePopover(createMenuId);
   selectedCollapsedTaskId.value = null;
-  startNewSession();
+  startNewSession(activeTab.value === 'agents' ? 'agent' : 'chat');
   openAssistant();
 };
 

@@ -5,7 +5,8 @@ export type ManagerMessageChannel =
   | 'vk'
   | 'avito'
   | 'telegram'
-  | 'max';
+  | 'max'
+  | 'whatsapp';
 
 export interface ManagerRoutedMessage {
   senderUserId?: string | null;
@@ -25,7 +26,8 @@ export function managerMessageChannel(ex: unknown): ManagerMessageChannel | '' {
     channel === 'vk' ||
     channel === 'avito' ||
     channel === 'telegram' ||
-    channel === 'max'
+    channel === 'max' ||
+    channel === 'whatsapp'
     ? channel
     : '';
 }
@@ -66,5 +68,7 @@ export function latestManagerReplyContext(
 }
 
 export function hasExternalMessageChannel(ex: unknown): boolean {
-  return ['vk', 'avito', 'telegram', 'max'].includes(managerMessageChannel(ex));
+  return ['vk', 'avito', 'telegram', 'max', 'whatsapp'].includes(
+    managerMessageChannel(ex)
+  );
 }

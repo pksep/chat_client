@@ -5,6 +5,10 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { check } from '@tauri-apps/plugin-updater';
 import { createDesktopUpdater } from '../../src/services/desktop-updater';
 import { settleDesktopUpdateStorage } from '../../src/services/desktop-storage-settle';
+import {
+  persistDesktopRecovery,
+  restoreDesktopRecovery
+} from '../../src/services/desktop-recovery';
 
 const storageState = () => ({
   origin: location.origin,
@@ -35,6 +39,30 @@ try {
     ...(version === '1.6.101' ? storageState() : {})
   });
   if (version === '1.6.101') {
+    if (/win/i.test(navigator.platform)) {
+      // Только изолированный QA-профиль: имитируем потерю WebView storage.
+      localStorage.setItem('chat_auth_session', 'synthetic-auth');
+      localStorage.setItem('erp-theme-color-scheme', 'theme-dark');
+      await persistDesktopRecovery();
+      localStorage.removeItem('chat_auth_session');
+      localStorage.removeItem('erp-theme-color-scheme');
+      await restoreDesktopRecovery();
+      if (
+        localStorage.getItem('chat_auth_session') !== 'synthetic-auth' ||
+        localStorage.getItem('erp-theme-color-scheme') !== 'theme-dark'
+      ) {
+        throw new Error('Не восстановлены вход и тема из защищённой копии');
+      }
+      localStorage.removeItem('chat_auth_session');
+      await persistDesktopRecovery();
+      await restoreDesktopRecovery();
+      if (localStorage.getItem('chat_auth_session') !== null)
+        throw new Error('Восстановлена сессия после выхода');
+      await report('recovery-verified', {
+        theme: 'theme-dark',
+        logoutPreserved: true
+      });
+    }
     const next = await check();
     const repeatUpdate = !!next;
     await next?.close();

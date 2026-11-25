@@ -279,8 +279,9 @@ button.button-yui-kit.large.menu-info__secondary-button {
   display: none;
 }
 
-.menu-info__name-form fieldset.input-yui-kit {
+fieldset.input-yui-kit.initial.menu-info__chat-name {
   min-height: 36px;
+  background-color: var(--action-secondary-pressed-bg);
 }
 
 .menu-info__name-form .menu__info-save-button:disabled {

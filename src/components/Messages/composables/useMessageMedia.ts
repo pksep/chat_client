@@ -168,6 +168,7 @@ export function useMessageMedia(): MessageMediaHelpers {
     if (!media.thumbnailPath || media.thumbnailPath === media.path) {
       return undefined;
     }
+    if (isInquiryFile(media.thumbnailPath)) return getFullMediaPath(media);
 
     return buildBrowserCompatibleImageUrl(
       buildMediaObjectUrl(config.CHAT_PATH_TO_FILE_CDN, media.thumbnailPath)

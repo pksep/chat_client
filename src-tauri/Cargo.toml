@@ -24,6 +24,10 @@ name = "desktop_auth"
 path = "tests/desktop_auth.rs"
 
 [[test]]
+name = "desktop_recovery"
+path = "tests/desktop_recovery.rs"
+
+[[test]]
 name = "desktop_autostart"
 path = "tests/desktop_autostart.rs"
 
@@ -72,7 +76,7 @@ tauri-plugin-process = "2"
 windows-capture = "=1.5.0"
 tauri-winrt-notification = "0.7.2"
 winreg = "0.55"
-windows = { version = "0.61", features = ["Data_Xml_Dom", "Foundation", "Foundation_Collections", "UI_Notifications", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.61", features = ["Data_Xml_Dom", "Foundation", "Foundation_Collections", "UI_Notifications", "Win32_Security_Cryptography", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

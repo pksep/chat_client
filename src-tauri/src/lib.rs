@@ -1,7 +1,12 @@
+#[cfg(desktop)]
+mod desktop_agent;
+
 use serde::Serialize;
 use std::process::Command;
 use tauri::{Manager, WindowEvent};
 mod desktop_auth;
+#[cfg(windows)]
+mod desktop_recovery;
 #[cfg(windows)]
 mod desktop_autostart;
 #[cfg(desktop)]
@@ -564,6 +569,9 @@ pub fn run() {
     let builder = tauri::Builder::default();
     #[cfg(desktop)]
     let builder = builder
+        .manage(std::sync::Arc::new(
+            desktop_agent::DesktopAgentState::default(),
+        ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(desktop_media_permissions::DesktopMediaPermissions::default())
@@ -634,6 +642,30 @@ pub fn run() {
             desktop_screen_capture::desktop_screen_capture_start,
             desktop_screen_capture::desktop_screen_capture_stop,
             desktop_screen_capture::desktop_screen_capture_ack,
+            #[cfg(desktop)]
+            desktop_agent::desktop_agent_models,
+            #[cfg(desktop)]
+            desktop_agent::desktop_agent_translate_notes,
+            #[cfg(desktop)]
+            desktop_agent::desktop_agent_pick_directory,
+            #[cfg(desktop)]
+            desktop_agent::desktop_agent_resume_directory,
+            #[cfg(desktop)]
+            desktop_agent::desktop_agent_configure,
+            #[cfg(desktop)]
+            desktop_agent::desktop_agent_prompt,
+            #[cfg(desktop)]
+            desktop_agent::desktop_agent_read_image,
+            #[cfg(desktop)]
+            desktop_agent::desktop_agent_read_output,
+            #[cfg(desktop)]
+            desktop_agent::desktop_agent_cancel,
+            #[cfg(desktop)]
+            desktop_agent::desktop_agent_answer_permission,
+            #[cfg(desktop)]
+            desktop_agent::desktop_agent_disconnect,
+            #[cfg(desktop)]
+            desktop_agent::desktop_agent_reset,
             show_windows_notification,
             desktop_notification_permission,
             clear_windows_topic_notifications,
@@ -650,6 +682,10 @@ pub fn run() {
             desktop_files::desktop_file_open,
             desktop_files::desktop_update_prepare,
             desktop_auth::desktop_auth_request,
+            #[cfg(windows)]
+            desktop_recovery::desktop_restore_recovery,
+            #[cfg(windows)]
+            desktop_recovery::desktop_save_recovery,
             get_vpn_status,
             open_vpn_settings
         ])

@@ -16,12 +16,22 @@ const isFolder = (value: unknown): value is ChatFolder => {
     chatFolderIcons.includes(folder.icon) &&
     (folder.scope === undefined ||
       folder.scope === 'chats' ||
-      folder.scope === 'clients') &&
+      folder.scope === 'clients' ||
+      folder.scope === 'ai') &&
     (folder.isSystem === undefined || typeof folder.isSystem === 'boolean') &&
     (folder.position === undefined ||
       (typeof folder.position === 'number' &&
         Number.isFinite(folder.position))) &&
     Array.isArray(folder.topicIds) &&
+    (folder.aiItems === undefined ||
+      (Array.isArray(folder.aiItems) &&
+        folder.aiItems.every(
+          item =>
+            item &&
+            (item.type === 'session' || item.type === 'automation') &&
+            typeof item.id === 'string' &&
+            /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(item.id)
+        ))) &&
     folder.topicIds.every(id => typeof id === 'string') &&
     typeof folder.createdAt === 'string' &&
     Number.isFinite(Date.parse(folder.createdAt)) &&

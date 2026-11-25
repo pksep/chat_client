@@ -94,7 +94,7 @@ for (const initiallyUnavailable of [false, true]) {
       });
     });
     await page.goto(`/ai/${SESSION_ID}`);
-    await expect(page.locator('.ai-assistant__editor')).toBeVisible({
+    await expect(page.locator('.ai-assistant__editor:has([contenteditable])')).toBeVisible({
       timeout: 30_000
     });
     await expect.poll(() => page.evaluate(async id => {
@@ -143,7 +143,7 @@ for (const initiallyUnavailable of [false, true]) {
     );
     const send = async () => {
       await page.reload();
-      const editor = page.locator('.ai-assistant__editor');
+      const editor = page.locator('.ai-assistant__editor:has([contenteditable])');
       await expect(editor).toBeVisible({ timeout: 30_000 });
       const stay = page.getByRole('button', { name: 'Остаться в браузере' });
       if (await stay.isVisible()) await stay.click();
@@ -235,7 +235,7 @@ test('передаёт прикреплённый документ AI-агент
 
   await page.goto(`/ai/${SESSION_ID}`);
 
-  const editor = page.locator('.ai-assistant__editor');
+  const editor = page.locator('.ai-assistant__editor:has([contenteditable])');
   await expect(editor).toBeVisible({ timeout: 30_000 });
 
   const documentInput = editor.locator('input[type="file"]:not([accept])');
@@ -337,7 +337,7 @@ test('передаёт прикреплённый документ AI-агент
   ).toBeVisible();
   await page.reload();
 
-  const restoredEditor = page.locator('.ai-assistant__editor');
+  const restoredEditor = page.locator('.ai-assistant__editor:has([contenteditable])');
   await expect(restoredEditor).toBeVisible({ timeout: 30_000 });
   const stayInBrowserButton = page.getByRole('button', {
     name: 'Остаться в браузере'
@@ -407,7 +407,7 @@ test('renders and restores an AI-generated file as a standard chat attachment', 
 
   await page.goto(`/ai/${SESSION_ID}`);
 
-  const editor = page.locator('.ai-assistant__editor');
+  const editor = page.locator('.ai-assistant__editor:has([contenteditable])');
   await expect(editor).toBeVisible({ timeout: 30_000 });
   const input = editor.locator('[contenteditable="true"]');
   await input.click();

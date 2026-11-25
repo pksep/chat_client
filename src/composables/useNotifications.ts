@@ -52,7 +52,7 @@ const formatNotificationDescription = (value: unknown): string => {
   return String(value);
 };
 
-const clearCloseNotificationTimeout = (key: number) => {
+const pauseNotificationTimeout = (key: number): void => {
   const timeout = closeNotificationTimeouts.get(key);
 
   if (!timeout) {
@@ -63,14 +63,24 @@ const clearCloseNotificationTimeout = (key: number) => {
   closeNotificationTimeouts.delete(key);
 };
 
+const resumeNotificationTimeout = (key: number): void => {
+  if (!state.items.some(item => item.key === key)) return;
+
+  pauseNotificationTimeout(key);
+  closeNotificationTimeouts.set(
+    key,
+    setTimeout(() => closeNotification(key), NOTIFICATION_TIMEOUT_MS)
+  );
+};
+
 export const closeNotification = (key?: number) => {
   if (typeof key !== 'number') {
-    state.items.forEach(item => clearCloseNotificationTimeout(item.key));
+    state.items.forEach(item => pauseNotificationTimeout(item.key));
     state.items = [];
     return;
   }
 
-  clearCloseNotificationTimeout(key);
+  pauseNotificationTimeout(key);
   state.items = state.items.filter(item => item.key !== key);
 };
 
@@ -90,12 +100,7 @@ export const showNotification = ({
   nextNotificationKey += 1;
   state.items = [...state.items, notification];
 
-  closeNotificationTimeouts.set(
-    notification.key,
-    setTimeout(() => {
-      closeNotification(notification.key);
-    }, NOTIFICATION_TIMEOUT_MS)
-  );
+  resumeNotificationTimeout(notification.key);
 
   if (type === MessageTypeEnum.error) {
     recordErrorNotification({
@@ -124,5 +129,7 @@ export const useNotifications = () => ({
   state: readonly(state),
   showNotification,
   showErrorNotification,
-  closeNotification
+  closeNotification,
+  pauseNotificationTimeout,
+  resumeNotificationTimeout
 });

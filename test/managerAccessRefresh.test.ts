@@ -4,6 +4,8 @@ import * as vue from 'vue';
 import ts from 'typescript';
 import type { ManagerInquiry } from '../src/composables/useManagerInquiries';
 import * as inquiryVisibility from '../src/utils/inquiry-message-visibility';
+import * as uuid from '../src/utils/generateUUID';
+import * as widgetDrafts from '../src/utils/widget-settings-drafts';
 
 interface ManagerState {
   allowed: vue.ComputedRef<boolean>;
@@ -57,6 +59,8 @@ function fixture(clientAccess = true): {
   const exported: ManagerModule = {} as ManagerModule;
   const dependencies: Record<string, object> = {
     vue,
+    '../utils/generateUUID': uuid,
+    '../utils/widget-settings-drafts': widgetDrafts,
     '../utils/inquiry-message-visibility': inquiryVisibility,
     '../services/error-notification-telemetry': {
       recordErrorRequest: (

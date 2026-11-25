@@ -16,7 +16,7 @@
         closePinnedMessagesView();
         showSearch();
       "
-      @call="handleCallAction"
+      @call="handleCall"
     />
     <div
       v-if="showHeaderCallBanner"
@@ -81,9 +81,20 @@
         />
       </Button>
 
-      <div
+      <button
         v-if="route.type === 'ai'"
+        type="button"
         class="chat__header-profile chat__header-ai-assistant"
+        aria-label="Информация об ИИ-чате"
+        @pointerenter="preloadAiInfo"
+        @focus="preloadAiInfo"
+        @click="
+          openAiInfo(
+            aiAssistantSessionId,
+            undefined,
+            aiAssistantSession?.kind === 'agent'
+          )
+        "
         :data-testid="`${props.dataTestid}-Header-AIAssistant`"
       >
         <span
@@ -109,7 +120,7 @@
             <span class="user-profile__title-text">{{ aiAssistantTitle }}</span>
           </h3>
         </Tooltip>
-      </div>
+      </button>
 
       <div
         v-else-if="isCallTopicRoute"
@@ -213,7 +224,7 @@
           v-else-if="showHeaderCallAction"
           class="chat__header__icon"
           :data-testid="`${props.dataTestid}-Header-CallIcon`"
-          @click.stop="handleCallAction"
+          @click.stop="handleCall"
         />
         <Icon
           v-if="getHeaderContextMenuOptions.length"
@@ -587,6 +598,7 @@ import AiAvatar from '../AI/AiAvatar.vue';
 import CreateTaskIcon from '../AI/CreateTaskIcon.vue';
 import MenuSearch from '../UI/MenuSearch.vue';
 import { useAiAssistant } from '../../composables/useAiAssistant';
+import { useAiConversationInfo } from '../../composables/useAiConversationInfo';
 import {
   useMenuInfo,
   type IMenuInfoInformation
@@ -684,6 +696,7 @@ const UserInfoPanel = defineAsyncComponent(
 
 const {
   activeTitle: aiAssistantTitle,
+  activeView: aiAssistantView,
   activeSessionId: aiAssistantSessionId,
   activeSession: aiAssistantSession,
   activeTask: aiAssistantTask,
@@ -695,10 +708,15 @@ const {
   isVoiceModeOpen: isAiVoiceCallActive,
   isVoiceModalVisible: isAiVoiceCallModalVisible,
   voiceCallStartedAt: aiVoiceCallStartedAt,
-  startVoiceCall: startAiVoiceCall,
   showVoiceCall: showAiVoiceCall,
   deleteSession: deleteAiAssistantSession
 } = useAiAssistant();
+
+const { open: openAiInfo } = useAiConversationInfo();
+
+function preloadAiInfo(): void {
+  void import('../AI/AiConversationInfoPanel.vue').catch((): void => {});
+}
 
 const { getSelectedTopic } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
@@ -960,10 +978,6 @@ const hasPendingCallForCurrentTopic = computed(
   () => !!currentPendingCall.value
 );
 const showHeaderCallAction = computed(() => {
-  if (route.value.type === RouteTypes.AI) {
-    return !isCallActive.value && !isAiVoiceCallActive.value;
-  }
-
   return (
     (route.value.type === RouteTypes.DIALOGS ||
       route.value.type === RouteTypes.GROUP) &&
@@ -1443,16 +1457,6 @@ const handleCall = async () => {
   await startLiveKitCall(state.calledUser, route.value.id);
 };
 
-const handleCallAction = async (): Promise<void> => {
-  if (isExternalInquiry.value) return;
-  if (route.value.type === RouteTypes.AI) {
-    startAiVoiceCall();
-    return;
-  }
-
-  await handleCall();
-};
-
 const handleHeaderCallClick = async () => {
   if (isDesktopHeaderCallPending.value) return;
   const desktop = isTauri() && !showAiVoiceCallBanner.value;
@@ -1658,7 +1662,9 @@ const getHeaderContextMenuOptions = computed(() => {
           value: 'Создать чат',
           customIcon: 'createChat',
           function: () => {
-            startNewAiSession();
+            startNewAiSession(
+              aiAssistantView.value === 'agents' ? 'agent' : 'chat'
+            );
             navigateToAI();
           }
         },
@@ -1860,6 +1866,15 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.chat__header-ai-assistant {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 .chat__header-client-call {
   display: flex;
   border: 0;

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { nextTick, ref } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { LaunchStartup } from '../services/launchStartup';
+import { persistDesktopRecovery } from '../services/desktop-recovery';
 
 /**
  * Класс темы, который добавляется на корневой html-элемент.
@@ -115,6 +116,7 @@ const saveThemeClass = (themeClass: TThemeClass): void => {
   try {
     // Записываем текущий класс темы для восстановления после перезагрузки.
     window.localStorage.setItem(THEME_STORAGE_KEY, themeClass);
+    void persistDesktopRecovery();
   } catch (error) {
     // Фиксируем ошибку сохранения без остановки переключения темы.
     console.error('Ошибка сохранения темы в localStorage:', error);

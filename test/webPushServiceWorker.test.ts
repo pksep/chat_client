@@ -166,9 +166,12 @@ test('показ push не ждёт зависшую фоновую синхро
   const push = worker.push({ action: 'CHAT_SYNC', messageId: 'message' });
   await push.visible;
   expect(worker.notifications).toHaveLength(1);
-  expect(push.pending).toHaveLength(2);
+  let completed = false;
+  const completion = Promise.all(push.pending).then(() => { completed = true; });
+  await Promise.resolve();
+  expect(completed).toBe(false);
   release();
-  await Promise.all(push.pending);
+  await completion;
 });
 
 test('видимая вкладка без фокуса и другой открытый чат не подавляют уведомление', async () => {

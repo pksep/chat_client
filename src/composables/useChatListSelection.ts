@@ -7,7 +7,8 @@ type ChatListSelection =
 
 const selections = {
   chats: ref<ChatListSelection>({ type: 'filter', filter: 'all' }),
-  clients: ref<ChatListSelection>({ type: 'filter', filter: 'all' })
+  clients: ref<ChatListSelection>({ type: 'filter', filter: 'all' }),
+  ai: ref<ChatListSelection>({ type: 'filter', filter: 'all' })
 };
 
 export const useChatListSelection = (scope: ChatFolderScope = 'chats') => {

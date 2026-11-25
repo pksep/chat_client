@@ -370,6 +370,7 @@
   />
   <MessageListInput
     v-if="shouldRenderMessageComposer"
+    :suspended="props.suspended"
     :inert="props.suspended || undefined"
     :topic-id="activeTopic?.id"
     v-model="inputText"

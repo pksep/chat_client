@@ -17,6 +17,7 @@
     <MessageReferenceBlock
       v-if="showExternalForward"
       :forward-user="props.forwardUser"
+      :message-ex="props.messageEx"
       :is-me-sender="props.isMeSender"
       @navigate-message="$emit('navigate-message')"
     />
@@ -43,7 +44,8 @@
       <slot name="reference">
         <MessageReferenceBlock
           v-if="
-            props.replyMessage || (!showExternalForward && props.forwardUser)
+            props.replyMessage ||
+            (!showExternalForward && (props.forwardUser || hasAiSource))
           "
           :forward-user="showExternalForward ? undefined : props.forwardUser"
           :reply-message="props.replyMessage"
@@ -169,6 +171,8 @@ import {
 } from './composables/useMentionUserClick';
 import { sanitizeMessageHtml } from '../../utils/sanitizeMessageHtml';
 import { copyMessageSelection } from '../../utils/copyMessageSelection';
+import { aiConversationSourceSchema } from '../../services/aiConversationSource';
+import { parseMessageEx } from '../../utils/messageReplyQuote';
 
 const props = defineProps<IMessageBubbleProps>();
 const slots = useSlots();
@@ -196,7 +200,13 @@ const showErrorIcon = computed(
   () => props.messageStatus === MessageStatus.NotDelivered
 );
 const showExternalForward = computed(
-  () => !props.isDialog && Boolean(props.forwardUser)
+  () => !props.isDialog && Boolean(props.forwardUser || hasAiSource.value)
+);
+const hasAiSource = computed(
+  () =>
+    aiConversationSourceSchema.safeParse(
+      parseMessageEx(props.messageEx).aiSource
+    ).success
 );
 const hasReactions = computed(() => Boolean(props.reactions?.length));
 const plainMessageText = computed(() =>

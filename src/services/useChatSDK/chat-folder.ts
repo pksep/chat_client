@@ -14,6 +14,7 @@ export interface ChatFolder {
   isSystem?: boolean;
   position?: number;
   topicIds: readonly string[];
+  aiItems?: readonly AiFolderItem[];
   createdAt: string;
   updatedAt: string;
 }
@@ -43,12 +44,24 @@ export const chatFolderIcons = [
 ] as const;
 
 export type ChatFolderIcon = (typeof chatFolderIcons)[number];
-export type ChatFolderScope = 'chats' | 'clients';
+export type ChatFolderScope = 'chats' | 'clients' | 'ai';
+
+export interface AiFolderItem {
+  type: 'session' | 'automation';
+  id: string;
+}
+
+export interface AiFolderChoice extends AiFolderItem {
+  title: string;
+  description: string;
+  kind: 'chats' | 'tasks';
+}
 
 export interface SaveChatFolderPayload {
   name?: string;
   icon?: ChatFolderIcon;
   topicIds?: string[];
+  aiItems?: AiFolderItem[];
 }
 
 export type CreateChatFolderPayload = SaveChatFolderPayload & {
@@ -70,9 +83,15 @@ type FolderCommand =
   | WebSocketEventType.UPDATE_CHAT_FOLDER
   | WebSocketEventType.DELETE_CHAT_FOLDER
   | WebSocketEventType.SET_CHAT_FOLDER_TOPIC
+  | WebSocketEventType.SET_CHAT_FOLDER_AI_ITEM
   | WebSocketEventType.REORDER_CHAT_FOLDERS;
 
 export interface ChatFolderInterface {
+  setChatFolderAiItem(
+    folderId: string,
+    item: AiFolderItem,
+    included: boolean
+  ): Promise<ChatFolder>;
   getChatFolders(): Promise<ChatFolder[]>;
   syncChatFolders(): Promise<ChatFolder[]>;
   setChatFolderTopic(
@@ -118,6 +137,18 @@ export class ChatFolderApi implements ChatFolderInterface {
 
   getChatFolders(): Promise<ChatFolder[]> {
     return readJson<ChatFolder[]>(this.reqi, '/chat-folders');
+  }
+
+  setChatFolderAiItem(
+    folderId: string,
+    item: AiFolderItem,
+    included: boolean
+  ): Promise<ChatFolder> {
+    return this.command(WebSocketEventType.SET_CHAT_FOLDER_AI_ITEM, {
+      folderId,
+      item,
+      included
+    });
   }
 
   syncChatFolders(): Promise<ChatFolder[]> {

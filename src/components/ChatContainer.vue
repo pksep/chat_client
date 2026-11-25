@@ -44,6 +44,16 @@
     />
     <template v-if="!isMobile">
       <Modal
+        v-if="isAiInfoOpen"
+        :open="isAiInfoOpen"
+        class="chat__user-info-modal"
+        position="right"
+        width="404px"
+        @close="closeAiInfo"
+      >
+        <AiConversationInfoPanel @close="closeAiInfo" />
+      </Modal>
+      <Modal
         v-if="hasOpenedGroupInfo"
         :open="state.isMenuDesktopOpen"
         class="chat__info__modal"
@@ -86,6 +96,15 @@
         />
       </Modal>
     </template>
+    <MobileModal
+      v-if="isMobile && isAiInfoOpen"
+      :open="isAiInfoOpen"
+      title="Информация о чате"
+      close-button-text="Назад"
+      @unmount-close="closeAiInfo"
+    >
+      <AiConversationInfoPanel mobile />
+    </MobileModal>
     <MobileModal
       v-if="isMobile"
       :open="isUserInfoOpen"
@@ -196,6 +215,7 @@ import {
 } from '../services/useCallState';
 import { useChatWallpaper } from '../composables/useChatWallpaper';
 import { useAiAssistant } from '../composables/useAiAssistant';
+import { useAiConversationInfo } from '../composables/useAiConversationInfo';
 import { useUserInfoModal } from '../composables/useUserInfoModal';
 import VpnConfirmModal from './UI/VpnConfirmModal.vue';
 import { useVpnStatus } from '../services/useVpnStatus';
@@ -431,7 +451,16 @@ const shouldRenderCallModal = computed(
     isAnyCallDialing.value ||
     isAnyCallIncoming.value
 );
-const { isVoiceModeOpen: isAiVoiceCallActive } = useAiAssistant();
+const AiConversationInfoPanel = defineAsyncComponent(
+  () => import('./AI/AiConversationInfoPanel.vue')
+);
+const {
+  isOpen: isAiInfoOpen,
+  open: openAiInfo,
+  close: closeAiInfo
+} = useAiConversationInfo();
+const { isVoiceModeOpen: isAiVoiceCallActive, activeSessionId: aiSessionId } =
+  useAiAssistant();
 const shouldShowHeader = computed(
   () => state.isActiveHeader || isCallActive.value || isAiVoiceCallActive.value
 );
@@ -503,6 +532,10 @@ const handleMenuToggle = (isOpen: boolean): void => {
 };
 
 const handleHeaderClick = (): void => {
+  if (route.value.type === RouteTypes.AI) {
+    openAiInfo(aiSessionId.value);
+    return;
+  }
   if (route.value.type === RouteTypes.FAVORITES) {
     return;
   }
@@ -544,6 +577,10 @@ const closeModals = (): void => {
 };
 
 const handleInformationClick = (): void => {
+  if (route.value.type === RouteTypes.AI) {
+    openAiInfo(aiSessionId.value);
+    return;
+  }
   state.isMenuDesktopOpen = true;
   state.activeTabId = 2;
 };

@@ -163,7 +163,7 @@ const shouldSkipTextNode = (node: Text): boolean => {
     return true;
   }
 
-  if (parentElement.closest(`.${EMOJI_WRAPPER_CLASS}`)) {
+  if (parentElement.closest(`.${EMOJI_WRAPPER_CLASS}, .ai-code-block`)) {
     return true;
   }
 

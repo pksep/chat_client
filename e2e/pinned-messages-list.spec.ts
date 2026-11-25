@@ -27,6 +27,24 @@ test('меню закрепления сохраняет обычные дейс
   expect(errors).toEqual([]);
 });
 
+test('обычный клик по закреплению оставляет список открытым и скрывает редактор сразу', async ({ page }) => {
+  const errors = await openPinnedFixture(page);
+  const editor = page.locator('.tiptap').first();
+  await editor.fill('Сохранённый черновик');
+  await page.getByTestId('Pinned-Messages-ListButton').click();
+  const list = page.getByTestId('PinnedList');
+  await expect(list).toBeVisible();
+  await expect(page.locator('.chat__input').first()).toHaveCSS('opacity', '0');
+  const bubble = list.locator('.message').nth(1);
+  await bubble.click({ position: { x: 8, y: 8 } });
+  await expect(list).toBeVisible();
+  await expect(list.locator('.message-selection-toggle__hide').first()).toHaveCSS('display', 'none');
+  await page.getByRole('button', { name: 'Назад в переписку' }).click();
+  await expect(editor).toHaveText('Сохранённый черновик');
+  await expect(page.locator('.chat__input').first()).toHaveCSS('opacity', '1');
+  expect(errors).toEqual([]);
+});
+
 for (const action of ['Ответить', 'Редактировать'] as const) {
   test(`действие «${action}» из закреплений открывает обычный composer с сообщением`, async ({ page }) => {
     const errors = await openPinnedFixture(page);
@@ -459,8 +477,10 @@ test('переход к оригиналу закрывает список', asy
   await page.getByTestId('Pinned-Messages-ListButton').click();
   await page
     .getByTestId('PinnedList')
-    .getByText('По заказу № 2847:', { exact: false })
-    .click();
+    .locator('.message').filter({ hasText: 'По заказу № 2847:' })
+    .click({ button: 'right', position: { x: 8, y: 8 } });
+  await page.locator('.message-context-menu:visible')
+    .getByRole('button', { name: 'Показать в чате', exact: true }).click();
   await expect(page.getByTestId('PinnedList')).toHaveCount(0);
   await expect(page.locator('.chat__message-navigation-overlay')).toBeHidden();
   await expect(

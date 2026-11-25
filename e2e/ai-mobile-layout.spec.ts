@@ -164,8 +164,8 @@ for (const theme of ['theme-light', 'theme-dark']) {
       await expect(
         page.locator('.ai-assistant__message-content script')
       ).toHaveCount(0);
-      const response = editor.locator(
-        '.ai-assistant__response-trigger:visible'
+      const response = page.locator(
+        '.ai-composer-settings__trigger:visible'
       );
       const permission = editor.locator(
         '.ai-assistant__permission-trigger:visible'
@@ -197,8 +197,8 @@ for (const theme of ['theme-light', 'theme-dark']) {
       await expect(permission.locator('.permission-hand-icon')).toBeVisible();
       await response.click();
       await expect(permissionMenu).toBeHidden();
-      const responseMenu = editor
-        .getByRole('menu', { name: 'Режим ответа', exact: true })
+      const responseMenu = page
+        .getByRole('dialog', { name: 'Модель и уровень рассуждения', exact: true })
         .filter({ visible: true });
       const responseMenuBox = await responseMenu.boundingBox();
       expect(responseMenuBox!.x).toBeGreaterThanOrEqual(0);
@@ -207,11 +207,10 @@ for (const theme of ['theme-light', 'theme-dark']) {
       );
       if (width <= 480)
         await page.screenshot({ path: testInfo.outputPath('mode-menu.png') });
-      await page
-        .getByRole('menuitemradio', { name: 'Продуманный ответ' })
-        .filter({ visible: true })
-        .click();
-      await expect(response).toHaveAttribute('aria-label', 'Продуманный ответ');
+      await responseMenu.getByRole('button', { name: /Выбрать модель/ }).click();
+      await page.getByRole('button', { name: 'Модель Б', exact: true }).click();
+      await expect(response).toContainText('Модель Б');
+      await response.click();
       const responseBox = await response.boundingBox();
       expect(responseBox!.x + responseBox!.width).toBeLessThanOrEqual(width);
       await page.getByTestId(`${HEADER}-PopoverIcon`).click();

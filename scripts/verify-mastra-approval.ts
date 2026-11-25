@@ -28,6 +28,44 @@ const productMessage = formatApprovalMessage({
 
 assertEqual(
   formatApprovalMessage({
+    runId: 'time',
+    toolCallId: 'time',
+    toolName: 'board_actions_task_time_entries_create',
+    args: {
+      taskTitle: 'Проверка чертежей',
+      durationMinutes: 120,
+      comment: 'Проверил размеры'
+    }
+  }),
+  'Записать по задаче «Проверка чертежей» фактически затраченное время: 120 мин., комментарий: «Проверил размеры»?'
+);
+
+assertEqual(
+  formatApprovalMessage({
+    runId: 'attributes',
+    toolCallId: 'attributes',
+    toolName: 'board_actions_task_attributes_update',
+    args: {
+      taskTitle: 'Проверка',
+      attributes: [
+        { id: 'hidden1', name: 'Проверено', type: 'boolean', value: false },
+        { id: 'hidden2', name: 'Количество', type: 'number', value: 0 },
+        { id: 'hidden3', name: 'Описание', type: 'text', value: null },
+        {
+          id: 'hidden4',
+          name: 'Участники',
+          type: 'participants',
+          value: [77],
+          participantNames: ['Иван Иванов']
+        }
+      ]
+    }
+  }),
+  'Изменить атрибуты задачи «Проверка»: «Проверено»: нет; «Количество»: 0; «Описание»: очистить; «Участники»: Иван Иванов?'
+);
+
+assertEqual(
+  formatApprovalMessage({
     runId: 'run-create-responsible',
     toolCallId: 'call-create-responsible',
     toolName: 'erp_actions_erp_entity_editor_create',

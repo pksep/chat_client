@@ -10,7 +10,7 @@
       type="button"
       class="ai-activity-panel__item"
       :aria-label="`${activity.title}. ${
-        activity.statusLabel || getStatusLabel(activity.status)
+        activity.statusLabel || getAiActivityStatusLabel(activity.status)
       }`"
       @click="emit('select', activity.sessionId)"
     >
@@ -24,7 +24,9 @@
       <span class="ai-activity-panel__copy">
         <strong>{{ activity.title }}</strong>
         <span v-if="props.showStatus" class="ai-activity-panel__status">
-          {{ activity.statusLabel || getStatusLabel(activity.status) }}
+          {{
+            activity.statusLabel || getAiActivityStatusLabel(activity.status)
+          }}
         </span>
         <small>{{ activity.description }}</small>
       </span>
@@ -34,9 +36,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import type {
-  AiAssistantActivity,
-  AiAssistantActivityStatus
+import {
+  getAiActivityStatusLabel,
+  type AiAssistantActivity
 } from '../../composables/useAiAssistant';
 
 type ActivityPanelItem = AiAssistantActivity & {
@@ -62,10 +64,4 @@ const emit = defineEmits<{
 }>();
 
 const visibleActivities = computed(() => props.activities.slice(0, 5));
-
-const getStatusLabel = (status: AiAssistantActivityStatus): string => {
-  if (status === 'running') return 'Выполняется';
-  if (status === 'success') return 'Успешно завершено';
-  return 'Требуется внимание';
-};
 </script>

@@ -22,6 +22,15 @@ export const test = base.extend<{ aiHistory: void }>({
           }
         });
       });
+      await page.route('**/response-models', route =>
+        route.fulfill({ json: {
+          defaults: { quick: 'model-a', advanced: 'model-a' },
+          models: [
+            { id: 'model-a', name: 'Модель А', efforts: ['low', 'high'], defaultEffort: 'low' },
+            { id: 'model-b', name: 'Модель Б', efforts: ['low', 'high'], defaultEffort: 'high' }
+          ]
+        } })
+      );
       await page.route('**/automations', route =>
         route.fulfill({ json: { automations: [] } })
       );

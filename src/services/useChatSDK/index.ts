@@ -53,7 +53,8 @@ import {
   type ChatFolder,
   type ChatFolderScope,
   type CreateChatFolderPayload,
-  type SaveChatFolderPayload
+  type SaveChatFolderPayload,
+  type AiFolderItem
 } from './chat-folder';
 import {
   ChatMessage,
@@ -834,6 +835,13 @@ export class ChatSDK {
     };
   }
 
+  getDictationSocket(): Pick<
+    Socket,
+    'connected' | 'on' | 'off' | 'emit' | 'timeout'
+  > | null {
+    return this.socket?.connected ? this.socket : null;
+  }
+
   connect(): Promise<void> {
     if (this.socket?.connected) return Promise.resolve();
     if (this.connectionPromise) {
@@ -1561,6 +1569,14 @@ export class ChatSDK {
 
   async getChatFolders(): Promise<ChatFolder[]> {
     return this.chatFolder.getChatFolders();
+  }
+
+  async setChatFolderAiItem(
+    folderId: string,
+    item: AiFolderItem,
+    included: boolean
+  ): Promise<ChatFolder> {
+    return this.chatFolder.setChatFolderAiItem(folderId, item, included);
   }
 
   async syncChatFolders(): Promise<ChatFolder[]> {

@@ -1,3 +1,7 @@
+import { notifyVoiceReply, type VoiceReplyOptions } from './voiceReply';
+import { actionTaskVoiceReply } from './aiActionTaskPresentation';
+import type { ResponseModelSelection } from './aiResponseModels';
+import type { AiSubmissionResult } from './aiSubmission';
 import {
   fetchWithAiAccess,
   requireAiAccess,
@@ -75,12 +79,18 @@ import { createMastraStreamLifecycle } from './mastraStreamLifecycle';
 
 type Message = AIMessage;
 
+interface MessageModelChoice {
+  mode: 'quick' | 'advanced';
+  selection?: ResponseModelSelection;
+}
+
 interface UseMastraOptions {
   agentId?: string;
   chatId?: string;
   baseUrl?: string;
   approvalMode?: Ref<'ask' | 'automatic'>;
   responseMode?: Ref<'quick' | 'advanced'>;
+  modelSelection?: Readonly<Ref<ResponseModelSelection | undefined>>;
   initializeServerHistory?: boolean;
 }
 
@@ -262,12 +272,19 @@ const useMastra = (options?: UseMastraOptions | false) => {
     messages.value = next;
     if (chatId && persist) await saveMessages(chatId, next);
   };
+  let taskRefreshError: string | null = null;
+
   const refreshActionTasks = async () => {
     if (disposed || !chatId || taskRefreshPending) return;
     const version = historyVersion;
     taskRefreshPending = true;
     try {
       const tasks = await fetchAiActionTasks(baseUrl, chatId);
+      if (disposed || version !== historyVersion) return;
+      if (tasks && taskRefreshError) {
+        if (lastError.value === taskRefreshError) lastError.value = null;
+        taskRefreshError = null;
+      }
       if (tasks)
         for (const task of [...tasks].reverse()) {
           if (disposed || version !== historyVersion) return;
@@ -275,8 +292,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
         }
     } catch (error) {
       if (disposed || version !== historyVersion) return;
-      if (messages.value.some(message => message.actionTask))
-        lastError.value = getAiErrorMessage(error);
+      if (messages.value.some(message => message.actionTask)) {
+        taskRefreshError = getAiErrorMessage(error);
+        lastError.value = taskRefreshError;
+      }
     } finally {
       taskRefreshPending = false;
     }
@@ -384,22 +403,26 @@ const useMastra = (options?: UseMastraOptions | false) => {
   };
 
   const createRequestContext = (
+    modelChoice: MessageModelChoice,
     attachments: AiMessageAttachment[] = getActiveAttachments(),
     forceStrictApproval = false,
     explicitRequestId?: string,
-    presentation?: AiMessagePresentation
+    presentation?: AiMessagePresentation,
+    interactionMode: 'text' | 'voice' = 'text'
   ): RequestContext<unknown> => {
     const requestContext = new RequestContext<Record<string, unknown>>();
+    requestContext.set('interactionMode', interactionMode);
+    if (modelChoice.selection)
+      requestContext.set('modelSelection', modelChoice.selection);
     requestContext.set(
       'approvalMode',
-      !forceStrictApproval && options.approvalMode?.value === 'automatic'
+      interactionMode !== 'voice' &&
+        !forceStrictApproval &&
+        options.approvalMode?.value === 'automatic'
         ? 'automatic'
         : 'strict'
     );
-    requestContext.set(
-      'responseMode',
-      options.responseMode?.value === 'advanced' ? 'advanced' : 'quick'
-    );
+    requestContext.set('responseMode', modelChoice.mode);
     requestContext.set(
       'attachments',
       parseAiAttachmentReferences(attachments).map(
@@ -439,11 +462,13 @@ const useMastra = (options?: UseMastraOptions | false) => {
   };
 
   const requestToolApproval = async (
+    modelChoice: MessageModelChoice,
     approval: PendingToolApproval,
     decision: Exclude<ApprovalDecision, null>,
     token: string,
     abortSignal?: AbortSignal,
-    attachments: AiMessageAttachment[] = getActiveAttachments()
+    attachments: AiMessageAttachment[] = getActiveAttachments(),
+    voice?: VoiceReplyOptions
   ): Promise<Response> => {
     validateAiAttachments(attachments);
     const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
@@ -467,12 +492,15 @@ const useMastra = (options?: UseMastraOptions | false) => {
             ? { reason: 'Пользователь отменил действие в чате.' }
             : {}),
           requestContext: {
+            ...(voice ? { interactionMode: voice.interactionMode } : {}),
             approvalMode:
-              options.approvalMode?.value === 'automatic'
+              !voice && options.approvalMode?.value === 'automatic'
                 ? 'automatic'
                 : 'strict',
-            responseMode:
-              options.responseMode?.value === 'advanced' ? 'advanced' : 'quick',
+            responseMode: modelChoice.mode,
+            ...(modelChoice.selection
+              ? { modelSelection: modelChoice.selection }
+              : {}),
             ...(chatId ? { threadId: chatId } : {}),
             ...(conversationGeneration !== undefined
               ? { conversationGeneration }
@@ -564,6 +592,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
     return historySnapshotPromise;
   };
 
+  let confirmedAnswerRequests = new Set<string>();
+
   const applyConversationState = async (
     state: AiConversationState,
     snapshot?: Awaited<ReturnType<typeof fetchAiConversationTranscript>>
@@ -574,10 +604,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
         state.generation < conversationGeneration)
     )
       return false;
+    const generationChanged =
+      state.deleted || state.generation !== (conversationGeneration ?? 0);
     const changed =
-      state.deleted ||
-      state.generation !== (conversationGeneration ?? 0) ||
-      (state.protocol === 1 && conversationProtocol !== 1);
+      generationChanged || (state.protocol === 1 && conversationProtocol !== 1);
     if (
       !state.deleted &&
       state.protocol !== 1 &&
@@ -591,7 +621,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
     // Проекцию проверяем до смены версии и очистки экрана. Ошибка не должна
     // превратить прежний кэш в пустую переписку с уже новой версией.
     const next = snapshot
-      ? createAiConversationView(snapshot, changed ? [] : messages.value)
+      ? createAiConversationView(
+          snapshot,
+          generationChanged ? [] : messages.value
+        )
       : changed
         ? []
         : messages.value;
@@ -618,6 +651,20 @@ const useMastra = (options?: UseMastraOptions | false) => {
       messages.value = [];
     }
     if (snapshot) {
+      const incomplete = new Set(
+        snapshot.incompleteMessages.map(message => message.requestId)
+      );
+      confirmedAnswerRequests = new Set(
+        snapshot.messages
+          .filter(
+            message =>
+              message.role === 'assistant' &&
+              !incomplete.has(message.requestId) &&
+              message.pendingToolApprovals.length === 0 &&
+              (message.content.trim() || message.outputAttachments.length > 0)
+          )
+          .map(message => message.requestId)
+      );
       messages.value = next;
       activeAttachments = nextAttachments!;
       pendingApproval.value = findPendingToolApproval(messages.value);
@@ -746,8 +793,15 @@ const useMastra = (options?: UseMastraOptions | false) => {
     replyTo?: AIMessageReference,
     modelInput?: string,
     preparedInput?: { requestId: string; generation: number },
-    submission?: AiSubmissionObserver
-  ) => {
+    submission?: AiSubmissionObserver,
+    voice?: VoiceReplyOptions,
+    localMessageId?: string
+  ): Promise<void> => {
+    const modelChoice: MessageModelChoice = {
+      mode: options.responseMode?.value ?? 'quick',
+      selection: options.modelSelection?.value
+    };
+
     await requireAiAccess();
     if (disposed || !input.trim()) return;
 
@@ -829,9 +883,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
       messages.value.findLast(
         message => message.actionTask?.status === 'waiting_approval'
       )?.actionTask;
-    const planDecision = pendingPlan
-      ? approvalDecisionFromMessage(input)
-      : null;
+    const planDecision =
+      pendingPlan && !voice ? approvalDecisionFromMessage(input) : null;
     if (pendingPlan && planDecision) {
       submission?.accept();
       await resolveActionTask(
@@ -856,7 +909,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
     if (lastMessage?.role === 'assistant' && lastMessage?.loading) return;
 
     const inferredApprovalDecision =
-      !preparedInput && pendingApproval.value
+      !preparedInput && !voice && pendingApproval.value
         ? approvalDecisionFromMessage(input)
         : null;
     const effectiveApprovalDecision =
@@ -865,7 +918,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
       appendUserMessage && !inferredApprovalDecision;
 
     if (shouldAppendUserMessage) {
-      const requestId = generateUUID();
+      const requestId = localMessageId ?? generateUUID();
       unsavedMessageIds.add(requestId);
       const userMessage: Message = {
         id: requestId,
@@ -1100,11 +1153,13 @@ const useMastra = (options?: UseMastraOptions | false) => {
 
         try {
           stream = await requestToolApproval(
+            modelChoice,
             approval,
             approvalDecision,
             token,
             run.controller.signal,
-            requestAttachments
+            requestAttachments,
+            voice
           );
           streamReceived = Boolean(stream);
           if (!isCurrentResponse()) {
@@ -1157,6 +1212,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
             {
               memory,
               requestContext: createRequestContext(
+                modelChoice,
                 requestAttachments,
                 true,
                 recoveryRequestId
@@ -1178,6 +1234,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
           {
             memory,
             requestContext: createRequestContext(
+              modelChoice,
               requestAttachments,
               false,
               preparedInput?.requestId,
@@ -1188,7 +1245,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
                       ? { replyTo: currentUser.replyTo }
                       : {})
                   }
-                : undefined
+                : undefined,
+              voice?.interactionMode
             )
           }
         );
@@ -1218,6 +1276,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
               flushUiUpdates();
               // План принадлежит исходному запросу, а не текущей позиции в списке.
               if (task.requestId !== run.requestId) return;
+              notifyVoiceReply(voice);
               await applyActionTask(task, run.messageId, false);
               scheduleStreamSave();
               if (isCurrentResponse()) pollActionTasks();
@@ -1311,6 +1370,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
                 scheduleStreamSave();
               }
 
+              notifyVoiceReply(voice);
               stoppedForApproval = true;
               return false;
             }
@@ -1320,8 +1380,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
               if (
                 assistantMessageIndex < messages.value.length &&
                 !messages.value[assistantMessageIndex].actionTask
-              )
+              ) {
                 bufferTextUpdate(event.payload.text);
+                notifyVoiceReply(voice, event.payload.text);
+              }
             } else if (event.type === 'finish') {
               // SDK закрывает body сразу после finish; дочитывание до EOF не
               // даёт отмене reader конкурировать с этим штатным закрытием.
@@ -1360,6 +1422,7 @@ const useMastra = (options?: UseMastraOptions | false) => {
       }
     } catch (error: unknown) {
       if (!isCurrentResponse()) return;
+      notifyVoiceReply(voice);
       const errorMessage = getAiErrorMessage(error);
 
       lastError.value = errorMessage;
@@ -1400,7 +1463,9 @@ const useMastra = (options?: UseMastraOptions | false) => {
       }
       const responseText = lastError.value
         ? null
-        : finalMessage?.content ?? null;
+        : (voice && finalMessage?.actionTask
+            ? actionTaskVoiceReply(finalMessage.actionTask)
+            : finalMessage?.content) ?? null;
       if (streamReceived) {
         try {
           onFinish?.();
@@ -1442,8 +1507,10 @@ const useMastra = (options?: UseMastraOptions | false) => {
     attachments: AiAttachmentReference[] = [],
     replyTo?: AIMessageReference,
     modelInput?: string,
-    onAccepted?: () => void
-  ) =>
+    onAccepted?: () => void,
+    voice?: VoiceReplyOptions,
+    localMessageId?: string
+  ): Promise<AiSubmissionResult> =>
     observeAiSubmission(
       submission =>
         submitMessage(
@@ -1456,7 +1523,9 @@ const useMastra = (options?: UseMastraOptions | false) => {
           replyTo,
           modelInput,
           undefined,
-          submission
+          submission,
+          voice,
+          localMessageId
         ),
       onAccepted
     );
@@ -1465,8 +1534,9 @@ const useMastra = (options?: UseMastraOptions | false) => {
     decision: Exclude<ApprovalDecision, null>,
     onFinish?: () => void,
     abortSignal?: AbortSignal,
-    onAccepted?: () => void
-  ) => {
+    onAccepted?: () => void,
+    voice?: VoiceReplyOptions
+  ): Promise<AiSubmissionResult> => {
     if (!pendingApproval.value) return { accepted: false, responseText: null };
 
     const command = decision === 'approve' ? 'подтверждаю' : 'отмена';
@@ -1483,7 +1553,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
           undefined,
           undefined,
           undefined,
-          submission
+          submission,
+          voice
         ),
       onAccepted
     );
@@ -1787,6 +1858,8 @@ const useMastra = (options?: UseMastraOptions | false) => {
   };
 
   return {
+    hasConfirmedAnswer: (requestId: string): boolean =>
+      confirmedAnswerRequests.has(requestId),
     messages,
     sendMessage,
     resolveToolApproval,

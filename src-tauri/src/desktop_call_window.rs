@@ -65,6 +65,8 @@ pub fn create_main_window<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> 
         .ok_or_else(|| tauri::Error::WindowNotFound)?;
     let handle = app.handle().clone();
     let main_builder = WebviewWindowBuilder::from_config(app, config)?;
+    #[cfg(windows)]
+    let main_builder = main_builder.data_directory(app.path().app_local_data_dir()?);
     #[cfg(target_os = "macos")]
     let main_builder = {
         let main_thread = objc2::MainThreadMarker::new()

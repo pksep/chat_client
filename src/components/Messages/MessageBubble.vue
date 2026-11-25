@@ -550,20 +550,9 @@ const handleToggleSelection = () => {
   if (props.isSelectionMode) emits('toggle-selection');
 };
 
-const handleMessageClick = (event?: MouseEvent) => {
+const handleMessageClick = () => {
   if (props.isSelectionMode) {
     emits('toggle-selection');
-    return;
-  }
-  if (props.pinListMode) {
-    const target = event?.target;
-    if (
-      !(target instanceof Element) ||
-      !target.closest(
-        'button, a, input, textarea, video, audio, img, canvas, [role="button"], .message-reference-block, .message-sticker__image, .message__article__file, .message-content__file, .message__article__media'
-      )
-    )
-      emits('unmount-navigate-original');
     return;
   }
 };
@@ -571,7 +560,6 @@ const handleMessageClick = (event?: MouseEvent) => {
 const handleStickerClick = () => {
   if (props.isSelectionMode) handleMessageClick();
   else if (sticker.value?.pack) emits('open-sticker-pack', sticker.value.pack);
-  else if (props.pinListMode) emits('unmount-navigate-original');
 };
 
 const handleDoubleClick = (event: MouseEvent): void => {

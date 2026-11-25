@@ -12,7 +12,8 @@ import type {
   ChatFolder,
   ChatFolderIcon,
   ChatFolderScope,
-  SaveChatFolderPayload
+  SaveChatFolderPayload,
+  AiFolderItem
 } from '../services/useChatSDK/chat-folder';
 
 const folders = ref<ChatFolder[]>([]);
@@ -24,6 +25,11 @@ const selections = {
   },
   clients: {
     activeFolderId: useChatListSelection('clients').activeFolderId,
+    isManagingFolders: ref(false),
+    isReordering: ref(false)
+  },
+  ai: {
+    activeFolderId: useChatListSelection('ai').activeFolderId,
     isManagingFolders: ref(false),
     isReordering: ref(false)
   }
@@ -249,7 +255,8 @@ const createFolder = async (
   name: string,
   topicIds: string[],
   icon: ChatFolderIcon = 'folder',
-  scope: ChatFolderScope = 'chats'
+  scope: ChatFolderScope = 'chats',
+  aiItems?: AiFolderItem[]
 ): Promise<ChatFolder> => {
   const normalizedName = name.trim();
   const uniqueTopicIds = [...new Set(topicIds)];
@@ -259,7 +266,8 @@ const createFolder = async (
     name: normalizedName,
     icon,
     scope,
-    topicIds: uniqueTopicIds
+    topicIds: uniqueTopicIds,
+    ...(aiItems === undefined ? {} : { aiItems })
   });
   applyMutation(folder, context);
   return folder;
@@ -277,7 +285,8 @@ const updateFolder = async (
     ...(payload.icon === undefined ? {} : { icon: payload.icon }),
     ...(payload.topicIds === undefined
       ? {}
-      : { topicIds: [...new Set(payload.topicIds)] })
+      : { topicIds: [...new Set(payload.topicIds)] }),
+    ...(payload.aiItems === undefined ? {} : { aiItems: payload.aiItems })
   };
 
   const context = mutationContext();
@@ -399,6 +408,37 @@ const reorderFolders = async (
   }
 };
 
+const setAiItemInFolder = async (
+  folderId: string,
+  item: AiFolderItem,
+  included: boolean
+): Promise<ChatFolder> => {
+  const owner = mutationContext();
+  const previous = topicUpdateQueue.get(folderId);
+  const update = (previous ?? Promise.resolve())
+    .catch(() => {})
+    .then(async (): Promise<ChatFolder> => {
+      if (!owner.isCurrent()) throw new Error('Сессия пользователя изменилась');
+      const context = mutationContext();
+      const savedFolder = await context.sdk.setChatFolderAiItem(
+        folderId,
+        item,
+        included
+      );
+      applyMutation(savedFolder, context);
+
+      return savedFolder;
+    });
+  topicUpdateQueue.set(folderId, update);
+  const clearUpdate = (): void => {
+    if (topicUpdateQueue.get(folderId) === update)
+      topicUpdateQueue.delete(folderId);
+  };
+  void update.then(clearUpdate, clearUpdate);
+
+  return update;
+};
+
 const selectFolder = (
   folderId: string | null,
   scope: ChatFolderScope
@@ -476,8 +516,10 @@ export const useChatFolders = (scope: ChatFolderScope = 'chats') => ({
   createFolder: (
     name: string,
     topicIds: string[],
-    icon: ChatFolderIcon = 'folder'
-  ) => createFolder(name, topicIds, icon, scope),
+    icon: ChatFolderIcon = 'folder',
+    aiItems?: AiFolderItem[]
+  ): Promise<ChatFolder> => createFolder(name, topicIds, icon, scope, aiItems),
+  setAiItemInFolder,
   updateFolder,
   addTopicToFolder: (folderId: string, topicId: string) =>
     setTopicInFolder(folderId, topicId, scope, true),
