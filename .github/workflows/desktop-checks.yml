@@ -37,6 +37,10 @@ on:
         description: 'Run macOS WebKit UI checks without building installers'
         default: false
         type: boolean
+      test_filter:
+        description: 'Optional Playwright test name pattern for UI checks'
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -149,7 +153,9 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bunx playwright install webkit
       - name: Verify dialog layout and pinned navigation
-        run: bunx playwright test e2e/creation-modal-desktop.spec.ts e2e/forward-modal-desktop.spec.ts e2e/macos-desktop.spec.ts e2e/macos-form-styles.spec.ts e2e/file-download-cancel.spec.ts e2e/pinned-messages-list.spec.ts --project=webkit-desktop --workers=1 --reporter=line --trace=retain-on-failure --output=test-results/dialog-layout
+        env:
+          UI_TEST_FILTER: ${{ inputs.test_filter }}
+        run: bunx playwright test e2e/creation-modal-desktop.spec.ts e2e/forward-modal-desktop.spec.ts e2e/macos-desktop.spec.ts e2e/macos-form-styles.spec.ts e2e/file-download-cancel.spec.ts e2e/pinned-messages-list.spec.ts --project=webkit-desktop --workers=1 --reporter=line --trace=retain-on-failure --grep "$UI_TEST_FILTER" --output=test-results/dialog-layout
       - uses: actions/upload-artifact@v4
         if: always()
         with:
