@@ -2,16 +2,22 @@
 
 test.setTimeout(90_000);
 
+const organizationUrl = 'http://127.0.0.1:65530';
+const organizationQuery = '?organization=' + encodeURIComponent(organizationUrl);
+
 const prepareAiSession = async (page: Page): Promise<void> => {
-  await page.addInitScript(() => {
-    const organizationUrl = 'http://127.0.0.1:65530';
-    const config = {
+  const user = { id: 'local-ui-test-user', name: 'Тест' };
+  const config = {
       CHAT_MASTRA_URL: 'http://127.0.0.1:4111',
       CHAT_API_DOMAIN: organizationUrl,
       CHAT_WS_DOMAIN: 'ws://127.0.0.1:65530',
-      CHAT_ERP_URL: 'http://127.0.0.1:5000'
-    };
+      CHAT_ERP_URL: organizationUrl
+  };
 
+  await page.route(organizationUrl + '/config', route => route.fulfill({ json: config }));
+  await page.route(organizationUrl + '/auth/session', route => route.fulfill({ json: user }));
+  await page.addInitScript(({ organizationUrl, config, user }): void => {
+    sessionStorage.setItem('menu-collapse', 'false');
     Object.defineProperty(navigator, 'standalone', {
       configurable: true,
       value: true
@@ -25,10 +31,11 @@ const prepareAiSession = async (page: Page): Promise<void> => {
       'chat_auth_session',
       JSON.stringify({
         token: 'local-ui-test',
-        user: { id: 'local-ui-test-user', name: 'Тест' }
+        user,
+        source: 'chat_credentials'
       })
     );
-  });
+  }, { organizationUrl, config, user });
 };
 
 test('раздел агентов доступен только в настольном интерфейсе, список ИИ помещается на телефоне', async ({ page }, testInfo): Promise<void> => {
@@ -45,7 +52,7 @@ test('раздел агентов доступен только в настол�
     });
   });
   await page.setViewportSize({ width: 1100, height: 800 });
-  await page.goto('/ai');
+  await page.goto('/ai' + organizationQuery);
   const tabs = page.getByRole('tablist', { name: 'Разделы ИИ' });
   const agents = tabs.getByRole('tab', { name: 'Агенты' });
   await expect(tabs).toBeVisible({ timeout: 60_000 });
@@ -55,7 +62,7 @@ test('раздел агентов доступен только в настол�
     await expect(agents).toHaveAttribute('aria-selected', 'true');
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/' + organizationQuery);
   await page.locator('[data-testid$="MenuBottomNav-AI"]:visible').click();
   for (const width of [390, 320, 768]) {
     await page.setViewportSize({ width, height: 844 });
@@ -97,7 +104,7 @@ for (const theme of ['theme-light', 'theme-dark']) {
       });
     });
 
-    await page.goto('/ai');
+    await page.goto('/ai' + organizationQuery);
 
     const trigger = page.locator('.ai-composer-settings__trigger:visible');
     const selectModel = async (name: string): Promise<void> => {

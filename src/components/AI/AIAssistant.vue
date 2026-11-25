@@ -578,6 +578,7 @@
             </div>
             <AiDictationButton
               v-if="placement.variant === 'mobile'"
+              :key="`${placement.slot}-dictation`"
               mobile
               :disabled="dictationDisabled"
               :label="dictationButtonLabel"
@@ -590,6 +591,7 @@
               :type="ButtonTypeEnum.primary"
               :size="SizesEnum.small"
               class="toolbar-button mobile-buttons ai-assistant__stop-button"
+              :key="`${placement.slot}-stop`"
               title="Остановить ответ"
               aria-label="Остановить ответ"
               @click.stop="stopAgentResponse"
