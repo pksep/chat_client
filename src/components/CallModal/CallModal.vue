@@ -4,6 +4,7 @@
     class="call-modal"
     :class="{
       'call-modal--hidden': !isCallModalVisible,
+      'call-modal--compact-controls': compactControls,
       'call-modal--topic-hover': isCallBackdropOverTopic
     }"
     @click.stop="handleCallModalBackdropClick"
@@ -11,6 +12,7 @@
     @mouseleave="clearCallBackdropTopicHover"
   >
     <div
+      ref="callContainer"
       class="call-modal__container"
       :class="{
         'call-modal__container--full-screen': isFullscreen || isMobile,
@@ -97,6 +99,7 @@
               @click.stop
             >
               <Button
+                v-if="!showQuickScreenShare"
                 class="call-modal__mobile-actions-item"
                 :type="ButtonTypeEnum.popover"
                 :size="SizesEnum.little"
@@ -113,6 +116,7 @@
                 }}</span>
               </Button>
               <Button
+                v-if="!showQuickRecording"
                 class="call-modal__mobile-actions-item"
                 :class="{
                   'call-modal__mobile-actions-item--recording':
@@ -379,7 +383,7 @@
             </div>
 
             <button
-              v-if="isMobile && isBusyCallNotice"
+              v-if="isMobile && isBusyCallNotice && !showQuickScreenShare"
               class="call-modal__control-button call-modal__control-button_alter call-modal__control-button__inactive"
               type="button"
               disabled
@@ -390,8 +394,9 @@
             </button>
 
             <Tooltip
-              v-if="!isMobile && !Capacitor.isNativePlatform()"
+              v-if="showQuickScreenShare"
               :hint="screenShareButtonTooltip"
+              :is-can-show="!isMobile"
               data-testid="CallModal-CallControls-ScreenShareTooltip"
               position="top-center"
               type="black"
@@ -412,8 +417,9 @@
             </Tooltip>
 
             <Tooltip
-              v-if="!isMobile"
+              v-if="showQuickRecording"
               :hint="summaryRecordButtonTooltip"
+              :is-can-show="!isMobile"
               data-testid="CallModal-CallControls-RecordingTooltip"
               position="top-center"
               type="black"
@@ -516,6 +522,57 @@
               </div>
 
               <div class="call-modal__video-overlay-actions">
+                <div v-if="isMobile" class="call-modal__mobile-actions">
+                  <button
+                    class="call-modal__control-button call-modal__control-button--action"
+                    type="button"
+                    aria-label="Открыть меню звонка"
+                    @click.stop="toggleMobileCallActionsMenu"
+                  >
+                    <CallMoreIcon />
+                  </button>
+                  <div
+                    v-if="state.mobileCallActionsOpen"
+                    class="call-modal__mobile-actions-menu"
+                    @click.stop
+                  >
+                    <Button
+                      v-if="!showQuickScreenShare"
+                      class="call-modal__mobile-actions-item"
+                      :type="ButtonTypeEnum.popover"
+                      :size="SizesEnum.little"
+                      :disabled="
+                        isBusyNoticeVisible || isScreenShareUnavailableOnMobile
+                      "
+                      @click="handleMobileScreenShareAction"
+                    >
+                      <ScreenShareIcon /><span>{{
+                        liveKitState.isScreenSharingActive
+                          ? 'Выключить демонстрацию'
+                          : 'Включить демонстрацию'
+                      }}</span>
+                    </Button>
+                    <Button
+                      v-if="!showQuickRecording"
+                      class="call-modal__mobile-actions-item"
+                      :type="ButtonTypeEnum.popover"
+                      :size="SizesEnum.little"
+                      :disabled="isSummaryRecordButtonDisabled"
+                      @click="handleSummaryRecordingAction"
+                    >
+                      <ScreenRecordIcon /><span>{{
+                        summaryRecordButtonLabel
+                      }}</span>
+                    </Button>
+                    <Button
+                      class="call-modal__mobile-actions-item"
+                      :type="ButtonTypeEnum.popover"
+                      :size="SizesEnum.little"
+                      @click="handleOpenMobileCallSettings"
+                      ><GroupInfoIcon /><span>Настройки</span></Button
+                    >
+                  </div>
+                </div>
                 <button
                   v-if="!isCallFullscreenTouchMode && !isMobile"
                   class="call-modal__control-button call-modal__control-button--action"
@@ -648,12 +705,9 @@
             </Tooltip>
 
             <Tooltip
-              v-if="
-                !isCallFullscreenTouchMode &&
-                !isMobile &&
-                !Capacitor.isNativePlatform()
-              "
+              v-if="showQuickScreenShare"
               :hint="screenShareButtonTooltip"
+              :is-can-show="!isCallFullscreenTouchMode && !isMobile"
               data-testid="CallModal-Overlay-ScreenShareTooltip"
               position="top-center"
               type="black"
@@ -714,8 +768,9 @@
             </div>
 
             <Tooltip
-              v-if="!isCallFullscreenTouchMode && !isMobile"
+              v-if="showQuickRecording"
               :hint="summaryRecordButtonTooltip"
+              :is-can-show="!isCallFullscreenTouchMode && !isMobile"
               data-testid="CallModal-Overlay-RecordingTooltip"
               position="top-center"
               type="black"
@@ -888,6 +943,16 @@ import {
 const callWindow = useDesktopCallWindowContext();
 const renderWindow = callWindow?.renderWindow || window;
 const renderDocument = renderWindow.document;
+const callContainer = ref<HTMLElement | null>(null);
+const controlsWidth = ref(0);
+watch(callContainer, (element, _, onCleanup) => {
+  if (!element) return;
+  const observer = new renderWindow.ResizeObserver(([entry]) => {
+    controlsWidth.value = entry.contentRect.width;
+  });
+  observer.observe(element);
+  onCleanup(() => observer.disconnect());
+});
 const { state: mainIsMobile } = useResizeState(MAX_W_MD);
 const isMobile = computed(() =>
   callWindow
@@ -1442,6 +1507,8 @@ const maxParticipantsPerPage = computed(() =>
   isMobile.value ? 4 : isFullscreen.value ? 9 : 6
 );
 const isScreenShareUnavailableOnMobile = computed(() => {
+  // Захват из дочернего WKWebView выполняет нативный контроллер звонка.
+  if (callWindow) return false;
   if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
     return false;
   }
@@ -1451,6 +1518,24 @@ const isScreenShareUnavailableOnMobile = computed(() => {
     !renderWindow.isSecureContext ||
     typeof navigator.mediaDevices?.getDisplayMedia !== 'function'
   );
+});
+const quickControlsFit = (count: number) =>
+  controlsWidth.value >= count * 40 + (count - 1) * 8 + 20;
+const baseControlCount = 4 + Number(Capacitor.isNativePlatform());
+const showQuickScreenShare = computed(
+  () =>
+    !isScreenShareUnavailableOnMobile.value &&
+    quickControlsFit(baseControlCount + 1)
+);
+const showQuickRecording = computed(() =>
+  quickControlsFit(baseControlCount + Number(showQuickScreenShare.value) + 1)
+);
+const compactControls = computed(() => {
+  const count =
+    baseControlCount +
+    Number(showQuickScreenShare.value) +
+    Number(showQuickRecording.value);
+  return controlsWidth.value < count * 50 + (count - 1) * 8 + 20;
 });
 const state = ref({
   openGroupInfoModal: false,
@@ -1932,10 +2017,8 @@ const summaryRecordButtonLabel = computed(() => {
 
   return canStopSummaryRecording.value ? 'Остановить запись' : 'Идёт запись';
 });
-const summaryRecordButtonTooltip = computed(() =>
-  isAnySummaryRecording.value
-    ? 'Идет запись экрана'
-    : summaryRecordButtonLabel.value
+const summaryRecordButtonTooltip = computed(
+  () => summaryRecordButtonLabel.value
 );
 const microphoneButtonTooltip = computed(() =>
   liveKitState.isMicActive ? 'Выключить микрофон' : 'Включить микрофон'

@@ -12,6 +12,7 @@ import { showTauriCallActivityNotification } from '../../src/services/useTauriNo
 import * as call from '../../src/services/useCallState';
 import { authedUser } from '../../src/composables/useAuth';
 import { useThemeStore } from '../../src/stores/theme';
+import { setConfig } from '../../src/services/useConfig';
 import { useTopics } from '../../src/composables/useTopics';
 import {
   desktopMediaPermissionRequest,
@@ -31,6 +32,7 @@ const isWindowActive = (label: 'main' | 'call') =>
   readDesktopWindowState(label).then(isDesktopWindowActive);
 
 const api = 'http://127.0.0.1:5213/report';
+setConfig({ CHAT_API_DOMAIN: location.origin + '/call-fixture-api' });
 const exerciseNativeToasts = new URLSearchParams(location.search).has(
   'nativeToasts'
 );
@@ -735,19 +737,35 @@ const verify = async () => {
   call.remoteParticipants.value = [];
   await report({ step: 'complete', passed: true, preview: true });
 };
-const showSixParticipants = () => {
+const showParticipants = (count = 6) => {
   call.isIncoming.value = false;
-  call.remoteParticipants.value = Array.from({ length: 5 }, (_, index) => ({
-    identity: `local-review-${index}`, name: `Участник ${index + 1}`,
-    videoStream: null, cameraStream: null, screenShareStream: null, audioStream: null,
-    isVideoActive: false, isScreenShareActive: false, isHandRaised: false,
-    activeReaction: null, activeReactionExpiresAt: null, isSpeaking: false,
-    audioLevel: 0, isMicActive: false, connectionQuality: 'excellent'
-  }));
+  call.remoteParticipants.value = Array.from(
+    { length: Math.max(0, count - 1) },
+    (_, index) => ({
+      identity: `local-review-${index}`,
+      name: `Участник ${index + 1}`,
+      videoStream: null,
+      cameraStream: null,
+      screenShareStream: null,
+      audioStream: null,
+      isVideoActive: false,
+      isScreenShareActive: false,
+      isHandRaised: false,
+      activeReaction: null,
+      activeReactionExpiresAt: null,
+      isSpeaking: false,
+      audioLevel: 0,
+      isMicActive: false,
+      connectionQuality: 'excellent'
+    })
+  );
 };
+const showSixParticipants = () => showParticipants();
 try {
   if (new URLSearchParams(location.search).has('review')) {
-    showSixParticipants();
+    showParticipants(
+      Number(new URLSearchParams(location.search).get('participants')) || 6
+    );
     await open();
   } else await verify();
 } catch (error) {
@@ -764,6 +782,7 @@ Object.assign(window, {
     },
     open,
     useMicrophone,
+    showParticipants,
     showSixParticipants
   }
 });

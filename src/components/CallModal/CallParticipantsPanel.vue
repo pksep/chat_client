@@ -1,5 +1,8 @@
 <template>
-  <div class="call-modal__group-layout">
+  <div
+    class="call-modal__group-layout"
+    :class="{ 'call-modal__participants-panel--grid': !focusedParticipant }"
+  >
     <ScreenShareParticipantsStrip
       v-if="!!focusedParticipant"
       :participants="participants"
@@ -236,7 +239,27 @@ const suppressSwipeClick = (event: MouseEvent) => {
 </script>
 
 <style scoped>
+.call-modal__participants-panel--grid {
+  container: call-participants / size;
+}
 .call-modal__remote-grid {
   touch-action: pan-y pinch-zoom;
+}
+.call-modal__remote-grid.call-modal__remote-grid--group-duo {
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+}
+.call-modal__remote-grid.call-modal__remote-grid--group-duo .call-modal__remote-tile {
+  min-height: 0;
+}
+@container call-participants (min-aspect-ratio: 1 / 1) {
+  .call-modal__remote-grid.call-modal__remote-grid--group-duo {
+    min-height: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr);
+    grid-auto-rows: minmax(0, 1fr);
+  }
 }
 </style>

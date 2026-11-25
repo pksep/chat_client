@@ -46,6 +46,7 @@ export default defineConfig({
         'macos-desktop.spec.ts',
         'macos-form-styles.spec.ts',
         'image-editor-desktop.spec.ts',
+        'compact-call-layout.spec.ts',
         'pinned-messages-list.spec.ts',
         'desktop-shell.spec.ts',
         'file-download-cancel.spec.ts',
