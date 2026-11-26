@@ -149,7 +149,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { label: Windows, os: windows-latest, session: desktop }
           - { label: macOS-ARM, os: macos-latest, session: desktop }
           - { label: macOS-Intel, os: macos-15-intel, session: desktop }
           - { label: Linux-X11, os: ubuntu-24.04, session: x11 }

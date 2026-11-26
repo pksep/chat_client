@@ -105,7 +105,15 @@ pub fn create_main_window<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> 
             // WKWebView может убрать fragment в запросе createWebView. Голый
             // about:blank принимается только после подготовки из главного окна.
             if !is_call_window_url(&url) && !(prepared && url.as_str() == "about:blank") {
-                popup_error(&handle, "unexpected-url");
+                popup_error(
+                    &handle,
+                    &format!(
+                        "unexpected-url:{}:blank={}:fragment={}",
+                        url.scheme(),
+                        url.path() == "blank",
+                        url.fragment().is_some()
+                    ),
+                );
                 return NewWindowResponse::Deny;
             }
             if handle.get_webview_window(CALL_WINDOW_LABEL).is_some() {
