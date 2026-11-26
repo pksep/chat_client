@@ -209,7 +209,7 @@ jobs:
             for attempt in {1..50}; do test -S "$XDG_RUNTIME_DIR/wayland-qa" && break; sleep .1; done
             export WAYLAND_DISPLAY=wayland-qa GDK_BACKEND=wayland
             dbus-update-activation-environment DISPLAY WAYLAND_DISPLAY XDG_RUNTIME_DIR
-            CHAT_CALL_NATIVE_TRACE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBGL_ALWAYS_SOFTWARE=1 RUST_BACKTRACE=1 bun scripts/test-desktop-call-portability.ts
+            CHAT_CALL_NATIVE_TRACE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBGL_ALWAYS_SOFTWARE=1 RUST_BACKTRACE=1 bun scripts/test-desktop-call-portability.ts
           '
       - name: Save Linux runtime packages
         if: always() && runner.os == 'Linux' && steps.linux_runtime.outcome == 'success' && steps.linux_runtime_cache.outputs.cache-hit != 'true'
