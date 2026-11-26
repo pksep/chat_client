@@ -1167,7 +1167,7 @@ test('показывает чистый индикатор работы и тё�
   }
 });
 
-test('вкладка агентов по умолчанию в Tauri, а ссылка на чат открывает диалог', async ({
+test('Tauri открывает обычный чат, а явный выбор агентов даёт папку и локальные действия', async ({
   page
 }, testInfo): Promise<void> => {
   test.skip(testInfo.project.use.isMobile, 'Проверка настольной панели ИИ');
@@ -1216,6 +1216,17 @@ test('вкладка агентов по умолчанию в Tauri, а ссы�
               attachments?: { name: string; mimeType: string; text?: string }[];
             } = {}
           ): Promise<unknown> => {
+            if (command === 'desktop_agent_models') {
+              return {
+                models: model.options.map(option => ({
+                  ...option,
+                  efforts: option.value.endsWith('deepseek-v4-pro')
+                    ? []
+                    : effort.options,
+                  defaultEffort: 'default'
+                }))
+              };
+            }
             if (command === 'desktop_agent_pick_directory') {
               pushEvent = args.events?.onmessage;
               if (args.preferredModel) model.currentValue = args.preferredModel;
@@ -1271,15 +1282,20 @@ test('вкладка агентов по умолчанию в Tauri, а ссы�
   const tabs = page.getByRole('tablist', { name: 'Разделы ИИ' });
   const agentTab = tabs.getByRole('tab', { name: 'Агенты' });
   const chatsTab = tabs.getByRole('tab', { name: 'Чаты' });
-  const agents = page.getByTestId('AI-Assistant-Agents');
+  const agents = page.getByTestId('AI-Assistant');
   const editor = page.locator('.ai-assistant__composer');
+  const folder = agents.getByRole('button', { name: 'Выбрать папку проекта' });
 
   await expect(tabs.getByRole('tab')).toHaveText(['Агенты', 'Чаты', 'Задачи'], {
     timeout: 20_000
   });
+  await expect(chatsTab).toHaveAttribute('aria-selected', 'true');
+  await expect(editor).toBeVisible();
+  await expect(folder).toHaveCount(0);
+  await agentTab.click();
   await expect(agentTab).toHaveAttribute('aria-selected', 'true');
   await expect(agents).toBeVisible();
-  await expect(editor).toBeHidden();
+  await expect(folder).toBeVisible();
   await expect(agents.getByText('Быстрый ответ')).toHaveCount(0);
   const permission = agents.getByRole('button', {
     name: 'Запрашивать разрешение'
@@ -1287,7 +1303,7 @@ test('вкладка агентов по умолчанию в Tauri, а ссы�
   await expect(permission).toBeVisible();
 
   const agentEditor = agents.locator('.editor-component');
-  const project = agents.getByLabel('Панель проекта');
+  const project = agents.getByLabel('Настройки ИИ-ассистента');
   await expect(project).toBeVisible();
   await expect(agentEditor.getByLabel('Панель проекта')).toHaveCount(0);
   await expect(
@@ -1295,7 +1311,6 @@ test('вкладка агентов по умолчанию в Tauri, а ссы�
   ).toBeVisible();
 
   await expect(project.getByRole('button')).toHaveCount(2);
-  const folder = project.getByRole('button', { name: 'Выбрать папку проекта' });
   const modelButton = project.getByRole('button', {
     name: /^Модель и уровень рассуждения/
   });
@@ -1306,7 +1321,7 @@ test('вкладка агентов по умолчанию в Tauri, а ссы�
   const pickModel = settings.getByRole('button', { name: /^Выбрать модель/ });
   const slider = settings.getByRole('slider', { name: 'Уровень рассуждения' });
   await modelButton.click();
-  await expect(slider).toBeDisabled();
+  await expect(slider).toBeEnabled();
   await expect(
     settings.getByRole('button', { name: 'DeepSeek V4 Pro', exact: true })
   ).toHaveCount(0);
@@ -1396,10 +1411,11 @@ test('вкладка агентов по умолчанию в Tauri, а ссы�
   await chatsTab.click();
   await expect(chatsTab).toHaveAttribute('aria-selected', 'true');
   await expect(editor).toBeVisible();
+  await expect(project.locator('.ai-composer-settings__folder')).toHaveCount(0);
 
   await agentTab.click();
   await expect(agents).toBeVisible();
-  await expect(editor).toBeHidden();
+  await expect(project.locator('.ai-composer-settings__folder')).toBeVisible();
 
   await page.goto(`/ai/${CHAT_SESSION_ID}`);
   await expect(chatsTab).toHaveAttribute('aria-selected', 'true');

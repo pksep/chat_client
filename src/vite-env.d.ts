@@ -3,6 +3,7 @@
 /// <reference types="vite-plugin-pwa/pwa-assets" />
 
 interface ImportMetaEnv {
+  readonly VITE_CHAT_AI_DEV_PROXY_TARGET?: string;
   readonly VITE_EMOJI_ASSET_BASE_URL?: string;
   readonly VITE_EMOJI_ANIMATION_ASSET_BASE_URL?: string;
   readonly VITE_STICKER_ASSET_BASE_URL?: string;

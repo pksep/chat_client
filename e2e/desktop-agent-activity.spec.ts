@@ -524,7 +524,7 @@ test('Агенты показывают ход работы, запрос раз
   await infoPanel.getByRole('tab', { name: 'Файлы', exact: true }).click();
   await expect(infoPanel.getByText('котик.svg', { exact: true })).toBeVisible();
   await infoPanel.getByText('чертёж.dwg', { exact: true }).click();
-  expect(await page.evaluate(() => sessionStorage.getItem('agent-test-revealed')))
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('agent-test-revealed')))
     .toBe('C:/Projects/Example/чертёж.dwg');
   const downloaded = page.waitForEvent('download');
   await infoPanel.getByText('поставки.csv', { exact: true }).click();

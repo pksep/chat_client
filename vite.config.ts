@@ -21,6 +21,7 @@ import { lazyUiKitEmojiRuntime } from './scripts/lazy-ui-kit-emoji-runtime';
 import { lazyUiKitEditorRuntime } from './scripts/lazy-ui-kit-editor-runtime';
 import { lazyUiKitSliderRuntime } from './scripts/lazy-ui-kit-slider-runtime';
 import { uiKitEditorCamera } from './scripts/ui-kit-editor-camera';
+import { AI_DEV_PROXY_PATH } from './src/utils/ai-dev-proxy';
 
 const BUILD_OUT_DIR = 'build';
 const PUBLIC_BUILD_ENTRIES = new Set([
@@ -113,6 +114,25 @@ const removeExternalizedPublicDirectoryPlugin = (
 
 export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
   const env = loadEnv(mode, process.cwd(), '');
+  const aiDevProxyTarget = env.VITE_CHAT_AI_DEV_PROXY_TARGET?.trim();
+  if (aiDevProxyTarget) {
+    const target = new URL(aiDevProxyTarget);
+    if (
+      (target.protocol !== 'https:' &&
+        !(
+          target.protocol === 'http:' &&
+          ['localhost', '127.0.0.1', '[::1]'].includes(target.hostname)
+        )) ||
+      target.pathname !== '/' ||
+      target.search ||
+      target.hash ||
+      target.username ||
+      target.password
+    )
+      throw new Error(
+        'Для локального ИИ-прокси нужен корневой HTTPS-адрес сервера'
+      );
+  }
   const hasExternalEmojiAssetBase = Boolean(
     env.VITE_EMOJI_ASSET_BASE_URL?.trim()
   );
@@ -338,6 +358,22 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
     server: {
       host: '0.0.0.0',
       port: 5173,
+      proxy: aiDevProxyTarget
+        ? {
+            [AI_DEV_PROXY_PATH]: {
+              target: aiDevProxyTarget,
+              changeOrigin: true,
+              rewrite: path => path.slice(AI_DEV_PROXY_PATH.length) || '/',
+              configure(proxy) {
+                proxy.on('proxyReq', request => {
+                  // Авторизация ИИ остаётся Bearer; браузерные cookies не пересылаем.
+                  request.removeHeader('cookie');
+                  request.removeHeader('origin');
+                });
+              }
+            }
+          }
+        : undefined,
       watch: {
         ignored: [
           '**/.git/**',

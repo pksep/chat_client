@@ -1,5 +1,6 @@
 import { IChatContainerConfig } from '../components/interfaces/interfaces';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import { aiDevProxyBase } from '../utils/ai-dev-proxy';
 
 const configStore = ref<IChatContainerConfig>({});
 const CONFIG_KEYS: Array<keyof IChatContainerConfig> = [
@@ -38,4 +39,17 @@ export const setConfig = (config: IChatContainerConfig) => {
   configStore.value = config;
 };
 
-export const getConfig = () => configStore.value;
+const effectiveConfig = computed(() => {
+  if (!import.meta.env?.DEV || typeof window === 'undefined')
+    return configStore.value;
+  const base = aiDevProxyBase(
+    configStore.value.CHAT_MASTRA_URL,
+    import.meta.env.VITE_CHAT_AI_DEV_PROXY_TARGET,
+    window.location.origin
+  );
+  return base === configStore.value.CHAT_MASTRA_URL
+    ? configStore.value
+    : { ...configStore.value, CHAT_MASTRA_URL: base };
+});
+
+export const getConfig = () => effectiveConfig.value;
