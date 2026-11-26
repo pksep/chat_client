@@ -155,7 +155,8 @@ export async function openDesktopCallWindow(options: {
 }) {
   if (!isTauri()) return null;
   const capabilities = await invoke<CallWindowCapabilities>(
-    'desktop_call_window_capabilities'
+    'desktop_call_window_capabilities',
+    { prepare: true }
   )
     .then(value => {
       if (!value) throw new Error('Нет сведений об оболочке');

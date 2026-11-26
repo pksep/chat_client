@@ -2,6 +2,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Mutex,
 };
+use std::time::{Duration, Instant};
 use tauri::{
     webview::NewWindowResponse, AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
@@ -47,6 +48,7 @@ fn finish_native_chrome<R: Runtime>(_window: &WebviewWindow<R>) {
 pub struct DesktopCallWindow {
     available: AtomicBool,
     last_error: Mutex<Option<String>>,
+    prepared_until: Mutex<Option<Instant>>,
 }
 
 fn popup_error<R: Runtime>(app: &AppHandle<R>, message: &str) {
@@ -93,7 +95,16 @@ pub fn create_main_window<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> 
         .on_new_window(move |url, features| {
             // Только собственная пустая поверхность: никакой загрузки внешнего сайта
             // и второго экземпляра приложения/RTC-контроллера.
-            if !is_call_window_url(&url) {
+            let prepared = handle
+                .state::<DesktopCallWindow>()
+                .prepared_until
+                .lock()
+                .unwrap()
+                .take()
+                .is_some_and(|until| Instant::now() <= until);
+            // WKWebView может убрать fragment в запросе createWebView. Голый
+            // about:blank принимается только после подготовки из главного окна.
+            if !is_call_window_url(&url) && !(prepared && url.as_str() == "about:blank") {
                 popup_error(&handle, "unexpected-url");
                 return NewWindowResponse::Deny;
             }
@@ -164,11 +175,16 @@ pub struct CallWindowCapabilities {
 #[tauri::command]
 pub fn desktop_call_window_capabilities<R: Runtime>(
     window: WebviewWindow<R>,
+    prepare: Option<bool>,
 ) -> Result<CallWindowCapabilities, String> {
     if window.label() != "main" {
         return Err("Окно звонка управляется основным окном чата".into());
     }
     let state = window.state::<DesktopCallWindow>();
+    if prepare == Some(true) {
+        *state.prepared_until.lock().unwrap() = Some(Instant::now() + Duration::from_secs(10));
+        *state.last_error.lock().unwrap() = None;
+    }
     let pin_supported = !cfg!(target_os = "linux")
         || std::env::var("WAYLAND_DISPLAY")
             .unwrap_or_default()

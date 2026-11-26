@@ -117,7 +117,30 @@ try {
   const pin = doc.querySelector<HTMLButtonElement>('.desktop-titlebar__pin')!;
   if (!pin) throw new Error('Нет кнопки пина');
   if (host.context.pinSupported) {
+    const toggle = host.context.toggleAlwaysOnTop;
+    host.context.toggleAlwaysOnTop = async () => {
+      try {
+        await toggle();
+      } catch (error) {
+        await report({
+          step: 'pin-failure-detail',
+          passed: false,
+          error: String(error),
+          actual: await host!.context.nativeWindow.isAlwaysOnTop()
+        });
+        throw error;
+      }
+    };
     pin.click();
+    await sleep(150);
+    await report({
+      step: 'pin-observed',
+      supported: host.context.pinSupported,
+      changing: host.context.pinChanging.value,
+      native: await host.context.nativeWindow.isAlwaysOnTop(),
+      pressed: pin.getAttribute('aria-pressed'),
+      disabled: pin.disabled
+    });
     await wait(() => host!.context.alwaysOnTop.value, 'Пин не включился');
     if (!(await host.context.nativeWindow.isAlwaysOnTop()))
       throw new Error('ОС не закрепила окно');

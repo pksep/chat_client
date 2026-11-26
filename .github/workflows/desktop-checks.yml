@@ -164,6 +164,7 @@ jobs:
         with:
           workspaces: src-tauri
           prefix-key: call-native-${{ matrix.label }}
+          cache-on-failure: true
       - name: Install Linux runtime
         if: runner.os == 'Linux'
         run: |
@@ -176,16 +177,24 @@ jobs:
       - name: Check X11 call window
         if: matrix.session == 'x11'
         run: |
-          dbus-run-session -- xvfb-run -a -s '-screen 0 1600x1200x24' bash -c 'openbox >/tmp/call-openbox.log 2>&1 & GDK_BACKEND=x11 bun scripts/test-desktop-call-portability.ts'
+          dbus-run-session -- xvfb-run -a -s '-screen 0 1600x1200x24' bash -c '
+            openbox >/tmp/call-openbox.log 2>&1 &
+            sleep .5
+            xprop -root _NET_SUPPORTING_WM_CHECK
+            GDK_BACKEND=x11 bun scripts/test-desktop-call-portability.ts
+            result=$?
+            cat /tmp/call-openbox.log
+            exit $result
+          '
       - name: Check Wayland call window
         if: matrix.session == 'wayland'
         run: |
           export XDG_RUNTIME_DIR="$(mktemp -d)"
           chmod 700 "$XDG_RUNTIME_DIR"
-          dbus-run-session -- bash -c '
-            weston --backend=headless-backend.so --socket=wayland-qa --width=1600 --height=1200 --idle-time=0 >/tmp/call-weston.log 2>&1 &
+          dbus-run-session -- xvfb-run -a -s '-screen 0 1600x1200x24' bash -c '
+            weston --backend=x11-backend.so --use-pixman --socket=wayland-qa --width=1600 --height=1200 --idle-time=0 >/tmp/call-weston.log 2>&1 &
             for attempt in {1..50}; do test -S "$XDG_RUNTIME_DIR/wayland-qa" && break; sleep .1; done
-            WAYLAND_DISPLAY=wayland-qa GDK_BACKEND=wayland WEBKIT_DISABLE_DMABUF_RENDERER=1 bun scripts/test-desktop-call-portability.ts
+            WAYLAND_DISPLAY=wayland-qa GDK_BACKEND=wayland WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBGL_ALWAYS_SOFTWARE=1 bun scripts/test-desktop-call-portability.ts
           '
       - uses: actions/upload-artifact@v4
         if: always()
