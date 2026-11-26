@@ -79,6 +79,9 @@ test('раздел агентов доступен только в настол�
     await expect(
       tabs.getByRole('tab', { name: 'Чаты', exact: true })
     ).toHaveAttribute('aria-selected', 'true');
+    await expect(
+      page.getByRole('button', { name: 'Выбрать папку проекта', exact: true })
+    ).toBeVisible();
     const model = page.locator('.ai-composer-settings__trigger:visible');
     await expect(model).toHaveAttribute('title', 'Модель А');
     expect(
@@ -106,10 +109,23 @@ test('раздел агентов доступен только в настол�
     await page.setViewportSize({ width, height: 844 });
     const panel = page.locator('.mobile-list-container__section--ai[aria-hidden="false"]');
     await expect(panel.getByRole('tab', { name: 'Чаты' })).toBeVisible();
-    await expect(panel.getByRole('tab', { name: 'Агенты' })).toHaveCount(0);
+    if (testInfo.project.use.isMobile) {
+      await expect(panel.getByRole('tab', { name: 'Агенты' })).toHaveCount(0);
+    } else {
+      await expect(panel.getByRole('tab', { name: 'Агенты' })).toBeVisible();
+    }
     for (const container of [panel, panel.locator('.ai-menu-panel'), panel.locator('.ai-menu-panel__list')]) {
       await expect.poll(() => container.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
     }
+  }
+  if (!testInfo.project.use.isMobile) {
+    const panel = page.locator('.mobile-list-container__section--ai[aria-hidden="false"]');
+    await panel.getByRole('tab', { name: 'Агенты' }).click();
+    const folder = page.getByRole('button', { name: 'Выбрать папку проекта', exact: true });
+    await expect(folder).toBeVisible();
+    await page.setViewportSize({ width: 420, height: 844 });
+    await expect(folder).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Найти файл', exact: true })).toBeVisible();
   }
 });
 

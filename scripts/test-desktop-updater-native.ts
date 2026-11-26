@@ -4,7 +4,9 @@ import {
   readFile,
   writeFile,
   copyFile,
-  readdir
+  readdir,
+  open,
+  rm
 } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -51,6 +53,10 @@ $values | ConvertTo-Json -Compress`
 const integrationBefore = await productionIntegration();
 const root = path.resolve('.codex/desktop-updater-native');
 await mkdir(root, { recursive: true });
+const qaRunId = Date.now().toString(36);
+const qaIdentifier = 'ru.pksep.chat.updaterqa.' + qaRunId;
+const lockedAgentMode = process.argv.includes('--locked-agent');
+let lockedAgent: ReturnType<typeof spawn> | undefined;
 const run = (file: string, args: string[], env = process.env, quiet = false) =>
   new Promise<number>((resolve, reject) => {
     const child = spawn(file, args, {
@@ -65,6 +71,10 @@ const mustRun = async (...args: Parameters<typeof run>) => {
   const code = await run(...args);
   if (code) throw new Error(`Command failed (${code}): ${args[0]}`);
 };
+const agentHelper = path.join(root, 'agent-lock-helper.exe');
+if (lockedAgentMode) {
+  await mustRun('rustc', ['--edition=2021', 'test/fixtures/agent-lock-helper.rs', '-o', agentHelper]);
+}
 const keyPath = path.join(root, 'test.key');
 if (!(await Bun.file(keyPath).exists())) {
   await mustRun(
@@ -109,7 +119,7 @@ for (const version of ['1.6.100', '1.6.101']) {
     config,
     JSON.stringify({
       productName,
-      identifier: 'ru.pksep.chat.updaterqa',
+      identifier: qaIdentifier,
       version,
       build: {
         beforeBuildCommand: '',
@@ -117,7 +127,12 @@ for (const version of ['1.6.100', '1.6.101']) {
       },
       app: {
         windows: [
-          { label: 'main', title: 'SEP Chat: updater QA', visible: true }
+          {
+            label: 'main',
+            title: 'SEP Chat: updater QA',
+            visible: true,
+            dataDirectory: path.join(root, 'profile-' + qaRunId)
+          }
         ]
       },
       bundle: { targets: ['nsis'], createUpdaterArtifacts: true },
@@ -207,6 +222,16 @@ const server = Bun.serve({
     if (url.pathname === '/report') {
       const data = await request.json();
       reports.push(data);
+      if (lockedAgentMode && data.stage === 'prepared' && !lockedAgent) {
+        const executable = path.join(installDirectory, 'sep-pi-agent.exe');
+        await copyFile(agentHelper, executable);
+        lockedAgent = spawn(executable, [], { windowsHide: true, stdio: 'ignore' });
+        let blocked = false;
+        try { const file = await open(executable, 'r+'); await file.close(); }
+        catch (error) { blocked = ['EPERM', 'EACCES', 'EBUSY'].includes((error as NodeJS.ErrnoException).code ?? ''); }
+        if (!blocked) throw new Error('QA-агент не заблокировал свой бинарник перед обновлением');
+        reports.push({ stage: 'agent-file-locked', pid: lockedAgent.pid });
+      }
       if (data.stage === 'invalid-signature' && data.rejected)
         goodSignature = true;
       if (data.stage === 'restarted' || data.stage === 'failed') complete(data);
@@ -268,6 +293,18 @@ try {
   ) {
     throw new Error('Native updater smoke failed');
   }
+  if (lockedAgentMode) {
+    if (!lockedAgent) throw new Error('Проверка не запустила заблокированный агент');
+    if (lockedAgent.exitCode === null && lockedAgent.signalCode === null) {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('После обновления остался старый агент')), 5000);
+        lockedAgent!.once('exit', () => { clearTimeout(timer); resolve(); });
+      });
+    }
+    const file = await open(path.join(installDirectory, 'sep-pi-agent.exe'), 'r+');
+    await file.close();
+    console.log('PASS: native updater recovered a locked agent executable');
+  }
   await stopQa();
   const next = spawn(
     path.join(installDirectory, 'sep-chat.exe'),
@@ -290,6 +327,11 @@ try {
   console.log(JSON.stringify(hidden));
 } finally {
   server.stop(true);
+  if (lockedAgent?.exitCode === null && lockedAgent.signalCode === null) {
+    lockedAgent.kill();
+    await new Promise<void>(resolve => lockedAgent!.once('exit', () => resolve()));
+  }
+  if (lockedAgentMode) await rm(path.join(installDirectory, 'sep-pi-agent.exe'), { force: true });
   await mustRun(
     'powershell.exe',
     [

@@ -45,8 +45,6 @@ import {
 } from '../services/aiConversationInfo';
 import { playMessageNotificationSound } from '../services/notification-sound';
 import { isTauriRuntime } from '../services/useTauriNotifications';
-import { useMediaQuery } from '@vueuse/core';
-import { MAX_W_MD } from '../utils/constants';
 import { desktopBrowserPlatform } from '../utils/desktop-app-downloads';
 import {
   agentChoices,
@@ -272,12 +270,8 @@ const loadState = (): PersistedAiState => {
 
 const initialState = loadState();
 const persisted = reactive<PersistedAiState>(initialState);
-const phoneLayout = useMediaQuery(`(max-width: ${MAX_W_MD})`);
 const hasDesktopAgentTab = computed(
-  () =>
-    isTauriRuntime() &&
-    desktopBrowserPlatform(navigator) !== 'mobile' &&
-    !phoneLayout.value
+  () => isTauriRuntime() && desktopBrowserPlatform(navigator) !== 'mobile'
 );
 // Общий ИИ-чат доступен по сессии пользователя; локальный агент выбирается явно
 // и может требовать отдельной настройки провайдера на компьютере.
@@ -982,7 +976,11 @@ async function loadAgentSession(
 async function chooseAgentDirectory(
   activateWithDraft?: (activate: () => void) => void
 ): Promise<DesktopAgentChat | undefined> {
-  if (activeView.value !== 'agents' || isChoosingAgentDirectory.value) return;
+  const sourceView = activeView.value;
+  // Обычный чат остаётся открытым до успешного выбора и подключения папки.
+  const fromChat = sourceView === 'chat' && hasDesktopAgentTab.value;
+  if ((sourceView !== 'agents' && !fromChat) || isChoosingAgentDirectory.value)
+    return;
   const ownerId = getChatAuthSession()?.user?.id;
   if (!ownerId) return;
 
@@ -993,10 +991,11 @@ async function chooseAgentDirectory(
   let reuseChat = false;
   try {
     await requireAiAccess();
-    if (activeView.value !== 'agents' || activeSessionId.value !== previousId)
+    if (activeView.value !== sourceView || activeSessionId.value !== previousId)
       return;
 
-    const current = previous ? await loadAgentSession(previous) : undefined;
+    const current =
+      !fromChat && previous ? await loadAgentSession(previous) : undefined;
     // Текущий процесс держит папку и модель до конца запроса.
     reuseChat = Boolean(current && !current.running && !current.busy);
     chat =
@@ -1020,7 +1019,7 @@ async function chooseAgentDirectory(
       previous.project = project;
     } else {
       const activate =
-        activeView.value === 'agents' && activeSessionId.value === previousId;
+        activeView.value === sourceView && activeSessionId.value === previousId;
       if (activate) markSessionInactive(previousId);
 
       const session = createSession(
@@ -1031,6 +1030,8 @@ async function chooseAgentDirectory(
       );
       if (activate) {
         const activateSession = (): void => {
+          activeTab.value = 'agents';
+          activeView.value = 'agents';
           activeSessionId.value = session.id;
         };
         if (activateWithDraft) activateWithDraft(activateSession);

@@ -1,5 +1,7 @@
 #[cfg(desktop)]
 mod desktop_agent;
+#[cfg(desktop)]
+mod desktop_agent_process;
 
 use serde::Serialize;
 use std::process::Command;
@@ -199,6 +201,14 @@ fn desktop_restart<R: Runtime>(app: AppHandle<R>) {
         .is_quitting
         .store(true, Ordering::SeqCst);
     app.request_restart();
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn desktop_update_prepare<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
+    desktop_files::desktop_update_prepare()?;
+    app.state::<std::sync::Arc<desktop_agent::DesktopAgentState>>()
+        .ensure_idle_for_update()
 }
 
 #[cfg(desktop)]
@@ -705,7 +715,7 @@ pub fn run() {
             desktop_files::desktop_file_cancel_download,
             desktop_files::desktop_file_save,
             desktop_files::desktop_file_open,
-            desktop_files::desktop_update_prepare,
+            desktop_update_prepare,
             desktop_auth::desktop_auth_request,
             #[cfg(windows)]
             desktop_recovery::desktop_restore_recovery,
@@ -769,6 +779,11 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("Не удалось создать приложение Tauri")
         .run(|_app, _event| {
+            #[cfg(desktop)]
+            if matches!(_event, tauri::RunEvent::Exit) {
+                _app.state::<std::sync::Arc<desktop_agent::DesktopAgentState>>()
+                    .shutdown();
+            }
             #[cfg(debug_assertions)]
             if matches!(_event, tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. }) {
                 eprintln!("Завершение цикла Tauri: {_event:?}");

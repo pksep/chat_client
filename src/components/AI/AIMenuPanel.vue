@@ -1054,7 +1054,7 @@ const handleTab = (tab: AiAssistantTab): void => {
   setTab(tab);
   closeActivePopover();
 
-  if (!isMobileViewport()) {
+  if (tab === 'agents' || !isMobileViewport()) {
     openAssistant();
   }
 };

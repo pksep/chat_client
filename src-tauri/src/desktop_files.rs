@@ -150,7 +150,6 @@ impl Drop for ActiveFileWrite {
     }
 }
 
-#[tauri::command]
 pub fn desktop_update_prepare() -> Result<(), String> {
     if ACTIVE_FILE_WRITES.load(Ordering::SeqCst) != 0 {
         return Err("Дождитесь завершения скачивания файлов".into());

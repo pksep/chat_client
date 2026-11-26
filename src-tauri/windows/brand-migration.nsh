@@ -1,5 +1,44 @@
 ; Имя продукта меняется, каталог старой установки и данные пользователя сохраняются.
 Var SepLegacyInstall
+Var SepAgentStopResult
+
+; Restart Manager освобождает только конкретный бинарник этой установки.
+; Это также восстанавливает обновление со старых версий с оставшимся агентом.
+Function SepStopInstalledAgent
+  Push $0
+  Push $1
+  Push $2
+  Push $3
+  Push $4
+  Push $5
+  StrCpy $SepAgentStopResult 0
+  ${If} ${FileExists} "$INSTDIR\sep-pi-agent.exe"
+    System::Alloc 66
+    Pop $1
+    System::Call 'rstrtmgr::RmStartSession(*i .r0, i 0, p r1) i .r2'
+    ${If} $2 = 0
+      System::Call '*(&w${NSIS_MAX_STRLEN} "$INSTDIR\sep-pi-agent.exe") p .r3'
+      System::Call '*(p r3) p .r4'
+      System::Call 'rstrtmgr::RmRegisterResources(i r0, i 1, p r4, i 0, p 0, i 0, p 0) i .r2'
+      ${If} $2 = 0
+        System::Call 'rstrtmgr::RmShutdown(i r0, i 1, p 0) i .r2'
+      ${EndIf}
+      StrCpy $SepAgentStopResult $2
+      System::Call 'rstrtmgr::RmEndSession(i r0) i .r5'
+      System::Free $4
+      System::Free $3
+    ${Else}
+      StrCpy $SepAgentStopResult $2
+    ${EndIf}
+    System::Free $1
+  ${EndIf}
+  Pop $5
+  Pop $4
+  Pop $3
+  Pop $2
+  Pop $1
+  Pop $0
+FunctionEnd
 
 !macro SEP_ENSURE_SHORTCUT shortcut
   !insertmacro IsShortcutTarget "${shortcut}" "$INSTDIR\${MAINBINARYNAME}.exe"
@@ -105,6 +144,16 @@ Var SepLegacyInstall
     StrCpy $INSTDIR $0
   ${EndIf}
   SetOutPath $INSTDIR
+  ; В ручной установке сначала используем штатное подтверждение закрытия Чата.
+  !ifmacrodef CheckIfAppIsRunning
+    !insertmacro CheckIfAppIsRunning "$INSTDIR\${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+  !endif
+  Call SepStopInstalledAgent
+  ${If} $SepAgentStopResult != 0
+    MessageBox MB_ICONSTOP|MB_OK "Не удалось завершить локальный агент. Закройте СЭП Чат и повторите установку. Код: $SepAgentStopResult" /SD IDOK
+    SetErrorLevel 5
+    Abort
+  ${EndIf}
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL

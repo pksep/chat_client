@@ -39,6 +39,7 @@ try {
       '/V2',
       `/DQA_ROOT=${directory}`,
       `/DQA_UTILS=${utilities}`,
+      `/DQA_PLUGINS=${path.join(path.dirname(nsis), 'Plugins/x86-unicode/additional')}`,
       `/DQA_HOOK=${path.resolve('src-tauri/windows/brand-migration.nsh')}`,
       `/DQA_KEY=ShortcutMigrationQA-${randomUUID()}`,
       `/DQA_STARTMENU=${startMenu}`,

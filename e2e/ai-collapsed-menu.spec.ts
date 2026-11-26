@@ -1291,7 +1291,7 @@ test('Tauri открывает обычный чат, а явный выбор �
   });
   await expect(chatsTab).toHaveAttribute('aria-selected', 'true');
   await expect(editor).toBeVisible();
-  await expect(folder).toHaveCount(0);
+  await expect(folder).toBeVisible();
   await agentTab.click();
   await expect(agentTab).toHaveAttribute('aria-selected', 'true');
   await expect(agents).toBeVisible();
@@ -1373,7 +1373,8 @@ test('Tauri открывает обычный чат, а явный выбор �
   const prompt = agents.locator('[contenteditable=true]');
   await prompt.fill('Создай тестовый файл');
   await prompt.press('Enter');
-  await expect(agents.getByText('Создай тестовый файл')).toBeVisible();
+  await expect(agents.locator('.ai-assistant__conversation').getByText('Создай тестовый файл', { exact: true })).toBeVisible();
+  await expect(prompt).not.toContainText('Создай тестовый файл');
   await expect(agents.getByText('Создать test.txt')).toBeVisible();
   await agents.getByRole('button', { name: 'Разрешить один раз' }).click();
   await expect(agents.getByText('Файл записан')).toBeVisible();
@@ -1411,7 +1412,7 @@ test('Tauri открывает обычный чат, а явный выбор �
   await chatsTab.click();
   await expect(chatsTab).toHaveAttribute('aria-selected', 'true');
   await expect(editor).toBeVisible();
-  await expect(project.locator('.ai-composer-settings__folder')).toHaveCount(0);
+  await expect(project.locator('.ai-composer-settings__folder')).toHaveText('Выбрать папку');
 
   await agentTab.click();
   await expect(agents).toBeVisible();

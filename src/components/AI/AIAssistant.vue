@@ -893,6 +893,7 @@ const getMessageHtml = (text: string): string =>
 
 const {
   sessions,
+  hasDesktopAgentTab,
   activeView,
   activeAgentChat,
   preferredAgentModel,
@@ -1066,16 +1067,19 @@ const composerEffort = computed<string>(() => {
     ? selected
     : availableAgentEffort.value?.currentValue ?? 'default';
 });
-const agentProjectSetting = computed(() =>
-  activeView.value === 'agents'
-    ? {
-        directory:
-          activeAgentChat.value?.pendingDirectory ||
+const agentProjectSetting = computed(() => {
+  if (!hasDesktopAgentTab.value || activeView.value === 'tasks')
+    return undefined;
+
+  return {
+    directory:
+      activeView.value === 'agents'
+        ? activeAgentChat.value?.pendingDirectory ||
           activeSession.value?.project?.directory ||
           ''
-      }
-    : undefined
-);
+        : ''
+  };
+});
 const agentPermission = computed(() => activeAgentChat.value?.permissions[0]);
 const canStopAgent = computed<boolean>(
   () => activeView.value === 'agents' && !!activeAgentChat.value?.running

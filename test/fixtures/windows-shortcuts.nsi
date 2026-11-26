@@ -11,6 +11,7 @@ OutFile "${QA_ROOT}\shortcuts.exe"
 !include "Win\Propkey.nsh"
 !include "Win\RestartManager.nsh"
 !include "${QA_UTILS}\utils.nsh"
+!addplugindir "${QA_PLUGINS}"
 
 !define PRODUCTNAME "СЭП Чат"
 !define MAINBINARYNAME "sep-chat"
@@ -24,6 +25,10 @@ Var UpdateMode
 Var NoShortcutMode
 Var AppStartMenuFolder
 Var MenuPath
+Var PassiveMode
+LangString appRunning 1033 "QA app is running"
+LangString appRunningOkKill 1033 "QA close app"
+LangString failedToKillApp 1033 "QA cannot close app"
 
 !macro QA_FAIL message
   FileOpen $R0 "$EXEDIR\failure.txt" w

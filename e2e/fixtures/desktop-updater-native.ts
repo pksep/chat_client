@@ -160,7 +160,7 @@ try {
           'Несохранённый текст перед обновлением'
         );
         localStorage.setItem('qa-session', 'synthetic-session');
-        void report('prepared', storageState());
+        await report('prepared', storageState());
         await settleDesktopUpdateStorage();
         if (/win/i.test(navigator.platform)) {
           await getCurrentWindow().minimize();

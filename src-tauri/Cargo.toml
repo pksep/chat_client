@@ -47,6 +47,10 @@ path = "tests/desktop_screen_capture.rs"
 name = "desktop_permission_preferences"
 path = "tests/desktop_permission_preferences.rs"
 
+[[test]]
+name = "desktop_agent_process"
+path = "tests/desktop_agent_process.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -81,7 +85,7 @@ x11rb = { version = "0.13", default-features = false }
 windows-capture = "=1.5.0"
 tauri-winrt-notification = "0.7.2"
 winreg = "0.55"
-windows = { version = "0.61", features = ["Data_Xml_Dom", "Foundation", "Foundation_Collections", "UI_Notifications", "Win32_Security_Cryptography", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.61", features = ["Data_Xml_Dom", "Foundation", "Foundation_Collections", "UI_Notifications", "Win32_Security_Cryptography", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_UI_WindowsAndMessaging", "Win32_System_JobObjects"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

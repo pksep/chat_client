@@ -220,6 +220,12 @@ jobs:
       - name: Verify Windows shortcut migration and recovery
         if: runner.os == 'Windows'
         run: bun scripts/test-windows-shortcuts.ts
+      - name: Verify Windows agent exit and installer file replacement
+        if: runner.os == 'Windows'
+        run: |
+          cargo test --manifest-path src-tauri/Cargo.toml --test desktop_agent_process --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          bun scripts/test-windows-agent-installer.ts
       - name: Verify Apple signatures, notarization and Gatekeeper
         if: runner.os == 'macOS' && needs.prepare.outputs.apple_signed == 'true'
         env:

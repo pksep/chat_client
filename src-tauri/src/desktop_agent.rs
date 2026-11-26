@@ -28,6 +28,23 @@ pub struct DesktopAgentState {
 }
 
 impl DesktopAgentState {
+    pub fn ensure_idle_for_update(&self) -> Result<(), String> {
+        let busy = || "Дождитесь завершения работы локального агента.".to_string();
+        let _opening = self.operation.try_lock().map_err(|_| busy())?;
+        let sessions = self.sessions.lock().map_err(|_| busy())?;
+        for session in sessions.values() {
+            let _operation = session.operation.try_lock().map_err(|_| busy())?;
+        }
+        Ok(())
+    }
+
+    pub fn shutdown(&self) {
+        if let Ok(mut sessions) = self.sessions.lock() {
+            sessions.clear();
+        }
+        crate::desktop_agent_process::stop();
+    }
+
     fn session(&self, thread_id: &str) -> Result<Arc<AgentSession>, String> {
         self.sessions
             .lock()
@@ -255,6 +272,7 @@ impl AcpProcess {
                 "Не удалось запустить агент. Попробуйте перезапустить приложение.".into()
             }
         })?;
+        crate::desktop_agent_process::attach(&mut child)?;
 
         let transport = Arc::new(AcpTransport {
             stdin: Mutex::new(child.stdin.take().expect("piped stdin")),
