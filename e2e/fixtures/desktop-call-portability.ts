@@ -172,6 +172,19 @@ try {
     supported: host.context.pinSupported
   });
   await host.context.nativeWindow.setSize(new LogicalSize(1400, 950));
+  await sleep(1200);
+  await host.context.nativeWindow.setSize(new LogicalSize(1400, 950));
+  await sleep(300);
+  const area = doc
+    .querySelector('.call-modal__participants-panel--grid')
+    ?.getBoundingClientRect();
+  await report({
+    step: 'native-resized',
+    viewport: { width: host.popup.innerWidth, height: host.popup.innerHeight },
+    screen: { width: screen.width, height: screen.height },
+    area: area?.toJSON(),
+    count: doc.querySelectorAll('.call-modal__remote-tile').length
+  });
   await wait(
     () => doc.querySelectorAll('.call-modal__remote-tile').length === 9,
     'В большом окне нет 9 участников'
