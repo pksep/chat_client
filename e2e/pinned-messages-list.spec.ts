@@ -1028,3 +1028,62 @@ test('потерянный ответ POST повторяется с тем же
   ).toHaveLength(1);
   expect(errors).toEqual([]);
 });
+
+test('двойной клик по заметке не всплывает и не запускает действие сообщения', async ({ page, isMobile }) => {
+  await openPinnedFixture(page);
+  await page.getByTestId('Pinned-Messages-ListButton').click();
+  await page.evaluate(() => {
+    (window as any).noteDoubleClicks = 0;
+    document.addEventListener('dblclick', () => (window as any).noteDoubleClicks++);
+  });
+  const note = page.getByTestId('PinnedList').locator('.pin-note__text').first();
+  if (isMobile) await note.dispatchEvent('dblclick');
+  else await note.dblclick();
+  expect(await page.evaluate(() => (window as any).noteDoubleClicks)).toBe(0);
+  await expect(page.getByTestId('PinnedList')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /В ответ/ })).toHaveCount(0);
+});
+
+test('локальный поиск находит текст сохранённой заметки без результата сервера', async ({ page }) => {
+  await openPinnedFixture(page);
+  const result = await page.evaluate(async () => {
+    const fixture = (window as any).pins;
+    await fixture.refresh();
+    fixture.sdk.searchMessages = async () => ({ data: [], total: 0 });
+    const { searchMessages } = await import('/src/composables/useMessageSearch.ts');
+    const found = await searchMessages('Важная инфа');
+    return found.results.map(row => ({ id: row.id, comments: row.pinComments.map(note => note.text) }));
+  });
+  expect(result).toEqual([{ id: '01f0a010-7ff7-4e7b-b97b-000000000001', comments: ['Важная инфа для логистического центра'] }]);
+});
+
+test('запоздалый поиск не возвращает удалённую после запроса заметку', async ({ page }) => {
+  await openPinnedFixture(page);
+  const result = await page.evaluate(async () => {
+    const fixture = (window as any).pins;
+    await fixture.refresh();
+    const note = fixture.store.state(fixture.topicId).value.comments.find((note: any) => note.text.startsWith('Важная инфа'));
+    const original = fixture.rows.find((row: any) => row.id === note.messageId);
+    let release!: () => void;
+    let started!: () => void;
+    const requested = new Promise<void>(resolve => { started = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    fixture.sdk.searchMessages = async () => {
+      started();
+      await gate;
+      return { data: [{ ...original, pinComments: [note] }], total: 1 };
+    };
+    const { searchMessages } = await import('/src/composables/useMessageSearch.ts');
+    const search = searchMessages('Важная инфа');
+    await requested;
+    fixture.store.enqueue(fixture.topicId, {
+      commandId: crypto.randomUUID(), messageId: note.messageId,
+      action: 'DELETE', scope: note.scope, commentId: note.id, expectedRevision: note.revision
+    });
+    await fixture.store.flush(fixture.topicId);
+    const remaining = fixture.store.commentsFor(fixture.topicId, note.messageId).length;
+    release();
+    return { remaining, ids: (await search).results.map(row => row.id) };
+  });
+  expect(result).toEqual({ remaining: 0, ids: [] });
+});

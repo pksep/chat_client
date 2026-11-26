@@ -21,6 +21,7 @@ export interface PaginatedResponse<T = any> {
 }
 
 export interface SearchParams {
+  includePinComments?: boolean;
   page?: number | null;
   limit?: number | null;
   search?: string | null;

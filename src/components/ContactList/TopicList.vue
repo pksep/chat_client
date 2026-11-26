@@ -230,6 +230,7 @@
       v-for="(result, index) in props.messageResults"
       :key="`message-${result.id}`"
       class="contact-list__li menu-list-row"
+      :class="{ 'contact-list__li--search-notes': result.pinComments?.length }"
       role="listitem"
       tabindex="0"
       :data-testid="`${props.dataTestid}-ContactList-MessageResult${index + 1}`"
@@ -277,6 +278,18 @@
             :data-testid="`${props.dataTestid}-ContactList-MessageDescription${index + 1}`"
           >
             {{ result.previewText }}
+          </div>
+          <div
+            v-if="result.pinComments?.length"
+            class="contact-list__search-pin-comments"
+            @keydown.stop
+          >
+            <PinCommentCard
+              v-for="comment in result.pinComments"
+              :key="comment.id"
+              :comment="comment"
+              :own="false"
+            />
           </div>
           <div class="contact-list__top">
             <span
@@ -431,6 +444,7 @@ import {
 } from '../../composables/navigation';
 import { MediaType } from '@pksep/zod-shared-chat';
 import PinIcon from '../UI/PinIcon.vue';
+import PinCommentCard from '../Messages/PinCommentCard.vue';
 import UnpinIcon from '../UI/UnpinIcon.vue';
 import UnmuteIcon from '../UI/UnmuteIcon.vue';
 import MuteIcon from '../UI/MuteIcon.vue';
@@ -1586,6 +1600,22 @@ const getTopicActiveCall = (topic: ITopic) => {
 </script>
 
 <style scoped>
+.contact-list__li--search-notes .contact-list__item--message-result {
+  height: auto;
+  align-items: flex-start;
+}
+.contact-list__search-pin-comments {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 0 0 8px;
+}
+.contact-list__search-pin-comments :deep(.pin-note) {
+  min-width: 0;
+  max-width: calc(100% - 20px);
+}
+.contact-list__search-pin-comments :deep(.pin-note__text) {
+  overflow-wrap: anywhere;
+}
 .contact-list__pagination {
   display: flex;
   justify-content: center;
