@@ -165,12 +165,14 @@ jobs:
           prefix-key: call-native-${{ matrix.label }}
           cache-on-failure: true
       - name: Restore Linux runtime packages
+        id: linux_runtime_cache
         if: runner.os == 'Linux'
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ~/.cache/chat-call-apt
           key: call-native-apt-${{ runner.os }}-v1
       - name: Install Linux runtime
+        id: linux_runtime
         if: runner.os == 'Linux'
         timeout-minutes: 20
         run: |
@@ -212,6 +214,12 @@ jobs:
             dbus-update-activation-environment DISPLAY WAYLAND_DISPLAY XDG_RUNTIME_DIR
             WAYLAND_DEBUG=client WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBGL_ALWAYS_SOFTWARE=1 RUST_BACKTRACE=1 bun scripts/test-desktop-call-portability.ts
           '
+      - name: Save Linux runtime packages
+        if: always() && runner.os == 'Linux' && steps.linux_runtime.outcome == 'success' && steps.linux_runtime_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/chat-call-apt
+          key: call-native-apt-${{ runner.os }}-v1
       - uses: actions/upload-artifact@v4
         if: always()
         with:

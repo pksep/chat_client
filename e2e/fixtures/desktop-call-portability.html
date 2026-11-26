@@ -15,6 +15,9 @@
       window.addEventListener('error', event =>
         report({ passed: false, error: event.message })
       );
+      window.addEventListener('unhandledrejection', event =>
+        report({ passed: false, error: String(event.reason) })
+      );
     </script>
     <script
       type="module"

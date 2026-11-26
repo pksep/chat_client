@@ -103,12 +103,12 @@ await writeFile(
   '<!doctype html><meta charset="utf-8"><title>SEP Chat updater QA</title><body>Проверка обновления<script type="module" src="./desktop-updater-native.js"></script>'
 );
 for (const version of ['1.6.100', '1.6.101']) {
+  const productName = 'СЭП Чат Updater QA';
   const config = path.join(root, `config-${version}.json`);
   await writeFile(
     config,
     JSON.stringify({
-      productName:
-        version === '1.6.100' ? 'SEP Chat Updater QA' : 'СЭП Чат Updater QA',
+      productName,
       identifier: 'ru.pksep.chat.updaterqa',
       version,
       build: {
@@ -131,16 +131,22 @@ for (const version of ['1.6.100', '1.6.101']) {
       }
     })
   );
-  await mustRun(
-    process.execPath,
-    ['run', 'tauri', 'build', '--config', config, '--bundles', 'nsis'],
-    signingEnv
-  );
+  if (!process.argv.includes(`--reuse-built-installer=${version}`))
+    await mustRun(
+      process.execPath,
+      ['run', 'tauri', 'build', '--config', config, '--bundles', 'nsis'],
+      signingEnv
+    );
   const bundles = path.resolve('src-tauri/target/release/bundle/nsis');
-  const installer = (await readdir(bundles)).find(
-    name => name.includes(version) && name.endsWith('-setup.exe')
+  const installer = `${productName}_${version}_x64-setup.exe`;
+  if (!(await readdir(bundles)).includes(installer))
+    throw new Error('Нет точного тестового NSIS-установщика');
+  console.log(
+    JSON.stringify({
+      qaInstaller: installer,
+      reused: process.argv.includes(`--reuse-built-installer=${version}`)
+    })
   );
-  if (!installer) throw new Error('No NSIS installer');
   await copyFile(
     path.join(bundles, installer),
     path.join(root, `${version}.exe`)
