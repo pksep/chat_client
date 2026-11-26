@@ -40,6 +40,7 @@
       <div
         v-if="isOpen"
         class="ai-assistant__response-menu ai-composer-settings__menu"
+        :class="{ 'ai-composer-settings__menu--models': showModels }"
         role="dialog"
         :aria-label="
           showModels ? 'Выбор модели' : 'Модель и уровень рассуждения'
@@ -63,7 +64,6 @@
         <div v-else-if="showModels" class="ai-composer-settings__choices">
           <header class="ai-composer-settings__choices-header">
             <button
-              ref="backButton"
               type="button"
               aria-label="Назад к уровню рассуждения"
               @click="showEffort"
@@ -72,21 +72,42 @@
             </button>
             <span>Выбор модели</span>
           </header>
-          <button
-            v-for="choice in props.models"
-            :key="choice.value"
-            type="button"
-            :aria-pressed="props.model === choice.value"
-            :disabled="props.pending"
-            @click="selectModel(choice.value)"
-          >
-            <span>{{ choice.name }}</span>
-            <Icon
-              v-if="props.model === choice.value"
-              :name="IconNameEnum.checked"
-              aria-hidden="true"
+          <div ref="searchField" class="ai-composer-settings__search">
+            <MenuSearch
+              v-model="query"
+              placeholder="Поиск моделей"
+              aria-label="Поиск по модели или провайдеру"
             />
-          </button>
+          </div>
+          <div class="ai-composer-settings__results">
+            <button
+              v-for="choice in filteredModels"
+              :key="choice.value"
+              class="ai-composer-settings__choice"
+              type="button"
+              :aria-pressed="props.model === choice.value"
+              :disabled="props.pending"
+              @click="selectModel(choice.value)"
+            >
+              <span class="ai-composer-settings__choice-name">{{
+                choice.name
+              }}</span>
+              <Badges
+                v-if="choice.provider"
+                class="ai-composer-settings__provider"
+                :text="choice.provider"
+                :type="choice.providerColor"
+                :disabled="true"
+              />
+            </button>
+            <p
+              v-if="!filteredModels.length"
+              class="ai-composer-settings__empty"
+              role="status"
+            >
+              Модели не найдены
+            </p>
+          </div>
         </div>
         <div v-else class="ai-composer-settings__levels">
           <span aria-live="polite">{{
@@ -138,6 +159,8 @@
 
 <script setup lang="ts">
 import {
+  Badges,
+  BadgesTypeEnum,
   Button,
   ButtonTypeEnum,
   Icon,
@@ -148,6 +171,7 @@ import {
 import { vOnClickOutside } from '@vueuse/components';
 import { computed, nextTick, ref } from 'vue';
 import type { AgentChoice } from '../../composables/useDesktopAgentChats';
+import MenuSearch from '../UI/MenuSearch.vue';
 
 const props = defineProps<{
   project?: { directory: string };
@@ -173,18 +197,52 @@ const isOpen = ref(false);
 const showModels = ref(false);
 const savingEffort = ref(false);
 const hoveredIndex = ref<number | null>(null);
-const backButton = ref<HTMLButtonElement>();
+const query = ref('');
+const searchField = ref<HTMLDivElement>();
 const pickerButton = ref<HTMLButtonElement>();
 const directoryLabel = computed(
   () =>
     props.project?.directory.split(/[\\/]/).filter(Boolean).at(-1) ||
     'Выбрать папку'
 );
+const providerColors = new Map<string, BadgesTypeEnum>([
+  ['OpenAI', BadgesTypeEnum.blue],
+  ['OpenCode Go', BadgesTypeEnum.violet],
+  ['OpenRouter', BadgesTypeEnum.green]
+]);
+
+const modelChoices = computed(() =>
+  props.models.map(({ value, name }) => {
+    // В каталоге с несколькими провайдерами сервер добавляет метку в конец названия.
+    const suffix = /\s+\(([^()]+)\)$/u.exec(name);
+    const providerColor = suffix && providerColors.get(suffix[1]);
+    if (!suffix || !providerColor) return { value, name };
+
+    return {
+      value,
+      name: name.slice(0, suffix.index),
+      provider: suffix[1],
+      providerColor
+    };
+  })
+);
 const modelLabel = computed(
   () =>
-    props.models.find(choice => choice.value === props.model)?.name ??
+    modelChoices.value.find(choice => choice.value === props.model)?.name ??
     (props.model || 'Модель ИИ')
 );
+const filteredModels = computed(() => {
+  const terms = query.value.trim().toLowerCase().split(/\s+/u).filter(Boolean);
+  if (!terms.length) return modelChoices.value;
+
+  return modelChoices.value.filter(choice => {
+    const label = [choice.name, choice.provider, choice.value]
+      .join(' ')
+      .toLowerCase();
+
+    return terms.every(term => label.includes(term));
+  });
+});
 const effortLabel = computed(
   () =>
     props.efforts.find(choice => choice.value === props.effort)?.name ??
@@ -214,9 +272,10 @@ function toggle(): void {
 }
 
 async function openModels(): Promise<void> {
+  query.value = '';
   showModels.value = true;
   await nextTick();
-  backButton.value?.focus();
+  searchField.value?.querySelector('input')?.focus({ preventScroll: true });
 }
 
 async function showEffort(): Promise<void> {
@@ -355,21 +414,52 @@ defineExpose({ close });
 
 .ai-composer-settings__choices {
   display: grid;
-  gap: 2px;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  gap: 6px;
 }
 
-.ai-composer-settings__choices button {
-  justify-content: space-between;
+.ai-composer-settings__menu--models {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ai-composer-settings__results {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ai-composer-settings__choices .ai-composer-settings__choice {
+  gap: 6px;
   min-height: 32px;
   font-size: 14px;
 }
 
-.ai-composer-settings__choices button[aria-pressed='true'] {
+.ai-composer-settings__choice-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ai-composer-settings__provider {
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
+.ai-composer-settings__empty {
+  margin: 8px 5px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.ai-composer-settings__choice[aria-pressed='true'] {
   color: var(--text-brand);
   background: var(--action-secondary-pressed-bg);
 }
 
-.ai-composer-settings__choices button :deep(svg) {
+.ai-composer-settings__choices-header :deep(svg) {
   width: 16px;
   height: 16px;
   flex: 0 0 16px;
