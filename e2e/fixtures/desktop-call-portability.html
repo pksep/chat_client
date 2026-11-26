@@ -5,6 +5,17 @@
     <title>Проверка окна звонка</title>
   </head>
   <body>
+    <script>
+      const report = value =>
+        fetch('http://127.0.0.1:5213/report', {
+          method: 'POST',
+          body: JSON.stringify(value)
+        });
+      report({ step: 'main-html', passed: true });
+      window.addEventListener('error', event =>
+        report({ passed: false, error: event.message })
+      );
+    </script>
     <script
       type="module"
       src="/e2e/fixtures/desktop-call-portability.ts"

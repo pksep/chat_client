@@ -94,6 +94,8 @@ pub fn create_main_window<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> 
     };
     let window = native_chrome(main_builder)
         .on_new_window(move |url, features| {
+            #[cfg(debug_assertions)]
+            eprintln!("Окно звонка: получен запрос отдельной поверхности");
             // Только собственная пустая поверхность: никакой загрузки внешнего сайта
             // и второго экземпляра приложения/RTC-контроллера.
             let prepared = handle
@@ -137,13 +139,14 @@ pub fn create_main_window<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> 
                 .inner_size(960.0, 720.0)
                 .min_inner_size(420.0, 400.0)
                 .decorations(false)
-                .visible(false)
-                .center(),
+                .visible(false),
             )
             .on_navigation(|url| is_call_window_url(url) || url.as_str() == "about:blank")
             .build();
             match window {
                 Ok(window) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("Окно звонка: нативная поверхность создана");
                     finish_native_chrome(&window);
                     NewWindowResponse::Create { window }
                 }
@@ -234,25 +237,43 @@ pub async fn desktop_call_window_pinned<R: Runtime>(
         let (sender, receiver) = tokio::sync::oneshot::channel();
         let target = call.clone();
         call.run_on_main_thread(move || {
-            use gtk::prelude::*;
-            // У popup Tao может хранить старое значение, хотя WM уже выставил ABOVE.
-            // GDK читает состояние реального окна, а не локальный флаг Tao.
-            let state = target
-                .gtk_window()
-                .map_err(|error| error.to_string())
-                .map(|window| {
-                    window
-                        .window()
-                        .map(|window| window.state().contains(gdk::WindowState::ABOVE))
-                        .unwrap_or(false)
-                });
-            let _ = sender.send(state);
+            let _ = sender.send(x11_call_window_pinned(&target));
         })
         .map_err(|error| error.to_string())?;
         receiver.await.map_err(|error| error.to_string())?
     }
     #[cfg(not(target_os = "linux"))]
     call.is_always_on_top().map_err(|error| error.to_string())
+}
+
+#[cfg(target_os = "linux")]
+fn x11_call_window_pinned<R: Runtime>(window: &WebviewWindow<R>) -> Result<bool, String> {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
+
+    let read = || -> Result<bool, Box<dyn std::error::Error>> {
+        let xid = match window.window_handle()?.as_raw() {
+            RawWindowHandle::Xlib(handle) => u32::try_from(handle.window)?,
+            RawWindowHandle::Xcb(handle) => handle.window.get(),
+            _ => return Err("Оконная система не поддерживает закрепление".into()),
+        };
+        // У popup Tao и GDK могут хранить старый флаг. Читаем EWMH напрямую у WM,
+        // без запуска внешних процессов и без подмены подтверждения локальным значением.
+        let (connection, _) = x11rb::connect(None)?;
+        let state = connection.intern_atom(false, b"_NET_WM_STATE")?.reply()?.atom;
+        let above = connection
+            .intern_atom(false, b"_NET_WM_STATE_ABOVE")?
+            .reply()?
+            .atom;
+        let property = connection
+            .get_property(false, xid, state, AtomEnum::ATOM, 0, 1024)?
+            .reply()?;
+        Ok(property
+            .value32()
+            .map(|mut values| values.any(|value| value == above))
+            .unwrap_or(false))
+    };
+    read().map_err(|error| error.to_string())
 }
 
 pub fn close_call_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {

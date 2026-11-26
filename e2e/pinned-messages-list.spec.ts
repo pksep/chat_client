@@ -1083,7 +1083,8 @@ test('запоздалый поиск не возвращает удалённу
     await fixture.store.flush(fixture.topicId);
     const remaining = fixture.store.commentsFor(fixture.topicId, note.messageId).length;
     release();
-    return { remaining, ids: (await search).results.map(row => row.id) };
+    const found = await search;
+    return { remaining, ids: found.results.map(row => row.id), total: found.total };
   });
-  expect(result).toEqual({ remaining: 0, ids: [] });
+  expect(result).toEqual({ remaining: 0, ids: [], total: 0 });
 });

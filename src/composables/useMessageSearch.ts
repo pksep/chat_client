@@ -327,7 +327,13 @@ export const searchMessages = async (
 
   return {
     results,
-    total: Math.max(remote.total ?? 0, results.length)
+    total: Math.max(
+      (remote.total ?? 0) -
+        remote.results.filter(
+          row => !results.some(result => result.id === row.id)
+        ).length,
+      results.length
+    )
   };
 };
 

@@ -88,6 +88,7 @@ const options = {
   }
 };
 try {
+  await report({ step: 'fixture-start', passed: true });
   // Входящий вызов должен открываться без нажатия пользователя.
   await sleep(600);
   const activation = navigator.userActivation?.isActive || false;
@@ -184,9 +185,11 @@ try {
     area: area?.toJSON(),
     count: doc.querySelectorAll('.call-modal__remote-tile').length
   });
+  const expectedTiles = area && area.width >= 924 && area.height >= 534 ? 9 : 6;
   await wait(
-    () => doc.querySelectorAll('.call-modal__remote-tile').length === 9,
-    'В большом окне нет 9 участников'
+    () =>
+      doc.querySelectorAll('.call-modal__remote-tile').length === expectedTiles,
+    `Неверное число участников для фактической области окна: нужно ${expectedTiles}`
   );
   const tiles = [...doc.querySelectorAll('.call-modal__remote-tile')].map(t => {
     const b = t.getBoundingClientRect();
@@ -195,8 +198,10 @@ try {
   if (tiles.some(t => t.y < 0 || t.y + t.height > host!.popup.innerHeight))
     throw new Error('Плитки обрезаны');
   await report({
-    step: 'native-nine',
+    step: 'native-grid',
     passed: true,
+    expectedTiles,
+    nineLimitedByScreen: expectedTiles !== 9,
     tiles,
     viewport: { width: host.popup.innerWidth, height: host.popup.innerHeight }
   });

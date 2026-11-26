@@ -1604,6 +1604,10 @@ const getTopicActiveCall = (topic: ITopic) => {
   height: auto;
   align-items: flex-start;
 }
+.contact-list__li--search-notes .contact-list__avatar {
+  align-self: flex-start;
+  margin-top: 8px;
+}
 .contact-list__search-pin-comments {
   grid-column: 1 / -1;
   min-width: 0;
