@@ -172,8 +172,16 @@ try {
     await wait(readPin, 'Пин не восстановлен после fullscreen');
     pin.click();
     await wait(() => !host!.context.alwaysOnTop.value, 'Пин не выключился');
-  } else if (!pin.disabled || pin.getAttribute('aria-pressed') !== 'false')
-    throw new Error('Неподдерживаемый пин показан активным');
+  } else {
+    if (!pin.disabled || pin.getAttribute('aria-pressed') !== 'false')
+      throw new Error('Неподдерживаемый пин показан активным');
+    await host.context.setFullscreen(true);
+    if (!(await host.context.nativeWindow.isFullscreen()))
+      throw new Error('Нет fullscreen без пина');
+    await host.context.setFullscreen(false);
+    if (await host.context.nativeWindow.isFullscreen())
+      throw new Error('Fullscreen без пина не завершился');
+  }
   await report({
     step: 'native-pin',
     passed: true,
