@@ -1,3 +1,10 @@
+# [1.59.0](https://github.com/pksep/chat_client/compare/v1.58.2...v1.59.0) (2026-11-26)
+
+
+### Features
+
+* **tauri:** improve calls, updates, AI and stickers (CHAT-564) [skip ci] ([1058bc9](https://github.com/pksep/chat_client/commit/1058bc9022bdf93735ff72224d18c48ef9eca8cf))
+
 ## [1.58.2](https://github.com/pksep/chat_client/compare/v1.58.1...v1.58.2) (2026-11-26)
 
 
