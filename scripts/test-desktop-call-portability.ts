@@ -55,6 +55,21 @@ const api = Bun.serve({
     const report = await request.json();
     reports.push(report);
     console.log(JSON.stringify(report));
+    if (report.step === 'native-grid' && process.platform === 'darwin') {
+      try {
+        execFileSync('/usr/sbin/screencapture', [
+          '-x',
+          path.join(root, 'native-call.png')
+        ]);
+      } catch (error) {
+        console.log(
+          JSON.stringify({
+            step: 'screenshot-unavailable',
+            error: String(error)
+          })
+        );
+      }
+    }
     if (
       report.step === 'pin-observed' &&
       process.platform === 'linux' &&

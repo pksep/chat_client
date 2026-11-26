@@ -164,7 +164,18 @@ test('поиск по заметке показывает оригинал и т
   ).toHaveCount(0);
   expect(includeNotes).toBe(true);
   expect(errors).toEqual([]);
-  await page.screenshot({ path: testInfo.outputPath('search-pin-comments.png') });
+  await page.screenshot({
+    path: testInfo.outputPath('search-pin-comments.png')
+  });
+  await page.evaluate(async () => {
+    const path = '/src/stores/theme.ts';
+    (await import(/* @vite-ignore */ path)).useThemeStore().setTheme(true);
+  });
+  await expect(page.locator('html')).toHaveClass(/theme-dark/);
+  await expect(page.locator('html')).not.toHaveClass(/theme-switching/);
+  await page.screenshot({
+    path: testInfo.outputPath('search-pin-comments-dark.png')
+  });
 });
 
 const openChatSearch = async (page: Page, isMobile: boolean) => {

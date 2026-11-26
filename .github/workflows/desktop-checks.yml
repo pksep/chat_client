@@ -203,7 +203,9 @@ jobs:
         if: always()
         with:
           name: call-native-${{ matrix.label }}
-          path: test-results-native/call-portability-*/report.json
+          path: |
+            test-results-native/call-portability-*/report.json
+            test-results-native/call-portability-*/native-call.png
           if-no-files-found: warn
           retention-days: 7
 
