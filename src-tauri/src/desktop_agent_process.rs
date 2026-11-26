@@ -13,7 +13,7 @@ mod owned_job {
             System::JobObjects::{
                 AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
                 SetInformationJobObject, TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK,
             },
         },
     };
@@ -26,7 +26,9 @@ mod owned_job {
                 CreateJobObjectW(None, PCWSTR::null()).map_err(|error| error.to_string())?;
             let owned = OwnedHandle::from_raw_handle(handle.0);
             let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            // Внешние приложения, открытые агентом, не должны закрываться вместе с Чатом.
+            limits.BasicLimitInformation.LimitFlags =
+                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK;
             SetInformationJobObject(
                 handle,
                 JobObjectExtendedLimitInformation,
@@ -57,7 +59,7 @@ mod owned_job {
     }
 }
 
-/// Не оставляет локальный агент и его дочерние команды после выхода Tauri.
+/// Не оставляет локальный агент после выхода Tauri.
 pub fn attach(child: &mut Child) -> Result<(), String> {
     #[cfg(windows)]
     if owned_job::attach(child).is_err() {
