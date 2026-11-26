@@ -76,6 +76,23 @@ test('не показывает ложный пин при отказе окон
   await expect(pin).toBeEnabled();
 });
 
+test('новый звонок не использует закрытый именованный контекст WebKit', async ({
+  page
+}) => {
+  const first = await open(page);
+  const firstName = await first.evaluate(() => window.name);
+  const nextPopup = page.waitForEvent('popup');
+  await page.evaluate(async () => {
+    const win = window as any;
+    win.callRetainClosedTarget = true;
+    await win.callWindowFixture.host.context.actions.leaveCall();
+    await win.callWindowFixture.open();
+  });
+  const second = await nextPopup;
+  await expect(second.getByTestId('DesktopTitleBar')).toBeVisible();
+  expect(await second.evaluate(() => window.name)).not.toBe(firstName);
+});
+
 test('закрытие во время запроса состояния не оставляет необработанную ошибку', async ({
   page
 }) => {

@@ -3,6 +3,19 @@ import type { Page } from '@playwright/test';
 export async function installTauriCallWindowMock(page: Page) {
   await page.addInitScript(() => {
     const win = window as any;
+    const nativeOpen = win.open.bind(win);
+    let callPopup: Window | null = null;
+    const namedSurfaces = new Map<string, Window>();
+    win.open = (url?: string | URL, target?: string, features?: string) => {
+      if (win.callRetainClosedTarget && target && namedSurfaces.has(target))
+        return namedSurfaces.get(target);
+      const popup = nativeOpen(url, target, features);
+      if (String(url) === 'about:blank#sep-chat-call') {
+        callPopup = popup;
+        if (target && popup) namedSurfaces.set(target, popup);
+      }
+      return popup;
+    };
     win.deliveredCallActivities = [];
     win.callControlsSnapshots = [];
     win.callAttentionRequests = [];
@@ -88,7 +101,8 @@ export async function installTauriCallWindowMock(page: Page) {
             pinSupported: win.callPinSupported !== false
           };
         if (command === 'desktop_close_call_window') {
-          win.open('', 'sep-chat-call')?.close();
+          callPopup?.close();
+          callPopup = null;
           return;
         }
         if (command === 'plugin:event|listen') {

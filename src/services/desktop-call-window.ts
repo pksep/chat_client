@@ -61,6 +61,7 @@ interface CallWindowCapabilities {
 }
 
 let lifecycle: Promise<unknown> = Promise.resolve();
+let callSurfaceSequence = 0;
 const initialCallWindowSize = () =>
   // Самостоятельное окно сразу показывает сетку на шесть участников.
   new LogicalSize(
@@ -210,7 +211,8 @@ export async function openDesktopCallWindow(options: {
     stage = 'popup';
     const popup = window.open(
       'about:blank#sep-chat-call',
-      'sep-chat-call',
+      // WKWebView может удерживать именованный контекст после native destroy.
+      `sep-chat-call-${Date.now()}-${++callSurfaceSequence}`,
       `popup,width=${initialSize.width},height=${initialSize.height}`
     );
     if (!popup) {
