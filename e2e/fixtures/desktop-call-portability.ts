@@ -1,0 +1,183 @@
+import { createApp, h } from 'vue';
+import { createPinia } from 'pinia';
+import { invoke } from '@tauri-apps/api/core';
+import { LogicalSize } from '@tauri-apps/api/dpi';
+import { openDesktopCallWindow } from '../../src/services/desktop-call-window';
+import { authedUser } from '../../src/composables/useAuth';
+import { setConfig } from '../../src/services/useConfig';
+import { useTopics } from '../../src/composables/useTopics';
+import { useThemeStore } from '../../src/stores/theme';
+import * as call from '../../src/services/useCallState';
+import '../../src/assets/chat-container.css';
+
+setConfig({ CHAT_API_DOMAIN: location.origin + '/synthetic-only' });
+authedUser.value = { id: 'local-portability', initials: 'Вы' } as any;
+const app = createApp({
+  render: () => h('p', 'Синтетическая проверка отдельного окна звонка')
+});
+const pinia = createPinia();
+app.use(pinia).mount(document.body.appendChild(document.createElement('main')));
+useThemeStore(pinia).setTheme(false);
+useTopics().setTopics([
+  { id: 'local-portability-topic', type: 'GROUP', name: 'Проверка окна' } as any
+]);
+call.topicId.value = 'local-portability-topic';
+call.roomId.value = 'local-portability-room';
+call.user.value = {
+  id: 'local-participant-1',
+  initials: 'Синтетический участник'
+} as any;
+call.state.connectionQuality = 'excellent';
+call.isIncoming.value = true;
+call.open.value = true;
+call.isModalVisible.value = true;
+call.remoteParticipants.value = Array.from({ length: 8 }, (_, i) => ({
+  identity: `local-participant-${i + 1}`,
+  name: `Участник ${i + 1}`,
+  videoStream: null,
+  cameraStream: null,
+  screenShareStream: null,
+  audioStream: null,
+  isVideoActive: false,
+  isScreenShareActive: false,
+  isHandRaised: false,
+  activeReaction: null,
+  activeReactionExpiresAt: null,
+  isSpeaking: false,
+  audioLevel: 0,
+  isMicActive: false,
+  connectionQuality: 'excellent'
+}));
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+async function wait(check: () => boolean | Promise<boolean>, label: string) {
+  const until = Date.now() + 10_000;
+  while (!(await check())) {
+    if (Date.now() >= until) throw new Error(label);
+    await sleep(30);
+  }
+}
+const report = (value: unknown) =>
+  fetch('http://127.0.0.1:5213/report', {
+    method: 'POST',
+    body: JSON.stringify(value)
+  });
+window.addEventListener(
+  'unhandledrejection',
+  e => void report({ passed: false, error: String(e.reason) })
+);
+window.addEventListener(
+  'error',
+  e => void report({ passed: false, error: e.message })
+);
+let host: Awaited<ReturnType<typeof openDesktopCallWindow>>;
+let endCount = 0;
+const options = {
+  appContext: app._context,
+  signal: new AbortController().signal,
+  actions: {
+    acceptCall: () => {
+      call.isIncoming.value = false;
+    },
+    leaveCall: () => {
+      endCount++;
+      call.open.value = false;
+    },
+    toggleMic: () => {
+      call.state.isMicActive = !call.state.isMicActive;
+    }
+  }
+};
+try {
+  // Входящий вызов должен открываться без нажатия пользователя.
+  await sleep(600);
+  const activation = navigator.userActivation?.isActive || false;
+  host = await openDesktopCallWindow(options);
+  if (!host) throw new Error('Отдельное окно недоступно');
+  await host.show();
+  const doc = host.popup.document;
+  await wait(
+    () => !!doc.querySelector('[data-testid="DesktopTitleBar"]'),
+    'Нет шапки звонка'
+  );
+  await sleep(400);
+  if (!doc.querySelector('.call-modal'))
+    throw new Error('DOM окна потерян после навигации');
+  const capabilities = await invoke<any>('desktop_call_window_capabilities');
+  await report({
+    step: 'incoming-without-activation',
+    passed: true,
+    activation,
+    capabilities,
+    opener: host.popup.opener === window,
+    documentUrl: doc.URL
+  });
+  doc
+    .querySelector<HTMLButtonElement>('.call-modal__control-button--answer')!
+    .click();
+  const pin = doc.querySelector<HTMLButtonElement>('.desktop-titlebar__pin')!;
+  if (!pin) throw new Error('Нет кнопки пина');
+  if (host.context.pinSupported) {
+    pin.click();
+    await wait(() => host!.context.alwaysOnTop.value, 'Пин не включился');
+    if (!(await host.context.nativeWindow.isAlwaysOnTop()))
+      throw new Error('ОС не закрепила окно');
+    await host.context.showMain();
+    if (!(await host.context.nativeWindow.isAlwaysOnTop()))
+      throw new Error('Пин потерялся после смены фокуса');
+    await host.show();
+    await host.context.setFullscreen(true);
+    await wait(
+      () => host!.context.nativeWindow.isFullscreen(),
+      'Нет fullscreen'
+    );
+    await host.context.setFullscreen(false);
+    await wait(
+      async () => !(await host!.context.nativeWindow.isFullscreen()),
+      'Fullscreen не завершился'
+    );
+    await wait(
+      () => host!.context.nativeWindow.isAlwaysOnTop(),
+      'Пин не восстановлен после fullscreen'
+    );
+    pin.click();
+    await wait(() => !host!.context.alwaysOnTop.value, 'Пин не выключился');
+  } else if (!pin.disabled || pin.getAttribute('aria-pressed') !== 'false')
+    throw new Error('Неподдерживаемый пин показан активным');
+  await report({
+    step: 'native-pin',
+    passed: true,
+    supported: host.context.pinSupported
+  });
+  await host.context.nativeWindow.setSize(new LogicalSize(1400, 950));
+  await wait(
+    () => doc.querySelectorAll('.call-modal__remote-tile').length === 9,
+    'В большом окне нет 9 участников'
+  );
+  const tiles = [...doc.querySelectorAll('.call-modal__remote-tile')].map(t => {
+    const b = t.getBoundingClientRect();
+    return { x: b.x, y: b.y, width: b.width, height: b.height };
+  });
+  if (tiles.some(t => t.y < 0 || t.y + t.height > host!.popup.innerHeight))
+    throw new Error('Плитки обрезаны');
+  await report({
+    step: 'native-nine',
+    passed: true,
+    tiles,
+    viewport: { width: host.popup.innerWidth, height: host.popup.innerHeight }
+  });
+  await host.dispose();
+  host = await openDesktopCallWindow(options);
+  if (!host) throw new Error('Повторный звонок не открылся');
+  await host.show();
+  if (host.context.alwaysOnTop.value)
+    throw new Error('Новый звонок унаследовал пин');
+  await host.dispose();
+  if (endCount) throw new Error('Техническое закрытие завершило звонок');
+  await report({ step: 'complete', passed: true });
+} catch (error) {
+  await report({
+    passed: false,
+    error: String(error),
+    stack: (error as Error).stack
+  });
+}

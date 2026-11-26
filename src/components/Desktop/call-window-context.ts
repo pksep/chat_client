@@ -20,6 +20,10 @@ export interface DesktopCallWindowContext {
   nativeWindow: TauriWindow;
   width: Ref<number>;
   fullscreen: Ref<boolean>;
+  alwaysOnTop: Ref<boolean>;
+  pinSupported: boolean;
+  pinChanging: Ref<boolean>;
+  toggleAlwaysOnTop: () => Promise<void>;
   microphoneLevel: Ref<number>;
   microphoneSpeaking: Ref<boolean>;
   contextMenuOpen: Ref<boolean>;

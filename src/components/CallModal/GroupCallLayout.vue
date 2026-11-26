@@ -9,6 +9,7 @@
       :go-to-page="goToPage"
       :set-remote-video-ref="setRemoteVideoRef"
       @select-participant="emit('select-participant', $event)"
+      @resize-grid="emit('resize-grid', $event)"
     />
 
     <div
@@ -124,6 +125,7 @@ import SwitchCameraIcon from './UI/SwitchCameraIcon.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 
 const emit = defineEmits<{
+  (event: 'resize-grid', area: { width: number; height: number }): void;
   (event: 'select-participant', identity: string | null): void;
   (event: 'open-video-overlay'): void;
   (event: 'switch-local-camera'): void;

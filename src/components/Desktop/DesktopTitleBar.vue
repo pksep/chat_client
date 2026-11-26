@@ -31,6 +31,26 @@
     </div>
     <nav class="desktop-titlebar__controls" aria-label="Управление окном">
       <button
+        v-if="callWindow"
+        type="button"
+        class="desktop-titlebar__pin"
+        :class="{
+          'desktop-titlebar__pin--active': callWindow.alwaysOnTop.value
+        }"
+        :aria-label="pinLabel"
+        :title="pinLabel"
+        :aria-pressed="callWindow.alwaysOnTop.value"
+        :disabled="!callWindow.pinSupported || callWindow.pinChanging.value"
+        @click="togglePin"
+      >
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path
+            d="m11.5 3.5 5 5-2.5.5-2 3 .5 2.5-3-1-3.5-3.5-1-3 2.5.5 3-2 .5-2.5Z"
+          />
+          <path d="m8 12-4 4" />
+        </svg>
+      </button>
+      <button
         type="button"
         aria-label="Свернуть"
         title="Свернуть"
@@ -70,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { UnlistenFn } from '@tauri-apps/api/event';
@@ -88,6 +108,22 @@ import {
 
 const visible = ref(false);
 const callWindow = useDesktopCallWindowContext();
+const pinLabel = computed(() =>
+  !callWindow?.pinSupported
+    ? 'Закрепление поверх окон недоступно в этой оконной системе'
+    : callWindow.alwaysOnTop.value
+      ? 'Открепить окно звонка'
+      : 'Закрепить поверх других окон'
+);
+const togglePin = async () => {
+  try {
+    await callWindow?.toggleAlwaysOnTop();
+  } catch {
+    showErrorNotification(
+      'Не удалось закрепить окно звонка поверх других окон.'
+    );
+  }
+};
 const renderDocument = callWindow?.renderWindow.document || document;
 const currentWindow = () => callWindow?.nativeWindow || getCurrentWindow();
 const focused = ref(true);
@@ -308,6 +344,16 @@ onBeforeUnmount(() => {
 .desktop-titlebar__controls button:focus-visible {
   outline: 2px solid var(--action-primary-bg);
   outline-offset: -2px;
+}
+
+.desktop-titlebar__controls .desktop-titlebar__pin--active {
+  color: var(--text-link);
+  background: var(--action-secondary-pressed-bg);
+}
+
+.desktop-titlebar__controls button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .desktop-titlebar__controls svg {

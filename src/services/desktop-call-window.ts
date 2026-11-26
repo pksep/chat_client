@@ -26,7 +26,8 @@ import {
   callPresentationRequest,
   isModalVisible,
   state,
-  open as callOpen
+  open as callOpen,
+  roomId as callRoomId
 } from './useCallState';
 import { desktopOverlayTarget } from './desktop-overlay-target';
 import { createDesktopMicrophoneMeter } from './desktop-microphone-meter';
@@ -47,6 +48,17 @@ import {
   isDesktopWindowActive,
   readDesktopWindowState
 } from './desktop-window-state';
+import { waitForDesktopCallDocument } from './desktop-call-document';
+import { setDesktopCallPinned } from './desktop-call-pin';
+import { getTelemetryErrorPayload, recordTelemetryEvent } from './useTelemetry';
+
+interface CallWindowCapabilities {
+  available: boolean;
+  version?: string;
+  os?: string;
+  pinSupported: boolean;
+  lastError?: string;
+}
 
 let lifecycle: Promise<unknown> = Promise.resolve();
 const initialCallWindowSize = () =>
@@ -142,12 +154,48 @@ export async function openDesktopCallWindow(options: {
   ) => Promise<boolean>;
 }) {
   if (!isTauri()) return null;
-  const available = await invoke<boolean>(
-    'desktop_call_window_available'
-  ).catch(() => false);
-  if (!available || options.signal.aborted) return null;
+  const capabilities = await invoke<CallWindowCapabilities>(
+    'desktop_call_window_capabilities'
+  )
+    .then(value => {
+      if (!value) throw new Error('Нет сведений об оболочке');
+      return value;
+    })
+    .catch(
+      async () =>
+        ({
+          available: await invoke<boolean>(
+            'desktop_call_window_available'
+          ).catch(() => false),
+          pinSupported: !/Linux/i.test(navigator.userAgent)
+        }) as CallWindowCapabilities
+    );
+  const startedAt = performance.now();
+  let stage = 'availability';
+  const record = (event: string, error?: unknown) =>
+    recordTelemetryEvent({
+      category: 'call',
+      name: `call.window.${event}`,
+      level: error ? 'warn' : 'info',
+      entityType: 'call',
+      entityId: callRoomId.value || undefined,
+      payload: {
+        stage,
+        roomId: callRoomId.value,
+        nativeVersion: capabilities.version,
+        nativeOs: capabilities.os,
+        elapsedMs: Math.round(performance.now() - startedAt),
+        ...(error ? getTelemetryErrorPayload(error) : {})
+      }
+    });
+  if (options.signal.aborted) return null;
+  if (!capabilities.available) {
+    record('unavailable');
+    return null;
+  }
   return exclusive(async () => {
     if (options.signal.aborted) return null;
+    record('opening');
     let core: typeof import('./useLiveKit') | null = null;
     const coreReady = import('./useLiveKit');
     void coreReady
@@ -158,12 +206,22 @@ export async function openDesktopCallWindow(options: {
         console.warn('Не удалось подготовить движок звонка:', error)
       );
     const initialSize = initialCallWindowSize();
+    stage = 'popup';
     const popup = window.open(
       'about:blank#sep-chat-call',
       'sep-chat-call',
       `popup,width=${initialSize.width},height=${initialSize.height}`
     );
-    if (!popup) throw new Error('Не удалось открыть отдельное окно звонка');
+    if (!popup) {
+      const diagnostic = await invoke<CallWindowCapabilities>(
+        'desktop_call_window_capabilities'
+      ).catch(() => null);
+      const error = new Error(
+        `Не удалось открыть отдельное окно звонка: ${diagnostic?.lastError || 'popup-blocked'}`
+      );
+      record('failed', error);
+      throw error;
+    }
     const host = popup as CallRenderWindow;
     const nativeWindow = new TauriWindow('call');
     let childDocument: Document | undefined;
@@ -176,6 +234,7 @@ export async function openDesktopCallWindow(options: {
     let unmount: (() => void) | undefined;
     let checkClosed: ReturnType<typeof setInterval> | undefined;
     let fullscreenChanges = Promise.resolve();
+    let pinChange = Promise.resolve();
     let fullscreenRevision = 0;
     let fullscreenSettledRevision = 0;
     const actions: DesktopCallActions = {
@@ -215,20 +274,17 @@ export async function openDesktopCallWindow(options: {
       await invoke('desktop_close_call_window');
     };
     try {
-      const deadline = Date.now() + 5000;
-      while (!host.document.body) {
-        if (options.signal.aborted || host.closed || Date.now() > deadline)
-          throw new Error('Окно звонка не подготовилось');
-        await new Promise(resolve => setTimeout(resolve, 16));
-      }
+      stage = 'document';
+      const doc = await waitForDesktopCallDocument(host, options.signal);
       if (options.signal.aborted) {
         await clean();
         return null;
       }
-      const doc = host.document;
       childDocument = doc;
+      stage = 'size';
       await nativeWindow.setSize(initialSize);
-      await nativeWindow.center();
+      // Wayland не предоставляет приложению глобальные координаты окна.
+      await nativeWindow.center().catch(() => undefined);
       const preventContextMenu = (event: Event) => event.preventDefault();
       doc.addEventListener('contextmenu', preventContextMenu);
       unlisten.push(() =>
@@ -243,6 +299,7 @@ export async function openDesktopCallWindow(options: {
         'chat-desktop-custom-chrome'
       );
       stopPresentation = copyWindowPresentation(doc);
+      stage = 'styles';
       await Promise.all(
         Array.from(
           doc.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'),
@@ -291,6 +348,30 @@ export async function openDesktopCallWindow(options: {
         nativeWindow,
         width: ref(host.innerWidth),
         fullscreen: ref(false),
+        alwaysOnTop: ref(false),
+        pinSupported: capabilities.pinSupported,
+        pinChanging: ref(false),
+        async toggleAlwaysOnTop() {
+          if (
+            !alive ||
+            !context.pinSupported ||
+            context.pinChanging.value ||
+            context.fullscreen.value
+          )
+            return;
+          context.pinChanging.value = true;
+          const change = (async () => {
+            try {
+              const enabled = !context.alwaysOnTop.value;
+              await setDesktopCallPinned(nativeWindow, enabled);
+              context.alwaysOnTop.value = enabled;
+            } finally {
+              context.pinChanging.value = false;
+            }
+          })();
+          pinChange = change.catch(() => undefined);
+          return change;
+        },
         microphoneLevel: meter.audioLevel,
         microphoneSpeaking: meter.speaking,
         contextMenuOpen: ref(false),
@@ -315,7 +396,10 @@ export async function openDesktopCallWindow(options: {
           );
           const change = fullscreenChanges.then(async () => {
             if (!alive) return;
+            await pinChange;
             try {
+              if (enabled && context.alwaysOnTop.value)
+                await setDesktopCallPinned(nativeWindow, false);
               await nativeWindow.setFullscreen(enabled);
             } finally {
               const actual = await nativeWindow.isFullscreen();
@@ -326,6 +410,11 @@ export async function openDesktopCallWindow(options: {
                   'chat-desktop-custom-chrome',
                   !actual
                 );
+                if (!actual && context.alwaysOnTop.value) {
+                  await setDesktopCallPinned(nativeWindow, true);
+                  context.alwaysOnTop.value =
+                    await nativeWindow.isAlwaysOnTop();
+                }
               }
             }
           });
@@ -367,6 +456,10 @@ export async function openDesktopCallWindow(options: {
             revision === fullscreenSettledRevision
           ) {
             context.fullscreen.value = actual;
+            if (!actual && context.alwaysOnTop.value) {
+              await setDesktopCallPinned(nativeWindow, true);
+              context.alwaysOnTop.value = await nativeWindow.isAlwaysOnTop();
+            }
             doc.documentElement.classList.toggle(
               'chat-desktop-custom-chrome',
               !actual
@@ -409,10 +502,15 @@ export async function openDesktopCallWindow(options: {
         if (!alive) return;
         desktopCallWindowOpening.value = true;
         try {
+          stage = 'show';
           await nativeWindow.unminimize();
           await nativeWindow.show();
           await nativeWindow.setFocus();
           if (alive) desktopCallWindowReady.value = true;
+          record('shown');
+        } catch (error) {
+          record('failed', error);
+          throw error;
         } finally {
           desktopCallWindowOpening.value = false;
         }
@@ -445,7 +543,8 @@ export async function openDesktopCallWindow(options: {
         dispose: () => exclusive(clean)
       };
     } catch (error) {
-      await clean();
+      record(options.signal.aborted ? 'cancelled' : 'failed', error);
+      await clean().catch(() => undefined);
       throw error;
     }
   });

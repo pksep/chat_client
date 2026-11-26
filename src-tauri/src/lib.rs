@@ -626,6 +626,8 @@ pub fn run() {
             desktop_window_state,
             desktop_call_controls::desktop_sync_call_controls,
             desktop_call_window::desktop_call_window_available,
+            #[cfg(desktop)]
+            desktop_call_window::desktop_call_window_capabilities,
             desktop_call_window::desktop_close_call_window,
             desktop_get_open_urls,
             desktop_restart,

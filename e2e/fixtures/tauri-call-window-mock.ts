@@ -12,6 +12,7 @@ export async function installTauriCallWindowMock(page: Page) {
     const listeners: any[] = [];
     const windows: Record<string, any> = {
       main: {
+        alwaysOnTop: false,
         visible: true,
         minimized: false,
         maximized: false,
@@ -19,6 +20,7 @@ export async function installTauriCallWindowMock(page: Page) {
         focused: true
       },
       call: {
+        alwaysOnTop: false,
         visible: false,
         minimized: false,
         maximized: false,
@@ -78,6 +80,13 @@ export async function installTauriCallWindowMock(page: Page) {
           return;
         }
         if (command === 'desktop_call_window_available') return true;
+        if (command === 'desktop_call_window_capabilities')
+          return {
+            available: true,
+            version: '0.0.0-test',
+            os: 'windows',
+            pinSupported: win.callPinSupported !== false
+          };
         if (command === 'desktop_close_call_window') {
           win.open('', 'sep-chat-call')?.close();
           return;
@@ -89,6 +98,13 @@ export async function installTauriCallWindowMock(page: Page) {
         if (command === 'plugin:event|unlisten') return;
         const state = windows[args.label || 'main'];
         switch (command) {
+          case 'plugin:window|is_always_on_top':
+            return state.alwaysOnTop;
+          case 'plugin:window|set_always_on_top':
+            if (win.callPinRejected)
+              throw new Error('Оконная система отказала');
+            state.alwaysOnTop = args.value;
+            return;
           case 'plugin:window|is_decorated':
             return false;
           case 'plugin:window|is_fullscreen':

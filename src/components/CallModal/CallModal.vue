@@ -205,6 +205,7 @@
         @select-participant="handleSelectParticipant"
         @switch-local-camera="handleSwitchLocalCamera"
         @toggle-screen-share="handleToggleScreenShare"
+        @resize-grid="callGridArea = $event"
       />
 
       <div v-if="shouldShowMediaLayout" class="call-modal__remote-audio-layer">
@@ -861,6 +862,7 @@ import {
 } from '@pksep/yui';
 import { Capacitor } from '@capacitor/core';
 import { useDesktopCallWindowContext } from '../Desktop/call-window-context';
+import { desktopCallPageSize } from '../../services/desktop-call-layout';
 import { MAX_W_MD } from '../../utils/constants';
 import { useResizeState } from '../../composables/useResizeState';
 import CachedAvatar from '../UI/CachedAvatar.vue';
@@ -945,6 +947,7 @@ const renderWindow = callWindow?.renderWindow || window;
 const renderDocument = renderWindow.document;
 const callContainer = ref<HTMLElement | null>(null);
 const controlsWidth = ref(0);
+const callGridArea = ref({ width: 0, height: 0 });
 watch(callContainer, (element, _, onCleanup) => {
   if (!element) return;
   const observer = new renderWindow.ResizeObserver(([entry]) => {
@@ -1503,9 +1506,18 @@ const bindFocusedScreenShareFitClass = (video: HTMLVideoElement | null) => {
 
   update();
 };
-const maxParticipantsPerPage = computed(() =>
-  isMobile.value ? 4 : isFullscreen.value ? 9 : 6
-);
+const maxParticipantsPerPage = computed(() => {
+  if (isMobile.value) return 4;
+  if (isFullscreen.value) return 9;
+  // Область участников уже исключает шапку и управление. Резерв пагинации
+  // не даёт размеру страницы колебаться при появлении/скрытии её кнопок.
+  return callWindow
+    ? desktopCallPageSize(
+        callGridArea.value.width,
+        callGridArea.value.height - 40
+      )
+    : 6;
+});
 const isScreenShareUnavailableOnMobile = computed(() => {
   // Захват из дочернего WKWebView выполняет нативный контроллер звонка.
   if (callWindow) return false;
@@ -2521,14 +2533,17 @@ watch(
 
 watch(
   maxParticipantsPerPage,
-  pageSize => {
+  (pageSize, previousPageSize) => {
     const lastPage = Math.max(
       0,
       Math.ceil(participantGridCount.value / pageSize) - 1
     );
-    if (currentParticipantPage.value > lastPage) {
-      currentParticipantPage.value = lastPage;
-    }
+    const anchor =
+      currentParticipantPage.value * (previousPageSize || pageSize);
+    currentParticipantPage.value = Math.min(
+      lastPage,
+      Math.floor(anchor / pageSize)
+    );
   },
   { immediate: true }
 );
