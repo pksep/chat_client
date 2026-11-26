@@ -1,3 +1,10 @@
+## [1.59.2](https://github.com/pksep/chat_client/compare/v1.59.1...v1.59.2) (2026-11-26)
+
+
+### Bug Fixes
+
+* preserve external apps when stopping desktop agent [skip ci] ([c501769](https://github.com/pksep/chat_client/commit/c5017691e01710dc3a7af216fc5f9aaa164d3e17))
+
 ## [1.59.1](https://github.com/pksep/chat_client/compare/v1.59.0...v1.59.1) (2026-11-26)
 
 
