@@ -239,7 +239,9 @@ try {
     throw new Error('Новый звонок унаследовал пин');
   await host.dispose();
   if (endCount) throw new Error('Техническое закрытие завершило звонок');
-  await report({ step: 'complete', passed: true });
+  await report({ step: 'native-call-complete', passed: true });
+  // Новый документ проверяет UI отдельно от графа модулей звонка.
+  location.replace('/e2e/fixtures/desktop-ui-regressions.html');
 } catch (error) {
   await report({
     passed: false,
