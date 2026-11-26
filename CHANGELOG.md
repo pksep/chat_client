@@ -1,3 +1,10 @@
+# [1.58.0](https://github.com/pksep/chat_client/compare/v1.57.0...v1.58.0) (2026-11-26)
+
+
+### Features
+
+* добавлен поиск моделей с тегами провайдеров ([f727bcd](https://github.com/pksep/chat_client/commit/f727bcdff853d806ed95b54fe582e1ddee33e82d))
+
 # [1.57.0](https://github.com/pksep/chat_client/compare/v1.56.3...v1.57.0) (2026-11-25)
 
 
