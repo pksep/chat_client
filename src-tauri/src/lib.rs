@@ -650,6 +650,7 @@ pub fn run() {
             #[cfg(desktop)]
             desktop_call_window::desktop_call_window_capabilities,
             desktop_call_window::desktop_call_window_pinned,
+            desktop_call_window::desktop_call_window_fullscreen,
             desktop_call_window::desktop_close_call_window,
             desktop_get_open_urls,
             desktop_restart,

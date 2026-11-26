@@ -227,6 +227,20 @@ pub fn desktop_call_window_available<R: Runtime>(window: WebviewWindow<R>) -> bo
 pub async fn desktop_call_window_pinned<R: Runtime>(
     window: WebviewWindow<R>,
 ) -> Result<bool, String> {
+    call_window_flag(window, false).await
+}
+
+#[tauri::command]
+pub async fn desktop_call_window_fullscreen<R: Runtime>(
+    window: WebviewWindow<R>,
+) -> Result<bool, String> {
+    call_window_flag(window, true).await
+}
+
+async fn call_window_flag<R: Runtime>(
+    window: WebviewWindow<R>,
+    fullscreen: bool,
+) -> Result<bool, String> {
     if window.label() != "main" {
         return Err("Окно звонка управляется основным окном чата".into());
     }
@@ -239,17 +253,25 @@ pub async fn desktop_call_window_pinned<R: Runtime>(
         let (sender, receiver) = tokio::sync::oneshot::channel();
         let target = call.clone();
         call.run_on_main_thread(move || {
-            let _ = sender.send(x11_call_window_pinned(&target));
+            let _ = sender.send(x11_call_window_flag(&target, fullscreen));
         })
         .map_err(|error| error.to_string())?;
         receiver.await.map_err(|error| error.to_string())?
     }
     #[cfg(not(target_os = "linux"))]
-    call.is_always_on_top().map_err(|error| error.to_string())
+    (if fullscreen {
+        call.is_fullscreen()
+    } else {
+        call.is_always_on_top()
+    })
+    .map_err(|error| error.to_string())
 }
 
 #[cfg(target_os = "linux")]
-fn x11_call_window_pinned<R: Runtime>(window: &WebviewWindow<R>) -> Result<bool, String> {
+fn x11_call_window_flag<R: Runtime>(
+    window: &WebviewWindow<R>,
+    fullscreen: bool,
+) -> Result<bool, String> {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
     use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
 
@@ -266,16 +288,18 @@ fn x11_call_window_pinned<R: Runtime>(window: &WebviewWindow<R>) -> Result<bool,
             .intern_atom(false, b"_NET_WM_STATE")?
             .reply()?
             .atom;
-        let above = connection
-            .intern_atom(false, b"_NET_WM_STATE_ABOVE")?
-            .reply()?
-            .atom;
+        let flag: &[u8] = if fullscreen {
+            b"_NET_WM_STATE_FULLSCREEN"
+        } else {
+            b"_NET_WM_STATE_ABOVE"
+        };
+        let expected = connection.intern_atom(false, flag)?.reply()?.atom;
         let property = connection
             .get_property(false, xid, state, AtomEnum::ATOM, 0, 1024)?
             .reply()?;
         Ok(property
             .value32()
-            .map(|mut values| values.any(|value| value == above))
+            .map(|mut values| values.any(|value| value == expected))
             .unwrap_or(false))
     };
     read().map_err(|error| error.to_string())

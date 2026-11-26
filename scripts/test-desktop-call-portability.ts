@@ -9,6 +9,16 @@ const root = path.resolve(
 );
 await mkdir(root, { recursive: true });
 const config = path.join(root, 'tauri.conf.json');
+const viteConfig = path.join(root, 'vite.config.ts');
+await writeFile(
+  viteConfig,
+  `import { defineConfig, mergeConfig } from 'vite';
+import base from '../../vite.config';
+export default defineConfig(async env => mergeConfig(
+  await (typeof base === 'function' ? base(env) : base),
+  { cacheDir: ${JSON.stringify(path.join(root, 'vite-cache'))} }
+));`
+);
 await writeFile(
   config,
   JSON.stringify({
@@ -145,9 +155,11 @@ process.once('SIGINT', () => void stop().finally(() => process.exit(1)));
 process.once('SIGTERM', () => void stop().finally(() => process.exit(1)));
 let timer: ReturnType<typeof setTimeout> | undefined;
 try {
-  launch([
+  const vite = launch([
     'run',
     'vite',
+    '--config',
+    viteConfig,
     '--host',
     '127.0.0.1',
     '--port',
@@ -156,6 +168,7 @@ try {
   ]);
   const ready = Date.now() + 60_000;
   while (true) {
+    if (vite.exitCode !== null) throw new Error('Vite завершился до запуска');
     try {
       if (
         (await fetch(`${origin}/e2e/fixtures/desktop-call-portability.html`)).ok

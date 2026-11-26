@@ -97,9 +97,13 @@ export async function installTauriCallWindowMock(page: Page) {
           return {
             available: true,
             version: '0.0.0-test',
-            os: 'windows',
+            os: win.callLinux ? 'linux' : 'windows',
             pinSupported: win.callPinSupported !== false
           };
+        if (command === 'desktop_call_window_pinned')
+          return windows.call.alwaysOnTop;
+        if (command === 'desktop_call_window_fullscreen')
+          return windows.call.wmFullscreen || false;
         if (command === 'desktop_close_call_window') {
           callPopup?.close();
           callPopup = null;
@@ -158,6 +162,13 @@ export async function installTauriCallWindowMock(page: Page) {
             return;
           case 'plugin:window|set_fullscreen':
             state.fullscreen = args.value;
+            if (win.callLinux) {
+              setTimeout(() => {
+                state.wmFullscreen = args.value;
+                if (!args.value) state.alwaysOnTop = false;
+                emit(args.label, 'tauri://resize');
+              }, 100);
+            } else state.wmFullscreen = args.value;
             emit(args.label, 'tauri://resize');
             return;
           case 'plugin:window|hide':

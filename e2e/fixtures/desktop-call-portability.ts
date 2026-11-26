@@ -116,6 +116,10 @@ try {
     capabilities.os === 'linux'
       ? invoke<boolean>('desktop_call_window_pinned')
       : host!.context.nativeWindow.isAlwaysOnTop();
+  const readFullscreen = () =>
+    capabilities.os === 'linux' && capabilities.pinSupported
+      ? invoke<boolean>('desktop_call_window_fullscreen')
+      : host!.context.nativeWindow.isFullscreen();
   await report({
     step: 'incoming-without-activation',
     passed: true,
@@ -159,17 +163,17 @@ try {
     await host.context.showMain();
     if (!(await readPin())) throw new Error('Пин потерялся после смены фокуса');
     await host.show();
-    await host.context.setFullscreen(true);
-    await wait(
-      () => host!.context.nativeWindow.isFullscreen(),
-      'Нет fullscreen'
-    );
-    await host.context.setFullscreen(false);
-    await wait(
-      async () => !(await host!.context.nativeWindow.isFullscreen()),
-      'Fullscreen не завершился'
-    );
-    await wait(readPin, 'Пин не восстановлен после fullscreen');
+    for (let cycle = 1; cycle <= 3; cycle++) {
+      await host.context.setFullscreen(true);
+      await wait(readFullscreen, 'Нет fullscreen');
+      await host.context.setFullscreen(false);
+      await wait(
+        async () => !(await readFullscreen()),
+        'Fullscreen не завершился'
+      );
+      await wait(readPin, 'Пин не восстановлен после fullscreen');
+      await report({ step: 'fullscreen-cycle', cycle, passed: true });
+    }
     pin.click();
     await wait(() => !host!.context.alwaysOnTop.value, 'Пин не выключился');
   } else {

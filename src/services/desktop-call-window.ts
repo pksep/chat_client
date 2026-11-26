@@ -237,6 +237,10 @@ export async function openDesktopCallWindow(options: {
           : nativeWindow.isAlwaysOnTop()
     };
     let childDocument: Document | undefined;
+    const readNativeFullscreen = () =>
+      capabilities.os === 'linux' && capabilities.pinSupported
+        ? invoke<boolean>('desktop_call_window_fullscreen')
+        : nativeWindow.isFullscreen();
     const unlisten: UnlistenFn[] = [];
     let alive = true;
     let closing = false;
@@ -397,7 +401,7 @@ export async function openDesktopCallWindow(options: {
           await main.setFocus();
         },
         async toggleFullscreen() {
-          await context.setFullscreen(!(await nativeWindow.isFullscreen()));
+          await context.setFullscreen(!(await readNativeFullscreen()));
         },
         setFullscreen(enabled) {
           const revision = ++fullscreenRevision;
@@ -416,7 +420,7 @@ export async function openDesktopCallWindow(options: {
                 await setDesktopCallPinned(pinWindow, false);
               await nativeWindow.setFullscreen(enabled);
               await waitForDesktopCallFullscreen(
-                nativeWindow,
+                { isFullscreen: readNativeFullscreen },
                 enabled,
                 () => alive
               );
@@ -424,12 +428,10 @@ export async function openDesktopCallWindow(options: {
               if (alive) throw error;
             } finally {
               if (alive) {
-                const actual = await nativeWindow
-                  .isFullscreen()
-                  .catch(error => {
-                    if (alive) throw error;
-                    return enabled;
-                  });
+                const actual = await readNativeFullscreen().catch(error => {
+                  if (alive) throw error;
+                  return enabled;
+                });
                 if (alive && revision === fullscreenRevision) {
                   fullscreenSettledRevision = revision;
                   context.fullscreen.value = actual;
@@ -475,7 +477,7 @@ export async function openDesktopCallWindow(options: {
         resize();
         if (fullscreenRevision !== fullscreenSettledRevision) return;
         const revision = fullscreenRevision;
-        const actual = await nativeWindow.isFullscreen();
+        const actual = await readNativeFullscreen();
         if (
           alive &&
           revision === fullscreenRevision &&

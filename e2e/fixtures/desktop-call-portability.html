@@ -12,6 +12,11 @@
           body: JSON.stringify(value)
         });
       report({ step: 'main-html', passed: true });
+      setTimeout(
+        () =>
+          report({ passed: false, error: 'Превышено время нативной проверки' }),
+        60_000
+      );
       window.addEventListener('error', event =>
         report({ passed: false, error: event.message })
       );
@@ -22,6 +27,10 @@
     <script
       type="module"
       src="/e2e/fixtures/desktop-call-portability-bootstrap.ts"
+    ></script>
+    <script
+      type="module"
+      src="/e2e/fixtures/desktop-call-portability.ts"
     ></script>
   </body>
 </html>

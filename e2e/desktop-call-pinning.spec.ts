@@ -9,12 +9,19 @@ test.use({
   hasTouch: false
 });
 test.setTimeout(60_000);
-async function open(page: Page, mode = { supported: true, reject: false }) {
+async function open(
+  page: Page,
+  mode: { supported: boolean; reject: boolean; linux?: boolean } = {
+    supported: true,
+    reject: false
+  }
+) {
   await installTauriCallWindowMock(page);
   await page.addInitScript(mode => {
     Object.assign(window, {
       callPinSupported: mode.supported,
-      callPinRejected: mode.reject
+      callPinRejected: mode.reject,
+      callLinux: mode.linux
     });
   }, mode);
   await page.route('http://127.0.0.1:5213/report', route =>
@@ -74,6 +81,33 @@ test('не показывает ложный пин при отказе окон
   await pin.click();
   await expect(pin).toHaveAttribute('aria-pressed', 'false');
   await expect(pin).toBeEnabled();
+});
+
+test('X11 восстанавливает пин после подтверждения fullscreen от WM, а не раннего флага Tao', async ({
+  page
+}) => {
+  const popup = await open(page, {
+    supported: true,
+    reject: false,
+    linux: true
+  });
+  const pin = popup.locator('.desktop-titlebar__pin');
+  await pin.click();
+  await expect(pin).toHaveAttribute('aria-pressed', 'true');
+  await page.evaluate(async () => {
+    const context = (window as any).callWindowFixture.host.context;
+    await context.setFullscreen(true);
+    await context.setFullscreen(false);
+  });
+  await page.waitForTimeout(250);
+  await expect(pin).toHaveAttribute('aria-pressed', 'true');
+  expect(
+    await page.evaluate(() =>
+      (
+        window as any
+      ).callWindowFixture.host.context.nativeWindow.isAlwaysOnTop()
+    )
+  ).toBe(true);
 });
 
 test('новый звонок не использует закрытый именованный контекст WebKit', async ({
