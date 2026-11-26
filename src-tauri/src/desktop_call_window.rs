@@ -1,4 +1,8 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
+use std::time::{Duration, Instant};
 use tauri::{
     webview::NewWindowResponse, AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
@@ -43,13 +47,20 @@ fn finish_native_chrome<R: Runtime>(_window: &WebviewWindow<R>) {
 #[derive(Default)]
 pub struct DesktopCallWindow {
     available: AtomicBool,
+    last_error: Mutex<Option<String>>,
+    prepared_until: Mutex<Option<Instant>>,
+}
+
+fn popup_error<R: Runtime>(app: &AppHandle<R>, message: &str) {
+    *app.state::<DesktopCallWindow>().last_error.lock().unwrap() = Some(message.into());
 }
 
 pub fn is_call_window_url(url: &tauri::Url) -> bool {
-    url.scheme() == "about"
-        && url.path() == "blank"
-        && url.query().is_none()
-        && url.fragment() == Some("sep-chat-call")
+    url.as_str() == "about:blank%23sep-chat-call"
+        || (url.scheme() == "about"
+            && url.path() == "blank"
+            && url.query().is_none()
+            && url.fragment() == Some("sep-chat-call"))
 }
 
 pub fn create_main_window<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
@@ -83,11 +94,40 @@ pub fn create_main_window<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> 
     };
     let window = native_chrome(main_builder)
         .on_new_window(move |url, features| {
+            #[cfg(debug_assertions)]
+            eprintln!("Окно звонка: получен запрос отдельной поверхности");
             // Только собственная пустая поверхность: никакой загрузки внешнего сайта
             // и второго экземпляра приложения/RTC-контроллера.
-            if !is_call_window_url(&url) || handle.get_webview_window(CALL_WINDOW_LABEL).is_some() {
+            let prepared = handle
+                .state::<DesktopCallWindow>()
+                .prepared_until
+                .lock()
+                .unwrap()
+                .take()
+                .is_some_and(|until| Instant::now() <= until);
+            // WKWebView может убрать fragment в запросе createWebView. Голый
+            // about:blank принимается только после подготовки из главного окна.
+            if !is_call_window_url(&url) && !(prepared && url.as_str() == "about:blank") {
+                popup_error(
+                    &handle,
+                    &format!(
+                        "unexpected-url:{}:blank={}:fragment={}",
+                        url.scheme(),
+                        url.path() == "blank",
+                        url.fragment().is_some()
+                    ),
+                );
                 return NewWindowResponse::Deny;
             }
+            if handle.get_webview_window(CALL_WINDOW_LABEL).is_some() {
+                popup_error(&handle, "window-already-exists");
+                return NewWindowResponse::Deny;
+            }
+            *handle
+                .state::<DesktopCallWindow>()
+                .last_error
+                .lock()
+                .unwrap() = None;
             let window = native_chrome(
                 WebviewWindowBuilder::new(
                     &handle,
@@ -99,17 +139,19 @@ pub fn create_main_window<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> 
                 .inner_size(960.0, 720.0)
                 .min_inner_size(420.0, 400.0)
                 .decorations(false)
-                .visible(false)
-                .center(),
+                .visible(false),
             )
             .on_navigation(|url| is_call_window_url(url) || url.as_str() == "about:blank")
             .build();
             match window {
                 Ok(window) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("Окно звонка: нативная поверхность создана");
                     finish_native_chrome(&window);
                     NewWindowResponse::Create { window }
                 }
                 Err(error) => {
+                    popup_error(&handle, "native-build-failed");
                     eprintln!("Не удалось открыть отдельное окно звонка: {error}");
                     NewWindowResponse::Deny
                 }
@@ -117,10 +159,59 @@ pub fn create_main_window<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> 
         })
         .build()?;
     finish_native_chrome(&window);
+    #[cfg(target_os = "linux")]
+    window.with_webview(|view| {
+        use webkit2gtk::{SettingsExt, WebViewExt};
+        if let Some(settings) = view.inner().settings() {
+            // Входящий вызов и открытие после IPC не имеют browser user activation.
+            // on_new_window выше по-прежнему допускает только нашу поверхность.
+            settings.set_javascript_can_open_windows_automatically(true);
+        }
+    })?;
     app.state::<DesktopCallWindow>()
         .available
         .store(true, Ordering::SeqCst);
     Ok(())
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CallWindowCapabilities {
+    available: bool,
+    version: String,
+    os: &'static str,
+    pin_supported: bool,
+    last_error: Option<String>,
+}
+
+#[tauri::command]
+pub fn desktop_call_window_capabilities<R: Runtime>(
+    window: WebviewWindow<R>,
+    prepare: Option<bool>,
+) -> Result<CallWindowCapabilities, String> {
+    #[cfg(debug_assertions)]
+    eprintln!("Окно звонка: проверка оболочки, prepare={prepare:?}");
+    if window.label() != "main" {
+        return Err("Окно звонка управляется основным окном чата".into());
+    }
+    let state = window.state::<DesktopCallWindow>();
+    if prepare == Some(true) {
+        *state.prepared_until.lock().unwrap() = Some(Instant::now() + Duration::from_secs(10));
+        *state.last_error.lock().unwrap() = None;
+    }
+    let pin_supported = !cfg!(target_os = "linux")
+        || std::env::var("WAYLAND_DISPLAY")
+            .unwrap_or_default()
+            .is_empty()
+        || std::env::var("GDK_BACKEND").unwrap_or_default() == "x11";
+    let last_error = state.last_error.lock().unwrap().clone();
+    Ok(CallWindowCapabilities {
+        available: state.available.load(Ordering::SeqCst),
+        version: window.app_handle().package_info().version.to_string(),
+        os: std::env::consts::OS,
+        pin_supported,
+        last_error,
+    })
 }
 
 #[tauri::command]
@@ -130,6 +221,88 @@ pub fn desktop_call_window_available<R: Runtime>(window: WebviewWindow<R>) -> bo
             .state::<DesktopCallWindow>()
             .available
             .load(Ordering::SeqCst)
+}
+
+#[tauri::command]
+pub async fn desktop_call_window_pinned<R: Runtime>(
+    window: WebviewWindow<R>,
+) -> Result<bool, String> {
+    call_window_flag(window, false).await
+}
+
+#[tauri::command]
+pub async fn desktop_call_window_fullscreen<R: Runtime>(
+    window: WebviewWindow<R>,
+) -> Result<bool, String> {
+    call_window_flag(window, true).await
+}
+
+async fn call_window_flag<R: Runtime>(
+    window: WebviewWindow<R>,
+    fullscreen: bool,
+) -> Result<bool, String> {
+    if window.label() != "main" {
+        return Err("Окно звонка управляется основным окном чата".into());
+    }
+    let call = window
+        .app_handle()
+        .get_webview_window(CALL_WINDOW_LABEL)
+        .ok_or("Окно звонка закрыто")?;
+    #[cfg(target_os = "linux")]
+    {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let target = call.clone();
+        call.run_on_main_thread(move || {
+            let _ = sender.send(x11_call_window_flag(&target, fullscreen));
+        })
+        .map_err(|error| error.to_string())?;
+        receiver.await.map_err(|error| error.to_string())?
+    }
+    #[cfg(not(target_os = "linux"))]
+    (if fullscreen {
+        call.is_fullscreen()
+    } else {
+        call.is_always_on_top()
+    })
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(target_os = "linux")]
+fn x11_call_window_flag<R: Runtime>(
+    window: &WebviewWindow<R>,
+    fullscreen: bool,
+) -> Result<bool, String> {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
+
+    let read = || -> Result<bool, Box<dyn std::error::Error>> {
+        let xid = match window.window_handle()?.as_raw() {
+            RawWindowHandle::Xlib(handle) => u32::try_from(handle.window)?,
+            RawWindowHandle::Xcb(handle) => handle.window.get(),
+            _ => return Err("Оконная система не поддерживает закрепление".into()),
+        };
+        // У popup Tao и GDK могут хранить старый флаг. Читаем EWMH напрямую у WM,
+        // без запуска внешних процессов и без подмены подтверждения локальным значением.
+        let (connection, _) = x11rb::connect(None)?;
+        let state = connection
+            .intern_atom(false, b"_NET_WM_STATE")?
+            .reply()?
+            .atom;
+        let flag: &[u8] = if fullscreen {
+            b"_NET_WM_STATE_FULLSCREEN"
+        } else {
+            b"_NET_WM_STATE_ABOVE"
+        };
+        let expected = connection.intern_atom(false, flag)?.reply()?.atom;
+        let property = connection
+            .get_property(false, xid, state, AtomEnum::ATOM, 0, 1024)?
+            .reply()?;
+        Ok(property
+            .value32()
+            .map(|mut values| values.any(|value| value == expected))
+            .unwrap_or(false))
+    };
+    read().map_err(|error| error.to_string())
 }
 
 pub fn close_call_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {

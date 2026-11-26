@@ -33,11 +33,11 @@ const openFixture = async (
     const fixture = await import(/* @vite-ignore */ path);
     (window as any).searchFixture = await fixture.initializeSearchFixture();
   });
-  if ((page.viewportSize()?.width || 0) <= 768) {
-    await page
-      .getByRole('button', { name: 'Остаться в браузере', exact: true })
-      .click();
-  }
+  const stay = page.getByRole('button', {
+    name: 'Остаться в браузере',
+    exact: true
+  });
+  if (await stay.isVisible()) await stay.click();
   return errors;
 };
 
@@ -89,6 +89,93 @@ test('локальные результаты общего поиска дост
     region.getByText('Локальный поиск: обновлено сервером', { exact: true })
   ).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test('поиск по заметке показывает оригинал и только доступные комментарии', async ({
+  page,
+  isMobile
+}, testInfo) => {
+  let includeNotes = false;
+  const stamp = '2026-11-26T07:00:00.000Z';
+  const comments = [
+    {
+      id: 'note-all',
+      scope: 'ALL',
+      authorId: 'search-peer',
+      text: 'План логистики: общая заметка'
+    },
+    {
+      id: 'note-self',
+      scope: 'SELF',
+      authorId: 'search-user',
+      text: 'Моя личная пометка'
+    },
+    {
+      id: 'note-foreign',
+      scope: 'SELF',
+      authorId: 'search-peer',
+      text: 'Чужая скрытая пометка'
+    }
+  ].map(note => ({
+    ...note,
+    topicId: 'search-topic',
+    messageId: 'search-note-hit',
+    authorName: 'Автор',
+    authorAvatarUrl: null,
+    revision: '9007199254740993',
+    createdAt: stamp,
+    updatedAt: stamp
+  }));
+  const errors = await openFixture(page, async route => {
+    includeNotes =
+      new URL(route.request().url()).searchParams.get('includePinComments') ===
+      'true';
+    await route.fulfill({
+      json: {
+        data: [
+          {
+            ...savedMessages[0],
+            id: 'search-note-hit',
+            text: 'Итог встречи',
+            isPin: true,
+            isPinnedForAll: true,
+            isPinnedForMe: true,
+            pinComments: comments
+          }
+        ],
+        total: 1
+      }
+    });
+  });
+  const region = page.locator(
+    isMobile ? '.mobile-list-container__section--chats' : '.menu'
+  );
+  await region.locator('.chats-toolbar input').fill('План логистики');
+  await expect(
+    region.locator('.contact-list__item--message-result')
+  ).toHaveCount(1);
+  await expect(region.getByText('Итог встречи', { exact: true })).toBeVisible();
+  await expect(region.locator('.pin-note')).toHaveCount(2);
+  await expect(
+    region.getByText('План логистики: общая заметка', { exact: true })
+  ).toBeVisible();
+  await expect(
+    region.getByText('Чужая скрытая пометка', { exact: true })
+  ).toHaveCount(0);
+  expect(includeNotes).toBe(true);
+  expect(errors).toEqual([]);
+  await page.screenshot({
+    path: testInfo.outputPath('search-pin-comments.png')
+  });
+  await page.evaluate(async () => {
+    const path = '/src/stores/theme.ts';
+    (await import(/* @vite-ignore */ path)).useThemeStore().setTheme(true);
+  });
+  await expect(page.locator('html')).toHaveClass(/theme-dark/);
+  await expect(page.locator('html')).not.toHaveClass(/theme-switching/);
+  await page.screenshot({
+    path: testInfo.outputPath('search-pin-comments-dark.png')
+  });
 });
 
 const openChatSearch = async (page: Page, isMobile: boolean) => {

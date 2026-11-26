@@ -53,7 +53,14 @@ test('раздел агентов доступен только в настол�
       isTauri: { value: true, configurable: true },
       __TAURI_INTERNALS__: { configurable: true, value: {
         metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
-        invoke: async (): Promise<null> => null,
+        invoke: async (command: string): Promise<null> => {
+            if (command === 'desktop_agent_models') {
+              (window as any).agentModelRequests =
+                ((window as any).agentModelRequests || 0) + 1;
+              throw 'Для локального агента не настроено подключение к ИИ.';
+            }
+            return null;
+          },
         transformCallback: (): number => 0,
         unregisterCallback: (): void => {}
       } }
@@ -68,7 +75,29 @@ test('раздел агентов доступен только в настол�
   if (testInfo.project.use.isMobile) {
     await expect(agents).toHaveCount(0);
   } else {
-    await expect(agents).toHaveAttribute('aria-selected', 'true');
+    await expect(agents).toHaveAttribute('aria-selected', 'false');
+    await expect(
+      tabs.getByRole('tab', { name: 'Чаты', exact: true })
+    ).toHaveAttribute('aria-selected', 'true');
+    const model = page.locator('.ai-composer-settings__trigger:visible');
+    await expect(model).toHaveAttribute('title', 'Модель А');
+    expect(
+      await page.evaluate(() => (window as any).agentModelRequests || 0)
+    ).toBe(0);
+    await agents.click();
+    await model.click();
+    await expect(
+      page
+        .getByRole('alert')
+        .filter({ hasText: 'Для локального агента не настроено' })
+    ).toBeVisible();
+    await tabs.getByRole('tab', { name: 'Чаты', exact: true }).click();
+    await expect(model).toHaveAttribute('title', 'Модель А');
+    await expect(
+      page
+        .getByRole('alert')
+        .filter({ hasText: 'Для локального агента не настроено' })
+    ).toHaveCount(0);
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/' + organizationQuery);

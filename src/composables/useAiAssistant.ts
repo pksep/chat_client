@@ -279,12 +279,10 @@ const hasDesktopAgentTab = computed(
     desktopBrowserPlatform(navigator) !== 'mobile' &&
     !phoneLayout.value
 );
-const activeTab = ref<AiAssistantTab>(
-  hasDesktopAgentTab.value ? 'agents' : 'chats'
-);
-const activeView = ref<AiAssistantView>(
-  hasDesktopAgentTab.value ? 'agents' : 'chat'
-);
+// Общий ИИ-чат доступен по сессии пользователя; локальный агент выбирается явно
+// и может требовать отдельной настройки провайдера на компьютере.
+const activeTab = ref<AiAssistantTab>('chats');
+const activeView = ref<AiAssistantView>('chat');
 const activeSessionId = ref<string | null>(null);
 const isVoiceModeOpen = ref(false);
 const isVoiceModalVisible = ref(false);

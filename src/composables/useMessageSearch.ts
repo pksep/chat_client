@@ -3,6 +3,7 @@ import type { IMessage, ITopic } from '../components/interfaces/interfaces';
 import { getChatSDK, getHasBrowserNetwork } from '../services/useChat';
 import {
   getFullMessagesByTopicId,
+  getClientMessageById,
   getMessagesByTopicId,
   getTopicIdsWithMessages,
   isDeletedMessageForTopic
@@ -23,6 +24,8 @@ import {
 import { isBotTopic, isBotUser } from '../utils/bot';
 import { compactPersonName } from '../utils/personName';
 import { mergeMessageSnapshots } from '../utils/merge-message-snapshots';
+import { pinComments } from '../services/usePinComments';
+import type { PinComment } from '../services/pin-comments';
 
 export interface IMessageSearchResult {
   id: string;
@@ -30,6 +33,7 @@ export interface IMessageSearchResult {
   message: IMessage;
   topic?: ITopic | null;
   previewText: string;
+  pinComments?: PinComment[];
   createdAt?: string | Date;
 }
 
@@ -118,7 +122,8 @@ const resolveMessageTopic = (
   getTopicById(message.topicId) || normalizeRemoteTopic(message.topic);
 
 const buildSearchResult = (
-  message: IMessage & { topic?: ITopic | null }
+  message: IMessage & { topic?: ITopic | null; pinComments?: PinComment[] },
+  preferLocalComments = false
 ): IMessageSearchResult | null => {
   const topicId = message.topicId || message.topic?.id;
 
@@ -137,17 +142,42 @@ const buildSearchResult = (
     return null;
   }
 
-  const previewText = getMessagePlainText(message) || 'Вложение';
+  const { pinComments: remoteComments, ...source } = message;
+  const current = preferLocalComments
+    ? getClientMessageById(topicId, message.id) || source
+    : source;
+  const original = pinComments.projectPins(topicId, [current])[0];
+  if (!original) return null;
+  const previewText = getMessagePlainText(original) || 'Вложение';
+  const localComments = pinComments.commentsFor(topicId, message.id);
+  const notes = (
+    preferLocalComments ? localComments : remoteComments || localComments
+  ).filter(
+    comment =>
+      comment.topicId === topicId &&
+      comment.messageId === message.id &&
+      typeof comment.text === 'string' &&
+      typeof comment.revision === 'string' &&
+      (comment.scope === 'SELF'
+        ? comment.authorId === getAuthUser()?.id &&
+          Boolean(original.isPinnedForMe || original.isPinnedOnlyMe)
+        : comment.scope === 'ALL' &&
+          Boolean(
+            original.isPinnedForAll ??
+              (original.isPin && !original.isPinnedOnlyMe)
+          ))
+  );
 
   return {
     id: message.id,
     topicId,
     message: {
-      ...message,
+      ...original,
       topicId
     },
     topic,
     previewText,
+    pinComments: notes,
     createdAt: message.createdAt
   };
 };
@@ -163,6 +193,16 @@ const dedupeResults = (
   results: IMessageSearchResult[]
 ): IMessageSearchResult[] =>
   Array.from(new Map(results.map(result => [result.id, result])).values());
+
+const matchesQuery = (result: IMessageSearchResult, query: string): boolean => {
+  const tokens = normalizeSearchQuery(query).split(' ');
+  return [
+    getMessagePlainText(result.message),
+    ...(result.pinComments || []).map(comment =>
+      normalizeSearchText(comment.text)
+    )
+  ].some(text => tokens.every(token => text.toLowerCase().includes(token)));
+};
 
 const searchLocalMessages = (
   query: string,
@@ -181,11 +221,9 @@ const searchLocalMessages = (
     const messages = fullMessages.length ? fullMessages : visibleMessages;
 
     return messages
-      .filter(message =>
-        getMessagePlainText(message).toLowerCase().includes(normalizedQuery)
-      )
       .map(message => buildSearchResult(message))
-      .filter((result): result is IMessageSearchResult => Boolean(result));
+      .filter((result): result is IMessageSearchResult => Boolean(result))
+      .filter(result => matchesQuery(result, normalizedQuery));
   });
 
   return dedupeResults(results)
@@ -207,7 +245,8 @@ const searchRemoteMessages = async (
     const response = await sdk.searchMessages(query, {
       page: 1,
       limit: opts?.limit || 100,
-      topicId: opts?.topicId
+      topicId: opts?.topicId,
+      includePinComments: true
     });
     const data = response.data || [];
 
@@ -241,6 +280,21 @@ export const searchMessages = async (
 
   const sdk = getChatSDK();
   const userId = getAuthUser()?.id;
+  const noteVersions = new Map(
+    [
+      ...new Set([
+        ...getTopicIdsWithMessages(),
+        ...useTopics()
+          .getTopicList()
+          .map(topic => topic.id),
+        ...(opts?.topicId ? [opts.topicId] : [])
+      ])
+    ].map(topicId => [topicId, pinComments.mutationVersion(topicId)])
+  );
+  const preferLocal = (message: IMessage) =>
+    pinComments.pending(message.topicId, message.id) ||
+    pinComments.mutationVersion(message.topicId) !==
+      (noteVersions.get(message.topicId) ?? 0);
   const localResults = searchLocalMessages(normalizedQuery, opts);
   const localResponse = { results: localResults, total: localResults.length };
   if (localResults.length) opts?.onLocalResults?.(localResponse);
@@ -254,13 +308,32 @@ export const searchMessages = async (
       result => result.message
     )
   )
-    .map(buildSearchResult)
+    .map(message =>
+      buildSearchResult(
+        {
+          ...message,
+          pinComments: remote.results.find(result => result.id === message.id)
+            ?.pinComments
+        },
+        preferLocal(message)
+      )
+    )
     .filter((result): result is IMessageSearchResult => !!result)
+    .filter(
+      result =>
+        !preferLocal(result.message) || matchesQuery(result, normalizedQuery)
+    )
     .sort(compareByCreatedAt);
 
   return {
     results,
-    total: Math.max(remote.total ?? 0, results.length)
+    total: Math.max(
+      (remote.total ?? 0) -
+        remote.results.filter(
+          row => !results.some(result => result.id === row.id)
+        ).length,
+      results.length
+    )
   };
 };
 

@@ -530,6 +530,7 @@ export function createPinComments(deps: PinCommentsDependencies) {
   };
   return {
     sessionVersion,
+    mutationVersion: (topicId: string) => entry(topicId).epoch,
     state: (topicId: string) => entry(topicId).state,
     hydrate,
     refresh: refreshOnce,

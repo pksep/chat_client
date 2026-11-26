@@ -103,11 +103,12 @@ await writeFile(
   '<!doctype html><meta charset="utf-8"><title>SEP Chat updater QA</title><body>Проверка обновления<script type="module" src="./desktop-updater-native.js"></script>'
 );
 for (const version of ['1.6.100', '1.6.101']) {
+  const productName = 'СЭП Чат Updater QA';
   const config = path.join(root, `config-${version}.json`);
   await writeFile(
     config,
     JSON.stringify({
-      productName: version === '1.6.100' ? 'SEP Chat Updater QA' : 'СЭП Чат Updater QA',
+      productName,
       identifier: 'ru.pksep.chat.updaterqa',
       version,
       build: {
@@ -116,7 +117,7 @@ for (const version of ['1.6.100', '1.6.101']) {
       },
       app: {
         windows: [
-          { label: 'main', title: 'SEP Chat: updater QA', visible: false }
+          { label: 'main', title: 'SEP Chat: updater QA', visible: true }
         ]
       },
       bundle: { targets: ['nsis'], createUpdaterArtifacts: true },
@@ -130,16 +131,22 @@ for (const version of ['1.6.100', '1.6.101']) {
       }
     })
   );
-  await mustRun(
-    process.execPath,
-    ['run', 'tauri', 'build', '--config', config, '--bundles', 'nsis'],
-    signingEnv
-  );
+  if (!process.argv.includes(`--reuse-built-installer=${version}`))
+    await mustRun(
+      process.execPath,
+      ['run', 'tauri', 'build', '--config', config, '--bundles', 'nsis'],
+      signingEnv
+    );
   const bundles = path.resolve('src-tauri/target/release/bundle/nsis');
-  const installer = (await readdir(bundles)).find(
-    name => name.includes(version) && name.endsWith('-setup.exe')
+  const installer = `${productName}_${version}_x64-setup.exe`;
+  if (!(await readdir(bundles)).includes(installer))
+    throw new Error('Нет точного тестового NSIS-установщика');
+  console.log(
+    JSON.stringify({
+      qaInstaller: installer,
+      reused: process.argv.includes(`--reuse-built-installer=${version}`)
+    })
   );
-  if (!installer) throw new Error('No NSIS installer');
   await copyFile(
     path.join(bundles, installer),
     path.join(root, `${version}.exe`)
@@ -153,6 +160,10 @@ let goodSignature = false;
 let complete!: (value: unknown) => void;
 const finished = new Promise(resolve => {
   complete = resolve;
+});
+let completeAutostart!: (value: unknown) => void;
+const finishedAutostart = new Promise(resolve => {
+  completeAutostart = resolve;
 });
 const reports: unknown[] = [];
 const signature = (
@@ -199,6 +210,8 @@ const server = Bun.serve({
       if (data.stage === 'invalid-signature' && data.rejected)
         goodSignature = true;
       if (data.stage === 'restarted' || data.stage === 'failed') complete(data);
+      if (data.stage === 'autostart-hidden' || data.stage === 'failed')
+        completeAutostart(data);
       await writeFile(
         path.join(root, 'reports.json'),
         JSON.stringify(reports, null, 2)
@@ -209,16 +222,34 @@ const server = Bun.serve({
   }
 });
 const installDirectory = path.join(root, 'installed');
+const stopQa = () =>
+  mustRun(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      'Get-CimInstance Win32_Process -Filter "Name = \'sep-chat.exe\'" | Where-Object { $_.ExecutablePath -eq $env:SEP_UPDATER_QA_EXECUTABLE } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }'
+    ],
+    {
+      ...process.env,
+      SEP_UPDATER_QA_EXECUTABLE: path.join(installDirectory, 'sep-chat.exe')
+    }
+  );
 try {
   await mustRun(path.join(root, '1.6.100.exe'), [
     '/S',
     `/D=${installDirectory}`
   ]);
-  const child = spawn(path.join(installDirectory, 'sep-chat.exe'), [], {
-    windowsHide: true,
-    stdio: 'ignore',
-    detached: true
-  });
+  const child = spawn(
+    path.join(installDirectory, 'sep-chat.exe'),
+    ['--autostart'],
+    {
+      windowsHide: true,
+      stdio: 'ignore',
+      detached: true
+    }
+  );
   child.unref();
   const timeout = setTimeout(
     () => complete({ stage: 'failed', message: 'Restart timeout' }),
@@ -231,10 +262,32 @@ try {
     result.stage !== 'restarted' ||
     result.version !== '1.6.101' ||
     result.draft !== 'Несохранённый текст перед обновлением' ||
-    result.session !== 'synthetic-session'
+    result.session !== 'synthetic-session' ||
+    !result.visible ||
+    result.minimized
   ) {
     throw new Error('Native updater smoke failed');
   }
+  await stopQa();
+  const next = spawn(
+    path.join(installDirectory, 'sep-chat.exe'),
+    ['--autostart'],
+    {
+      windowsHide: true,
+      stdio: 'ignore',
+      detached: true
+    }
+  );
+  next.unref();
+  const hiddenTimeout = setTimeout(
+    () => completeAutostart({ stage: 'failed', message: 'Autostart timeout' }),
+    30000
+  );
+  const hidden = (await finishedAutostart) as Record<string, unknown>;
+  clearTimeout(hiddenTimeout);
+  if (hidden.stage !== 'autostart-hidden' || hidden.visible)
+    throw new Error('Обычный автозапуск после обновления не остался в трее');
+  console.log(JSON.stringify(hidden));
 } finally {
   server.stop(true);
   await mustRun(

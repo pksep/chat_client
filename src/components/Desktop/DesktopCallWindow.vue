@@ -46,6 +46,8 @@ onMounted(async () => {
   } catch (error) {
     if (abort.signal.aborted) return;
     console.warn('Не удалось подготовить отдельное окно звонка:', error);
+    await host?.dispose().catch(() => undefined);
+    host = null;
     fallback.value = true;
   } finally {
     desktopCallWindowOpening.value = false;

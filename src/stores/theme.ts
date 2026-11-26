@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { nextTick, ref } from 'vue';
 import { Capacitor } from '@capacitor/core';
+import { isTauri } from '@tauri-apps/api/core';
 import { LaunchStartup } from '../services/launchStartup';
 import { persistDesktopRecovery } from '../services/desktop-recovery';
 
@@ -212,7 +213,12 @@ export const useThemeStore = defineStore('theme', () => {
 
     if (!hasChanged || reduceMotion) {
       applyNextTheme();
-    } else if (typeof document.startViewTransition === 'function') {
+    } else if (
+      typeof document.startViewTransition === 'function' &&
+      // WebKitGTK 2.52 может падать в UI-процессе при первом snapshot без
+      // backing store (WebKit #321683). try/catch нативное падение не перехватит.
+      !(isTauri() && /linux/i.test(navigator.platform))
+    ) {
       const transition = document.startViewTransition(async () => {
         if (sequence !== themeSwitchSequence) return;
         root.classList.add('theme-snapshot');

@@ -38,8 +38,27 @@ try {
     href: location.href,
     ...(version === '1.6.101' ? storageState() : {})
   });
-  if (version === '1.6.101') {
+  const windows = /win/i.test(navigator.platform);
+  if (
+    version === '1.6.101' &&
+    windows &&
+    localStorage.getItem('qa-foreground-version') === version
+  ) {
+    const state = await invoke<{ visible: boolean }>('desktop_window_state');
+    if (state.visible)
+      throw new Error(
+        'Обычный автозапуск повторно показал окно после обновления'
+      );
+    await report('autostart-hidden', state);
+  } else if (version === '1.6.101') {
     if (/win/i.test(navigator.platform)) {
+      const windowState = await invoke<{
+        visible: boolean;
+        minimized: boolean;
+      }>('desktop_window_state');
+      if (!windowState.visible || windowState.minimized)
+        throw new Error('После обновления окно осталось в трее или свёрнутым');
+      await report('foreground-after-update', windowState);
       // Только изолированный QA-профиль: имитируем потерю WebView storage.
       localStorage.setItem('chat_auth_session', 'synthetic-auth');
       localStorage.setItem('erp-theme-color-scheme', 'theme-dark');
@@ -68,11 +87,18 @@ try {
     await next?.close();
     if (repeatUpdate)
       throw new Error('Установленная версия снова предлагает обновление');
+    if (windows) {
+      localStorage.setItem('qa-foreground-version', version);
+      await settleDesktopUpdateStorage();
+    }
     await report('restarted', {
       version,
       draft: localStorage.getItem('qa-draft'),
       session: localStorage.getItem('qa-session'),
-      repeatUpdate
+      repeatUpdate,
+      ...(windows
+        ? await invoke<Record<string, unknown>>('desktop_window_state')
+        : {})
     });
     if (/mac/i.test(navigator.platform)) {
       await getCurrentWindow().show();
@@ -97,6 +123,7 @@ try {
       await exit(0);
     }
   } else {
+    localStorage.removeItem('qa-foreground-version');
     const bad = await check();
     if (!bad || bad.version !== '1.6.101')
       throw new Error('Expected newer QA version');
@@ -135,6 +162,14 @@ try {
         localStorage.setItem('qa-session', 'synthetic-session');
         void report('prepared', storageState());
         await settleDesktopUpdateStorage();
+        if (/win/i.test(navigator.platform)) {
+          await getCurrentWindow().minimize();
+          await getCurrentWindow().close();
+          await report(
+            'hidden-before-update',
+            await invoke('desktop_window_state')
+          );
+        }
       },
       relaunch: () => invoke('desktop_restart')
     });

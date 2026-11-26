@@ -3,6 +3,19 @@ import type { Page } from '@playwright/test';
 export async function installTauriCallWindowMock(page: Page) {
   await page.addInitScript(() => {
     const win = window as any;
+    const nativeOpen = win.open.bind(win);
+    let callPopup: Window | null = null;
+    const namedSurfaces = new Map<string, Window>();
+    win.open = (url?: string | URL, target?: string, features?: string) => {
+      if (win.callRetainClosedTarget && target && namedSurfaces.has(target))
+        return namedSurfaces.get(target);
+      const popup = nativeOpen(url, target, features);
+      if (String(url) === 'about:blank#sep-chat-call') {
+        callPopup = popup;
+        if (target && popup) namedSurfaces.set(target, popup);
+      }
+      return popup;
+    };
     win.deliveredCallActivities = [];
     win.callControlsSnapshots = [];
     win.callAttentionRequests = [];
@@ -12,6 +25,7 @@ export async function installTauriCallWindowMock(page: Page) {
     const listeners: any[] = [];
     const windows: Record<string, any> = {
       main: {
+        alwaysOnTop: false,
         visible: true,
         minimized: false,
         maximized: false,
@@ -19,6 +33,7 @@ export async function installTauriCallWindowMock(page: Page) {
         focused: true
       },
       call: {
+        alwaysOnTop: false,
         visible: false,
         minimized: false,
         maximized: false,
@@ -78,8 +93,20 @@ export async function installTauriCallWindowMock(page: Page) {
           return;
         }
         if (command === 'desktop_call_window_available') return true;
+        if (command === 'desktop_call_window_capabilities')
+          return {
+            available: true,
+            version: '0.0.0-test',
+            os: win.callLinux ? 'linux' : 'windows',
+            pinSupported: win.callPinSupported !== false
+          };
+        if (command === 'desktop_call_window_pinned')
+          return windows.call.alwaysOnTop;
+        if (command === 'desktop_call_window_fullscreen')
+          return windows.call.wmFullscreen || false;
         if (command === 'desktop_close_call_window') {
-          win.open('', 'sep-chat-call')?.close();
+          callPopup?.close();
+          callPopup = null;
           return;
         }
         if (command === 'plugin:event|listen') {
@@ -89,6 +116,13 @@ export async function installTauriCallWindowMock(page: Page) {
         if (command === 'plugin:event|unlisten') return;
         const state = windows[args.label || 'main'];
         switch (command) {
+          case 'plugin:window|is_always_on_top':
+            return state.alwaysOnTop;
+          case 'plugin:window|set_always_on_top':
+            if (win.callPinRejected)
+              throw new Error('Оконная система отказала');
+            state.alwaysOnTop = args.value;
+            return;
           case 'plugin:window|is_decorated':
             return false;
           case 'plugin:window|is_fullscreen':
@@ -128,6 +162,13 @@ export async function installTauriCallWindowMock(page: Page) {
             return;
           case 'plugin:window|set_fullscreen':
             state.fullscreen = args.value;
+            if (win.callLinux) {
+              setTimeout(() => {
+                state.wmFullscreen = args.value;
+                if (!args.value) state.alwaysOnTop = false;
+                emit(args.label, 'tauri://resize');
+              }, 100);
+            } else state.wmFullscreen = args.value;
             emit(args.label, 'tauri://resize');
             return;
           case 'plugin:window|hide':

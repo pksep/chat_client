@@ -37,6 +37,8 @@ export class ChatUtils implements ChatUtilsInterface {
     if (params?.limit !== undefined && params?.limit !== null)
       queryParams.append('limit', params.limit.toString());
     if (params?.topicId) queryParams.append('topicId', params.topicId);
+    if (params?.includePinComments)
+      queryParams.append('includePinComments', 'true');
 
     const queryString = queryParams.toString();
     const endpoint = `/search/messages${queryString ? `?${queryString}` : ''}`;

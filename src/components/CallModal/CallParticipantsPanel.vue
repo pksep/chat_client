@@ -1,5 +1,6 @@
 <template>
   <div
+    ref="panel"
     class="call-modal__group-layout"
     :class="{ 'call-modal__participants-panel--grid': !focusedParticipant }"
   >
@@ -123,7 +124,7 @@
 </template>
 
 <script setup lang="ts">
-import type { CSSProperties } from 'vue';
+import { ref, watch, type CSSProperties } from 'vue';
 import { Icon, IconNameEnum } from '@pksep/yui';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
 import MicDisableIcon from './UI/MicDisableIcon.vue';
@@ -134,8 +135,24 @@ import ReactionVideoOverlay from './ReactionVideoOverlay.vue';
 import CachedAvatar from '../UI/CachedAvatar.vue';
 
 const emit = defineEmits<{
+  (event: 'resize-grid', area: { width: number; height: number }): void;
   (event: 'select-participant', identity: string | null): void;
 }>();
+
+const panel = ref<HTMLElement | null>(null);
+watch(panel, (element, _, onCleanup) => {
+  if (!element) return;
+  const observer = new element.ownerDocument.defaultView!.ResizeObserver(
+    ([entry]) => {
+      emit('resize-grid', {
+        width: entry.contentRect.width,
+        height: entry.contentRect.height
+      });
+    }
+  );
+  observer.observe(element);
+  onCleanup(() => observer.disconnect());
+});
 
 const props = defineProps<{
   participants: Array<{

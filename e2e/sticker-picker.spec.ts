@@ -14,6 +14,33 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
+test('первый клик по вкладке сохраняется до появления асинхронного body пикера', async ({
+  page
+}) => {
+  await page.goto('/e2e/fixtures/stickers.html?catalog=1');
+  await page.locator('.smile-button:visible').click();
+  const tab = page.getByRole('button', { name: 'Стикеры', exact: true });
+  await expect(tab).toBeVisible();
+  await page.evaluate(() => {
+    const body = document.querySelector('.emoji-picker--open .v3-body')!;
+    const marker = document.createComment('Отложенное содержимое UI-kit');
+    body.replaceWith(marker);
+    (window as any).restoreStickerBody = () => marker.replaceWith(body);
+  });
+  await page.waitForTimeout(30);
+  try {
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-pressed', 'true');
+  } finally {
+    await page.evaluate(() => (window as any).restoreStickerBody());
+  }
+  const picker = page.getByRole('region', { name: 'Каталог стикеров' });
+  await expect(picker).toBeVisible();
+  await expect(
+    picker.locator('.chat-sticker-picker__item').first()
+  ).toBeVisible();
+});
+
 test('стикеры загружаются после временного сбоя и возвращения сети', async ({
   page
 }) => {
