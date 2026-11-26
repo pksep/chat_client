@@ -1,3 +1,10 @@
+## [1.59.1](https://github.com/pksep/chat_client/compare/v1.59.0...v1.59.1) (2026-11-26)
+
+
+### Bug Fixes
+
+* restore desktop folder access and release agent locks on update [skip ci] ([4643779](https://github.com/pksep/chat_client/commit/4643779804e9f6cd76f7b7ce8f05f7c00a5e6ffb))
+
 # [1.59.0](https://github.com/pksep/chat_client/compare/v1.58.2...v1.59.0) (2026-11-26)
 
 
