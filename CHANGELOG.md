@@ -1,3 +1,124 @@
+## [1.58.1](https://github.com/pksep/chat_client/compare/v1.58.0...v1.58.1) (2026-11-26)
+
+
+### Bug Fixes
+
+* unify pinned comment editor modal [skip ci] ([ab69785](https://github.com/pksep/chat_client/commit/ab69785189f6c6161778fd6d3d1403bfe770c83c))
+
+# [1.58.0](https://github.com/pksep/chat_client/compare/v1.57.0...v1.58.0) (2026-11-26)
+
+
+### Features
+
+* добавлен поиск моделей с тегами провайдеров ([f727bcd](https://github.com/pksep/chat_client/commit/f727bcdff853d806ed95b54fe582e1ddee33e82d))
+
+# [1.57.0](https://github.com/pksep/chat_client/compare/v1.56.3...v1.57.0) (2026-11-25)
+
+
+### Bug Fixes
+
+* **ai:** keep mixed conversation history in chronological order ([01515c5](https://github.com/pksep/chat_client/commit/01515c53220bfe711680bda93a3834ea9fb6dd88))
+* **ai:** keep welcome shortcuts inside narrow chat panes ([c976b9a](https://github.com/pksep/chat_client/commit/c976b9a540a6e6496dae3bc930123d54fa818e62))
+* **ai:** preserve user prompts when server replies are incomplete ([03285c7](https://github.com/pksep/chat_client/commit/03285c799e03557e8358792c250a9030a58ed791))
+* **ai:** restore execution status in menus after reload ([8c34d4e](https://github.com/pksep/chat_client/commit/8c34d4e50ce8c820e33ebc8f0d13f335909fb012))
+* keep the mobile AI folder strip within the menu width ([7c2e682](https://github.com/pksep/chat_client/commit/7c2e682486c1defcdf2cac25d64a0ddc5b66996b))
+* **menu:** keep unread badges circular and verify the 9+ cap ([5a4b665](https://github.com/pksep/chat_client/commit/5a4b66525c2b1e0cd15aed1776a9fb74a71425c3))
+* reject invalid cached server configuration [skip ci] ([8acd3d7](https://github.com/pksep/chat_client/commit/8acd3d7d01dbccbefb0244866e1349913cabe751))
+* **tauri:** preserve screen share clarity ([#507](https://github.com/pksep/chat_client/issues/507)) [skip ci] ([a7af78e](https://github.com/pksep/chat_client/commit/a7af78ea408612c10044ff563a9fe1befade716d))
+* **tauri:** preserve screen share clarity across call views ([3348564](https://github.com/pksep/chat_client/commit/3348564eee5e208c117d17a6e15ea7fe0f5d4671))
+* **ui:** center navigation unread counters ([a187659](https://github.com/pksep/chat_client/commit/a1876594b5c83320d3fc33d2abb059c63a97d36e))
+* use the current call action in the pinned conversation header ([d944e26](https://github.com/pksep/chat_client/commit/d944e266b9c555f66df1c7aa9df759090995d84b))
+
+
+### Features
+
+* add private AI chat information and attachments panel ([9aced81](https://github.com/pksep/chat_client/commit/9aced81bdc8f5f756ec323d8b08d45a8e33fcbdb))
+* **ai:** integrate the desktop agent, model picker and dictation ([bfcc599](https://github.com/pksep/chat_client/commit/bfcc5994ea0411b7f84ea44c5a3b12aa28701ddf))
+* **ai:** show task attribute and work log approvals ([d1c45ff](https://github.com/pksep/chat_client/commit/d1c45ffca403994ac38f0a4758a9f8927f97e522))
+* **ai:** support responsive voice conversations and spoken action results ([415c8a6](https://github.com/pksep/chat_client/commit/415c8a63f72d8bb26fa270ed5535b6a1be5dcea8))
+* merge reviewed AI updates and preserve desktop state ([#481](https://github.com/pksep/chat_client/issues/481)) [skip ci] ([db95d9a](https://github.com/pksep/chat_client/commit/db95d9a18da8603c6ade3df291a0de1af271cd0e))
+* organize AI chats and tasks in shared folder menu ([534ffa9](https://github.com/pksep/chat_client/commit/534ffa97ad4cd3e403236d9ce401d5fe9c4b3b4b))
+* show WhatsApp inquiries and reply limits in clients ([12fbb9a](https://github.com/pksep/chat_client/commit/12fbb9a47fe9c2f73669002323f861465a65865e))
+
+## [1.56.2](https://github.com/pksep/chat_client/compare/v1.56.1...v1.56.2) (2026-11-25)
+
+
+### Bug Fixes
+
+* **calls:** adapt participant cards and quick controls to window size [skip ci] ([182fa6d](https://github.com/pksep/chat_client/commit/182fa6d4bf5f99fedfcb888f7ad0fe2145e24fa9))
+* **deploy:** use matching SSH credentials and update web version [skip ci] ([5629601](https://github.com/pksep/chat_client/commit/56296018cfec9380c0005198d00e87f359efa757))
+* **ui:** align pinned views and desktop dialogs [skip ci] ([5b5da3a](https://github.com/pksep/chat_client/commit/5b5da3ac073f5661d692238f725c1eb8f41ff41e))
+
+## [1.56.1](https://github.com/pksep/chat_client/compare/v1.56.0...v1.56.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* **chat-561:** open original pinned messages reliably on macOS ([#506](https://github.com/pksep/chat_client/issues/506)) ([6cb1d74](https://github.com/pksep/chat_client/commit/6cb1d746c881a8f3aa442739ffb4b6b60cdd4f0a))
+
+# [1.56.0](https://github.com/pksep/chat_client/compare/v1.55.0...v1.56.0) (2026-11-25)
+
+
+### Bug Fixes
+
+* **chat-561:** center pinned dates with classic scrollbars ([21bbd9a](https://github.com/pksep/chat_client/commit/21bbd9a06c5eab1bf3214e469e7a33d32f257b89))
+* **desktop:** cancel file downloads and keep macOS forms compact ([bf1786e](https://github.com/pksep/chat_client/commit/bf1786ef3f835c29e3435f4d0f9ccd786c920701))
+
+
+### Features
+
+* **chat-561:** add pinned messages list and pin comments ([a162e7e](https://github.com/pksep/chat_client/commit/a162e7eda92a1313e0b1b75e0562f5799a58fdc7))
+
+# [1.55.0](https://github.com/pksep/chat_client/compare/v1.54.2...v1.55.0) (2026-11-24)
+
+
+### Bug Fixes
+
+* align profile and Tauri call layout (CHAT-559) [skip ci] ([2f61afc](https://github.com/pksep/chat_client/commit/2f61afcda7cac79cea52b0503454b6c2267ef043))
+* align profile controls and keep Tauri calls below titlebar ([d27da26](https://github.com/pksep/chat_client/commit/d27da26ee5f63f2a3ef32833faba99166e215f29))
+* center profile identity and allow hiding the desktop app button ([cc66e54](https://github.com/pksep/chat_client/commit/cc66e54b7f43b18b7d759fcde4a29506d92b9eca))
+* center profile identity and support hiding app button (CHAT-559) [skip ci] ([42cc906](https://github.com/pksep/chat_client/commit/42cc9063788a1d19cc02d01d8971029c708bc6e0))
+* **desktop:** control call devices directly and track native window activity ([ae3c38d](https://github.com/pksep/chat_client/commit/ae3c38da797c92da799a060f894462651d8e1062))
+* keep call settings below the Tauri titlebar ([895762e](https://github.com/pksep/chat_client/commit/895762e831d53b0e808f12fef3f1d5a88addb5a6))
+* keep call settings below the Tauri titlebar [skip ci] ([92e2a0a](https://github.com/pksep/chat_client/commit/92e2a0ad07cb51fd9ac2d0e7447a5a405f1ec9a2))
+* **tauri:** expose call status and shorten Windows activity tags ([6d6a6e6](https://github.com/pksep/chat_client/commit/6d6a6e66a8017bee2e8e682c513b3e32b018fb35))
+
+
+### Features
+
+* **chat:** improve native call feedback and app handoff ([208640f](https://github.com/pksep/chat_client/commit/208640fa379d6454ad264208cd634362052d0262))
+* **tauri:** add a dedicated call window and device controls ([6fb7009](https://github.com/pksep/chat_client/commit/6fb7009e53d8476722d47389af7ec9c1463524b5))
+
+## [1.54.2](https://github.com/pksep/chat_client/compare/v1.54.1...v1.54.2) (2026-11-23)
+
+
+### Bug Fixes
+
+* keep reaction picker anchored to the message menu [skip ci] ([1549152](https://github.com/pksep/chat_client/commit/154915289a03845176d7954e745261aabb82dd50))
+* preserve desktop permissions through updates and restore Windows notifications ([88b3c85](https://github.com/pksep/chat_client/commit/88b3c85a1952d1bf4a91ec585b1045b924bfa9aa))
+
+## [1.54.1](https://github.com/pksep/chat_client/compare/v1.54.0...v1.54.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* preserve desktop permissions across restarts [skip ci] ([735cfc9](https://github.com/pksep/chat_client/commit/735cfc94b92f1ec41973cca2990959f6721cb82b))
+
+# [1.54.0](https://github.com/pksep/chat_client/compare/v1.53.7...v1.54.0) (2026-11-20)
+
+
+### Bug Fixes
+
+* isolate desktop QA protocol and autostart registration [skip ci] ([38a5954](https://github.com/pksep/chat_client/commit/38a595457ec177ecbc57f1ecb191674163f8de2a))
+* open native chat before download destinations [skip ci] ([15356e3](https://github.com/pksep/chat_client/commit/15356e30f34e97375ee625183debbec05210c792))
+* restore minimized notifications and native app downloads [skip ci] ([8855ab2](https://github.com/pksep/chat_client/commit/8855ab2b0098bab85152258336a81e7995d251f0))
+* use one native app action and keep PWA only on iOS [skip ci] ([56e0191](https://github.com/pksep/chat_client/commit/56e01914f9dbc57a5cdd5c990c587376c32d4174))
+
+
+### Features
+
+* improve desktop launcher, inspector and notification actions [skip ci] ([45001eb](https://github.com/pksep/chat_client/commit/45001eb8b27561a5118ceb3126089f229a319edd))
+
 ## [1.53.7](https://github.com/pksep/chat_client/compare/v1.53.6...v1.53.7) (2026-11-20)
 
 

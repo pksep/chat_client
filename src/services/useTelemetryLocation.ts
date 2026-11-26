@@ -1,8 +1,13 @@
 import { Capacitor } from '@capacitor/core';
+import { watch } from 'vue';
 import {
   Geolocation,
   type PermissionStatus as NativePermissionStatus
 } from '@capacitor/geolocation';
+import {
+  getDesktopPermissionChoice,
+  saveDesktopPermissionChoice
+} from './desktop-permission-preferences';
 
 const MAX_AGE_MS = 60_000;
 let deviceLocation: Record<string, unknown> | null = null;
@@ -30,10 +35,20 @@ const clearLocation = (nextStatus: string): void => {
 
 export const getTelemetryLocationContext = (): Record<string, unknown> => ({
   device:
-    deviceLocation && Date.now() - sampledAt <= MAX_AGE_MS
-      ? deviceLocation
-      : { status: status === 'resolved' ? 'not_sampled' : status }
+    getDesktopPermissionChoice('geolocation') === 'denied'
+      ? { status: 'denied' }
+      : deviceLocation && Date.now() - sampledAt <= MAX_AGE_MS
+        ? deviceLocation
+        : { status: status === 'resolved' ? 'not_sampled' : status }
 });
+
+watch(
+  () => getDesktopPermissionChoice('geolocation'),
+  choice => {
+    if (choice === 'denied') clearLocation('denied');
+  },
+  { flush: 'sync' }
+);
 
 const isGranted = (permission: Partial<NativePermissionStatus>): boolean =>
   permission.location === 'granted' || permission.coarseLocation === 'granted';
@@ -52,6 +67,10 @@ const getBrowserPermission = async (): Promise<PermissionState | undefined> => {
           clearLocation(
             permission.state === 'denied' ? 'denied' : 'permission_required'
           );
+          void saveDesktopPermissionChoice(
+            'geolocation',
+            permission.state === 'denied' ? 'denied' : 'requested'
+          );
         }
       };
     }
@@ -62,6 +81,10 @@ const getBrowserPermission = async (): Promise<PermissionState | undefined> => {
 };
 
 const refreshLocation = (requestPermission: boolean): Promise<void> => {
+  if (getDesktopPermissionChoice('geolocation') === 'denied') {
+    if (status !== 'denied') clearLocation('denied');
+    return Promise.resolve();
+  }
   if (
     typeof document !== 'undefined' &&
     document.visibilityState === 'hidden'
@@ -87,13 +110,16 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
         }
       } else {
         const state = await getBrowserPermission();
+        const previousChoice = getDesktopPermissionChoice('geolocation');
         permission = { location: state };
         if (!state && deviceLocation) permission.location = 'granted';
         if (
           state !== 'denied' &&
           !isGranted(permission) &&
           requestPermission &&
-          !permissionRequested
+          !permissionRequested &&
+          previousChoice !== 'denied' &&
+          previousChoice !== 'requested'
         ) {
           // В браузере системный запрос открывает сам getCurrentPosition.
           permissionRequested = true;
@@ -101,6 +127,9 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
         }
       }
       if (!isGranted(permission)) {
+        if (permission.location === 'denied') {
+          await saveDesktopPermissionChoice('geolocation', 'denied');
+        }
         clearLocation(
           permission.location === 'denied' ? 'denied' : 'permission_required'
         );
@@ -110,12 +139,19 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
       if (Date.now() - lastAttemptAt < MAX_AGE_MS) return;
       lastAttemptAt = Date.now();
       const currentGeneration = generation;
+      if (!getDesktopPermissionChoice('geolocation')) {
+        await saveDesktopPermissionChoice('geolocation', 'requested');
+      }
       const position = await Geolocation.getCurrentPosition({
         enableHighAccuracy: permission.location === 'granted',
         timeout: 10_000,
         maximumAge: MAX_AGE_MS
       });
-      if (currentGeneration !== generation) return;
+      if (
+        currentGeneration !== generation ||
+        getDesktopPermissionChoice('geolocation') === 'denied'
+      )
+        return;
       const { latitude, longitude, accuracy } = position.coords;
       if (
         !Number.isFinite(latitude) ||
@@ -129,6 +165,8 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
       ) {
         throw new Error('Не удалось получить актуальную геолокацию.');
       }
+      await saveDesktopPermissionChoice('geolocation', 'granted');
+      if (currentGeneration !== generation) return;
       sampledAt = position.timestamp;
       status = 'resolved';
       deviceLocation = {
@@ -139,8 +177,10 @@ const refreshLocation = (requestPermission: boolean): Promise<void> => {
         accuracyMeters: accuracy,
         observedAt: new Date(position.timestamp).toISOString()
       };
-    } catch {
-      clearLocation('unavailable');
+    } catch (error) {
+      const denied = Number(error?.code) === 1;
+      if (denied) await saveDesktopPermissionChoice('geolocation', 'denied');
+      clearLocation(denied ? 'denied' : 'unavailable');
     }
   })().finally(() => {
     inFlight = null;

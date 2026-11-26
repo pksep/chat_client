@@ -2,6 +2,7 @@
   <div
     ref="inputContainerRef"
     class="chat__input emoji-font-host"
+    :style="props.suspended ? { opacity: 0, pointerEvents: 'none' } : undefined"
     :class="{ 'chat__input--booting': !isEditorReady }"
     :data-testid="`${props.dataTestid}-MessageList-InputContainer`"
     @pointerdown.capture="handleContentEditorPointerDown"
@@ -187,7 +188,10 @@
     <Teleport to="body">
       <Transition name="chat-tauri-drag">
         <div
-          v-if="tauriFileDragState.dragging || isTauriFileReading"
+          v-if="
+            !props.suspended &&
+            (tauriFileDragState.dragging || isTauriFileReading)
+          "
           class="chat__input-tauri-dropzone"
           :aria-busy="isTauriFileReading"
           :data-testid="`${props.dataTestid}-MessageList-TauriDropzone`"
@@ -311,6 +315,7 @@ import {
 } from '../../services/useDesktopUpdater';
 
 interface Props {
+  suspended?: boolean;
   topicId?: string;
   dataTestid: string;
   modelValue: string;
@@ -995,7 +1000,9 @@ onMounted(() => {
 
   void bindTauriFileDrop({
     getTargetElement: () =>
-      props.allowAttachFile ? inputContainerRef.value : null,
+      props.allowAttachFile && !props.suspended
+        ? inputContainerRef.value
+        : null,
     getContextKey: () => `${props.topicId || ''}:${composerDraftKey.value}`,
     isMediaDrop: isTauriMediaDrop,
     onDragStateChange: state => {

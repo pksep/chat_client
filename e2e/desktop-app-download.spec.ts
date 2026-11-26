@@ -22,6 +22,41 @@ const device = async (
   );
 };
 
+test('правый клик предлагает только скрытие кнопки и запоминает выбор', async ({
+  page
+}) => {
+  await device(page, 'Win32');
+  await page.goto(fixture);
+  const action = page.getByRole('button', {
+    name: 'Открыть приложение',
+    exact: true
+  });
+  await action.click({ button: 'right' });
+  const menu = page.getByTestId(
+    'DesktopAppButton-ContextMenu-ContextMenu-Container'
+  );
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('button')).toHaveCount(1);
+  await expect(
+    page.getByRole('button', { name: 'Скрыть кнопку', exact: true })
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => (window as any).selectedAppLinks ?? [])
+  ).toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toBeVisible();
+  await expect(action).toBeVisible();
+  await action.click({ button: 'right' });
+  await page
+    .getByRole('button', { name: 'Скрыть кнопку', exact: true })
+    .click();
+  await expect(action).toHaveCount(0);
+  await page.reload();
+  await expect(action).toHaveCount(0);
+  await page.goto(fixture + '?collapsed');
+  await expect(action).toHaveCount(0);
+});
+
 test('desktop удаляет старую PWA-оболочку, сохраняя уведомления и кеш файлов', async ({
   page
 }) => {
@@ -139,6 +174,31 @@ test('ожидание видно сразу, повторные клики не
   );
   await expect(action).toHaveAttribute('aria-busy', 'false');
   await expect(action.locator('.menu-native-app__spinner')).toHaveCount(0);
+});
+
+test('переход в окно Tauri останавливает крутилку без скрытия вкладки браузера', async ({
+  page
+}) => {
+  await device(page, 'Win32');
+  await page.clock.install();
+  await page.goto(fixture);
+  const action = page.getByRole('button', { name: 'Открыть приложение' });
+  await action.click();
+  await expect(action).toHaveAttribute('aria-busy', 'true');
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hasFocus', {
+      configurable: true,
+      value: () => false
+    });
+    window.dispatchEvent(new Event('blur'));
+  });
+  await expect(action).toHaveAttribute('aria-busy', 'false');
+  await expect(action).toHaveAttribute('aria-disabled', 'false');
+  await expect(action.locator('.menu-native-app__spinner')).toHaveCount(0);
+  await page.clock.fastForward(10_000);
+  expect(await page.evaluate(() => (window as any).selectedAppLinks)).toEqual([
+    'sepchat://open'
+  ]);
 });
 
 for (const promptDuration of [500, 10_000])

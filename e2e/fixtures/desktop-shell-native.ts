@@ -102,6 +102,9 @@ export const verifyNativeShell = async (
 
   const capture = prepareDesktopScreenCapture();
   if (!capture) throw new Error('Нативный выбор экрана недоступен');
+  await waitFor(() => !!desktopMediaPermissionRequest.value, 'Не появился запрос демонстрации экрана');
+  const permissionButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-testid="DesktopMediaPermissionDialog"] button')];
+  permissionButtons.find(button => button.textContent?.trim() === 'Разрешить')?.click();
   const sourceButton = () =>
     [
       ...document.querySelectorAll<HTMLButtonElement>(

@@ -63,7 +63,7 @@
           </span>
         </span>
         <span class="chat-folder-rail__label">{{
-          props.tabs ? 'Все' : 'Все чаты'
+          props.tabs ? 'Все' : props.allLabel
         }}</span>
       </button>
 
@@ -212,13 +212,15 @@ const props = withDefaults(
     scope?: ChatFolderScope;
     loading?: boolean;
     systemActive?: boolean;
+    allLabel?: string;
   }>(),
   {
     mobile: false,
     tabs: false,
     authUserId: '',
     scope: 'chats',
-    loading: false
+    loading: false,
+    allLabel: 'Все чаты'
   }
 );
 

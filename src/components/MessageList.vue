@@ -1,5 +1,9 @@
 <template>
-  <div class="chat__message-viewport">
+  <div
+    class="chat__message-viewport"
+    :inert="props.suspended || undefined"
+    :aria-hidden="props.suspended || undefined"
+  >
     <div
       :class="[
         'chat__message-wrapper',
@@ -137,8 +141,9 @@
           'chat__message-bubble--warming': shouldCoverUserMessagesWithSkeleton,
           'chat__message-bubble--pin-context': isPinnedNavigationContext
         }"
-        :messages="renderedUserMessages"
+        :messages="displayedUserMessages"
         :auth-user-id="authUserId"
+        :animations-paused="props.suspended"
         :navigation-anchor-message-id="pinnedNavigationMessageId"
         :hide-unread-marker="state.hideUnreadMarker"
         :unread-marker-message-id="state.unreadMarkerMessageId"
@@ -365,6 +370,8 @@
   />
   <MessageListInput
     v-if="shouldRenderMessageComposer"
+    :suspended="props.suspended"
+    :inert="props.suspended || undefined"
     :topic-id="activeTopic?.id"
     v-model="inputText"
     ref="messageListInputRef"
@@ -404,6 +411,7 @@
 <script lang="ts" setup>
 import {
   ref,
+  shallowRef,
   reactive,
   watch,
   useTemplateRef,
@@ -549,6 +557,7 @@ export interface IMessageListExtendedProps extends IMessageListProps {
   dataTestid?: string;
   deferContentRender?: boolean;
   suppressInitialSkeleton?: boolean;
+  suspended?: boolean;
 }
 
 let cleanupAndroidKeyboardViewport = () => {};
@@ -560,7 +569,8 @@ onBeforeUnmount(() => cleanupAndroidKeyboardViewport());
 const props = withDefaults(defineProps<IMessageListExtendedProps>(), {
   dataTestid: 'MessageList',
   deferContentRender: false,
-  suppressInitialSkeleton: false
+  suppressInitialSkeleton: false,
+  suspended: false
 });
 const emit = defineEmits<{
   (
@@ -770,6 +780,19 @@ const renderedUserMessages = computed(() => {
   // Сохранённая переписка остаётся доступной во время фонового обновления.
   return getRenderedTopicMessages(topicId, currentTopicMessages);
 });
+const frozenUserMessages = shallowRef<IMessage[] | null>(null);
+const displayedUserMessages = computed(
+  () => frozenUserMessages.value || renderedUserMessages.value
+);
+watch(
+  () => props.suspended,
+  suspended => {
+    frozenUserMessages.value = suspended
+      ? [...renderedUserMessages.value]
+      : null;
+  },
+  { flush: 'sync' }
+);
 const renderedLastUserMessageSignature = computed(() => {
   const lastMessage =
     renderedUserMessages.value[renderedUserMessages.value.length - 1];
@@ -1805,7 +1828,7 @@ const scheduleExpandedTopicMessagesFetch = (
         return;
       }
 
-      if (document.visibilityState !== 'visible') {
+      if (props.suspended || document.visibilityState !== 'visible') {
         releaseBootstrapScrollLockAfterPaint(topicSwitchToken);
         return;
       }
@@ -2273,6 +2296,7 @@ const handleBottomBarHeightChange = (height: number): void => {
 };
 
 const handleInputHeightChange = (height: number): void => {
+  if (props.suspended) return;
   if (height === 0 && isSelectionMode.value) {
     return;
   }
@@ -3574,6 +3598,7 @@ const handleArrowDownClick = async (): Promise<void> => {
 };
 
 const handleUnreadReactionClick = async (): Promise<void> => {
+  if (props.suspended) return;
   const messageId = unreadReactionMessageId.value;
 
   if (!messageId) {
@@ -3591,6 +3616,7 @@ const handleUnreadReactionClick = async (): Promise<void> => {
 watch(
   [pendingTopicReactionJump, () => route.value.id],
   async ([pendingJump, topicId]) => {
+    if (props.suspended) return;
     if (!pendingJump || pendingJump.topicId !== topicId) {
       return;
     }
@@ -3610,6 +3636,7 @@ watch(
 );
 
 const shouldResetUnreadForCurrentTopic = (): boolean => {
+  if (props.suspended) return false;
   const lastMessage = state.messages.at(-1);
   const currentUserId = authUser.value?.id;
   const topicUnreadCount = route.value?.id
@@ -5160,7 +5187,12 @@ watch(
 
 defineExpose({
   handleClear: clearAiMessages,
-  scrollToMessage: handleScrollToMessage
+  scrollToMessage: handleScrollToMessage,
+  handleSetEditMessage,
+  handleSetReplyMessage,
+  handleSetForwardMessage,
+  openStickerPack: (pack: string) =>
+    messageListInputRef.value?.openStickerPack?.(pack)
 });
 </script>
 

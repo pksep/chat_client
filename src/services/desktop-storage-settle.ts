@@ -1,8 +1,9 @@
 import { isTauri } from '@tauri-apps/api/core';
+import { persistDesktopRecovery } from './desktop-recovery';
 
 export async function settleDesktopUpdateStorage(): Promise<void> {
-  if (!isTauri() || !/mac/i.test(navigator.platform || navigator.userAgent))
-    return;
+  if (!isTauri()) return;
+  await persistDesktopRecovery();
 
   // WebKit откладывает транзакцию localStorage. Даём ей завершиться после
   // сохранения черновика, прежде чем установка и перезапуск остановят WebView.

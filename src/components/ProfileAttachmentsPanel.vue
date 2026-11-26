@@ -113,7 +113,14 @@
               {{ getShortName(item.media.originName || 'Файл') }}
             </span>
             <span class="profile-attachments__file-properties">
-              <span class="profile-attachments__file-size">
+              <span
+                v-if="
+                  item.media.size ||
+                  item.media.localPath ||
+                  !source?.projectPath?.(item.media)
+                "
+                class="profile-attachments__file-size"
+              >
                 {{ getFormatFileSize(item.media.size) }}
               </span>
               <time
@@ -130,11 +137,18 @@
     </ul>
 
     <p
-      v-if="isCurrentTabEmpty && !isHistoryLoading"
+      v-if="isCurrentTabEmpty && !isHistoryLoading && !historyError"
       class="profile-attachments__empty"
       :data-testid="`${props.dataTestid}-Empty`"
     >
       {{ emptyLabel }}
+    </p>
+
+    <p v-if="historyError" role="alert" class="profile-attachments__empty">
+      {{ historyError }}
+      <Button :type="ButtonTypeEnum.ghost" @click="retryHistory"
+        >Повторить</Button
+      >
     </p>
 
     <div
@@ -143,7 +157,10 @@
       class="profile-attachments__load-more"
       :data-testid="`${props.dataTestid}-LoadMore`"
     >
-      <span v-if="isHistoryLoading">Загрузка...</span>
+      <template v-if="isHistoryLoading">
+        <SkeletonBlock v-if="source" class="profile-attachments__skeleton" />
+        <span v-else>Загрузка...</span>
+      </template>
     </div>
 
     <Teleport
@@ -180,7 +197,10 @@
         @unmount-close="closeAttachmentContextMenu"
       >
         <Button
-          v-if="canShowNativeFileInFolder(contextMenuItem.media)"
+          v-if="
+            source?.projectPath?.(contextMenuItem.media) ||
+            canShowNativeFileInFolder(contextMenuItem.media)
+          "
           :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           :data-testid="`${props.dataTestid}-ShowInFolderButton`"
@@ -191,6 +211,7 @@
         </Button>
 
         <Button
+          v-if="!props.source || props.source.showInChat"
           :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           :data-testid="`${props.dataTestid}-ShowInChatButton`"
@@ -201,6 +222,7 @@
         </Button>
 
         <Button
+          v-if="!props.source"
           :type="ButtonTypeEnum.popover"
           :size="SizesEnum.small"
           :data-testid="`${props.dataTestid}-ForwardButton`"
@@ -274,6 +296,10 @@ import { navigateToSearchResult } from '../composables/useMessageSearch';
 import { deleteMessageChat, getChatSDK } from '../services/useChat';
 import { getClientMessageById } from '../services/useMessages';
 import {
+  ensureMediaObjectUrl,
+  isInquiryFile
+} from '../services/useMediaBlobCache';
+import {
   downloadNativeFile,
   canShowNativeFileInFolder,
   showNativeFileInFolder,
@@ -293,12 +319,17 @@ import {
 import { VIDEO_FALLBACK_THUMBNAIL } from '../utils/mediaPreview';
 import { createLiveSliderItem } from '../utils/live-slider-item';
 import type { IMessage, IMedia, ITopic } from './interfaces/interfaces';
+import type {
+  ProfileAttachmentItem,
+  ProfileAttachmentSource
+} from './interfaces/profile-attachment-source';
 import type { TopicAttachmentItem as ApiTopicAttachmentItem } from '../services/useChatSDK/message';
 import ContextMenu from './ContactList/ContextMenu.vue';
 import { useMessageMedia } from './Messages/composables/useMessageMedia';
 import ForwardModal from './Messages/ForwardModal.vue';
 import ConfirmModal from './UI/ConfirmModal.vue';
 import FileIcon from './UI/FileIcon.vue';
+import SkeletonBlock from './UI/SkeletonBlock.vue';
 import ForwardIcon from './UI/ForwardIcon.vue';
 import PlayIcon from './UI/PlayIcon.vue';
 
@@ -306,16 +337,11 @@ type ProfileAttachmentsTab = 'media' | 'files';
 
 interface ProfileAttachmentsPanelProps {
   topicId?: string | null;
+  source?: ProfileAttachmentSource;
   activeTab?: ProfileAttachmentsTab;
   showTabs?: boolean;
   dataTestid?: string;
 }
-
-type ProfileAttachmentItem = {
-  key: string;
-  media: IMedia;
-  message: IMessage;
-};
 
 type AttachmentScrollSnapshot = {
   container: HTMLElement | Window;
@@ -356,6 +382,7 @@ const tabs: Array<{ label: string; value: ProfileAttachmentsTab }> = [
 ];
 
 const localActiveTab = ref<ProfileAttachmentsTab>('media');
+const historyError = ref('');
 const sliderElements = ref<
   {
     path: string;
@@ -425,7 +452,7 @@ const isOutgoingMessage = (message: IMessage): boolean =>
   Boolean(authUserId.value && message.senderUserId === authUserId.value);
 
 const canDeleteContextMessage = computed(() =>
-  contextMenuItem.value
+  !props.source && contextMenuItem.value
     ? isOutgoingMessage(contextMenuItem.value.message)
     : false
 );
@@ -456,6 +483,14 @@ const showAttachmentContextMenu = (
 const handleShowInFolder = async (): Promise<void> => {
   const media = contextMenuItem.value?.media;
   closeAttachmentContextMenu();
+  const projectPath = media && props.source?.projectPath?.(media);
+  if (projectPath) {
+    const { revealAgentFile } = await import(
+      '../services/desktop-agent-output'
+    );
+    await revealAgentFile(projectPath);
+    return;
+  }
   if (media) await showNativeFileInFolder(media);
 };
 
@@ -541,6 +576,13 @@ const handleAttachmentClick = (
 
 const handleShowInChat = (): void => {
   const item = contextMenuItem.value;
+
+  if (props.source && item) {
+    props.source.showInChat?.(item.message.id);
+    closeAttachmentContextMenu();
+    emits('show-in-chat');
+    return;
+  }
 
   if (!item?.message.id || !item.message.topicId) {
     closeAttachmentContextMenu();
@@ -1017,10 +1059,11 @@ const mergeAttachmentPage = (
 
 const loadNextHistoryPage = async (): Promise<void> => {
   const topicId = props.topicId;
+  const source = props.source;
   const requestedTab = currentTab.value;
 
   if (
-    !topicId ||
+    (!topicId && !source) ||
     attachmentLoadingByTab[requestedTab] ||
     !attachmentHasMoreByTab[requestedTab]
   ) {
@@ -1029,7 +1072,7 @@ const loadNextHistoryPage = async (): Promise<void> => {
 
   const sdk = getChatSDK();
 
-  if (!sdk) {
+  if (!sdk && !source) {
     return;
   }
 
@@ -1039,19 +1082,24 @@ const loadNextHistoryPage = async (): Promise<void> => {
       ? captureAttachmentScrollSnapshot()
       : null;
   attachmentLoadingByTab[requestedTab] = true;
+  historyError.value = '';
 
   try {
-    const request =
-      requestedTab === 'media'
-        ? sdk.getTopicMedia.bind(sdk)
-        : sdk.getTopicFiles.bind(sdk);
-    const page = await request(topicId, {
-      limit: ATTACHMENTS_PAGE_LIMIT,
-      cursor: attachmentCursorByTab[requestedTab] || undefined
-    });
+    const cursor = attachmentCursorByTab[requestedTab];
+    const page = source
+      ? await source.load(requestedTab, cursor)
+      : await (
+          requestedTab === 'media'
+            ? sdk!.getTopicMedia.bind(sdk)
+            : sdk!.getTopicFiles.bind(sdk)
+        )(topicId!, {
+          limit: ATTACHMENTS_PAGE_LIMIT,
+          cursor: cursor || undefined
+        });
 
     if (
       props.topicId !== topicId ||
+      props.source !== source ||
       requestGeneration !== attachmentRequestGeneration
     ) {
       return;
@@ -1068,6 +1116,8 @@ const loadNextHistoryPage = async (): Promise<void> => {
       scheduleScrollingMonthUpdate();
     }
   } catch (error) {
+    if (requestGeneration !== attachmentRequestGeneration) return;
+    historyError.value = 'Не удалось загрузить вложения. Повторите позже.';
     // Prevent the visible IntersectionObserver sentinel from immediately
     // retrying the same failed cursor in a tight loop. Reopening the panel or
     // changing the topic resets pagination and allows a fresh request.
@@ -1076,15 +1126,29 @@ const loadNextHistoryPage = async (): Promise<void> => {
   } finally {
     if (requestGeneration === attachmentRequestGeneration) {
       attachmentLoadingByTab[requestedTab] = false;
+      if (
+        source &&
+        !historyError.value &&
+        attachmentHasMoreByTab[requestedTab] &&
+        !attachmentItemsByTab[requestedTab].length &&
+        requestedTab === currentTab.value
+      ) {
+        void loadNextHistoryPage();
+      }
     }
   }
 };
 
 const ensureActiveTabHasRequestedData = (): void => {
-  if (!props.topicId || activeItems.value.length > 0) {
+  if ((!props.topicId && !props.source) || activeItems.value.length > 0) {
     return;
   }
 
+  void loadNextHistoryPage();
+};
+
+const retryHistory = (): void => {
+  attachmentHasMoreByTab[currentTab.value] = true;
   void loadNextHistoryPage();
 };
 
@@ -1119,13 +1183,14 @@ const setupLoadMoreObserver = (): void => {
 };
 
 watch(
-  () => props.topicId,
+  () => [props.topicId, props.source],
   () => {
     cancelAttachmentLongPress();
     closeAttachmentContextMenu();
     deleteModalOpen.value = false;
     forwardModalOpen.value = false;
     resetHistoryPagination();
+    historyError.value = '';
     void nextTick().then(() => {
       setupLoadMoreObserver();
       ensureActiveTabHasRequestedData();
@@ -1186,6 +1251,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  attachmentRequestGeneration++;
   cancelAttachmentLongPress();
   teardownScrollingMonth();
   Array.from(videoMetadataElements.keys()).forEach(clearVideoMetadataElement);
@@ -1303,6 +1369,12 @@ const buildSliderItem = (initialMedia: IMedia) =>
       path: sliderPath,
       fallbackPath,
       name,
+      mediaType:
+        media.type === MediaType.Video
+          ? 'video'
+          : media.type === MediaType.Image
+            ? 'image'
+            : undefined,
       downloadPath
     };
   });
@@ -1325,6 +1397,29 @@ const openSlider = async (
 
   if (!selectedMedia) {
     return;
+  }
+
+  if (!selectedMedia.path) {
+    const projectPath = props.source?.projectPath?.(selectedMedia);
+    if (!selectedMedia.localPath && projectPath) {
+      const { revealAgentFile } = await import(
+        '../services/desktop-agent-output'
+      );
+      await revealAgentFile(projectPath);
+      return;
+    }
+    if (selectedMedia.localPath && selectedMedia.type === MediaType.File) {
+      triggerBrowserDownload(selectedMedia.localPath, selectedMedia.originName);
+      return;
+    }
+  }
+
+  if (isInquiryFile(selectedMedia.path)) {
+    const url = await ensureMediaObjectUrl(selectedMedia.path);
+    if (!url) {
+      historyError.value = 'Файл недоступен. Повторите открытие позже.';
+      return;
+    }
   }
 
   if (
@@ -1374,6 +1469,12 @@ const openSlider = async (
   }
 
   const sliderMedias = medias.filter(isSliderContentMedia);
+
+  // Оригиналы приватных файлов запрашиваются только при открытии просмотрщика.
+  for (const media of sliderMedias) {
+    if (isInquiryFile(media.path) && media !== selectedMedia)
+      void ensureMediaObjectUrl(media.path);
+  }
 
   sliderElements.value = await Promise.all(
     sliderMedias.map(media => buildSliderItem(media))
@@ -1600,6 +1701,12 @@ const getMediaLabel = (media: IMedia): string =>
 .profile-attachments__context-menu {
   z-index: 2100;
   min-width: 190px;
+}
+
+.profile-attachments__skeleton {
+  width: 100%;
+  height: 28px;
+  border-radius: 6px;
 }
 
 .profile-attachments__scroll-month {

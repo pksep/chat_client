@@ -24,7 +24,6 @@
     :open="props.open"
     position="center"
     width="492px"
-    height="178px"
     class="confirm__modal"
     @close="handleCloseModal"
     @click.stop

@@ -1,4 +1,16 @@
-import { ConnectionState, Room, RoomEvent, Track } from 'livekit-client';
+import {
+  ConnectionQuality,
+  ConnectionState,
+  RemoteTrackPublication,
+  RemoteVideoTrack,
+  Room,
+  RoomEvent,
+  Track,
+  TrackEvent,
+  VideoQuality,
+  type TrackPublishOptions
+} from 'livekit-client';
+import { TrackInfo, TrackSource, TrackType } from '@livekit/protocol';
 import { authedUser } from '../../src/composables/useAuth';
 import { setConfig } from '../../src/services/useConfig';
 import { initializeChat, getChatSDK } from '../../src/services/useChat';
@@ -9,6 +21,13 @@ import { state } from '../../src/services/useCallState';
 // Только транспорт подменён: жизненный цикл звонка и MediaStreamTrack настоящие.
 export async function initializeScreenShareRecoveryFixture() {
   const rooms: Room[] = [];
+  const publishOptions: TrackPublishOptions[] = [];
+  const publishingQualities: VideoQuality[] = [];
+  const remoteRequests: {
+    quality: VideoQuality;
+    width: number;
+    height: number;
+  }[] = [];
   let captureCount = 0;
   let publishCount = 0;
   let releaseCapture: (() => void) | null = null;
@@ -37,8 +56,9 @@ export async function initializeScreenShareRecoveryFixture() {
       this.state = ConnectionState.Connected;
       const participant = this.localParticipant;
       participant.setMicrophoneEnabled = async () => undefined;
-      participant.publishTrack = async track => {
+      participant.publishTrack = async (track, options) => {
         publishCount++;
+        publishOptions.push(options || {});
         if (delayPublication)
           await new Promise<void>(resolve => {
             releasePublication = resolve;
@@ -51,6 +71,10 @@ export async function initializeScreenShareRecoveryFixture() {
         }
         const publication = {
           track,
+          videoTrack: {
+            setPublishingQuality: (quality: VideoQuality) =>
+              publishingQualities.push(quality)
+          },
           source: Track.Source.ScreenShare,
           isMuted: false,
           trackSid: `screen-${publishCount}`
@@ -115,6 +139,9 @@ export async function initializeScreenShareRecoveryFixture() {
     snapshot: () => ({
       captureCount,
       publishCount,
+      publishOptions,
+      publishingQualities,
+      remoteRequests,
       roomCount: rooms.length,
       screenActive: state.isScreenSharingActive,
       tracks: captured.map(track => ({
@@ -123,6 +150,62 @@ export async function initializeScreenShareRecoveryFixture() {
         readyState: track.readyState
       }))
     }),
+    desktopMode: () => {
+      (window as any).isTauri = true;
+      localStorage.setItem(
+        'chat.desktop.permissions.v1',
+        JSON.stringify({ 'screen-capture': 'granted' })
+      );
+    },
+    simulateQuality: (quality: ConnectionQuality) => {
+      const room = rooms.at(-1)!;
+      Object.defineProperty(room.localParticipant, 'connectionQuality', {
+        configurable: true,
+        value: quality
+      });
+      room.emit(
+        RoomEvent.ConnectionQualityChanged,
+        quality,
+        room.localParticipant
+      );
+    },
+    attachRemoteScreen: () => {
+      const media = canvas.captureStream(5).getVideoTracks()[0];
+      captured.push(media);
+      const publication = new RemoteTrackPublication(
+        Track.Kind.Video,
+        new TrackInfo({
+          sid: 'TR_SCREEN_SYNTHETIC',
+          type: TrackType.VIDEO,
+          source: TrackSource.SCREEN_SHARE,
+          width: 1920,
+          height: 1080
+        }),
+        true
+      );
+      publication.track = new RemoteVideoTrack(
+        media,
+        publication.trackSid,
+        {} as RTCRtpReceiver,
+        { pixelDensity: 'screen' }
+      );
+      publication.on(TrackEvent.UpdateSettings, settings =>
+        remoteRequests.push({
+          quality: settings.quality,
+          width: settings.width,
+          height: settings.height
+        })
+      );
+      rooms.at(-1)!.remoteParticipants.set('screen-source', {
+        identity: 'screen-source',
+        name: 'Синтетическая демонстрация',
+        videoTrackPublications: new Map([[publication.trackSid, publication]]),
+        trackPublications: new Map([[publication.trackSid, publication]]),
+        audioTrackPublications: new Map(),
+        connectionQuality: ConnectionQuality.Excellent
+      } as any);
+      return new MediaStream([media]);
+    },
     setDelayCapture: () => {
       delayCapture = true;
     },

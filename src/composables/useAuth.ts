@@ -15,6 +15,7 @@ import {
 import { buildGroupCallInviteAuthorizationUrl } from '../utils/groupCallInviteUrl';
 import { withNetworkTimeout } from '../utils/network-timeout';
 import { fetchAuthWithCookies } from '../utils/auth-http';
+import { persistDesktopRecovery } from '../services/desktop-recovery';
 import { getAccessTokenFromResponse } from '../utils/auth-response-token';
 import {
   recordTelemetryEvent,
@@ -316,6 +317,7 @@ export const saveChatAuthSession = (
   authSessionRevision++;
   secondaryStorage.removeItem(CHAT_AUTH_SESSION_KEY);
   storage.setItem(CHAT_AUTH_SESSION_KEY, JSON.stringify(normalizedSession));
+  void persistDesktopRecovery();
   scheduleSharedTokenRefresh(normalizedSession.token);
 };
 
@@ -340,6 +342,7 @@ const clearLocalChatAuthSession = (broadcast: boolean): void => {
   configureCustomBackgroundSync(null);
   localStorage.removeItem(CHAT_AUTH_SESSION_KEY);
   sessionStorage.removeItem(CHAT_AUTH_SESSION_KEY);
+  void persistDesktopRecovery();
   if (broadcast) {
     getRefreshBroadcastChannel()?.postMessage({
       type: 'cleared',
@@ -371,6 +374,7 @@ export const saveBootstrapErpSession = (
   storage.setItem(ERP_BOOTSTRAP_TOKEN_KEY, session.accessToken);
   if (session.source === 'qr') storage.setItem(QR_BOOTSTRAP_SOURCE_KEY, '1');
   else storage.removeItem(QR_BOOTSTRAP_SOURCE_KEY);
+  void persistDesktopRecovery();
 };
 
 export const isStoredBootstrapFromQr = (): boolean => {
@@ -392,6 +396,7 @@ export const clearBootstrapErpSession = (): void => {
   sessionStorage.removeItem(ERP_BOOTSTRAP_TOKEN_KEY);
   localStorage.removeItem(QR_BOOTSTRAP_SOURCE_KEY);
   sessionStorage.removeItem(QR_BOOTSTRAP_SOURCE_KEY);
+  void persistDesktopRecovery();
 };
 
 export const clearErpAuthSession = (): void => {

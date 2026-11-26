@@ -186,6 +186,7 @@ interface Props {
   hideUnreadMarker?: boolean;
   unreadMarkerMessageId?: string | null;
   navigationAnchorMessageId?: string;
+  animationsPaused?: boolean;
 }
 
 type RenderItem =
@@ -232,12 +233,14 @@ const listRootRef = ref<HTMLElement | null>(null);
 useMessageDeletionAnimation(
   listRootRef,
   () => props.messages,
-  () => route.value.id
+  () => route.value.id,
+  () => !!props.animationsPaused
 );
 useMessageArrivalAnimation(
   listRootRef,
   () => props.messages,
-  () => route.value.id
+  () => route.value.id,
+  () => !!props.animationsPaused
 );
 const messageElementsById = new Map<string, HTMLElement>();
 let indexedMessageElements: IndexedMessageElement[] = [];
@@ -603,6 +606,7 @@ const getRenderItemMemo = (item: RenderItem): unknown[] => {
   const memo: unknown[] = [
     item.kind,
     props.authUserId,
+    props.animationsPaused,
     isMobile.value,
     props.navigationAnchorMessageId
   ];
@@ -1066,7 +1070,8 @@ const getBubbleProps = (message: IMessage, index: number) => ({
     visibleMessages.value[index - 1],
     message
   ),
-  showAvatar: false
+  showAvatar: false,
+  animationsPaused: props.animationsPaused
 });
 
 defineExpose({

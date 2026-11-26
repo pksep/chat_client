@@ -24,6 +24,10 @@ name = "desktop_auth"
 path = "tests/desktop_auth.rs"
 
 [[test]]
+name = "desktop_recovery"
+path = "tests/desktop_recovery.rs"
+
+[[test]]
 name = "desktop_autostart"
 path = "tests/desktop_autostart.rs"
 
@@ -39,13 +43,17 @@ path = "tests/desktop_notifications.rs"
 name = "desktop_screen_capture"
 path = "tests/desktop_screen_capture.rs"
 
+[[test]]
+name = "desktop_permission_preferences"
+path = "tests/desktop_permission_preferences.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "2", features = ["tray-icon", "image-png", "devtools"] }
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
@@ -68,8 +76,11 @@ tauri-plugin-process = "2"
 windows-capture = "=1.5.0"
 tauri-winrt-notification = "0.7.2"
 winreg = "0.55"
-windows = { version = "0.61", features = ["Data_Xml_Dom", "Foundation", "UI_Notifications", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock"] }
+windows = { version = "0.61", features = ["Data_Xml_Dom", "Foundation", "Foundation_Collections", "UI_Notifications", "Win32_Security_Cryptography", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-web-kit = { version = "0.3.2", default-features = false, features = ["std", "WKWebView", "WKWebViewConfiguration", "WKPreferences"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSWindow", "NSView", "NSButton", "NSControl", "NSResponder"] }
 cidre = { version = "=0.10.1", default-features = false, features = ["async", "av", "sc", "dispatch", "macos_12_3"] }
 futures = "0.3"

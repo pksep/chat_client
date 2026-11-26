@@ -52,7 +52,7 @@ test.beforeEach(async ({ page }) => {
 test('показывает обычный чат при свёрнутом голосовом разговоре с ИИ', async ({
   page
 }, testInfo) => {
-  await page.goto(`/ai/${AI_SESSION_ID}`);
+  await page.goto('/ai?agentPreview=1');
 
   if (testInfo.project.name === 'chromium-mobile') {
     const stayInBrowserButton = page.getByRole('button', {
@@ -62,9 +62,13 @@ test('показывает обычный чат при свёрнутом го�
     await stayInBrowserButton.click();
   }
 
-  await page
-    .getByTestId('ChatContainer-ChatContainer-Header-Header-CallIcon')
-    .click();
+  const assistant = page.getByTestId('AI-Assistant');
+  await expect(assistant).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('tab', { name: 'Агенты' })).toHaveCount(0);
+  await expect(
+    page.getByTestId('ChatContainer-ChatContainer-Header-Header-CallIcon')
+  ).toHaveCount(0);
+  await assistant.getByRole('button', { name: 'Голосовой режим' }).click();
   const voiceDialog = page.getByRole('dialog', { name: 'Голосовой режим' });
   await expect(voiceDialog).toBeVisible();
   await voiceDialog

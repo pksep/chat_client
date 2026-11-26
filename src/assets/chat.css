@@ -78,6 +78,7 @@ p.chat__nothing-paragraph {
   touch-action: pan-y;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(100%, max-content);
   align-content: start;
   position: relative;
   border-radius: 18px 0 0 18px;
@@ -1043,6 +1044,44 @@ body.chat-tauri-macos-runtime
   > .modal-yui-kit__modal-content {
   display: block;
   height: auto;
+}
+
+/* Явная высота не даёт WebKit растягивать редактор и вложенное подтверждение. */
+dialog:is(.attach-modal-container--image-editor, .image-attachment-editor__confirm-modal).modal-yui-kit_center {
+  display: block;
+  box-sizing: border-box;
+  top: var(--desktop-content-top, 0px);
+  bottom: 0;
+  height: max-content;
+  min-height: 0;
+  max-height: calc(var(--app-viewport-height, 100dvh) - var(--desktop-content-top, 0px) - 24px);
+  max-width: calc(100vw - 24px);
+  margin: auto;
+  overflow: auto;
+}
+
+.attach-modal-container--image-editor > .modal-yui-kit__modal-content,
+.image-attachment-editor__confirm-modal > .modal-yui-kit__modal-content {
+  display: block;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.attach-modal-container--image-editor .image-attachment-editor {
+  --image-attachment-editor-stage-height: max(80px, min(60dvh, calc(var(--app-viewport-height, 100dvh) - var(--desktop-content-top, 0px) - 170px)));
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.attach-modal-container--image-editor .image-attachment-editor__stage-wrap {
+  min-height: 0;
+}
+
+@media (width <= 640px) {
+  .attach-modal-container--image-editor .image-attachment-editor {
+    --image-attachment-editor-stage-height: max(80px, min(58dvh, calc(var(--app-viewport-height, 100dvh) - var(--desktop-content-top, 0px) - 230px)));
+  }
 }
 
 .attach-modal-container > .attach-modal__emoji-picker-overlay {

@@ -4,6 +4,11 @@ import { observeUploadRequest } from '../upload-request-telemetry';
 import { deferWebUpdateReload } from '../web-update-activity';
 import { bindIncomingChatEvents } from './incoming-events';
 import { createMessageDeliveryQueue } from '../message-delivery-queue';
+import type {
+  PinComment,
+  PinCommentAck,
+  PinCommentCommand
+} from '../pin-comments';
 import { createSocketReconnectScheduler } from '../socket-reconnect';
 import {
   User,
@@ -48,7 +53,8 @@ import {
   type ChatFolder,
   type ChatFolderScope,
   type CreateChatFolderPayload,
-  type SaveChatFolderPayload
+  type SaveChatFolderPayload,
+  type AiFolderItem
 } from './chat-folder';
 import {
   ChatMessage,
@@ -829,6 +835,13 @@ export class ChatSDK {
     };
   }
 
+  getDictationSocket(): Pick<
+    Socket,
+    'connected' | 'on' | 'off' | 'emit' | 'timeout'
+  > | null {
+    return this.socket?.connected ? this.socket : null;
+  }
+
   connect(): Promise<void> {
     if (this.socket?.connected) return Promise.resolve();
     if (this.connectionPromise) {
@@ -1558,6 +1571,14 @@ export class ChatSDK {
     return this.chatFolder.getChatFolders();
   }
 
+  async setChatFolderAiItem(
+    folderId: string,
+    item: AiFolderItem,
+    included: boolean
+  ): Promise<ChatFolder> {
+    return this.chatFolder.setChatFolderAiItem(folderId, item, included);
+  }
+
   async syncChatFolders(): Promise<ChatFolder[]> {
     return this.chatFolder.syncChatFolders();
   }
@@ -1794,6 +1815,19 @@ export class ChatSDK {
 
   async getPinnedMessages(topicId: string): Promise<Message[]> {
     return await this.message.getPinnedMessages(topicId);
+  }
+
+  getPinComments(
+    topicId: string
+  ): Promise<{ version: number; comments: PinComment[] }> {
+    return this.message.getPinComments(topicId);
+  }
+
+  sendPinCommentCommand(
+    topicId: string,
+    command: PinCommentCommand
+  ): Promise<PinCommentAck> {
+    return this.message.sendPinCommentCommand(topicId, command);
   }
 
   async getCallHistory(opts?: {

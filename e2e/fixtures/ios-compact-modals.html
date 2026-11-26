@@ -34,7 +34,15 @@
           };
           return () =>
             h('main', [
-              ...['delete', 'pin', 'vpn', 'profile'].map(name =>
+              ...[
+                'delete',
+                'unpin',
+                'folder',
+                'logout',
+                'pin',
+                'vpn',
+                'profile'
+              ].map(name =>
                 h(
                   'button',
                   {
@@ -46,14 +54,35 @@
                 )
               ),
               h('output', { 'data-testid': 'confirmed' }, confirmed.value),
-              h(ConfirmModal, {
-                open: active.value === 'delete',
-                title: 'Удалить сообщение',
-                description:
-                  'Вы уверены, что хотите удалить сообщение для всех участников чата?',
-                'onUnmount-close': close,
-                'onUnmount-confirm': confirm
-              }),
+              ...[
+                [
+                  'delete',
+                  'Удалить сообщение',
+                  'Вы уверены, что хотите удалить сообщение для всех участников чата?'
+                ],
+                [
+                  'unpin',
+                  'Открепить сообщение',
+                  'Вы уверены, что хотите открепить сообщение?'
+                ],
+                [
+                  'folder',
+                  'Удалить папку',
+                  'Вы уверены, что хотите удалить папку «Дизайн»?'
+                ],
+                ['logout', 'Выход из профиля', 'Вы уверены, что хотите выйти?']
+              ].map(([name, title, description]) =>
+                h(ConfirmModal, {
+                  key: name,
+                  open: active.value === name,
+                  class:
+                    name === 'folder' ? 'chat-folder-delete-modal' : undefined,
+                  title,
+                  description,
+                  'onUnmount-close': close,
+                  'onUnmount-confirm': confirm
+                })
+              ),
               h(PinConfirmModal, {
                 open: active.value === 'pin',
                 title: 'Закрепить сообщение',

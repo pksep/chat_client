@@ -107,7 +107,7 @@ for (const version of ['1.6.100', '1.6.101']) {
   await writeFile(
     config,
     JSON.stringify({
-      productName: 'SEP Chat Updater QA',
+      productName: version === '1.6.100' ? 'SEP Chat Updater QA' : 'СЭП Чат Updater QA',
       identifier: 'ru.pksep.chat.updaterqa',
       version,
       build: {

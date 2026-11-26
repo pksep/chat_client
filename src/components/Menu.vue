@@ -12,25 +12,54 @@
 
     <ChatFolderRail
       v-if="!isCollapse && !isShareSelectionActive"
-      :scope="activeSection === 'clients' ? 'clients' : 'chats'"
+      :scope="
+        activeSection === 'ai'
+          ? 'ai'
+          : activeSection === 'clients'
+            ? 'clients'
+            : 'chats'
+      "
       :loading="isChatFoldersLoading"
-      :folders="activeSection === 'clients' ? clientFolders : chatFolders"
+      :folders="
+        activeSection === 'ai'
+          ? aiFolders
+          : activeSection === 'clients'
+            ? clientFolders
+            : chatFolders
+      "
       :topics="
-        activeSection === 'clients' ? clientFolderTopics : chatBadgeTopics
+        activeSection === 'ai'
+          ? []
+          : activeSection === 'clients'
+            ? clientFolderTopics
+            : chatBadgeTopics
       "
       :selected-folder-id="
-        activeSection === 'clients' ? activeClientFolderId : activeFolderId
+        activeSection === 'ai'
+          ? activeAiFolderId
+          : activeSection === 'clients'
+            ? activeClientFolderId
+            : activeFolderId
       "
       :is-managing="
-        activeSection === 'clients'
-          ? isManagingClientFolders
-          : isManagingFolders
+        activeSection === 'ai'
+          ? isManagingAiFolders
+          : activeSection === 'clients'
+            ? isManagingClientFolders
+            : isManagingFolders
       "
-      :is-active="activeSection === 'chats' || activeSection === 'clients'"
+      :is-active="
+        activeSection === 'chats' ||
+        activeSection === 'clients' ||
+        activeSection === 'ai'
+      "
+      :all-label="activeSection === 'ai' ? 'Все' : 'Все чаты'"
       :system-active="
-        activeSection === 'clients'
-          ? !!clientListFilter && clientListFilter !== 'all'
-          : toolbarState.filter !== 'all'
+        activeSection === 'ai'
+          ? false
+          : activeSection === 'clients'
+            ? !!clientListFilter && clientListFilter !== 'all'
+            : toolbarState.filter !== 'all'
       "
       :auth-user-id="authUserId"
       @select="handleSelectFolder"
@@ -292,6 +321,13 @@ const {
   openFolderManager: openClientFolderManager
 } = useChatFolders('clients');
 const { selectedFilter: clientListFilter } = useChatListSelection('clients');
+const {
+  folders: aiFolders,
+  activeFolderId: activeAiFolderId,
+  isManagingFolders: isManagingAiFolders,
+  selectFolder: selectAiFolder,
+  openFolderManager: openAiFolderManager
+} = useChatFolders('ai');
 const clientFolderTopics = computed(() =>
   getUnreadTopicList().filter(isClientTopic)
 );
@@ -499,6 +535,10 @@ const menuClasses = computed(() => [
 ]);
 
 const handleSelectFolder = (folderId: string | null): void => {
+  if (activeSection.value === 'ai') {
+    selectAiFolder(folderId);
+    return;
+  }
   if (activeSection.value === 'clients') {
     selectClientFolder(folderId);
     return;
@@ -508,6 +548,10 @@ const handleSelectFolder = (folderId: string | null): void => {
 };
 
 const handleOpenFolderManager = (): void => {
+  if (activeSection.value === 'ai') {
+    openAiFolderManager();
+    return;
+  }
   if (activeSection.value === 'clients') {
     openClientFolderManager();
     return;

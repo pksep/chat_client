@@ -14,7 +14,10 @@ import { createPinia } from 'pinia';
 import { initIosPwaViewport } from './utils/ios-pwa-viewport';
 import { suppressDefaultDesktopContextMenu } from './utils/desktop-context-menu';
 import { installDesktopMediaPermissions } from './services/desktop-media-permissions';
+import { installDesktopClipboardPermissions } from './services/desktop-permission-preferences';
 import { initDesktopScreenCapture } from './services/desktop-screen-capture';
+import { installDesktopCallControls } from './services/desktop-call-controls';
+import { restoreDesktopRecovery } from './services/desktop-recovery';
 
 performance.mark('chat-startup:modules-ready');
 const disposeIosPwaViewport = initIosPwaViewport();
@@ -193,6 +196,13 @@ const runPostMountStartupTasks = (): void => {
   runAfterFirstPaint(() => {
     void waitForAppFontReady();
     void clearTauriServiceWorkers();
+    if (isTauri())
+      void Promise.all([
+        import('./services/desktop-call-window'),
+        import('./services/useLiveKit')
+      ]).catch(error =>
+        console.warn('Не удалось подготовить окно звонка:', error)
+      );
     void runIndexedDbResetIfNeeded();
   });
 };
@@ -207,11 +217,17 @@ const mountApp = async (): Promise<void> => {
   applyRuntimeBodyClasses();
   const disposeDesktopMediaPermissions = await installDesktopMediaPermissions();
   import.meta.hot?.dispose(disposeDesktopMediaPermissions);
+  const disposeDesktopClipboardPermissions =
+    installDesktopClipboardPermissions();
+  import.meta.hot?.dispose(disposeDesktopClipboardPermissions);
   await initDesktopScreenCapture();
+  const disposeDesktopCallControls = await installDesktopCallControls();
+  import.meta.hot?.dispose(disposeDesktopCallControls);
   installNotoEmojiFontFaces({
     preferSystemFont: Capacitor.getPlatform() === 'android'
   });
 
+  await restoreDesktopRecovery();
   const app = createApp(App);
 
   const piniaStore = createPinia();

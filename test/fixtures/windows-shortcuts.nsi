@@ -165,8 +165,18 @@ Section
   !insertmacro QA_TARGET "$INSTDIR\desktop\SEP Chat.lnk" "$INSTDIR\other.exe"
   !insertmacro QA_TARGET "$INSTDIR\programs\SEP Chat\Uninstall.lnk" "$INSTDIR\other.exe"
 
+  ; Правильный target с потерянным AppUserModelId после уже завершённой миграции.
+  !insertmacro QA_BEGIN same-target-id
+  CreateDirectory "$MenuPath"
+  CreateShortcut "$INSTDIR\desktop\${PRODUCTNAME}.lnk" "$INSTDIR\sep-chat.exe"
+  CreateShortcut "$MenuPath\${PRODUCTNAME}.lnk" "$INSTDIR\sep-chat.exe"
+  WriteRegDWORD SHCTX "${MANUPRODUCTKEY}" "ShortcutMigrationVersion" 1
+  !insertmacro QA_REPAIR
+  !insertmacro SEP_REFRESH_SHORTCUT_IDS "$INSTDIR\desktop" "$INSTDIR\programs"
+  !insertmacro QA_REPAIRED
+
   DeleteRegKey SHCTX "${MANUPRODUCTKEY}"
   FileOpen $R0 "$EXEDIR\passed.txt" w
-  FileWrite $R0 "7"
+  FileWrite $R0 "8"
   FileClose $R0
 SectionEnd

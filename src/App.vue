@@ -40,7 +40,6 @@
   />
 
   <NotificationStack />
-  <DesktopCallInvitePrompt />
 </template>
 <script lang="ts" setup>
 import {
@@ -53,7 +52,6 @@ import {
 } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import NotificationStack from './components/UI/NotificationStack.vue';
-import DesktopCallInvitePrompt from './components/Menu/DesktopCallInvitePrompt.vue';
 import DesktopTitleBar from './components/Desktop/DesktopTitleBar.vue';
 import DesktopMediaPermissionDialog from './components/Desktop/DesktopMediaPermissionDialog.vue';
 import DesktopScreenSharePicker from './components/Desktop/DesktopScreenSharePicker.vue';
@@ -81,7 +79,12 @@ import {
   NOTIFICATION_TOPIC_SHELL_READY_EVENT
 } from './utils/nativeStartup';
 import { useThemeStore } from './stores/theme';
-import { withNetworkTimeout } from './utils/network-timeout';
+import { persistDesktopRecovery } from './services/desktop-recovery';
+import {
+  fetchOrganizationConfig,
+  isOrganizationConfig,
+  organizationConfigErrorMessage
+} from './utils/organization-config';
 import { isBotUser } from './utils/bot';
 import { parseQrAuthPayload, resolveQrAuthPayload } from './utils/qr-auth';
 import {
@@ -438,16 +441,19 @@ const openCredentialsStepIfNeeded = () => {
 const saveOrganizations = (items: IStoredOrganization[]) => {
   organizations.value = items;
   localStorage.setItem(ORGANIZATIONS_KEY, JSON.stringify(items));
+  void persistDesktopRecovery();
 };
 
 const setLastOrganization = (url: string) => {
   selectedOrganization.value = url;
   localStorage.setItem(LAST_ORGANIZATION_KEY, url);
+  void persistDesktopRecovery();
 };
 
 const clearLastOrganization = () => {
   selectedOrganization.value = '';
   localStorage.removeItem(LAST_ORGANIZATION_KEY);
+  void persistDesktopRecovery();
 };
 
 const getOrganizationByUrl = (url: string) => {
@@ -616,19 +622,13 @@ const loadRemoteConfig = async (options?: {
 
   serverUrl.value = normalizedUrl;
   isLoading.value = true;
+  errorMessage.value = '';
 
   try {
-    const runtimeConfig = await withNetworkTimeout(async signal => {
-      const response = await fetch(getRuntimeConfigUrl(normalizedUrl), {
-        signal
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to load runtime config: ${response.status}`);
-      }
-
-      return parseRuntimeConfig(await response.text());
-    });
+    const runtimeConfig = await fetchOrganizationConfig(
+      getRuntimeConfigUrl(normalizedUrl),
+      parseRuntimeConfig
+    );
     const resolvedConfig = runtimeConfig as IChatContainerConfig;
     serverUrl.value = normalizedUrl;
     setLastOrganization(normalizedUrl);
@@ -639,12 +639,14 @@ const loadRemoteConfig = async (options?: {
   } catch (error) {
     console.error(error);
 
-    if (options?.fallbackConfig) {
+    if (isOrganizationConfig(options?.fallbackConfig)) {
       serverUrl.value = normalizedUrl;
       setLastOrganization(normalizedUrl);
       isAddingNewOrganization.value = false;
       applyConfig(options.fallbackConfig);
       openCredentialsStepIfNeeded();
+    } else {
+      errorMessage.value = organizationConfigErrorMessage(error);
     }
   } finally {
     isLoading.value = false;

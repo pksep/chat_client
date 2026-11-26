@@ -134,12 +134,16 @@ pub async fn desktop_auth_request<R: Runtime>(
         .collect();
     // Ротация должна сохраниться и при обрыве чтения тела ответа.
     tauri::async_runtime::spawn_blocking(move || -> tauri::Result<()> {
-        for cookie in cookies {
+        for cookie in &cookies {
             if expired(&cookie) {
-                webview.delete_cookie(cookie)?;
+                webview.delete_cookie(cookie.clone())?;
             } else {
-                webview.set_cookie(cookie)?;
+                webview.set_cookie(cookie.clone())?;
             }
+        }
+        #[cfg(all(windows, not(test)))]
+        if crate::desktop_recovery::remember_cookies(&webview, &cookies).is_err() {
+            eprintln!("Не удалось сохранить резервную копию сессии");
         }
         Ok(())
     })

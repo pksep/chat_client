@@ -22,6 +22,7 @@ import {
   managerUploadId
 } from '../../../composables/useManagerRoutes';
 import { generateUUID } from '../../../utils/generateUUID';
+import { takeAiForwardSource } from '../../../composables/useMessageDraftTransfer';
 import { stripHtml } from '../../../utils/stripHtml';
 import { showErrorNotification } from '../../../composables/useNotifications';
 import {
@@ -1676,6 +1677,9 @@ export function useMessageSender(
       return;
     }
     inputText.value = '';
+
+    const aiSource = takeAiForwardSource(topicId, stripHtml(rawText));
+    if (aiSource) Object.assign(replyQuoteEx, { aiSource });
 
     const textToSend = isTextEmpty ? '' : normalizedText;
 

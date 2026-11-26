@@ -44,6 +44,16 @@
     />
     <template v-if="!isMobile">
       <Modal
+        v-if="isAiInfoOpen"
+        :open="isAiInfoOpen"
+        class="chat__user-info-modal"
+        position="right"
+        width="404px"
+        @close="closeAiInfo"
+      >
+        <AiConversationInfoPanel @close="closeAiInfo" />
+      </Modal>
+      <Modal
         v-if="hasOpenedGroupInfo"
         :open="state.isMenuDesktopOpen"
         class="chat__info__modal"
@@ -86,6 +96,15 @@
         />
       </Modal>
     </template>
+    <MobileModal
+      v-if="isMobile && isAiInfoOpen"
+      :open="isAiInfoOpen"
+      title="Информация о чате"
+      close-button-text="Назад"
+      @unmount-close="closeAiInfo"
+    >
+      <AiConversationInfoPanel mobile />
+    </MobileModal>
     <MobileModal
       v-if="isMobile"
       :open="isUserInfoOpen"
@@ -134,35 +153,15 @@
       @unmount-close="closeModals"
       @unmount-new-group="handleNewGroupMessage"
     />
-
-    <MobileModal
-      v-if="showDownloadModal"
-      class="mobile-modal"
-      headerClass="hidden"
-      :show-divider="false"
-      :open="state.isAppModalOpen"
-      @unmount-close="closeModals"
-    >
-      <Button
-        v-if="mobilePlatform === MobilePlatformEnum.ANDROID"
-        class="mobile-modal-download-button"
-        @click="handleInstall"
-        ><AndroidIcon />Открыть приложение</Button
-      >
-      <Button
-        v-if="mobilePlatform === MobilePlatformEnum.APPLE"
-        disabled
-        class="mobile-modal-download-button"
-        @click="handleInstall"
-        ><AppleIcon /> Загрузить на iOS</Button
-      >
-      <Button :type="ButtonTypeEnum.secondary" @click="closeModals"
-        >Остаться в браузере</Button
-      >
-    </MobileModal>
   </main>
 
-  <CallModal v-if="shouldRenderCallModal" />
+  <DesktopCallWindow
+    v-if="
+      isTauriRuntime() &&
+      (shouldRenderCallModal || desktopCallPreparationRequested)
+    "
+  />
+  <CallModal v-else-if="shouldRenderCallModal" />
   <VpnConfirmModal
     :open="isVpnConfirmModalOpen"
     :data-testid="`${props.dataTestid}-VpnConfirmModal`"
@@ -172,7 +171,9 @@
 </template>
 
 <script setup lang="ts">
+import { desktopCallPreparationRequested } from '../services/desktop-call-presentation';
 import { Capacitor } from '@capacitor/core';
+import { isTauri as isTauriRuntime } from '@tauri-apps/api/core';
 import {
   computed,
   defineAsyncComponent,
@@ -187,7 +188,6 @@ import HeaderMenu from './Header/HeaderMenu.vue';
 import Chat from './Chat.vue';
 import ChatWallpaperLayer from './ChatWallpaperLayer.vue';
 import {
-  MobilePlatformEnum,
   type IChatContainerProps,
   type IHeaderDisplayRoute,
   type IMessageRenderedTopicState
@@ -196,7 +196,6 @@ import { useResizeState } from '../composables/useResizeState';
 import { MAX_W_MD } from '../utils/constants';
 import { getAuthUser } from '../composables/useAuth';
 import MobileModal from './UI/MobileModal.vue';
-import { Button, ButtonTypeEnum } from '@pksep/yui';
 import {
   navigateToDefault,
   navigateToGroup,
@@ -206,8 +205,6 @@ import { getChatSDK } from '../services/useChat';
 import { getUsersList } from '../composables/useUsers';
 import { RouteTypes } from '../composables/navigation/useUrlRouting';
 import Modal from './UI/Modal.vue';
-import AndroidIcon from './UI/AndroidIcon.vue';
-import AppleIcon from './UI/AppleIcon.vue';
 import { useMobileApp } from '../composables/useMobileApp';
 import {
   invitedGroupCallInfo,
@@ -218,6 +215,7 @@ import {
 } from '../services/useCallState';
 import { useChatWallpaper } from '../composables/useChatWallpaper';
 import { useAiAssistant } from '../composables/useAiAssistant';
+import { useAiConversationInfo } from '../composables/useAiConversationInfo';
 import { useUserInfoModal } from '../composables/useUserInfoModal';
 import VpnConfirmModal from './UI/VpnConfirmModal.vue';
 import { useVpnStatus } from '../services/useVpnStatus';
@@ -257,8 +255,12 @@ const NewGroupModal = defineAsyncComponent(
 const CallModal = defineAsyncComponent(
   () => import('./CallModal/CallModal.vue')
 );
+const DesktopCallWindow = defineAsyncComponent(
+  () => import('./Desktop/DesktopCallWindow.vue')
+);
 
-const { mobilePlatform, handleInstall, showDownloadModal } = useMobileApp();
+// Проверка обновлений работает и в мобильном вебе без прежнего окна установки.
+useMobileApp();
 
 const route = useUrlWatcher();
 const { access: chatAccess, ready: chatAccessReady } = useChatAccess();
@@ -392,7 +394,6 @@ const mountedCreationModals = reactive({
   group: false
 });
 const state = reactive({
-  isAppModalOpen: true,
   isMenuDesktopOpen: false,
   isMenuMobileOpen: false,
   activeTabId: null,
@@ -450,7 +451,16 @@ const shouldRenderCallModal = computed(
     isAnyCallDialing.value ||
     isAnyCallIncoming.value
 );
-const { isVoiceModeOpen: isAiVoiceCallActive } = useAiAssistant();
+const AiConversationInfoPanel = defineAsyncComponent(
+  () => import('./AI/AiConversationInfoPanel.vue')
+);
+const {
+  isOpen: isAiInfoOpen,
+  open: openAiInfo,
+  close: closeAiInfo
+} = useAiConversationInfo();
+const { isVoiceModeOpen: isAiVoiceCallActive, activeSessionId: aiSessionId } =
+  useAiAssistant();
 const shouldShowHeader = computed(
   () => state.isActiveHeader || isCallActive.value || isAiVoiceCallActive.value
 );
@@ -522,6 +532,10 @@ const handleMenuToggle = (isOpen: boolean): void => {
 };
 
 const handleHeaderClick = (): void => {
+  if (route.value.type === RouteTypes.AI) {
+    openAiInfo(aiSessionId.value);
+    return;
+  }
   if (route.value.type === RouteTypes.FAVORITES) {
     return;
   }
@@ -560,10 +574,13 @@ const closeModals = (): void => {
   state.isNewContactOpen = false;
   state.isNewBotOpen = false;
   state.isNewGroupOpen = false;
-  state.isAppModalOpen = false;
 };
 
 const handleInformationClick = (): void => {
+  if (route.value.type === RouteTypes.AI) {
+    openAiInfo(aiSessionId.value);
+    return;
+  }
   state.isMenuDesktopOpen = true;
   state.activeTabId = 2;
 };

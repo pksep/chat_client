@@ -16,6 +16,8 @@ export interface VoiceCaptureSession {
 
 export interface VoicePlaybackSession {
   done: Promise<void>;
+  pause: () => void;
+  resume: () => void;
   stop: () => void;
 }
 
@@ -161,7 +163,11 @@ export const startVoicePlayback = (audioBlob: Blob): VoicePlaybackSession => {
   const objectUrl = URL.createObjectURL(audioBlob);
   const audio = new Audio(objectUrl);
   audio.preload = 'auto';
+  audio.playbackRate = 1.2;
+  audio.preservesPitch = true;
   let settled = false;
+  let paused = false;
+  let playEpoch = 0;
   let resolveDone: () => void = () => {};
   let rejectDone: (reason?: unknown) => void = () => {};
   const done = new Promise<void>((resolve, reject) => {
@@ -181,13 +187,31 @@ export const startVoicePlayback = (audioBlob: Blob): VoicePlaybackSession => {
 
   audio.onended = () => finish();
   audio.onerror = () => finish(new Error('Не удалось воспроизвести ответ.'));
-  void audio.play().catch(error => {
-    finish(error);
-  });
+  const play = (): void => {
+    const epoch = ++playEpoch;
+    void audio.play().catch(error => {
+      // pause() отклоняет ещё не завершённый play(); это не ошибка звука.
+      if (!paused && epoch === playEpoch) finish(error);
+    });
+  };
+
+  play();
 
   return {
     done,
+    pause: (): void => {
+      if (settled || paused) return;
+      paused = true;
+      playEpoch++;
+      audio.pause();
+    },
+    resume: (): void => {
+      if (settled || !paused) return;
+      paused = false;
+      play();
+    },
     stop: () => {
+      playEpoch++;
       audio.pause();
       audio.currentTime = 0;
       finish();
@@ -198,7 +222,7 @@ export const startVoicePlayback = (audioBlob: Blob): VoicePlaybackSession => {
 /** Убирает Markdown и служебное форматирование, которые не нужно произносить. */
 export const prepareTextForSpeech = (text: string): string =>
   text
-    .replace(/```[\s\S]*?```/g, ' Фрагмент кода. ')
+    .replace(/```[\s\S]*?(?:```|$)/g, ' Фрагмент кода. ')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/\[([^\]]+)]\([^)]+\)/g, '$1')
     .replace(/<[^>]+>/g, ' ')
@@ -208,8 +232,8 @@ export const prepareTextForSpeech = (text: string): string =>
     .trim()
     .slice(0, 5_000);
 
-const speechFetch = async (
-  path: '/speech/recognize' | '/speech/synthesize',
+export const speechFetch = async (
+  path: `/speech/${string}`,
   init: RequestInit
 ): Promise<Response> => {
   const token = getAuthToken();
@@ -241,13 +265,13 @@ const speechFetch = async (
   throw new Error(message);
 };
 
-const calculateRootMeanSquare = (samples: Float32Array): number => {
+export const calculateRootMeanSquare = (samples: Float32Array): number => {
   let sum = 0;
   for (const sample of samples) sum += sample * sample;
   return Math.sqrt(sum / samples.length);
 };
 
-const encodeLinearPcm = (
+export const encodeLinearPcm = (
   chunks: Float32Array[],
   totalSamples: number,
   sourceSampleRate: number

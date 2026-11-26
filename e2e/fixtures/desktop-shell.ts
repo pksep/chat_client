@@ -2,6 +2,7 @@ import { createApp, h } from 'vue';
 import { createPinia } from 'pinia';
 import DesktopTitleBar from '../../src/components/Desktop/DesktopTitleBar.vue';
 import DesktopMediaPermissionDialog from '../../src/components/Desktop/DesktopMediaPermissionDialog.vue';
+import DesktopPermissionPreferences from '../../src/components/Desktop/DesktopPermissionPreferences.vue';
 import DesktopScreenSharePicker from '../../src/components/Desktop/DesktopScreenSharePicker.vue';
 import {
   initDesktopScreenCapture,
@@ -41,6 +42,7 @@ const app = createApp({
       [
         h('h1', 'SEP Chat'),
         h('p', 'Оформление приложения и доступ к устройствам'),
+        h(DesktopPermissionPreferences),
         h(
           'button',
           { onClick: () => capture({ audio: true }) },
@@ -58,6 +60,60 @@ const app = createApp({
 const dispose = await installDesktopMediaPermissions();
 await initDesktopScreenCapture();
 app.use(pinia).mount(host);
+const showCall = new URLSearchParams(location.search).has('call');
+if (showCall) {
+  const { default: CallModal } = await import(
+    '../../src/components/CallModal/CallModal.vue'
+  );
+  const call = await import('../../src/services/useCallState');
+  // Playwright WebKit на Windows не содержит MediaStream; здесь проверяется геометрия.
+  if (typeof MediaStream === 'undefined') {
+    const assigned = new WeakMap<HTMLMediaElement, MediaStream>();
+    Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', {
+      configurable: true,
+      get() {
+        return assigned.get(this) ?? null;
+      },
+      set(value: MediaStream) {
+        assigned.set(this, value);
+      }
+    });
+  }
+  const stream =
+    typeof MediaStream === 'undefined'
+      ? ({
+          getTracks: () => [],
+          getVideoTracks: () => [],
+          getAudioTracks: () => []
+        } as unknown as MediaStream)
+      : new MediaStream();
+  call.user.value = { id: 'layout-peer', initials: 'Проверка звонка' } as any;
+  call.roomId.value = 'layout-only-no-network';
+  call.remoteParticipants.value = [
+    {
+      identity: 'layout-peer',
+      name: 'Проверка звонка',
+      videoStream: stream,
+      cameraStream: stream,
+      screenShareStream: null,
+      audioStream: null,
+      isVideoActive: true,
+      isScreenShareActive: false,
+      isHandRaised: false,
+      activeReaction: null,
+      activeReactionExpiresAt: null,
+      isSpeaking: false,
+      audioLevel: 0,
+      isMicActive: false,
+      connectionQuality: 'excellent'
+    }
+  ];
+  call.open.value = true;
+  call.isModalVisible.value = true;
+  const callHost = document.createElement('div');
+  document.body.append(callHost);
+  createApp(CallModal).use(pinia).mount(callHost);
+}
 const output = document.createElement('output');
 output.dataset.testid = 'DesktopShellCaptureResult';
 document.body.append(output);

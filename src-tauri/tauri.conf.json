@@ -12,8 +12,10 @@
   "app": {
     "windows": [
       {
+        "create": false,
         "title": "СЭП Чат",
         "decorations": false,
+        "devtools": true,
         "width": 1200,
         "height": 800,
         "minWidth": 420,

@@ -3,10 +3,18 @@ import type { AiMessageAttachment } from '../services/aiAttachmentReferences';
 import type { AiOutputAttachment } from '../services/aiOutputAttachments';
 import type { PendingToolApproval } from '../services/mastraApproval';
 import type { AiActionTask } from '../services/aiActionTasks';
+import type { AgentWorkEntry } from './agent-work';
 
 export interface AIMessageReference {
   role: 'user' | 'assistant';
   content: string;
+}
+
+export interface AgentProjectFile {
+  path: string;
+  relativePath: string;
+  linkOnly?: boolean;
+  imageError?: string;
 }
 
 export interface AIMessage {
@@ -18,6 +26,11 @@ export interface AIMessage {
   modelContent?: string;
   loading?: boolean;
   timestamp?: number;
+  durationMs?: number;
+  reasoningSummaries?: string[];
+  workLog?: AgentWorkEntry[];
+  projectFiles?: AgentProjectFile[];
+  localFiles?: { file: File; projectPath?: string; previewId?: string }[];
   pinned?: boolean;
   pinVersion?: number;
   replyTo?: AIMessageReference;
@@ -29,6 +42,14 @@ export interface AIMessage {
   sourceId?: string;
   /** Служебная связь с ожидающим подтверждением сохраняется при обновлении страницы. */
   pendingToolApproval?: PendingToolApproval;
+}
+
+export function getLocalAiMessageId(
+  sessionId: string,
+  message: AIMessage,
+  index: number
+): string {
+  return `${sessionId}:${message.timestamp ?? 'message'}:${index}`;
 }
 
 export interface ChatMessage extends ChatSDKMessage {

@@ -56,6 +56,7 @@
 }
 
 .mobile-list-container__section--chats,
+.mobile-list-container__section--ai,
 .mobile-list-container__section--clients {
   overflow-x: hidden;
   overflow-y: auto;
@@ -66,6 +67,11 @@
 .mobile-list-container__section--chats .chat-list {
   min-height: 0;
   overflow: visible;
+}
+
+.mobile-list-container__section--ai .chat-folder-rail--tabs {
+  width: 100%;
+  margin-inline: 0;
 }
 
 .mobile-list-container__section--chats .contact-list,

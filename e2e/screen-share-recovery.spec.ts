@@ -39,6 +39,74 @@ async function openFixture(page: Page) {
 const snapshot = (page: Page) =>
   page.evaluate(() => (window as any).screenFixture.snapshot());
 
+test('Tauri: демо сохраняет исходное разрешение при poor/lost и перепубликации', async ({
+  page
+}) => {
+  await openFixture(page);
+  await page.evaluate(async () => {
+    const fixture = (window as any).screenFixture;
+    fixture.desktopMode();
+    await fixture.calls.toggleScreenShare();
+    for (const quality of ['poor', 'lost', 'excellent'])
+      fixture.simulateQuality(quality);
+    await fixture.replaceRoom();
+  });
+  const result = await snapshot(page);
+  expect(result.publishOptions.length).toBeGreaterThanOrEqual(2);
+  for (const options of result.publishOptions)
+    expect(options).toMatchObject({
+      degradationPreference: 'maintain-resolution',
+      simulcast: false,
+      source: 'screen_share'
+    });
+  expect(result.publishingQualities.length).toBeGreaterThan(0);
+  expect(
+    result.publishingQualities.every((quality: number) => quality === 2)
+  ).toBe(true);
+  expect(result.captureCount).toBe(1);
+});
+
+test('Tauri: миниатюра, fullscreen и изменения сети не понижают подписку экрана', async ({
+  page
+}) => {
+  await openFixture(page);
+  await page.evaluate(() => {
+    const fixture = (window as any).screenFixture;
+    fixture.desktopMode();
+    const stream = fixture.attachRemoteScreen();
+    const big = document.createElement('video');
+    const small = document.createElement('video');
+    for (const video of [big, small]) {
+      video.srcObject = stream;
+      document.body.append(video);
+    }
+    for (const [width, height] of [
+      [1280, 720],
+      [180, 102],
+      [1920, 1080],
+      [60, 60]
+    ]) {
+      const video = width < 200 ? small : big;
+      video.style.cssText = `width:${width}px;height:${height}px`;
+      fixture.calls.updateRemoteVideoSubscription(
+        'screen-source',
+        'screen',
+        video
+      );
+    }
+    for (const quality of ['poor', 'lost', 'excellent'])
+      fixture.simulateQuality(quality);
+  });
+  const result = await snapshot(page);
+  expect(result.remoteRequests.length).toBeGreaterThan(0);
+  expect(
+    result.remoteRequests.every(
+      (request: { quality: number; width: number; height: number }) =>
+        request.quality === 2 && !request.width && !request.height
+    )
+  ).toBe(true);
+});
+
 test('демонстрация переживает сигнальные переподключения и замену комнаты без нового захвата', async ({
   page
 }) => {

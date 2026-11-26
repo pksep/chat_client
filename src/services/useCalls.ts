@@ -11,7 +11,7 @@ import {
   isAnyCallIncoming,
   isAnyCallModalVisible,
   isCallActive,
-  isModalVisible,
+  requestCallPresentation,
   pendingGroupCallInfo
 } from './useCallState';
 
@@ -69,19 +69,26 @@ export const declineCall = async () => {
 };
 
 export const showCallModal = () => {
-  isModalVisible.value = true;
+  requestCallPresentation();
 };
 
-export const joinGroupCall = async (topicId?: string) => {
+export const joinGroupCall = async (
+  topicId?: string,
+  options?: { signal?: AbortSignal }
+) => {
   const { joinPendingGroupCall } = await loadLiveKit();
 
-  return !!(await joinPendingGroupCall(topicId));
+  if (options?.signal?.aborted) return false;
+  return !!(await joinPendingGroupCall(topicId, options));
 };
 
-export const joinInviteGroupCall = async () => {
+export const joinInviteGroupCall = async (options?: {
+  signal?: AbortSignal;
+}) => {
   const { joinInvitedGroupCall } = await loadLiveKit();
 
-  return !!(await joinInvitedGroupCall());
+  if (options?.signal?.aborted) return false;
+  return !!(await joinInvitedGroupCall(options));
 };
 
 export const handleCallAnswered = async (

@@ -2,7 +2,7 @@ import { expect, test, type Page } from './fixtures/ai-history';
 import type { AiActionTask } from '../src/services/aiActionTasks';
 
 test.setTimeout(90_000);
-async function prepare(page: Page, sessionId: string) {
+async function prepare(page: Page, sessionId: string): Promise<void> {
   await page.addInitScript(id => {
     const url = 'http://127.0.0.1:65530';
     Object.defineProperty(navigator, 'standalone', {
@@ -216,12 +216,15 @@ for (const kind of ['answer', 'completed-plan', 'partial-plan']) {
 async function send(
   page: Page,
   input = 'Создай деталь Дрон вымышленный 123-321 и прикрепи файлы'
-) {
+): Promise<void> {
   const stay = page.getByRole('button', { name: 'Остаться в браузере' });
   if (await stay.isVisible().catch(() => false)) await stay.click();
-  const editor = page.locator('.ai-assistant__editor');
-  await expect(editor).toBeVisible({ timeout: 30_000 });
-  await editor.locator('[contenteditable="true"]').fill(input);
+  await expect(page.locator('#startup-shell')).toHaveCount(0, {
+    timeout: 30_000
+  });
+  const editor = page.locator('.ai-assistant__editor:has([contenteditable])');
+  await editor.locator('[contenteditable="true"]').click();
+  await page.keyboard.insertText(input);
   await editor.locator('.toolbar-button.right:visible').click();
 }
 
@@ -354,16 +357,15 @@ for (const theme of ['theme-light', 'theme-dark']) {
     await expect(card.locator('.badges-text')).toHaveText(['1', '2', '3']);
     const placement = await card.evaluate(element => {
       const parent = element.parentElement!;
-      const article = element.closest('.message__article')!;
       const text = parent.querySelector('.message-content__html')!;
       return {
         inConversation: Boolean(element.closest('.ai-assistant__conversation')),
         insideMessage: Boolean(element.closest('.ai-assistant__message')),
-        insideBubble: Boolean(article),
+        insideAnswer: parent.matches('.ai-assistant__answer'),
         afterMessageText:
           element.getBoundingClientRect().top >=
           text.getBoundingClientRect().bottom,
-        bubbleBackground: getComputedStyle(article).backgroundColor,
+        answerBackground: getComputedStyle(parent).backgroundColor,
         wallpaper: getComputedStyle(element.closest('.ai-assistant__scroll')!)
           .backgroundImage,
         textColor: getComputedStyle(text).color,
@@ -387,14 +389,14 @@ for (const theme of ['theme-light', 'theme-dark']) {
     expect(placement).toMatchObject({
       inConversation: true,
       insideMessage: true,
-      insideBubble: true,
+      insideAnswer: true,
+      answerBackground: 'rgba(0, 0, 0, 0)',
       afterMessageText: true,
       borderWidth: '0px',
       background: 'rgba(0, 0, 0, 0)',
       connectorWidth: '1px',
       lastConnector: 'none'
     });
-    expect(placement.bubbleBackground).not.toBe('rgba(0, 0, 0, 0)');
     expect(placement.wallpaper).toContain('repeating-linear-gradient');
     expect(placement.stepColor).toBe(placement.textColor);
     expect(Math.abs(placement.leftOffset)).toBeLessThanOrEqual(1);
@@ -405,7 +407,7 @@ for (const theme of ['theme-light', 'theme-dark']) {
     await expect(card.locator('button, [role="button"]')).toHaveCount(0);
     await expect(page.locator('.ai-action-pipeline__actions')).toHaveCount(0);
     await expect(approval.getByRole('button')).toHaveText([
-      'Отменить',
+      'Отклонить',
       'Подтвердить'
     ]);
     await expect(approval).toBeVisible();
@@ -599,9 +601,9 @@ test('автоматически восстанавливает неизвест
 });
 
 for (const scenario of [
-  { label: 'Отменить', action: 'cancel', conflict: false },
+  { label: 'Отклонить', action: 'cancel', conflict: false },
   { label: 'Подтвердить', action: 'approve', conflict: true },
-  { label: 'Отменить', action: 'cancel', conflict: true }
+  { label: 'Отклонить', action: 'cancel', conflict: true }
 ]) {
   test(`обычная кнопка «${scenario.label}» управляет точным планом после перезагрузки, конфликт: ${scenario.conflict}`, async ({
     page
@@ -646,7 +648,7 @@ for (const scenario of [
       .filter({ has: card })
       .locator('.ai-assistant__approval');
     await expect(approval.getByRole('button')).toHaveText([
-      'Отменить',
+      'Отклонить',
       'Подтвердить'
     ]);
     await expect(card.locator('button, [role="button"]')).toHaveCount(0);
@@ -826,7 +828,7 @@ test('шаги остаются в своём сообщении и не пер�
           .closest('.ai-assistant__conversation')!
           .querySelectorAll(':scope > .ai-assistant__message');
         return (
-          Boolean(element.closest('.message__article')) &&
+          Boolean(element.closest('.ai-assistant__answer')) &&
           element.closest('.ai-assistant__message') !==
             messages[messages.length - 1]
         );

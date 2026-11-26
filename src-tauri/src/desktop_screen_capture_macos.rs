@@ -31,7 +31,7 @@ pub fn has_permission() -> bool {
     supported() && unsafe { CGPreflightScreenCaptureAccess() }
 }
 pub fn request_permission() -> bool {
-    supported() && unsafe { CGRequestScreenCaptureAccess() }
+    has_permission() || (supported() && unsafe { CGRequestScreenCaptureAccess() })
 }
 
 fn content() -> Result<arc::R<sc::ShareableContent>, String> {

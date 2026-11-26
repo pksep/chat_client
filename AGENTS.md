@@ -1,5 +1,11 @@
 # Repository Guidelines
 
+## Текущая ветка и публикация
+- Последнее указание пользователя от 25.11.2026: работать только в `main`, текущие исправления переносить в `main`; отдельные рабочие ветки без новой просьбы не создавать.
+- До нового разрешения пользователя не публиковать версии, установщики и update-feed, не запускать production-деплой. Отправки в `main` в этот период делать с `[skip ci]`, поскольку push запускает Release и Deploy Web.
+- Уточнение пользователя от 25.11 после локальной проверки: все правки отправлять в `main`, разрешено опубликовать Tauri. Веб больше не трогать и не выкладывать; Release/Desktop Builds запускать отдельно, коммиты main сохранять с `[skip ci]`.
+- При явно разрешённом коммите в `main` допустимо точечно исключить локальную проверку `protected` через `LEFTHOOK_EXCLUDE=protected`. Остальные проверки и pre-push lint сохраняются.
+
 ## Project Structure & Module Organization
 - `src/` holds the Vue 3 + TypeScript app code, with `components/`, `composables/`, `services/`, `state/`, `types/`, and `utils/` split by concern.
 - `src/assets/` and `public/` contain static assets used by the UI and PWA.

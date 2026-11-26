@@ -14,6 +14,7 @@ const runThemeScript = (savedTheme: string | null) => {
   let themeColor = '';
 
   runInNewContext(themeScript, {
+    navigator: { userAgent: '', platform: 'Win32' },
     window: {
       matchMedia: () => ({ matches: false }),
       localStorage: {

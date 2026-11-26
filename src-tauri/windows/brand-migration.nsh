@@ -6,7 +6,27 @@ Var SepLegacyInstall
   Pop $R7
   ${If} $R7 != 1
     CreateShortcut "${shortcut}" "$INSTDIR\${MAINBINARYNAME}.exe"
+  ${EndIf}
+  !insertmacro SetLnkAppUserModelId "${shortcut}"
+!macroend
+
+!macro SEP_REFRESH_SHORTCUT_ID shortcut
+  !insertmacro IsShortcutTarget "${shortcut}" "$INSTDIR\${MAINBINARYNAME}.exe"
+  Pop $R7
+  ${If} $R7 = 1
     !insertmacro SetLnkAppUserModelId "${shortcut}"
+  ${EndIf}
+!macroend
+
+!macro SEP_REFRESH_SHORTCUT_IDS desktop programs
+  !insertmacro SEP_REFRESH_SHORTCUT_ID "${desktop}\${PRODUCTNAME}.lnk"
+  !insertmacro SEP_REFRESH_SHORTCUT_ID "${programs}\${PRODUCTNAME}.lnk"
+  ${If} $AppStartMenuFolder != ""
+    !insertmacro SEP_REFRESH_SHORTCUT_ID "${programs}\$AppStartMenuFolder\${PRODUCTNAME}.lnk"
+  ${Else}
+    !if "${STARTMENUFOLDER}" != ""
+      !insertmacro SEP_REFRESH_SHORTCUT_ID "${programs}\${STARTMENUFOLDER}\${PRODUCTNAME}.lnk"
+    !endif
   ${EndIf}
 !macroend
 
@@ -89,6 +109,8 @@ Var SepLegacyInstall
 
 !macro NSIS_HOOK_POSTINSTALL
   !insertmacro SEP_MIGRATE_SHORTCUTS "$DESKTOP" "$SMPROGRAMS"
+  ; Путь мог быть правильным при потерянном AppUserModelId. Исправляем и после миграции.
+  !insertmacro SEP_REFRESH_SHORTCUT_IDS "$DESKTOP" "$SMPROGRAMS"
   ${If} $SepLegacyInstall != ""
     ReadRegStr $R8 SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\SEP Chat" "InstallLocation"
     ${If} $R8 == $SepLegacyInstall

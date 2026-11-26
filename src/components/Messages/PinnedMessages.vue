@@ -3,9 +3,12 @@
     v-if="currentPinnedMessage"
     :preview-text="pinnedPreviewText"
     :preview-key="pinnedPreviewKey"
+    :show-list="true"
+    @open-list="openPinnedMessagesView(activeTopicId)"
     @navigate="handleChangeCurrentIndex"
     @request-unpin="handleOpenUnpinModal"
   />
+  <PinCommentNotices :topic-id="activeTopicId" />
 
   <ConfirmModal
     :open="unpinModalOpen"
@@ -30,6 +33,9 @@ import { computed, ref, watch } from 'vue';
 import { togglePinMessageChat } from '../../services/useChat';
 import ConfirmModal from '../UI/ConfirmModal.vue';
 import PinnedMessageBanner from './PinnedMessageBanner.vue';
+import PinCommentNotices from './PinCommentNotices.vue';
+import { openPinnedMessagesView } from '../../services/pinned-messages-view';
+import { usePinComments } from '../../services/usePinComments';
 import type {
   IMessage,
   IMessageViewportSnapshot
@@ -38,11 +44,15 @@ import type {
 interface Props {
   topicId?: string | null;
   viewportSnapshot?: IMessageViewportSnapshot | null;
+  inert?: boolean;
 }
 
 const route = useUrlWatcher();
 const props = defineProps<Props>();
 const activeTopicId = computed(() => props.topicId || route.value.id || '');
+const { state: pinCommentState, pinComments } = usePinComments(
+  () => activeTopicId.value
+);
 
 const getMessageTimestamp = (message?: Pick<IMessage, 'createdAt'>): number => {
   const timestamp = new Date(message?.createdAt || 0).getTime();
@@ -51,7 +61,11 @@ const getMessageTimestamp = (message?: Pick<IMessage, 'createdAt'>): number => {
 };
 
 const pinnedMessages = computed(() =>
-  [...getPinnedMessagesByTopicId(activeTopicId.value)].sort(
+  (void pinCommentState.value,
+  pinComments.projectPins(
+    activeTopicId.value,
+    getPinnedMessagesByTopicId(activeTopicId.value)
+  )).sort(
     (left, right) => getMessageTimestamp(left) - getMessageTimestamp(right)
   )
 );
@@ -144,6 +158,7 @@ const handleCloseUnpinModal = () => {
 
 const handleConfirmUnpinMessage = async () => {
   const message = currentPinnedMessage.value;
+  if (message && pinComments.pending(activeTopicId.value, message.id)) return;
   if (!message) {
     handleCloseUnpinModal();
     return;

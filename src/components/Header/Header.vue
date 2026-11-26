@@ -1,20 +1,57 @@
 <template>
   <header
     ref="headerRef"
-    :class="['chat__header-wrapper', $attrs.class]"
+    :class="[
+      'chat__header-wrapper',
+      $attrs.class,
+      { 'chat__header-wrapper--pinned': isPinnedListOpen }
+    ]"
     :data-testid="`${props.dataTestid}-Header-Container`"
   >
+    <PinnedMessagesHeader
+      v-if="isPinnedListOpen"
+      :topic-id="route.id"
+      :can-call="showHeaderCallAction"
+      @search="
+        closePinnedMessagesView();
+        showSearch();
+      "
+      @call="handleCall"
+    />
     <div
       v-if="showHeaderCallBanner"
       class="chat__header-active-call"
+      :class="{
+        'chat__header-active-call--pending': isDesktopHeaderCallPending
+      }"
+      :aria-busy="isDesktopHeaderCallPending || undefined"
+      :aria-disabled="isDesktopHeaderCallPending || undefined"
+      role="button"
+      tabindex="0"
       @click.stop="handleHeaderCallClick"
+      @keydown.enter.prevent="handleHeaderCallClick"
+      @keydown.space.prevent="handleHeaderCallClick"
     >
-      <LeaveIcon />
+      <span
+        v-if="isDesktopHeaderCallPending"
+        class="chat__header-active-call__spinner"
+        aria-hidden="true"
+      />
+      <LeaveIcon v-else />
       <span class="chat__header-active-call__label">
-        {{ resolvedHeaderCallLabel }}
+        {{
+          isDesktopHeaderCallPending
+            ? isHeaderCallJoining
+              ? 'Подключение…'
+              : 'Открываем звонок…'
+            : resolvedHeaderCallLabel
+        }}
       </span>
 
-      <span v-if="showHeaderCallTime" class="chat__header-active-call__time">
+      <span
+        v-if="showHeaderCallTime && !isDesktopHeaderCallPending"
+        class="chat__header-active-call__time"
+      >
         {{ headerCallTimeLabel }}
       </span>
     </div>
@@ -44,9 +81,20 @@
         />
       </Button>
 
-      <div
+      <button
         v-if="route.type === 'ai'"
+        type="button"
         class="chat__header-profile chat__header-ai-assistant"
+        aria-label="Информация об ИИ-чате"
+        @pointerenter="preloadAiInfo"
+        @focus="preloadAiInfo"
+        @click="
+          openAiInfo(
+            aiAssistantSessionId,
+            undefined,
+            aiAssistantSession?.kind === 'agent'
+          )
+        "
         :data-testid="`${props.dataTestid}-Header-AIAssistant`"
       >
         <span
@@ -72,7 +120,7 @@
             <span class="user-profile__title-text">{{ aiAssistantTitle }}</span>
           </h3>
         </Tooltip>
-      </div>
+      </button>
 
       <div
         v-else-if="isCallTopicRoute"
@@ -176,7 +224,7 @@
           v-else-if="showHeaderCallAction"
           class="chat__header__icon"
           :data-testid="`${props.dataTestid}-Header-CallIcon`"
-          @click.stop="handleCallAction"
+          @click.stop="handleCall"
         />
         <Icon
           v-if="getHeaderContextMenuOptions.length"
@@ -496,6 +544,12 @@
 </template>
 
 <script lang="ts" setup>
+import PinnedMessagesHeader from '../Messages/PinnedMessagesHeader.vue';
+import {
+  pinnedMessagesViewTopicId,
+  closePinnedMessagesView
+} from '../../services/pinned-messages-view';
+import { isTauri } from '@tauri-apps/api/core';
 import {
   useManagerInquiries,
   clientUser,
@@ -544,6 +598,7 @@ import AiAvatar from '../AI/AiAvatar.vue';
 import CreateTaskIcon from '../AI/CreateTaskIcon.vue';
 import MenuSearch from '../UI/MenuSearch.vue';
 import { useAiAssistant } from '../../composables/useAiAssistant';
+import { useAiConversationInfo } from '../../composables/useAiConversationInfo';
 import {
   useMenuInfo,
   type IMenuInfoInformation
@@ -597,11 +652,16 @@ import {
   isAnyCallDialing,
   isAnyCallModalVisible,
   isCallActive,
-  isModalVisible as isCallModalVisible,
+  requestCallPresentation,
   invitedGroupCallInfo,
   pendingGroupCallInfo
 } from '../../services/useCallState';
 import LeaveIcon from '../CallModal/UI/LeaveIcon.vue';
+import {
+  desktopCallWindowOpening,
+  desktopCallWindowReady,
+  beginDesktopCallPreparation
+} from '../../services/desktop-call-presentation';
 import { getTopicActivityLabel } from '../../composables/useTopicActivity';
 import { useUserInfoModal } from '../../composables/useUserInfoModal';
 import { useContextMenu } from '../../composables/useContextMenu';
@@ -636,6 +696,7 @@ const UserInfoPanel = defineAsyncComponent(
 
 const {
   activeTitle: aiAssistantTitle,
+  activeView: aiAssistantView,
   activeSessionId: aiAssistantSessionId,
   activeSession: aiAssistantSession,
   activeTask: aiAssistantTask,
@@ -647,10 +708,15 @@ const {
   isVoiceModeOpen: isAiVoiceCallActive,
   isVoiceModalVisible: isAiVoiceCallModalVisible,
   voiceCallStartedAt: aiVoiceCallStartedAt,
-  startVoiceCall: startAiVoiceCall,
   showVoiceCall: showAiVoiceCall,
   deleteSession: deleteAiAssistantSession
 } = useAiAssistant();
+
+const { open: openAiInfo } = useAiConversationInfo();
+
+function preloadAiInfo(): void {
+  void import('../AI/AiConversationInfoPanel.vue').catch((): void => {});
+}
 
 const { getSelectedTopic } = useTopics();
 const { openUserInfo, canOpenUserInfo } = useUserInfoModal();
@@ -658,19 +724,22 @@ const { isOpen, position, openActivePopover, closeActivePopover } =
   useContextMenu();
 
 const showCallModal = (): void => {
-  isCallModalVisible.value = true;
+  requestCallPresentation();
 };
 
-const joinInviteGroupCall = async () => {
+const joinInviteGroupCall = async (options?: { signal?: AbortSignal }) => {
   const { joinInviteGroupCall } = await import('../../services/useCalls');
 
-  return joinInviteGroupCall();
+  return joinInviteGroupCall(options);
 };
 
-const joinGroupCall = async (topicId?: string) => {
+const joinGroupCall = async (
+  topicId?: string,
+  options?: { signal?: AbortSignal }
+) => {
   const { joinGroupCall } = await import('../../services/useCalls');
 
-  return joinGroupCall(topicId);
+  return joinGroupCall(topicId, options);
 };
 
 const props = withDefaults(defineProps<IHeaderProps>(), {
@@ -684,6 +753,9 @@ defineOptions({
 const emits = defineEmits<IHeaderEmits>();
 const currentRoute = useUrlWatcher();
 const route = computed(() => props.displayRoute || currentRoute.value);
+const isPinnedListOpen = computed(
+  () => !!route.value.id && pinnedMessagesViewTopicId.value === route.value.id
+);
 const aiAssistantTitleRef = ref<HTMLElement | null>(null);
 const isAiAssistantTitleOverflowing = ref(false);
 let aiAssistantTitleResizeObserver: ResizeObserver | null = null;
@@ -906,10 +978,6 @@ const hasPendingCallForCurrentTopic = computed(
   () => !!currentPendingCall.value
 );
 const showHeaderCallAction = computed(() => {
-  if (route.value.type === RouteTypes.AI) {
-    return !isCallActive.value && !isAiVoiceCallActive.value;
-  }
-
   return (
     (route.value.type === RouteTypes.DIALOGS ||
       route.value.type === RouteTypes.GROUP) &&
@@ -927,7 +995,8 @@ const hasInvitedCall = computed(
 const showRegularCallBanner = computed(
   () =>
     (isCallActive.value &&
-      (!isAnyCallModalVisible.value ||
+      (isTauri() ||
+        !isAnyCallModalVisible.value ||
         (!route.value.id && route.value.type !== RouteTypes.AI))) ||
     !!currentHeaderCallEntry.value ||
     hasInvitedCall.value
@@ -940,6 +1009,16 @@ const showAiVoiceCallBanner = computed(
 );
 const showHeaderCallBanner = computed(
   () => showRegularCallBanner.value || showAiVoiceCallBanner.value
+);
+const isHeaderCallJoining = ref(false);
+let headerCallRequestId = 0;
+const isDesktopHeaderCallPending = computed(
+  () =>
+    isTauri() &&
+    !showAiVoiceCallBanner.value &&
+    (isHeaderCallJoining.value ||
+      desktopCallWindowOpening.value ||
+      (isCallActive.value && !desktopCallWindowReady.value))
 );
 const currentTime = ref(Date.now());
 let headerCallTimerInterval: ReturnType<typeof setInterval> | null = null;
@@ -1069,6 +1148,19 @@ const isActiveDirectCallLabel = computed(
     activeCallParticipantCount.value > 0 &&
     activeCallParticipantCount.value <= 2
 );
+const lastDirectCallLabel = ref('');
+watch(
+  [isCallActive, activeCallTopic, activeCallUser, activeCallParticipantCount],
+  ([active, topic, user, count]) => {
+    if (!active || topic?.type === TopicType.Group || count > 2) {
+      lastDirectCallLabel.value = '';
+    } else if (topic?.type === TopicType.DM) {
+      lastDirectCallLabel.value =
+        user?.initials || topic.user?.initials || lastDirectCallLabel.value;
+    }
+  },
+  { immediate: true, flush: 'sync' }
+);
 
 const headerCallLabel = computed(() => {
   if (hasInvitedCall.value && !isCallActive.value) {
@@ -1086,6 +1178,9 @@ const resolvedHeaderCallLabel = computed(() => {
   if (showAiVoiceCallBanner.value) {
     return 'Разговор с СЭПи';
   }
+
+  if (isTauri() && isCallActive.value && lastDirectCallLabel.value)
+    return lastDirectCallLabel.value;
 
   if (isActiveDirectCallLabel.value) {
     return (
@@ -1362,44 +1457,55 @@ const handleCall = async () => {
   await startLiveKitCall(state.calledUser, route.value.id);
 };
 
-const handleCallAction = async (): Promise<void> => {
-  if (isExternalInquiry.value) return;
-  if (route.value.type === RouteTypes.AI) {
-    startAiVoiceCall();
-    return;
-  }
-
-  await handleCall();
-};
-
 const handleHeaderCallClick = async () => {
-  if (showAiVoiceCallBanner.value) {
-    navigateToAI(aiAssistantSessionId.value);
-    showAiVoiceCall();
-    return;
-  }
-
-  if (hasInvitedCall.value && !isCallActive.value) {
-    const didJoin = await joinInviteGroupCall();
-
-    if (!didJoin) {
-      await handleCall();
+  if (isDesktopHeaderCallPending.value) return;
+  const desktop = isTauri() && !showAiVoiceCallBanner.value;
+  const preparation =
+    desktop && !isCallActive.value ? beginDesktopCallPreparation() : null;
+  const requestId = ++headerCallRequestId;
+  const clearJoining = () => {
+    if (desktop && requestId === headerCallRequestId)
+      isHeaderCallJoining.value = false;
+  };
+  preparation?.signal.addEventListener('abort', clearJoining, { once: true });
+  if (desktop) isHeaderCallJoining.value = true;
+  try {
+    if (showAiVoiceCallBanner.value) {
+      navigateToAI(aiAssistantSessionId.value);
+      showAiVoiceCall();
+      return;
     }
 
-    return;
-  }
+    if (hasInvitedCall.value && !isCallActive.value) {
+      const didJoin = await joinInviteGroupCall({
+        signal: preparation?.signal
+      });
 
-  if (currentHeaderCallEntry.value && !isCallActive.value) {
-    const didJoin = await joinGroupCall(route.value.id);
+      if (!didJoin && !preparation?.signal.aborted) {
+        await handleCall();
+      }
 
-    if (!didJoin) {
-      await handleCall();
+      return;
     }
 
-    return;
-  }
+    if (currentHeaderCallEntry.value && !isCallActive.value) {
+      const didJoin = await joinGroupCall(route.value.id, {
+        signal: preparation?.signal
+      });
 
-  showCallModal();
+      if (!didJoin && !preparation?.signal.aborted) {
+        await handleCall();
+      }
+
+      return;
+    }
+
+    showCallModal();
+  } finally {
+    preparation?.signal.removeEventListener('abort', clearJoining);
+    preparation?.finish();
+    clearJoining();
+  }
 };
 
 const handleCloseMobileInfoModal = (): void => {
@@ -1556,7 +1662,9 @@ const getHeaderContextMenuOptions = computed(() => {
           value: 'Создать чат',
           customIcon: 'createChat',
           function: () => {
-            startNewAiSession();
+            startNewAiSession(
+              aiAssistantView.value === 'agents' ? 'agent' : 'chat'
+            );
             navigateToAI();
           }
         },
@@ -1758,6 +1866,15 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.chat__header-ai-assistant {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 .chat__header-client-call {
   display: flex;
   border: 0;

@@ -24,6 +24,8 @@ const invokeFileAction = async (
   try {
     return await invoke<FileStatus>(command, args);
   } catch (error) {
+    if ((error as { code?: string })?.code === 'FILE_DOWNLOAD_CANCELLED')
+      throw error;
     const { showErrorNotification } = await import(
       '../composables/useNotifications'
     );
@@ -35,6 +37,8 @@ const invokeFileAction = async (
 };
 
 export const TauriFile = {
+  cancelDownload: (requestId: string) =>
+    invoke<boolean>('desktop_file_cancel_download', { requestId }),
   getFileStatus: (options: FileOptions) =>
     invoke<FileStatus>('desktop_file_status', {
       options: normalizeFileOptions(options)

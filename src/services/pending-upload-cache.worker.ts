@@ -1,5 +1,5 @@
 const DB_NAME = 'chat-topic-messages-db';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 const PENDING_UPLOADS_STORE_NAME = 'pendingUploads';
 const PENDING_UPLOAD_CHUNKS_STORE_NAME = 'pendingUploadChunks';
 const PENDING_UPLOAD_CHUNK_SIZE = 4 * 1024 * 1024;
@@ -113,6 +113,16 @@ const openWorkerDb = (): Promise<IDBDatabase> => {
 
     request.onupgradeneeded = () => {
       const db = request.result;
+
+      for (const name of [
+        'topicMessages',
+        'pinnedMessages',
+        'pinCommentTopics',
+        'pendingUploadMeta'
+      ]) {
+        if (!db.objectStoreNames.contains(name))
+          db.createObjectStore(name, { keyPath: 'cacheKey' });
+      }
 
       if (!db.objectStoreNames.contains(PENDING_UPLOADS_STORE_NAME)) {
         db.createObjectStore(PENDING_UPLOADS_STORE_NAME, {

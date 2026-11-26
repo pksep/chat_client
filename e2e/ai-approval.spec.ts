@@ -2,7 +2,10 @@ import { expect, test, type Page } from './fixtures/ai-history';
 
 test.setTimeout(90_000);
 
-const prepareAiSession = async (page: Page, sessionId: string) => {
+const prepareAiSession = async (
+  page: Page,
+  sessionId: string
+): Promise<void> => {
   await page.addInitScript(id => {
     const organizationUrl = 'http://127.0.0.1:65530';
     const config = {
@@ -45,9 +48,23 @@ const prepareAiSession = async (page: Page, sessionId: string) => {
       })
     );
   }, sessionId);
+
+  // Пользователь известен заранее. Не читаем документ из обработчика запроса:
+  // обновление страницы может уничтожить его контекст во время проверки доступа.
+  await page.route('**/users/me/access', route =>
+    route.fulfill({
+      json: {
+        userId: 'local-ui-test-user',
+        erpUserId: null,
+        erpRoleId: null,
+        access: { client: true, ai: true },
+        effective: { client: true, ai: true }
+      }
+    })
+  );
 };
 
-const sendEditorMessage = async (page: Page, text: string) => {
+const sendEditorMessage = async (page: Page, text: string): Promise<void> => {
   const stayInBrowser = page.getByRole('button', {
     name: 'Остаться в браузере'
   });
@@ -59,8 +76,115 @@ const sendEditorMessage = async (page: Page, text: string) => {
   await expect(editor).toBeVisible({ timeout: 30_000 });
   await editor.locator('[contenteditable="true"]').click();
   await page.keyboard.insertText(text);
-  await editor.locator('.toolbar-button.right:visible').click();
+  const sendButton = editor.locator(
+    'button.toolbar-button.right:visible, .toolbar-button.right:visible button'
+  );
+  await expect(sendButton).toBeEnabled({ timeout: 30000 });
+  await sendButton.click();
 };
+
+for (const scenario of [
+  {
+    title: 'подтверждение времени задачи',
+    toolName: 'board_actions_task_time_entries_create',
+    args: {
+      taskId: 42,
+      taskTitle: 'Проверка чертежей',
+      durationMinutes: 120,
+      comment: 'Проверил размеры',
+      idempotencyKey: 'private-time-key'
+    },
+    expected:
+      'Записать по задаче «Проверка чертежей» фактически затраченное время: 120 мин., комментарий: «Проверил размеры»?'
+  },
+  {
+    title: 'подтверждение атрибутов задачи',
+    toolName: 'board_actions_task_attributes_update',
+    args: {
+      taskId: 42,
+      taskTitle: 'Проверка чертежей',
+      attributes: [
+        {
+          id: 'private-attribute-flag',
+          name: 'Проверено',
+          type: 'boolean',
+          value: false
+        },
+        {
+          id: 'private-attribute-number',
+          name: 'Количество',
+          type: 'number',
+          value: 0
+        }
+      ],
+      idempotencyKey: 'private-attribute-key'
+    },
+    expected:
+      'Изменить атрибуты задачи «Проверка чертежей»: «Проверено»: нет; «Количество»: 0?'
+  }
+]) {
+  test(scenario.title, async ({ page }): Promise<void> => {
+    const sessionId = `ai-task-details-${scenario.toolName.replaceAll('_', '-')}-${Date.now()}`;
+    let writes = 0;
+    await prepareAiSession(page, sessionId);
+    await page.route('**/api/agents/generalAgent/stream*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        body: `data: ${JSON.stringify({
+          type: 'tool-call-approval',
+          runId: 'task-details-run',
+          payload: {
+            toolCallId: 'task-details-call',
+            toolName: scenario.toolName,
+            args: scenario.args
+          }
+        })}\n\n`
+      });
+    });
+    await page.route(
+      '**/api/agents/generalAgent/approve-tool-call**',
+      async route => {
+        writes += 1;
+        expect(route.request().postDataJSON()).toMatchObject({
+          runId: 'task-details-run',
+          toolCallId: 'task-details-call'
+        });
+        await route.fulfill({
+          status: 200,
+          contentType: 'text/event-stream',
+          body: `data: ${JSON.stringify({ type: 'text-delta', payload: { text: 'Изменения проверены в задаче.' } })}\n\ndata: ${JSON.stringify({ type: 'finish' })}\n\n`
+        });
+      }
+    );
+    await page.goto(`/ai/${sessionId}`);
+    await page
+      .getByRole('button', { name: 'Проверка подтверждения Тест 10:00' })
+      .click();
+    await expect(
+      page.getByRole('button', { name: /^Проверка подтверждения Новый чат/ })
+    ).toBeVisible({ timeout: 30000 });
+    await sendEditorMessage(page, scenario.title);
+    await expect(
+      page.getByText(scenario.expected, { exact: true })
+    ).toBeVisible({ timeout: 30000 });
+    expect(writes).toBe(0);
+    await expect(page.getByText('private-', { exact: false })).toHaveCount(0);
+    await page.reload();
+    await expect(
+      page.getByText(scenario.expected, { exact: true })
+    ).toBeVisible({ timeout: 30000 });
+    await page
+      .getByRole('button', { name: 'Подтвердить', exact: true })
+      .click();
+    await expect(
+      page
+        .locator('.ai-assistant__message--assistant .message-content__html')
+        .filter({ hasText: 'Изменения проверены в задаче.' })
+    ).toBeVisible({ timeout: 30000 });
+    expect(writes).toBe(1);
+  });
+}
 
 for (const { status, code, recover, userMessage } of [
   {

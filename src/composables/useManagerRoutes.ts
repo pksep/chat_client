@@ -13,11 +13,12 @@ import { showErrorNotification } from './useNotifications';
 
 export interface ManagerRoute {
   id: string;
-  channel: 'widget' | 'vk' | 'avito' | 'telegram' | 'max';
+  channel: 'widget' | 'vk' | 'avito' | 'telegram' | 'max' | 'whatsapp';
   name: string;
   title: string;
   pageUrl: string;
   canReply: boolean;
+  replyUnavailableReason?: string;
   capabilities: {
     textChars: number;
     fileBytes: number;
@@ -36,7 +37,8 @@ export const channelLabel = (channel: string): string =>
     vk: 'ВКонтакте',
     avito: 'Авито',
     telegram: 'Telegram',
-    max: 'MAX'
+    max: 'MAX',
+    whatsapp: 'WhatsApp'
   })[channel] || 'Канал';
 
 /** Сбрасывает приватные маршруты при смене сотрудника или отзыве права. */
@@ -164,10 +166,19 @@ export function managerSendError(
   const route = selectedManagerRoute(topicId);
   if (!route) return 'Не удалось определить канал последнего сообщения клиента';
   if (!route.canReply)
-    return 'Канал последнего сообщения клиента сейчас недоступен';
+    return (
+      route.replyUnavailableReason ||
+      'Канал последнего сообщения клиента сейчас недоступен'
+    );
   if (files.length > route.capabilities.fileCount)
     return `Можно отправить не больше ${route.capabilities.fileCount} вложений`;
   for (const file of files) {
+    if (
+      route.channel === 'whatsapp' &&
+      file.type.startsWith('image/') &&
+      file.size > 5 * 1024 * 1024
+    )
+      return 'Изображение для WhatsApp должно быть не больше 5 МБ';
     if (file.size > route.capabilities.fileBytes)
       return `Файл «${file.name}» превышает допустимый размер для ${channelLabel(route.channel)}`;
     if (

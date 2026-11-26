@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { devices, expect, test, type Page } from '@playwright/test';
 
 test.setTimeout(90_000);
 
@@ -10,11 +10,23 @@ async function openShell(
     theme: string;
     screenPermission?: boolean;
     fullApp?: boolean;
+    call?: boolean;
+    customMacChrome?: boolean;
   } = { tauri: true, decorated: false, theme: 'light' }
 ) {
   await page.addInitScript(
-    ({ tauri, decorated, screenPermission, fullApp }) => {
+    ({ tauri, decorated, screenPermission, fullApp, customMacChrome }) => {
       const win = window as any;
+      if (customMacChrome)
+        Object.defineProperty(navigator, 'platform', {
+          value: 'MacIntel',
+          configurable: true
+        });
+      // Геометрия и клики проверяются без временного оверлея смены темы.
+      Object.defineProperty(document, 'startViewTransition', {
+        value: undefined,
+        configurable: true
+      });
       win.shellCalls = [];
       win.shellCaptureCalls = [];
       win.shellScreenPermission = screenPermission !== false;
@@ -70,6 +82,8 @@ async function openShell(
             return id;
           },
           invoke: async (command: string, args: any) => {
+            if (command === 'desktop_call_window_available')
+              return customMacChrome === true;
             win.shellCalls.push({ command, args });
             if (command === 'plugin:event|listen') {
               handlers.set(args.event, [
@@ -88,6 +102,28 @@ async function openShell(
             if (command === 'plugin:window|toggle_maximize')
               win.shellState.maximized = !win.shellState.maximized;
             if (command === 'desktop_media_permissions_available') return true;
+            if (command === 'desktop_load_permission_preferences') {
+              const saved = sessionStorage.getItem('shell-native-permissions');
+              if (saved) return JSON.parse(saved);
+              sessionStorage.setItem(
+                'shell-native-permissions',
+                JSON.stringify(args.legacy)
+              );
+              return args.legacy;
+            }
+            if (command === 'desktop_save_permission_choice') {
+              const saved = JSON.parse(
+                sessionStorage.getItem('shell-native-permissions') || '{}'
+              );
+              saved[args.permission] = args.choice;
+              sessionStorage.setItem(
+                'shell-native-permissions',
+                JSON.stringify(saved)
+              );
+            }
+            if (command === 'desktop_reset_permission_preferences') {
+              sessionStorage.setItem('shell-native-permissions', '{}');
+            }
             if (command === 'desktop_screen_capture_available')
               return {
                 supported: true,
@@ -95,7 +131,14 @@ async function openShell(
               };
             if (command === 'desktop_screen_capture_sources')
               return win.shellSources;
-            if (command === 'desktop_screen_capture_permission') return true;
+            if (command === 'desktop_screen_capture_permission') {
+              win.shellScreenPermissionRequests =
+                (win.shellScreenPermissionRequests || 0) + 1;
+              return (
+                win.shellScreenPermission ||
+                win.shellScreenPermissionRequests > 1
+              );
+            }
             if (command === 'desktop_screen_capture_start') {
               win.shellCaptureActive = true;
               const buffer = new ArrayBuffer(24);
@@ -118,7 +161,23 @@ async function openShell(
         });
       navigator.mediaDevices.getUserMedia = async constraints => {
         win.shellCaptureCalls.push(constraints);
-        return { getTracks: () => [] } as unknown as MediaStream;
+        const audio =
+          win.shellUseTrack && constraints?.audio
+            ? [
+                {
+                  readyState: 'live',
+                  stop() {
+                    this.readyState = 'ended';
+                  },
+                  addEventListener() {}
+                }
+              ]
+            : [];
+        return {
+          getTracks: () => audio,
+          getAudioTracks: () => audio,
+          getVideoTracks: () => []
+        } as unknown as MediaStream;
       };
     },
     options
@@ -141,9 +200,12 @@ async function openShell(
     await expect(page.getByTestId('DesktopTitleBar')).toBeVisible();
     return;
   }
-  await page.goto(`/e2e/fixtures/desktop-shell.html?theme=${options.theme}`, {
-    waitUntil: 'domcontentloaded'
-  });
+  await page.goto(
+    `/e2e/fixtures/desktop-shell.html?theme=${options.theme}${options.call ? '&call' : ''}`,
+    {
+      waitUntil: 'domcontentloaded'
+    }
+  );
   await expect
     .poll(() =>
       page.evaluate(() => !!(window as any).desktopShellFixture?.ready)
@@ -151,65 +213,291 @@ async function openShell(
     .toBe(true);
 }
 
-test('Tauri: окно целиком помещается под шапкой, сворачивание списка доступно', async ({
+test('Полноэкранное видео звонка и панели помещаются под шапкой Tauri', async ({
   page
-}) => {
+}, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
   await openShell(page, {
     tauri: true,
     decorated: false,
-    theme: 'light',
-    fullApp: true
+    theme: 'dark',
+    call: true
   });
-  const collapse = page.locator('.chats-toolbar__collapse');
-  const checkLayout = async (titlebarHeight: number) => {
-    const geometry = await page.evaluate(() => {
-      const box = (selector: string) => {
-        const { top, bottom, height } = document
-          .querySelector(selector)!
-          .getBoundingClientRect();
-        return { top, bottom, height };
-      };
-      return {
-        viewport: innerHeight,
-        scrollHeight: document.scrollingElement!.scrollHeight,
-        body: box('body'),
-        root: box('#app'),
-        content: box('.chat-container'),
-        collapse: box('.chats-toolbar__collapse')
-      };
-    });
-    expect(geometry.scrollHeight, JSON.stringify(geometry)).toBeLessThanOrEqual(
-      geometry.viewport
-    );
-    expect(geometry.content.bottom).toBeLessThanOrEqual(geometry.viewport);
-    expect(geometry.content.top).toBe(titlebarHeight);
-    expect(geometry.collapse.top).toBe(titlebarHeight + 20);
-  };
-  for (const viewport of [
-    { width: 960, height: 640 },
-    { width: 1280, height: 800 }
+  const stage = page.locator('.call-modal__participant-stage');
+  await page.locator('.call-modal__remote-tile').first().click();
+  await expect(stage).toBeVisible();
+  await stage
+    .getByRole('button', { name: 'Видео fullscreen', exact: true })
+    .click();
+  const overlay = page.locator('.call-modal__video-overlay');
+  await expect(overlay).toBeVisible();
+  for (const [width, height] of [
+    [1280, 800],
+    [960, 640]
   ]) {
-    await page.setViewportSize(viewport);
-    await checkLayout(36);
-    await collapse.click();
-    await expect(page.locator('.menu')).toHaveClass(/menu--collapse/);
-    await checkLayout(36);
-    await collapse.click();
-    await expect(page.locator('.menu')).not.toHaveClass(/menu--collapse/);
+    await page.setViewportSize({ width, height });
+    await page.mouse.move(400, 90);
+    const top = overlay.locator('.call-modal__video-overlay-bar--top');
+    await expect(top).toBeVisible();
+    const titlebar = (await page.getByTestId('DesktopTitleBar').boundingBox())!;
+    for (const selector of [
+      '.call-modal__video-overlay',
+      '.call-modal__video-overlay-video',
+      '.call-modal__video-overlay-bar--top'
+    ]) {
+      await expect
+        .poll(async () => (await page.locator(selector).boundingBox())!.y)
+        .toBeGreaterThanOrEqual(titlebar.y + titlebar.height);
+      await expect
+        .poll(async () => {
+          const box = (await page.locator(selector).boundingBox())!;
+          return box.y + box.height;
+        })
+        .toBeLessThanOrEqual(height + 1);
+    }
+    await page.mouse.move(400, height - 50);
+    const bottom = overlay.locator('.call-modal__video-overlay-bar--bottom');
+    await expect(bottom).toBeVisible();
+    await expect
+      .poll(async () => {
+        const controls = (await bottom.boundingBox())!;
+        return controls.y + controls.height;
+      })
+      .toBeLessThanOrEqual(height + 1);
   }
-  for (const fullscreen of [true, false]) {
-    await page.evaluate(fullscreen => {
-      (window as any).shellState.fullscreen = fullscreen;
-      (window as any).emitShellEvent('tauri://resize', {
-        width: innerWidth,
-        height: innerHeight
+  await page.mouse.move(400, 90);
+  await expect(
+    overlay.locator('.call-modal__video-overlay-bar--top')
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath('call-below-titlebar.png'),
+    animations: 'disabled'
+  });
+  await page.evaluate(() =>
+    document.documentElement.classList.remove('chat-desktop-custom-chrome')
+  );
+  expect((await overlay.boundingBox())!.y).toBe(0);
+  expect((await overlay.boundingBox())!.height).toBe(640);
+});
+
+test.describe('desktop application geometry', () => {
+  test.use({
+    isMobile: false,
+    hasTouch: false,
+    userAgent: devices['Desktop Chrome'].userAgent
+  });
+  for (const theme of ['light', 'dark']) {
+    test(`Настройки звонка Tauri: ${theme}, шапка, прокрутка и fullscreen`, async ({
+      page
+    }, testInfo) => {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await openShell(page, {
+        tauri: true,
+        decorated: false,
+        theme,
+        call: true
       });
-    }, fullscreen);
-    await expect(page.getByTestId('DesktopTitleBar')).toHaveCount(
-      fullscreen ? 0 : 1
-    );
-    await checkLayout(fullscreen ? 0 : 36);
+      await page
+        .locator('.call-modal')
+        .getByRole('button', { name: 'Информация о звонке', exact: true })
+        .click();
+      const openingPositions = await page.evaluate(async () => {
+        const positions: number[] = [];
+        for (let frame = 0; frame < 20; frame++) {
+          await new Promise(requestAnimationFrame);
+          const panel = document.querySelector('.call-modal__group-panel');
+          if (panel) positions.push(panel.getBoundingClientRect().top);
+        }
+        return positions;
+      });
+      expect(openingPositions.length).toBeGreaterThan(1);
+      for (const top of openingPositions) expect(top).toBeCloseTo(36, 0);
+      const shell = page.locator('.call-modal__group-panel-shell');
+      const panel = page.locator('.call-modal__group-panel');
+      const header = panel.locator('.call-modal__group-panel-header');
+      const content = panel.locator('.call-modal__group-panel-content');
+      const close = panel.locator('.call-modal__group-panel-close');
+      await expect(panel).toBeVisible();
+      const checkPanel = async (top: number) => {
+        await expect.poll(async () => (await shell.boundingBox())!.y).toBe(top);
+        await expect.poll(async () => (await panel.boundingBox())!.y).toBe(top);
+        const viewport = page.viewportSize()!;
+        const bounds = (await panel.boundingBox())!;
+        expect(bounds.y + bounds.height).toBeLessThanOrEqual(
+          viewport.height + 1
+        );
+        const heading = (await header.boundingBox())!;
+        const body = (await content.boundingBox())!;
+        expect(heading.y).toBeGreaterThanOrEqual(top);
+        expect(body.y).toBeGreaterThanOrEqual(heading.y + heading.height - 1);
+        expect(body.y + body.height).toBeLessThanOrEqual(viewport.height + 1);
+        expect(
+          await close.evaluate(element => {
+            const rect = element.getBoundingClientRect();
+            return element.contains(
+              document.elementFromPoint(
+                rect.x + rect.width / 2,
+                rect.y + rect.height / 2
+              )
+            );
+          })
+        ).toBe(true);
+      };
+      for (const height of [800, 640, 400]) {
+        await page.setViewportSize({ width: 960, height });
+        await checkPanel(36);
+      }
+      await panel
+        .locator('.call-modal__group-panel-background-trigger')
+        .click();
+      await expect(
+        panel.getByRole('button', { name: 'Загрузить изображение' })
+      ).toBeAttached();
+      expect(
+        await content.evaluate(
+          element => element.scrollHeight > element.clientHeight
+        )
+      ).toBe(true);
+      await content.evaluate(element => {
+        element.scrollTop = element.scrollHeight;
+      });
+      await expect(
+        panel.locator('.call-modal__group-panel-member').last()
+      ).toBeInViewport();
+      await checkPanel(36);
+      await page.screenshot({
+        path: testInfo.outputPath(`call-settings-${theme}.png`),
+        animations: 'disabled'
+      });
+      for (const fullscreen of [true, false]) {
+        await page.evaluate(fullscreen => {
+          (window as any).shellState.fullscreen = fullscreen;
+          (window as any).emitShellEvent('tauri://resize', {
+            width: innerWidth,
+            height: innerHeight
+          });
+        }, fullscreen);
+        await expect(page.getByTestId('DesktopTitleBar')).toHaveCount(
+          fullscreen ? 0 : 1
+        );
+        await checkPanel(fullscreen ? 0 : 36);
+      }
+      await close.click();
+      await expect(panel).toHaveCount(0);
+    });
   }
+
+  test('Настройки звонка в узком Tauri сохраняют доступную кнопку «Назад»', async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 760, height: 480 });
+    await openShell(page, {
+      tauri: true,
+      decorated: false,
+      theme: 'light',
+      call: true
+    });
+    await page
+      .getByRole('button', { name: 'Открыть меню звонка', exact: true })
+      .click();
+    await page.getByRole('button', { name: 'Настройки', exact: true }).click();
+    const dialog = page.locator('dialog.mobile__modal:visible');
+    await expect(dialog).toBeVisible();
+    await expect.poll(async () => (await dialog.boundingBox())!.y).toBe(36);
+    const bounds = (await dialog.boundingBox())!;
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(481);
+    await dialog.getByRole('button', { name: 'Назад', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+  });
+
+  test('Настройки звонка в браузере и Tauri с системной рамкой занимают весь viewport', async ({
+    page
+  }) => {
+    for (const tauri of [false, true]) {
+      await page.setViewportSize({ width: 960, height: 800 });
+      await openShell(page, {
+        tauri,
+        decorated: true,
+        theme: 'light',
+        call: true
+      });
+      await page
+        .locator('.call-modal')
+        .getByRole('button', { name: 'Информация о звонке', exact: true })
+        .click();
+      const panel = page.locator('.call-modal__group-panel');
+      await expect(panel).toBeVisible();
+      await page.setViewportSize({ width: 960, height: 400 });
+      expect((await panel.boundingBox())!.y).toBe(0);
+      expect((await panel.boundingBox())!.height).toBe(400);
+      await panel.locator('.call-modal__group-panel-close').click();
+      await expect(panel).toHaveCount(0);
+    }
+  });
+
+  test('Tauri: окно целиком помещается под шапкой, сворачивание списка доступно', async ({
+    page
+  }) => {
+    // Этот сценарий проверяет desktop layout даже при мобильном browser project.
+    await page.setViewportSize({ width: 960, height: 640 });
+    await openShell(page, {
+      tauri: true,
+      decorated: false,
+      theme: 'light',
+      fullApp: true
+    });
+    const collapse = page.locator('.chats-toolbar__collapse');
+    const checkLayout = async (titlebarHeight: number) => {
+      const geometry = await page.evaluate(() => {
+        const box = (selector: string) => {
+          const { top, bottom, height } = document
+            .querySelector(selector)!
+            .getBoundingClientRect();
+          return { top, bottom, height };
+        };
+        return {
+          viewport: innerHeight,
+          scrollHeight: document.scrollingElement!.scrollHeight,
+          body: box('body'),
+          root: box('#app'),
+          content: box('.chat-container'),
+          collapse: box('.chats-toolbar__collapse')
+        };
+      });
+      expect(
+        geometry.scrollHeight,
+        JSON.stringify(geometry)
+      ).toBeLessThanOrEqual(geometry.viewport);
+      expect(geometry.content.bottom).toBeLessThanOrEqual(geometry.viewport);
+      expect(geometry.content.top).toBe(titlebarHeight);
+      expect(geometry.collapse.top).toBe(titlebarHeight + 20);
+    };
+    for (const viewport of [
+      { width: 960, height: 640 },
+      { width: 1280, height: 800 }
+    ]) {
+      await page.setViewportSize(viewport);
+      await checkLayout(36);
+      await collapse.click();
+      await expect(page.locator('.menu')).toHaveClass(/menu--collapse/);
+      await checkLayout(36);
+      await collapse.click();
+      await expect(page.locator('.menu')).not.toHaveClass(/menu--collapse/);
+    }
+    for (const fullscreen of [true, false]) {
+      await page.evaluate(fullscreen => {
+        (window as any).shellState.fullscreen = fullscreen;
+        (window as any).emitShellEvent('tauri://resize', {
+          width: innerWidth,
+          height: innerHeight
+        });
+      }, fullscreen);
+      await expect(page.getByTestId('DesktopTitleBar')).toHaveCount(
+        fullscreen ? 0 : 1
+      );
+      await checkLayout(fullscreen ? 0 : 36);
+    }
+  });
 });
 
 test('Шапка Tauri: управление окном и отступы без полосы прокрутки', async ({
@@ -274,8 +562,70 @@ async function openScreenPicker(page: Page) {
         }
       );
   });
+  const permission = page.getByTestId('DesktopMediaPermissionDialog');
+  await expect(permission).toBeVisible();
+  await expect(permission).toContainText('Разрешить демонстрацию экрана?');
+  await permission
+    .getByRole('button', { name: 'Разрешить', exact: true })
+    .click();
   return page.getByTestId('DesktopScreenSharePicker');
 }
+
+test('Запрещённая демонстрация спрашивает согласие; отказ и остановка не запускают захват', async ({
+  page
+}) => {
+  await openShell(page);
+  await page.evaluate(async () => {
+    const preferences = await import(
+      '/src/services/desktop-permission-preferences.ts'
+    );
+    await preferences.saveDesktopPermissionChoice('screen-capture', 'denied');
+    const win = window as any;
+    win.desktopShellFixture
+      .prepareDesktopScreenCapture()
+      .catch((error: Error) => {
+        win.shellDisplayError = error.name;
+      });
+  });
+  const permission = page.getByTestId('DesktopMediaPermissionDialog');
+  await expect(permission).toBeVisible();
+  await permission
+    .getByRole('button', { name: 'Не сейчас', exact: true })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).shellDisplayError))
+    .toBe('NotAllowedError');
+  expect(
+    await page.evaluate(() =>
+      (window as any).shellCalls.some(
+        (call: any) => call.command === 'desktop_screen_capture_start'
+      )
+    )
+  ).toBe(false);
+  await page.evaluate(() => {
+    (window as any).desktopShellFixture
+      .prepareDesktopScreenCapture()
+      .catch(() => {});
+  });
+  await expect(permission).toBeVisible();
+  await page.evaluate(async () => {
+    const { stopDesktopScreenCapture } = await import(
+      '/src/services/desktop-screen-capture.ts'
+    );
+    stopDesktopScreenCapture();
+  });
+  await expect(permission).not.toBeVisible();
+  const picker = await openScreenPicker(page);
+  await expect(picker).toBeVisible();
+  await picker.getByRole('button', { name: 'Отмена', exact: true }).click();
+  expect(
+    await page.evaluate(() =>
+      (window as any).shellCalls.some(
+        (call: any) => call.command === 'desktop_screen_capture_start'
+      )
+    )
+  ).toBe(false);
+});
 
 test('Свой выбор экрана: конкретный источник, начало только по кнопке, освобождение захвата', async ({
   page
@@ -384,6 +734,50 @@ test('Запись экрана: запрос ОС и обновление сп�
   ).toBeDisabled();
 });
 
+test('Разрешения устройств показываются списком, запрос и выдача обновляют статус', async ({
+  page
+}, testInfo) => {
+  await openShell(page, { tauri: true, decorated: false, theme: 'dark' });
+  await page
+    .getByRole('button', { name: 'Разрешения устройств', exact: true })
+    .click();
+  const list = page.getByRole('list', { name: 'Разрешения СЭП Чата' });
+  await expect(list.getByRole('listitem')).toHaveCount(6);
+  await expect(
+    list.getByRole('listitem').filter({ hasText: 'Микрофон' })
+  ).toContainText('Не запрошено');
+  await expect(
+    list.getByRole('listitem').filter({ hasText: 'Демонстрация экрана' })
+  ).toContainText('Не запрошено');
+  await list.screenshot({
+    path: testInfo.outputPath('device-permissions-list-dark.png')
+  });
+  await page.getByRole('button', { name: 'Проверить видеозвонок' }).click();
+  const dialog = page.getByTestId('DesktopMediaPermissionDialog');
+  await expect(
+    dialog
+      .getByRole('list', { name: 'Запрашиваемые разрешения' })
+      .getByRole('listitem')
+  ).toHaveCount(2);
+  await dialog.screenshot({
+    path: testInfo.outputPath('media-permissions-list-dark.png')
+  });
+  await dialog.getByRole('button', { name: 'Разрешить', exact: true }).click();
+  await expect(
+    list.getByRole('listitem').filter({ hasText: 'Микрофон' })
+  ).toContainText('Разрешено');
+  await expect(
+    list.getByRole('listitem').filter({ hasText: 'Камера' })
+  ).toContainText('Разрешено');
+  await list.getByRole('switch', { name: 'Микрофон', exact: true }).click();
+  await expect(
+    list.getByRole('listitem').filter({ hasText: 'Микрофон' })
+  ).toContainText('Не разрешено');
+  await expect(
+    list.getByRole('switch', { name: 'Камера', exact: true })
+  ).toHaveAttribute('aria-checked', 'true');
+});
+
 test('Отказ и Escape не включают микрофон, повторное разрешение даёт доступ', async ({
   page
 }) => {
@@ -444,6 +838,191 @@ test('Одновременные запросы не дают доступ к к
   ).toBe(1);
 });
 
+test('разрешение микрофона переживает перезапуск интерфейса, камера требует отдельного согласия', async ({
+  page
+}) => {
+  await openShell(page);
+  await page.getByRole('button', { name: 'Проверить микрофон' }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Разрешить', exact: true })
+    .click();
+  await expect(page.getByTestId('DesktopShellCaptureResult')).toHaveText(
+    'Доступ разрешён'
+  );
+  await page.reload();
+  await expect
+    .poll(() =>
+      page.evaluate(() => !!(window as any).desktopShellFixture?.ready)
+    )
+    .toBe(true);
+  await page.getByRole('button', { name: 'Проверить микрофон' }).click();
+  await expect(page.getByTestId('DesktopShellCaptureResult')).toHaveText(
+    'Доступ разрешён'
+  );
+  await expect(
+    page.getByTestId('DesktopMediaPermissionDialog')
+  ).not.toBeVisible();
+  const restored = await page.evaluate(() =>
+    (window as any).shellCalls.filter(
+      (call: any) => call.command === 'desktop_grant_permissions'
+    )
+  );
+  expect(restored).toContainEqual({
+    command: 'desktop_grant_permissions',
+    args: { permissions: ['microphone'] }
+  });
+  await page.getByRole('button', { name: 'Проверить видеозвонок' }).click();
+  await expect(page.getByRole('dialog')).toContainText(
+    'Разрешить доступ к камере?'
+  );
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Разрешить', exact: true })
+    .click();
+  await expect(page.getByTestId('DesktopShellCaptureResult')).toHaveText(
+    'Доступ разрешён'
+  );
+  await page.reload();
+  await expect
+    .poll(() =>
+      page.evaluate(() => !!(window as any).desktopShellFixture?.ready)
+    )
+    .toBe(true);
+  await page.getByRole('button', { name: 'Проверить видеозвонок' }).click();
+  await expect(page.getByTestId('DesktopShellCaptureResult')).toHaveText(
+    'Доступ разрешён'
+  );
+  await expect(
+    page.getByTestId('DesktopMediaPermissionDialog')
+  ).not.toBeVisible();
+});
+
+test('каждое разрешение переключается отдельно и сохраняется после перезапуска', async ({
+  page
+}, testInfo) => {
+  await openShell(page);
+  await page.evaluate(async () => {
+    const { saveDesktopPermissionChoice } = await import(
+      '/src/services/desktop-permission-preferences.ts'
+    );
+    await saveDesktopPermissionChoice('microphone', 'granted');
+    await saveDesktopPermissionChoice('geolocation', 'denied');
+  });
+  await page
+    .getByRole('button', { name: 'Разрешения устройств', exact: true })
+    .click();
+  await expect(
+    page.getByRole('button', { name: 'Запросить разрешения заново' })
+  ).toHaveCount(0);
+  await page.getByRole('switch', { name: 'Микрофон', exact: true }).click();
+  await page.getByRole('switch', { name: 'Камера', exact: true }).click();
+  await page
+    .getByTestId('DesktopPermissions-Container')
+    .screenshot({ path: testInfo.outputPath('permission-preferences.png') });
+  expect(
+    await page.evaluate(() =>
+      JSON.parse(localStorage.getItem('chat.desktop.permissions.v1')!)
+    )
+  ).toMatchObject({
+    microphone: 'denied',
+    camera: 'granted',
+    geolocation: 'denied'
+  });
+  await page.reload();
+  await expect
+    .poll(() =>
+      page.evaluate(() => !!(window as any).desktopShellFixture?.ready)
+    )
+    .toBe(true);
+  await page.getByRole('button', { name: 'Проверить микрофон' }).click();
+  await expect(page.getByTestId('DesktopShellCaptureResult')).toHaveText(
+    'NotAllowedError'
+  );
+  await expect(
+    page.getByTestId('DesktopMediaPermissionDialog')
+  ).not.toBeVisible();
+  await page
+    .getByRole('button', { name: 'Разрешения устройств', exact: true })
+    .click();
+  await expect(
+    page.getByRole('switch', { name: 'Камера', exact: true })
+  ).toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('switch', { name: 'Микрофон', exact: true }).click();
+  await page.getByRole('button', { name: 'Проверить микрофон' }).click();
+  await expect(page.getByTestId('DesktopShellCaptureResult')).toHaveText(
+    'Доступ разрешён'
+  );
+});
+
+test('отзыв микрофона останавливает текущий трек и не отключает камеру', async ({
+  page
+}) => {
+  await openShell(page);
+  await page
+    .getByRole('button', { name: 'Разрешения устройств', exact: true })
+    .click();
+  await page.getByRole('switch', { name: 'Микрофон', exact: true }).click();
+  await page.getByRole('switch', { name: 'Камера', exact: true }).click();
+  await page.evaluate(async () => {
+    const win = window as any;
+    win.shellUseTrack = true;
+    win.heldMicrophone = await navigator.mediaDevices.getUserMedia({
+      audio: true
+    });
+  });
+  await page.getByRole('switch', { name: 'Микрофон', exact: true }).click();
+  expect(
+    await page.evaluate(
+      () => (window as any).heldMicrophone.getAudioTracks()[0].readyState
+    )
+  ).toBe('ended');
+  await expect(
+    page.getByRole('switch', { name: 'Камера', exact: true })
+  ).toHaveAttribute('aria-checked', 'true');
+  await page
+    .getByRole('switch', { name: 'Демонстрация экрана', exact: true })
+    .click();
+  await page
+    .getByRole('switch', { name: 'Демонстрация экрана', exact: true })
+    .click();
+  await page.evaluate(() => {
+    const win = window as any;
+    win.desktopShellFixture
+      .prepareDesktopScreenCapture()
+      .catch((error: Error) => {
+        win.shellDisplayError = error.name;
+      });
+  });
+  const permission = page.getByTestId('DesktopMediaPermissionDialog');
+  await expect(permission).toBeVisible();
+  await permission
+    .getByRole('button', { name: 'Не сейчас', exact: true })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).shellDisplayError))
+    .toBe('NotAllowedError');
+});
+
+test('«Не сейчас» не сохраняет разрешение на устройство', async ({ page }) => {
+  await openShell(page);
+  await page.getByRole('button', { name: 'Проверить микрофон' }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Не сейчас' })
+    .click();
+  await page.reload();
+  await expect
+    .poll(() =>
+      page.evaluate(() => !!(window as any).desktopShellFixture?.ready)
+    )
+    .toBe(true);
+  await page.getByRole('button', { name: 'Проверить микрофон' }).click();
+  await expect(page.getByRole('dialog')).toContainText(
+    'Разрешить доступ к микрофону?'
+  );
+});
+
 test('Светлая и тёмная темы: собственная шапка и запрос устройств', async ({
   page
 }, testInfo) => {
@@ -484,5 +1063,21 @@ test('Браузер и старая Tauri с рамкой сохраняют п
   await expect(page.getByTestId('DesktopTitleBar')).toHaveCount(0);
   expect((await page.getByTestId('DesktopShellContent').boundingBox())?.y).toBe(
     0
+  );
+});
+
+test('Mac с нативными скруглениями сохраняет собственную шапку и отступ содержимого', async ({
+  page
+}) => {
+  await openShell(page, {
+    tauri: true,
+    decorated: true,
+    theme: 'light',
+    customMacChrome: true
+  });
+  await expect(page.getByTestId('DesktopTitleBar')).toBeVisible();
+  await expect(page.locator('html')).toHaveClass(/chat-desktop-custom-chrome/);
+  expect((await page.getByTestId('DesktopShellContent').boundingBox())?.y).toBe(
+    36
   );
 });
