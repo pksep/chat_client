@@ -212,7 +212,7 @@ jobs:
             cc .github/scripts/wayland-webkit-probe.c -o /tmp/chat-wayland-webkit-probe $(pkg-config --cflags --libs webkit2gtk-4.1)
             /tmp/chat-wayland-webkit-probe
             echo "WebKit probe exit: $?"
-            CHAT_CALL_NATIVE_TRACE=1 RUST_BACKTRACE=1 bun scripts/test-desktop-call-portability.ts
+            RUST_BACKTRACE=1 bun scripts/test-desktop-call-portability.ts
           '
       - name: Save Linux runtime packages
         if: always() && runner.os == 'Linux' && steps.linux_runtime.outcome == 'success' && steps.linux_runtime_cache.outputs.cache-hit != 'true'
