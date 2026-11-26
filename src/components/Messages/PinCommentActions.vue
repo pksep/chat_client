@@ -11,32 +11,17 @@
     @edit="openEditor"
     @delete="deleting = $event"
   />
-  <Modal
+  <PinConfirmModal
     :open="!!editing"
-    width="492px"
-    position="center"
-    class="pin-note-dialog"
-    @close="editing = null"
-  >
-    <h2>Комментарий к закреплению</h2>
-    <textarea
-      v-model="text"
-      aria-label="Комментарий к закреплению"
-      maxlength="4000"
-      rows="5"
-    />
-    <p v-if="error" role="alert">{{ error }}</p>
-    <div class="confirm__modal__buttons">
-      <Button :type="ButtonTypeEnum.secondary" @click="editing = null"
-        >Отмена</Button
-      ><Button
-        :type="ButtonTypeEnum.primary"
-        :disabled="!text.trim() || text.length > 4000"
-        @click="save"
-        >Сохранить</Button
-      >
-    </div>
-  </Modal>
+    editing
+    comments-enabled
+    title="Комментарий к закреплению"
+    v-model:comment="text"
+    :error="error"
+    :confirm-disabled="!text.trim() || text.length > 4000"
+    @unmount-close="editing = null"
+    @unmount-confirm="save"
+  />
   <ConfirmModal
     :open="!!deleting"
     title="Удалить комментарий?"
@@ -47,13 +32,12 @@
 </template>
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { Button, ButtonTypeEnum } from '@pksep/yui';
 import { authedUser } from '../../composables/useAuth';
 import { usePinComments } from '../../services/usePinComments';
 import type { PinComment } from '../../services/pin-comments';
 import PinCommentCard from './PinCommentCard.vue';
 import ConfirmModal from '../UI/ConfirmModal.vue';
-import Modal from '../UI/Modal.vue';
+import PinConfirmModal from '../UI/PinConfirmModal.vue';
 const props = defineProps<{
   topicId: string;
   messageId: string;

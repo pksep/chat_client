@@ -412,6 +412,83 @@ test('редактирование и удаление своих заметок
   expect(errors).toEqual([]);
 });
 
+for (const theme of ['light', 'dark'] as const) {
+  test(`редактор комментария использует компактную форму закрепления, ${theme}`, async ({
+    page
+  }, testInfo) => {
+    const api = createPinFixtureApi();
+    api.comments[0].text = 'Сохранённый комментарий\nВторая строка';
+    const errors = await openPinnedFixture(page, { api });
+    await page.evaluate(theme => (window as any).pins.setTheme(theme), theme);
+    if (!isNarrow(page)) {
+      await page.evaluate(() => {
+        document.body.classList.add(
+          'chat-tauri-runtime',
+          'chat-tauri-macos-runtime'
+        );
+        document.documentElement.classList.add('chat-desktop-custom-chrome');
+      });
+      await page.addStyleTag({
+        content:
+          ':where(dialog.modal-yui-kit_center) { height: auto; inset-block: 0; }'
+      });
+    }
+    await page.getByTestId('Pinned-Messages-ListButton').click();
+    await noteAction(page, 'Редактировать комментарий');
+    const dialog = page
+      .locator('dialog[open]')
+      .filter({
+        has: page.getByRole('heading', {
+          name: 'Комментарий к закреплению',
+          exact: true
+        })
+      });
+    const field = dialog.getByRole('textbox', {
+      name: 'Комментарий к закреплению'
+    });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).not.toHaveClass(/fade-and-scale-enter-/);
+    await expect(field).toHaveValue(api.comments[0].text);
+    await expect(field).toBeInViewport({ ratio: 1 });
+    await expect(dialog.getByRole('checkbox')).toHaveCount(0);
+    for (const label of ['Отмена', 'Сохранить']) {
+      await expect(
+        dialog.getByRole('button', { name: label, exact: true })
+      ).toBeInViewport({ ratio: 1 });
+    }
+    const bounds = (await dialog.boundingBox())!;
+    const input = (await field.boundingBox())!;
+    expect(bounds.height).toBeLessThan(
+      (page.viewportSize()?.height || 800) * 0.8
+    );
+    expect(input.x).toBeGreaterThanOrEqual(bounds.x);
+    expect(input.x + input.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+    if (!isNarrow(page)) {
+      await expect(dialog).toHaveClass(/confirm__modal--pin/);
+      expect(bounds.height).toBeLessThan(300);
+      expect(Math.abs(input.height - 100)).toBeLessThan(2);
+      expect(
+        Math.abs(
+          bounds.x + bounds.width / 2 - (page.viewportSize()?.width || 0) / 2
+        )
+      ).toBeLessThan(2);
+    }
+    await dialog.screenshot({
+      path: testInfo.outputPath(`pin-comment-editor-${theme}.png`)
+    });
+    await field.fill('   ');
+    await expect(
+      dialog.getByRole('button', { name: 'Сохранить', exact: true })
+    ).toBeDisabled();
+    await dialog.getByRole('button', { name: 'Отмена', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(
+      api.requests.filter(request => request.path.endsWith('/commands'))
+    ).toHaveLength(0);
+    expect(errors).toEqual([]);
+  });
+}
+
 test('создание заметки через подтверждение — одна атомарная команда', async ({
   page
 }) => {

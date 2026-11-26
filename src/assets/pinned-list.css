@@ -220,11 +220,6 @@
   white-space: pre-wrap;
   user-select: text;
 }
-.pin-note-dialog h2 {
-  font-size: 20px;
-  margin-bottom: 20px;
-}
-.pin-note-dialog textarea,
 .pin-comment-input {
   width: 100%;
   min-height: 100px;
@@ -237,13 +232,13 @@
   resize: vertical;
   outline-color: var(--text-brand);
 }
-.pin-note-dialog .confirm__modal__buttons {
-  margin-top: 20px;
-}
 .confirm__modal--pin .pin-comment-input {
   height: 100px;
   min-height: 100px;
   margin-bottom: 25px;
+}
+.confirm__modal--pin-edit .pin-comment-input {
+  margin-top: 20px;
 }
 .confirm__modal__mobile--pin .pin-comment-input {
   height: 100px;
@@ -364,9 +359,6 @@
   }
   .pin-note__actions {
     display: none;
-  }
-  .pin-note-dialog {
-    max-width: calc(100vw - 24px);
   }
   .pinned-list-header__back {
     color: var(--text-primary) !important;
