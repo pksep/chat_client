@@ -420,19 +420,27 @@ export async function openDesktopCallWindow(options: {
                 enabled,
                 () => alive
               );
+            } catch (error) {
+              if (alive) throw error;
             } finally {
-              if (!alive) return;
-              const actual = await nativeWindow.isFullscreen();
-              if (alive && revision === fullscreenRevision) {
-                fullscreenSettledRevision = revision;
-                context.fullscreen.value = actual;
-                doc.documentElement.classList.toggle(
-                  'chat-desktop-custom-chrome',
-                  !actual
-                );
-                if (!actual && context.alwaysOnTop.value) {
-                  await setDesktopCallPinned(pinWindow, true);
-                  context.alwaysOnTop.value = await pinWindow.isAlwaysOnTop();
+              if (alive) {
+                const actual = await nativeWindow
+                  .isFullscreen()
+                  .catch(error => {
+                    if (alive) throw error;
+                    return enabled;
+                  });
+                if (alive && revision === fullscreenRevision) {
+                  fullscreenSettledRevision = revision;
+                  context.fullscreen.value = actual;
+                  doc.documentElement.classList.toggle(
+                    'chat-desktop-custom-chrome',
+                    !actual
+                  );
+                  if (!actual && context.alwaysOnTop.value) {
+                    await setDesktopCallPinned(pinWindow, true);
+                    context.alwaysOnTop.value = await pinWindow.isAlwaysOnTop();
+                  }
                 }
               }
             }
