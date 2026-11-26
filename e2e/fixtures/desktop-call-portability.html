@@ -21,7 +21,11 @@
         report({ passed: false, error: event.message })
       );
       window.addEventListener('unhandledrejection', event =>
-        report({ passed: false, error: String(event.reason) })
+        report({
+          passed: false,
+          error: String(event.reason),
+          stack: event.reason?.stack
+        })
       );
     </script>
     <script

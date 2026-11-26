@@ -1,5 +1,5 @@
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const origin = 'http://127.0.0.1:5184';
@@ -9,9 +9,10 @@ const fixture =
     : 'desktop-call-portability';
 const root = path.resolve(
   'test-results-native',
-  `call-portability-${process.platform}-${process.arch}`
+  `call-portability-${process.platform}-${process.arch}${process.env.CHAT_NATIVE_UI === '1' ? '-ui' : ''}`
 );
 await mkdir(root, { recursive: true });
+const profile = await mkdtemp(path.join(root, 'profile-run-'));
 const config = path.join(root, 'tauri.conf.json');
 const viteConfig = path.join(root, 'vite.config.ts');
 await writeFile(
@@ -33,7 +34,7 @@ await writeFile(
       devUrl: `${origin}/e2e/fixtures/${fixture}.html`
     },
     app: {
-      appDirectoriesOverride: path.join(root, 'profile'),
+      appDirectoriesOverride: profile,
       windows: [
         {
           label: 'main',

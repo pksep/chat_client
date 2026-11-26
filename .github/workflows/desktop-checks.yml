@@ -184,6 +184,11 @@ jobs:
       - name: Check native desktop
         if: runner.os != 'Linux'
         run: bun scripts/test-desktop-call-portability.ts
+      - name: Check native AI default and first sticker click
+        if: runner.os != 'Linux'
+        env:
+          CHAT_NATIVE_UI: '1'
+        run: bun scripts/test-desktop-call-portability.ts
       - name: Check X11 call window
         if: matrix.session == 'x11'
         run: |
@@ -193,6 +198,10 @@ jobs:
             xprop -root _NET_SUPPORTING_WM_CHECK
             GDK_BACKEND=x11 bun scripts/test-desktop-call-portability.ts
             result=$?
+            if test "$result" -eq 0; then
+              CHAT_NATIVE_UI=1 GDK_BACKEND=x11 bun scripts/test-desktop-call-portability.ts
+              result=$?
+            fi
             cat /tmp/call-openbox.log
             exit $result
           '
@@ -213,6 +222,12 @@ jobs:
             /tmp/chat-wayland-webkit-probe
             echo "WebKit probe exit: $?"
             RUST_BACKTRACE=1 bun scripts/test-desktop-call-portability.ts
+            result=$?
+            if test "$result" -eq 0; then
+              CHAT_NATIVE_UI=1 RUST_BACKTRACE=1 bun scripts/test-desktop-call-portability.ts
+              result=$?
+            fi
+            exit $result
           '
       - name: Save Linux runtime packages
         if: always() && runner.os == 'Linux' && steps.linux_runtime.outcome == 'success' && steps.linux_runtime_cache.outputs.cache-hit != 'true'
