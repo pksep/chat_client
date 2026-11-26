@@ -225,6 +225,14 @@ export async function openDesktopCallWindow(options: {
     }
     const host = popup as CallRenderWindow;
     const nativeWindow = new TauriWindow('call');
+    const pinWindow = {
+      setAlwaysOnTop: (enabled: boolean) =>
+        nativeWindow.setAlwaysOnTop(enabled),
+      isAlwaysOnTop: () =>
+        capabilities.os === 'linux'
+          ? invoke<boolean>('desktop_call_window_pinned')
+          : nativeWindow.isAlwaysOnTop()
+    };
     let childDocument: Document | undefined;
     const unlisten: UnlistenFn[] = [];
     let alive = true;
@@ -364,7 +372,7 @@ export async function openDesktopCallWindow(options: {
           const change = (async () => {
             try {
               const enabled = !context.alwaysOnTop.value;
-              await setDesktopCallPinned(nativeWindow, enabled);
+              await setDesktopCallPinned(pinWindow, enabled);
               context.alwaysOnTop.value = enabled;
             } finally {
               context.pinChanging.value = false;
@@ -400,7 +408,7 @@ export async function openDesktopCallWindow(options: {
             await pinChange;
             try {
               if (enabled && context.alwaysOnTop.value)
-                await setDesktopCallPinned(nativeWindow, false);
+                await setDesktopCallPinned(pinWindow, false);
               await nativeWindow.setFullscreen(enabled);
             } finally {
               const actual = await nativeWindow.isFullscreen();
@@ -412,9 +420,8 @@ export async function openDesktopCallWindow(options: {
                   !actual
                 );
                 if (!actual && context.alwaysOnTop.value) {
-                  await setDesktopCallPinned(nativeWindow, true);
-                  context.alwaysOnTop.value =
-                    await nativeWindow.isAlwaysOnTop();
+                  await setDesktopCallPinned(pinWindow, true);
+                  context.alwaysOnTop.value = await pinWindow.isAlwaysOnTop();
                 }
               }
             }
@@ -458,8 +465,8 @@ export async function openDesktopCallWindow(options: {
           ) {
             context.fullscreen.value = actual;
             if (!actual && context.alwaysOnTop.value) {
-              await setDesktopCallPinned(nativeWindow, true);
-              context.alwaysOnTop.value = await nativeWindow.isAlwaysOnTop();
+              await setDesktopCallPinned(pinWindow, true);
+              context.alwaysOnTop.value = await pinWindow.isAlwaysOnTop();
             }
             doc.documentElement.classList.toggle(
               'chat-desktop-custom-chrome',

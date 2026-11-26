@@ -3659,6 +3659,8 @@ dependencies = [
  "base64 0.22.1",
  "cidre",
  "futures",
+ "gdk",
+ "gtk",
  "objc2",
  "objc2-app-kit",
  "objc2-web-kit",

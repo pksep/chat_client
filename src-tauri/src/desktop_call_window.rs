@@ -218,6 +218,43 @@ pub fn desktop_call_window_available<R: Runtime>(window: WebviewWindow<R>) -> bo
             .load(Ordering::SeqCst)
 }
 
+#[tauri::command]
+pub async fn desktop_call_window_pinned<R: Runtime>(
+    window: WebviewWindow<R>,
+) -> Result<bool, String> {
+    if window.label() != "main" {
+        return Err("Окно звонка управляется основным окном чата".into());
+    }
+    let call = window
+        .app_handle()
+        .get_webview_window(CALL_WINDOW_LABEL)
+        .ok_or("Окно звонка закрыто")?;
+    #[cfg(target_os = "linux")]
+    {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let target = call.clone();
+        call.run_on_main_thread(move || {
+            use gtk::prelude::*;
+            // У popup Tao может хранить старое значение, хотя WM уже выставил ABOVE.
+            // GDK читает состояние реального окна, а не локальный флаг Tao.
+            let state = target
+                .gtk_window()
+                .map_err(|error| error.to_string())
+                .map(|window| {
+                    window
+                        .window()
+                        .map(|window| window.state().contains(gdk::WindowState::ABOVE))
+                        .unwrap_or(false)
+                });
+            let _ = sender.send(state);
+        })
+        .map_err(|error| error.to_string())?;
+        receiver.await.map_err(|error| error.to_string())?
+    }
+    #[cfg(not(target_os = "linux"))]
+    call.is_always_on_top().map_err(|error| error.to_string())
+}
+
 pub fn close_call_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(CALL_WINDOW_LABEL) {
         window.destroy().map_err(|error| error.to_string())?;

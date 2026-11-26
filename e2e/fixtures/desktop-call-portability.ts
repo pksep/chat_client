@@ -103,6 +103,10 @@ try {
   if (!doc.querySelector('.call-modal'))
     throw new Error('DOM окна потерян после навигации');
   const capabilities = await invoke<any>('desktop_call_window_capabilities');
+  const readPin = () =>
+    capabilities.os === 'linux'
+      ? invoke<boolean>('desktop_call_window_pinned')
+      : host!.context.nativeWindow.isAlwaysOnTop();
   await report({
     step: 'incoming-without-activation',
     passed: true,
@@ -126,7 +130,7 @@ try {
           step: 'pin-failure-detail',
           passed: false,
           error: String(error),
-          actual: await host!.context.nativeWindow.isAlwaysOnTop()
+          actual: await readPin()
         });
         throw error;
       }
@@ -137,16 +141,14 @@ try {
       step: 'pin-observed',
       supported: host.context.pinSupported,
       changing: host.context.pinChanging.value,
-      native: await host.context.nativeWindow.isAlwaysOnTop(),
+      native: await readPin(),
       pressed: pin.getAttribute('aria-pressed'),
       disabled: pin.disabled
     });
     await wait(() => host!.context.alwaysOnTop.value, 'Пин не включился');
-    if (!(await host.context.nativeWindow.isAlwaysOnTop()))
-      throw new Error('ОС не закрепила окно');
+    if (!(await readPin())) throw new Error('ОС не закрепила окно');
     await host.context.showMain();
-    if (!(await host.context.nativeWindow.isAlwaysOnTop()))
-      throw new Error('Пин потерялся после смены фокуса');
+    if (!(await readPin())) throw new Error('Пин потерялся после смены фокуса');
     await host.show();
     await host.context.setFullscreen(true);
     await wait(
@@ -158,10 +160,7 @@ try {
       async () => !(await host!.context.nativeWindow.isFullscreen()),
       'Fullscreen не завершился'
     );
-    await wait(
-      () => host!.context.nativeWindow.isAlwaysOnTop(),
-      'Пин не восстановлен после fullscreen'
-    );
+    await wait(readPin, 'Пин не восстановлен после fullscreen');
     pin.click();
     await wait(() => !host!.context.alwaysOnTop.value, 'Пин не выключился');
   } else if (!pin.disabled || pin.getAttribute('aria-pressed') !== 'false')

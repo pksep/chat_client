@@ -154,7 +154,10 @@ try {
         '--autoplay-policy=no-user-gesture-required'
     }
   );
-  native.once('exit', () => finish(false));
+  native.once('exit', (code, signal) => {
+    console.log(JSON.stringify({ step: 'native-exit', code, signal }));
+    finish(false);
+  });
   await writeFile(
     path.join(root, 'pids.json'),
     JSON.stringify({
