@@ -166,10 +166,15 @@ jobs:
           cache-on-failure: true
       - name: Install Linux runtime
         if: runner.os == 'Linux'
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: |
+          for source in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
+            if test -f "$source"; then
+              sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
+            fi
+          done
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libxdo-dev libasound2-dev librsvg2-dev clang libclang-dev cmake pkg-config libunwind-dev libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good xvfb openbox weston dbus-x11 wmctrl x11-utils
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libxdo-dev libasound2-dev librsvg2-dev pkg-config libunwind-dev libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good xvfb openbox weston dbus-x11 wmctrl x11-utils
       - run: bun install --frozen-lockfile
       - name: Check native desktop
         if: runner.os != 'Linux'
