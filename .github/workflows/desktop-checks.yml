@@ -177,11 +177,6 @@ jobs:
         timeout-minutes: 20
         run: |
           mkdir -p "$HOME/.cache/chat-call-apt/partial"
-          for source in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
-            if test -f "$source"; then
-              sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
-            fi
-          done
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
           sudo apt-get -o Dir::Cache::archives="$HOME/.cache/chat-call-apt" -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libxdo-dev libasound2-dev librsvg2-dev pkg-config libunwind-dev libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good xvfb openbox weston dbus-x11 wmctrl x11-utils
           sudo chmod -R a+rX "$HOME/.cache/chat-call-apt"
@@ -208,6 +203,8 @@ jobs:
           chmod 700 "$XDG_RUNTIME_DIR"
           dbus-run-session -- xvfb-run -a -s '-screen 0 1600x1200x24' bash -c '
             trap "cat /tmp/call-weston.log" EXIT
+            openbox >/tmp/call-wayland-openbox.log 2>&1 &
+            sleep .5
             weston --backend=x11-backend.so --use-pixman --socket=wayland-qa --width=1600 --height=1200 --idle-time=0 >/tmp/call-weston.log 2>&1 &
             for attempt in {1..50}; do test -S "$XDG_RUNTIME_DIR/wayland-qa" && break; sleep .1; done
             export WAYLAND_DISPLAY=wayland-qa GDK_BACKEND=wayland
