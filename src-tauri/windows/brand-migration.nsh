@@ -108,6 +108,9 @@ Var SepLegacyInstall
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
+  ${If} $UpdateMode = 1
+    WriteRegStr SHCTX "Software\${BUNDLEID}\Updater" "PendingForegroundVersion" "${VERSION}"
+  ${EndIf}
   !insertmacro SEP_MIGRATE_SHORTCUTS "$DESKTOP" "$SMPROGRAMS"
   ; Путь мог быть правильным при потерянном AppUserModelId. Исправляем и после миграции.
   !insertmacro SEP_REFRESH_SHORTCUT_IDS "$DESKTOP" "$SMPROGRAMS"
@@ -122,4 +125,8 @@ Var SepLegacyInstall
       DeleteRegKey SHCTX "Software\${MANUFACTURER}\SEP Chat"
     ${EndIf}
   ${EndIf}
+!macroend
+
+!macro NSIS_HOOK_POSTUNINSTALL
+  DeleteRegKey SHCTX "Software\${BUNDLEID}\Updater"
 !macroend

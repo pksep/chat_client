@@ -9,6 +9,8 @@ mod desktop_auth;
 mod desktop_recovery;
 #[cfg(windows)]
 mod desktop_autostart;
+#[cfg(windows)]
+mod desktop_update_launch;
 #[cfg(desktop)]
 mod desktop_call_controls;
 #[cfg(desktop)]
@@ -202,6 +204,23 @@ fn desktop_restart<R: Runtime>(app: AppHandle<R>) {
 #[cfg(desktop)]
 fn launched_from_autostart() -> bool {
     std::env::args().any(|arg| arg == AUTOSTART_ARG)
+}
+
+#[cfg(desktop)]
+fn take_update_foreground<R: Runtime>(_app: &AppHandle<R>) -> bool {
+    #[cfg(windows)]
+    match desktop_update_launch::take_pending_foreground(
+        &_app.config().identifier,
+        &_app.package_info().version.to_string(),
+    ) {
+        Ok(pending) => pending,
+        Err(error) => {
+            eprintln!("Не удалось проверить запуск после обновления: {error}");
+            false
+        }
+    }
+    #[cfg(not(windows))]
+    false
 }
 
 #[cfg(desktop)]
@@ -550,7 +569,9 @@ fn setup_desktop<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
 
     let _tray = tray_builder.build(app)?;
 
-    if launched_from_autostart() {
+    if take_update_foreground(app.handle()) {
+        show_main_window(app.handle());
+    } else if launched_from_autostart() {
         if let Some(window) = app.get_webview_window("main") {
             hide_window(&window);
         }
@@ -582,7 +603,7 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = builder
         .plugin(tauri_plugin_single_instance::init(|app, args, _| {
-            if !args.iter().any(|arg| arg == AUTOSTART_ARG) {
+            if take_update_foreground(app) || !args.iter().any(|arg| arg == AUTOSTART_ARG) {
                 show_main_window(app);
             }
         }))
@@ -711,6 +732,10 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            #[cfg(debug_assertions)]
+            if matches!(event, WindowEvent::Destroyed) {
+                eprintln!("Окно Tauri уничтожено: {}", window.label());
+            }
             #[cfg(desktop)]
             if matches!(event, WindowEvent::Focused(_) | WindowEvent::Resized(_)) {
                 if let Some(webview) = window.app_handle().get_webview_window(window.label()) {
@@ -743,6 +768,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("Не удалось создать приложение Tauri")
         .run(|_app, _event| {
+            #[cfg(debug_assertions)]
+            if matches!(_event, tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. }) {
+                eprintln!("Завершение цикла Tauri: {_event:?}");
+            }
             #[cfg(target_os = "macos")]
             if matches!(_event, tauri::RunEvent::Reopen { .. }) {
                 show_main_window(_app);

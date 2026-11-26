@@ -61,6 +61,24 @@ const report = (value: unknown) =>
     method: 'POST',
     body: JSON.stringify(value)
   });
+const ipc = (window as any).__TAURI_INTERNALS__.invoke;
+(window as any).__TAURI_INTERNALS__.invoke = async (
+  command: string,
+  args: unknown
+) => {
+  const trace = command === 'desktop_call_window_capabilities';
+  if (trace) await report({ step: 'capabilities-request' });
+  const result = await ipc(command, args);
+  if (trace) await report({ step: 'capabilities-response', result });
+  return result;
+};
+const openSurface = window.open.bind(window);
+window.open = (url?: string | URL, target?: string, features?: string) => {
+  void report({ step: 'popup-request' });
+  const surface = openSurface(url, target, features);
+  void report({ step: 'popup-response', returned: !!surface });
+  return surface;
+};
 window.addEventListener(
   'unhandledrejection',
   e => void report({ passed: false, error: String(e.reason) })

@@ -189,6 +189,8 @@ pub fn desktop_call_window_capabilities<R: Runtime>(
     window: WebviewWindow<R>,
     prepare: Option<bool>,
 ) -> Result<CallWindowCapabilities, String> {
+    #[cfg(debug_assertions)]
+    eprintln!("Окно звонка: проверка оболочки, prepare={prepare:?}");
     if window.label() != "main" {
         return Err("Окно звонка управляется основным окном чата".into());
     }

@@ -50,6 +50,7 @@ import {
 } from './desktop-window-state';
 import { waitForDesktopCallDocument } from './desktop-call-document';
 import { setDesktopCallPinned } from './desktop-call-pin';
+import { waitForDesktopCallFullscreen } from './desktop-call-fullscreen';
 import { getTelemetryErrorPayload, recordTelemetryEvent } from './useTelemetry';
 
 interface CallWindowCapabilities {
@@ -414,7 +415,13 @@ export async function openDesktopCallWindow(options: {
               if (enabled && context.alwaysOnTop.value)
                 await setDesktopCallPinned(pinWindow, false);
               await nativeWindow.setFullscreen(enabled);
+              await waitForDesktopCallFullscreen(
+                nativeWindow,
+                enabled,
+                () => alive
+              );
             } finally {
+              if (!alive) return;
               const actual = await nativeWindow.isFullscreen();
               if (alive && revision === fullscreenRevision) {
                 fullscreenSettledRevision = revision;
