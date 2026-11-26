@@ -16,7 +16,12 @@ const prepareAiSession = async (page: Page): Promise<void> => {
 
   await page.route(organizationUrl + '/config', route => route.fulfill({
     contentType: 'text/plain',
-    body: Object.entries(config).map(([key, value]) => 'VITE_' + key + '=' + value).join('\n')
+    body: [
+      'VITE_MASTRA_URL=' + config.CHAT_MASTRA_URL,
+      'VITE_CHAT_API_DOMAIN=' + config.CHAT_API_DOMAIN,
+      'VITE_CHAT_WS_DOMAIN=' + config.CHAT_WS_DOMAIN,
+      'VITE_ERP_URL=' + config.CHAT_ERP_URL
+    ].join('\n')
   }));
   await page.route(organizationUrl + '/auth/session', route => route.fulfill({ json: user }));
   await page.addInitScript(({ organizationUrl, config, user }): void => {
@@ -77,6 +82,79 @@ test('раздел агентов доступен только в настол�
       await expect.poll(() => container.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
     }
   }
+});
+
+test('показывает провайдера тегом и ищет модель по названию и провайдеру', async ({
+  page
+}): Promise<void> => {
+  await prepareAiSession(page);
+  await page.route('**/response-models', route =>
+    route.fulfill({
+      json: {
+        defaults: { quick: 'sol', advanced: 'sol' },
+        models: [
+          { id: 'sol', name: 'Sol (Preview) (OpenAI)', efforts: ['low'] },
+          {
+            id: 'opencode-go|sol',
+            name: 'Sol (Preview) (OpenCode Go)',
+            efforts: ['low']
+          },
+          {
+            id: 'opencode-go|deepseek',
+            name: 'DeepSeek (OpenCode Go)',
+            efforts: ['low']
+          },
+          {
+            id: 'openrouter|sol',
+            name: 'Sol (Preview) (OpenRouter)',
+            efforts: ['low']
+          }
+        ]
+      }
+    })
+  );
+
+  await page.goto('/ai' + organizationQuery);
+  const trigger = page.locator('.ai-composer-settings__trigger:visible');
+  const badge = '.ai-composer-settings__provider';
+  await expect(trigger).toHaveAttribute('title', 'Sol (Preview)', {
+    timeout: 30_000
+  });
+  await expect(trigger.locator(badge)).toHaveCount(0);
+  await trigger.click();
+  const picker = page.getByRole('button', { name: /^Выбрать модель,/ });
+  await expect(picker.locator(badge)).toHaveCount(0);
+  await picker.click();
+
+  const dialog = page.getByRole('dialog', { name: 'Выбор модели' });
+  const search = dialog.getByPlaceholder('Поиск моделей');
+  const choices = dialog.locator('button[aria-pressed]');
+  await expect(search).toBeFocused();
+  await expect(choices).toHaveCount(4);
+  const badges = choices.locator(badge);
+  await expect(badges.getByText('OpenAI', { exact: true })).toBeVisible();
+  await expect(badges.filter({ hasText: 'OpenAI' })).toHaveClass(/\bblue-yui-kit\b/);
+  await expect(badges.filter({ hasText: 'OpenCode Go' }).first()).toHaveClass(/\bviolet-yui-kit\b/);
+  await expect(badges.filter({ hasText: 'OpenRouter' })).toHaveClass(/\bgreen-yui-kit\b/);
+  const selected = dialog.locator('button[aria-pressed="true"]');
+  await expect(selected.locator(badge)).toHaveText('OpenAI');
+  await expect(selected.locator(':scope > svg')).toHaveCount(0);
+  await search.fill('OPENCODE');
+  await expect(choices).toHaveCount(2);
+  await search.fill('сияние');
+  await expect(dialog.getByRole('status')).toHaveText('Модели не найдены');
+  await search.fill('  Go   PREVIEW ');
+  await expect(choices).toHaveCount(1);
+  await expect(choices.locator(badge)).toHaveText('OpenCode Go');
+  await choices.click();
+
+  await expect(picker).toHaveAccessibleName('Выбрать модель, Sol (Preview)');
+  await expect(trigger).not.toContainText('OpenCode Go');
+  await picker.click();
+  await expect(search).toHaveValue('');
+  await expect(choices).toHaveCount(4);
+  await expect(selected.locator(badge)).toHaveText('OpenCode Go');
+  await expect(selected.locator(':scope > svg')).toHaveCount(0);
 });
 
 for (const theme of ['theme-light', 'theme-dark']) {
