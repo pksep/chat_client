@@ -1,3 +1,10 @@
+## [1.58.1](https://github.com/pksep/chat_client/compare/v1.58.0...v1.58.1) (2026-11-26)
+
+
+### Bug Fixes
+
+* unify pinned comment editor modal [skip ci] ([ab69785](https://github.com/pksep/chat_client/commit/ab69785189f6c6161778fd6d3d1403bfe770c83c))
+
 # [1.58.0](https://github.com/pksep/chat_client/compare/v1.57.0...v1.58.0) (2026-11-26)
 
 
