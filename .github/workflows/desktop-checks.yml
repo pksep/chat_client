@@ -1,4 +1,4 @@
-name: Desktop Checks
+﻿name: Desktop Checks
 
 on:
   pull_request:
@@ -168,7 +168,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libxdo-dev libasound2-dev librsvg2-dev clang libclang-dev cmake pkg-config libunwind-dev libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-nice xvfb openbox weston dbus-x11
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libxdo-dev libasound2-dev librsvg2-dev clang libclang-dev cmake pkg-config libunwind-dev libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-nice xvfb openbox weston dbus-x11 wmctrl x11-utils
       - run: bun install --frozen-lockfile
       - name: Check native desktop
         if: runner.os != 'Linux'

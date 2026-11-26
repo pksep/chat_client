@@ -7,6 +7,7 @@
     }"
     :data-testid="`PinComment-${comment.id}`"
     @click.stop="openMobileMenu"
+    @dblclick.stop
     @contextmenu.prevent.stop="openMenu"
   >
     <div class="pin-note__card">

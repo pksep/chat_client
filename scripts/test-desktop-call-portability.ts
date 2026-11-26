@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -55,6 +55,32 @@ const api = Bun.serve({
     const report = await request.json();
     reports.push(report);
     console.log(JSON.stringify(report));
+    if (
+      report.step === 'pin-observed' &&
+      process.platform === 'linux' &&
+      process.env.GDK_BACKEND === 'x11'
+    ) {
+      try {
+        const windows = execFileSync('wmctrl', ['-l'], { encoding: 'utf8' });
+        for (const line of windows.trim().split('\n')) {
+          const id = line.split(/\s+/)[0];
+          if (/^0x[0-9a-f]+$/i.test(id))
+            console.log(
+              JSON.stringify({
+                step: 'x11-state',
+                window: line,
+                state: execFileSync(
+                  'xprop',
+                  ['-id', id, '_NET_WM_STATE', '_NET_WM_WINDOW_TYPE'],
+                  { encoding: 'utf8' }
+                )
+              })
+            );
+        }
+      } catch (error) {
+        console.log(String(error));
+      }
+    }
     await writeFile(
       path.join(root, 'report.json'),
       JSON.stringify(reports, null, 2)

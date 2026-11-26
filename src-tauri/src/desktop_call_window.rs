@@ -56,10 +56,11 @@ fn popup_error<R: Runtime>(app: &AppHandle<R>, message: &str) {
 }
 
 pub fn is_call_window_url(url: &tauri::Url) -> bool {
-    url.scheme() == "about"
-        && url.path() == "blank"
-        && url.query().is_none()
-        && url.fragment() == Some("sep-chat-call")
+    url.as_str() == "about:blank%23sep-chat-call"
+        || (url.scheme() == "about"
+            && url.path() == "blank"
+            && url.query().is_none()
+            && url.fragment() == Some("sep-chat-call"))
 }
 
 pub fn create_main_window<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {

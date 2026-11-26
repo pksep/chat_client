@@ -14,7 +14,8 @@ export async function waitForDesktopCallDocument(
       if (
         doc.body &&
         doc.readyState === 'complete' &&
-        doc.URL === 'about:blank#sep-chat-call'
+        (doc.URL === 'about:blank#sep-chat-call' ||
+          doc.URL === 'about:blank%23sep-chat-call')
       )
         return doc;
     } catch (error) {
