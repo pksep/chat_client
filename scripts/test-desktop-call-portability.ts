@@ -3,6 +3,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const origin = 'http://127.0.0.1:5184';
+const fixture =
+  process.env.CHAT_NATIVE_UI === '1'
+    ? 'desktop-ui-regressions'
+    : 'desktop-call-portability';
 const root = path.resolve(
   'test-results-native',
   `call-portability-${process.platform}-${process.arch}`
@@ -26,7 +30,7 @@ await writeFile(
     productName: 'СЭП Чат — проверка окна',
     build: {
       beforeDevCommand: '',
-      devUrl: `${origin}/e2e/fixtures/desktop-call-portability.html`
+      devUrl: `${origin}/e2e/fixtures/${fixture}.html`
     },
     app: {
       appDirectoriesOverride: path.join(root, 'profile'),
@@ -170,10 +174,7 @@ try {
   while (true) {
     if (vite.exitCode !== null) throw new Error('Vite завершился до запуска');
     try {
-      if (
-        (await fetch(`${origin}/e2e/fixtures/desktop-call-portability.html`)).ok
-      )
-        break;
+      if ((await fetch(`${origin}/e2e/fixtures/${fixture}.html`)).ok) break;
     } catch {
       /* Запуск Vite. */
     }

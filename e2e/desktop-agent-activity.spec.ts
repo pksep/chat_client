@@ -316,6 +316,7 @@ test('Агенты показывают ход работы, запрос раз
   const assistant = page.getByTestId('AI-Assistant');
   const thread = assistant.locator('.ai-assistant__conversation');
   const sidebar = page.getByTestId('AI-MenuPanel');
+  await sidebar.getByRole('tab', { name: 'Агенты', exact: true }).click();
   const footer = page.locator('.menu-bottom-nav__ai-control');
   const footerStatus = footer.locator('.menu-bottom-nav__ai-status');
   const row = sidebar
@@ -518,6 +519,7 @@ test('Агенты показывают ход работы, запрос раз
   await expect(answer.getByLabel('Ход работы агента')).toHaveCount(2);
   await page.getByRole('button', { name: 'Информация об ИИ-чате', exact: true }).click();
   const infoPanel = page.getByTestId('AiConversationInfo');
+  await expect(infoPanel).toBeVisible({ timeout: 15_000 });
   await expect(infoPanel.getByRole('button', { name: 'котик.png' })).toBeVisible();
   await infoPanel.getByRole('tab', { name: 'Файлы', exact: true }).click();
   await expect(infoPanel.getByText('котик.svg', { exact: true })).toBeVisible();

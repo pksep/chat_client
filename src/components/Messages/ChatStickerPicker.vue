@@ -781,7 +781,9 @@ const chooseMode = (mode: string) => {
     deactivate();
     return;
   }
-  if (!props.enabled || !wrapper || !bodyTarget.value || active.value) return;
+  // UI-kit может показать переключатель раньше асинхронного body. Сохраняем
+  // выбор сразу; isVisible откроет сетку после появления контейнера.
+  if (!props.enabled || !wrapper || active.value) return;
   prepared.value = true;
   active.value = true;
   refreshPacks = true;
