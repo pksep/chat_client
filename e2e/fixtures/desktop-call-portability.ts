@@ -171,9 +171,14 @@ try {
     passed: true,
     supported: host.context.pinSupported
   });
-  await host.context.nativeWindow.setSize(new LogicalSize(1400, 950));
+  const largeSize = new LogicalSize(
+    Math.min(1400, screen.availWidth),
+    Math.min(950, screen.availHeight - 40)
+  );
+  await host.context.nativeWindow.setSize(largeSize);
   await sleep(1200);
-  await host.context.nativeWindow.setSize(new LogicalSize(1400, 950));
+  await host.context.nativeWindow.setSize(largeSize);
+  await host.context.nativeWindow.center().catch(() => undefined);
   await sleep(300);
   const area = doc
     .querySelector('.call-modal__participants-panel--grid')
@@ -206,6 +211,7 @@ try {
     viewport: { width: host.popup.innerWidth, height: host.popup.innerHeight }
   });
   await host.dispose();
+  await report({ step: 'first-disposed', passed: true });
   host = await openDesktopCallWindow(options);
   if (!host) throw new Error('Повторный звонок не открылся');
   await host.show();

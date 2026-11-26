@@ -270,7 +270,9 @@ export async function openDesktopCallWindow(options: {
       alive = false;
       desktopCallWindowReady.value = false;
       if (checkClosed) clearInterval(checkClosed);
-      unlisten.splice(0).forEach(dispose => dispose());
+      await Promise.allSettled(
+        unlisten.splice(0).map(dispose => Promise.resolve().then(dispose))
+      );
       // Сначала возвращаем живые диалоги в основной документ, затем уничтожаем окно.
       if (childDocument && desktopOverlayTarget.value === childDocument.body) {
         desktopOverlayTarget.value = 'body';
@@ -451,28 +453,36 @@ export async function openDesktopCallWindow(options: {
       };
       host.addEventListener('resize', resize);
       unlisten.push(() => host.removeEventListener('resize', resize));
-      unlisten.push(
-        await nativeWindow.onResized(async () => {
-          if (!alive) return;
-          resize();
-          if (fullscreenRevision !== fullscreenSettledRevision) return;
-          const revision = fullscreenRevision;
-          const actual = await nativeWindow.isFullscreen();
-          if (
-            alive &&
-            revision === fullscreenRevision &&
-            revision === fullscreenSettledRevision
-          ) {
-            context.fullscreen.value = actual;
-            if (!actual && context.alwaysOnTop.value) {
-              await setDesktopCallPinned(pinWindow, true);
-              context.alwaysOnTop.value = await pinWindow.isAlwaysOnTop();
-            }
-            doc.documentElement.classList.toggle(
-              'chat-desktop-custom-chrome',
-              !actual
-            );
+      const refreshNativeWindow = async () => {
+        if (!alive) return;
+        resize();
+        if (fullscreenRevision !== fullscreenSettledRevision) return;
+        const revision = fullscreenRevision;
+        const actual = await nativeWindow.isFullscreen();
+        if (
+          alive &&
+          revision === fullscreenRevision &&
+          revision === fullscreenSettledRevision
+        ) {
+          context.fullscreen.value = actual;
+          if (!actual && context.alwaysOnTop.value) {
+            await setDesktopCallPinned(pinWindow, true);
+            context.alwaysOnTop.value = await pinWindow.isAlwaysOnTop();
           }
+          doc.documentElement.classList.toggle(
+            'chat-desktop-custom-chrome',
+            !actual
+          );
+        }
+      };
+      unlisten.push(
+        await nativeWindow.onResized(() => {
+          void refreshNativeWindow().catch(error => {
+            if (alive) {
+              record('state-failed', error);
+              console.warn('Не удалось обновить состояние окна звонка:', error);
+            }
+          });
         })
       );
       unlisten.push(

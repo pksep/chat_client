@@ -76,6 +76,43 @@ test('не показывает ложный пин при отказе окон
   await expect(pin).toBeEnabled();
 });
 
+test('закрытие во время запроса состояния не оставляет необработанную ошибку', async ({
+  page
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await open(page);
+  await page.evaluate(async () => {
+    const win = window as any;
+    const original = win.__TAURI_INTERNALS__.invoke;
+    let reject!: (error: Error) => void;
+    let started!: () => void;
+    const requested = new Promise<void>(resolve => {
+      started = resolve;
+    });
+    const pending = new Promise((_, fail) => {
+      reject = fail;
+    });
+    win.__TAURI_INTERNALS__.invoke = (command: string, args: any) => {
+      if (command === 'plugin:window|is_fullscreen' && args.label === 'call') {
+        started();
+        return pending;
+      }
+      return original(command, args);
+    };
+    const host = win.callWindowFixture.host;
+    const { LogicalSize } = await import(
+      '/node_modules/@tauri-apps/api/dpi.js'
+    );
+    await host.context.nativeWindow.setSize(new LogicalSize(900, 700));
+    await requested;
+    await host.dispose();
+    reject(new Error('window not found'));
+    await new Promise(resolve => setTimeout(resolve, 50));
+  });
+  expect(errors).toEqual([]);
+});
+
 test('в неподдерживаемом Wayland пин отключён с пояснением', async ({
   page
 }) => {
