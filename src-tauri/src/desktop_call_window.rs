@@ -260,7 +260,10 @@ fn x11_call_window_pinned<R: Runtime>(window: &WebviewWindow<R>) -> Result<bool,
         // У popup Tao и GDK могут хранить старый флаг. Читаем EWMH напрямую у WM,
         // без запуска внешних процессов и без подмены подтверждения локальным значением.
         let (connection, _) = x11rb::connect(None)?;
-        let state = connection.intern_atom(false, b"_NET_WM_STATE")?.reply()?.atom;
+        let state = connection
+            .intern_atom(false, b"_NET_WM_STATE")?
+            .reply()?
+            .atom;
         let above = connection
             .intern_atom(false, b"_NET_WM_STATE_ABOVE")?
             .reply()?
