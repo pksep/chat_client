@@ -1,3 +1,10 @@
+## [1.58.2](https://github.com/pksep/chat_client/compare/v1.58.1...v1.58.2) (2026-11-26)
+
+
+### Bug Fixes
+
+* **ai:** display assistant replies at full width ([76e6a95](https://github.com/pksep/chat_client/commit/76e6a9571116831d259d62a4491282a11d4e994c))
+
 ## [1.58.1](https://github.com/pksep/chat_client/compare/v1.58.0...v1.58.1) (2026-11-26)
 
 

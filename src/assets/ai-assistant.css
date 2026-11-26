@@ -831,9 +831,9 @@
 }
 
 .ai-assistant__message--assistant {
-  align-self: flex-start;
+  align-self: stretch;
   width: 100%;
-  max-width: min(680px, 100%);
+  max-width: none;
 }
 
 .ai-assistant__message--user + :is(.ai-assistant__message--assistant, .ai-assistant__progress),
