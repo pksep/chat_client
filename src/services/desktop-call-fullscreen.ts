@@ -5,8 +5,8 @@ export async function waitForDesktopCallFullscreen(
   enabled: boolean,
   current: () => boolean
 ): Promise<void> {
-  const deadline = performance.now() + 2000;
-  // ACK команды X11 приходит до подтверждения смены состояния от WM.
+  const deadline = performance.now() + 8000;
+  // ACK приходит раньше WM; macOS также завершает анимацию смены Space.
   while (current()) {
     if ((await window.isFullscreen()) === enabled) return;
     if (performance.now() >= deadline)

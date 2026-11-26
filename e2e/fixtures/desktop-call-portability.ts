@@ -1,6 +1,7 @@
 import { createApp, h } from 'vue';
 import { createPinia } from 'pinia';
 import { invoke } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
 import { LogicalSize } from '@tauri-apps/api/dpi';
 import { openDesktopCallWindow } from '../../src/services/desktop-call-window';
 import { authedUser } from '../../src/composables/useAuth';
@@ -91,6 +92,8 @@ try {
   await report({ step: 'fixture-start', passed: true });
   // Входящий вызов должен открываться без нажатия пользователя.
   await sleep(600);
+  await report({ step: 'version-probe-request' });
+  await report({ step: 'version-probe-response', version: await getVersion() });
   await report({ step: 'capabilities-probe-request' });
   await report({
     step: 'capabilities-probe-response',

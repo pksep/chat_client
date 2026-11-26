@@ -178,7 +178,7 @@ jobs:
         run: |
           mkdir -p "$HOME/.cache/chat-call-apt/partial"
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-          sudo apt-get -o Dir::Cache::archives="$HOME/.cache/chat-call-apt" -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libxdo-dev libasound2-dev librsvg2-dev pkg-config libunwind-dev libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good xvfb openbox weston dbus-x11 wmctrl x11-utils
+          sudo apt-get -o Dir::Cache::archives="$HOME/.cache/chat-call-apt" -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libxdo-dev libasound2-dev librsvg2-dev pkg-config libunwind-dev libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good xvfb openbox weston dbus-x11 wmctrl x11-utils gdb
           sudo chmod -R a+rX "$HOME/.cache/chat-call-apt"
       - run: bun install --frozen-lockfile
       - name: Check native desktop
@@ -209,7 +209,7 @@ jobs:
             for attempt in {1..50}; do test -S "$XDG_RUNTIME_DIR/wayland-qa" && break; sleep .1; done
             export WAYLAND_DISPLAY=wayland-qa GDK_BACKEND=wayland
             dbus-update-activation-environment DISPLAY WAYLAND_DISPLAY XDG_RUNTIME_DIR
-            WAYLAND_DEBUG=client WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBGL_ALWAYS_SOFTWARE=1 RUST_BACKTRACE=1 bun scripts/test-desktop-call-portability.ts
+            CHAT_CALL_NATIVE_TRACE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBGL_ALWAYS_SOFTWARE=1 RUST_BACKTRACE=1 bun scripts/test-desktop-call-portability.ts
           '
       - name: Save Linux runtime packages
         if: always() && runner.os == 'Linux' && steps.linux_runtime.outcome == 'success' && steps.linux_runtime_cache.outputs.cache-hit != 'true'

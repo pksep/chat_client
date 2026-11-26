@@ -1,5 +1,5 @@
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const origin = 'http://127.0.0.1:5184';
@@ -106,8 +106,14 @@ const api = Bun.serve({
   }
 });
 const children: ChildProcess[] = [];
-const launch = (args: string[], env = process.env) => {
-  const child = spawn(process.execPath, args, {
+const launch = (
+  args: string[],
+  env = process.env,
+  executable = process.execPath,
+  cwd = process.cwd()
+) => {
+  const child = spawn(executable, args, {
+    cwd,
     windowsHide: true,
     stdio: 'inherit',
     detached: process.platform !== 'win32',
@@ -161,14 +167,59 @@ try {
     if (Date.now() >= ready) throw new Error('Не запустился Vite');
     await new Promise(resolve => setTimeout(resolve, 200));
   }
-  const native = launch(
-    ['run', 'tauri', 'dev', '--no-watch', '--config', config],
-    {
-      ...process.env,
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
-        '--autoplay-policy=no-user-gesture-required'
-    }
-  );
+  const nativeEnv = {
+    ...process.env,
+    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
+      '--autoplay-policy=no-user-gesture-required'
+  };
+  let native: ChildProcess;
+  if (
+    process.platform === 'linux' &&
+    process.env.CHAT_CALL_NATIVE_TRACE === '1'
+  ) {
+    const buildEnv = {
+      ...nativeEnv,
+      TAURI_CONFIG: await readFile(config, 'utf8')
+    };
+    const build = launch(
+      ['build', '--no-default-features'],
+      buildEnv,
+      'cargo',
+      path.resolve('src-tauri')
+    );
+    const code = await new Promise(resolve => build.once('exit', resolve));
+    if (code !== 0) throw new Error('Не собрался диагностический бинарник');
+    native = launch(
+      [
+        '--batch',
+        '-ex',
+        'set pagination off',
+        '-ex',
+        'set confirm off',
+        '-ex',
+        'set debuginfod enabled off',
+        '-ex',
+        'handle SIGPIPE nostop noprint pass',
+        '-ex',
+        'catch syscall exit_group',
+        '-ex',
+        'run',
+        '-ex',
+        'thread apply all bt',
+        '-ex',
+        'continue',
+        '--args',
+        path.resolve('src-tauri/target/debug/sep-chat')
+      ],
+      buildEnv,
+      'gdb'
+    );
+  } else {
+    native = launch(
+      ['run', 'tauri', 'dev', '--no-watch', '--config', config],
+      nativeEnv
+    );
+  }
   native.once('exit', (code, signal) => {
     console.log(JSON.stringify({ step: 'native-exit', code, signal }));
     finish(false);
