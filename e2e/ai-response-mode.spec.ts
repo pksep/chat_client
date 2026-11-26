@@ -226,6 +226,36 @@ for (const theme of ['theme-light', 'theme-dark']) {
     }
 
     await expect(page.locator('.ai-assistant__thinking')).toHaveCount(0);
+    const conversation = page.locator('.ai-assistant__conversation');
+    const answer = conversation.locator('.ai-assistant__answer');
+    const prompt = conversation.locator(
+      '.ai-assistant__message--user .message__article__text'
+    );
+    await expect(answer).toContainText('Готово.');
+    await expect(answer).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(answer).toHaveCSS('padding-left', '0px');
+    await expect(answer).toHaveCSS('padding-right', '0px');
+    await expect(answer.locator('.message-bubble-tail')).toBeHidden();
+    await expect(prompt).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    const horizontalOffsets = await conversation.evaluate(element => {
+      const content = element.querySelector('.ai-assistant__answer')!
+        .getBoundingClientRect();
+      const container = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+
+      return [
+        content.left - container.left - parseFloat(style.paddingLeft),
+        container.right - content.right - parseFloat(style.paddingRight)
+      ];
+    });
+    for (const offset of horizontalOffsets) {
+      expect(Math.abs(offset)).toBeLessThanOrEqual(1);
+    }
+    await testInfo.attach(`full-width-reply-${theme}`, {
+      body: await conversation.screenshot(),
+      contentType: 'image/png'
+    });
+
     await editor.click();
     await page.keyboard.insertText('Ответь ещё раз');
     await send.click();
