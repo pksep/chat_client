@@ -33,10 +33,20 @@ for (const separate of [false, true]) {
       return route.continue();
     });
     let captures = 0;
-    await page.exposeFunction('unexpectedMicCapture', () => {
+    await context.exposeFunction('unexpectedMicCapture', () => {
       captures++;
     });
-    await page.addInitScript(() => {
+    await context.addInitScript(() => {
+      const win = window as any;
+      const contexts: AudioContext[] = [];
+      win.fixtureAudioContexts = contexts;
+      if (typeof AudioContext === 'function') {
+        const originalResume = AudioContext.prototype.resume;
+        AudioContext.prototype.resume = function () {
+          if (!contexts.includes(this)) contexts.push(this);
+          return originalResume.call(this);
+        };
+      }
       if (navigator.mediaDevices)
         navigator.mediaDevices.getUserMedia = async () => {
           await (window as any).unexpectedMicCapture();

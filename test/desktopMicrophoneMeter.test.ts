@@ -123,8 +123,8 @@ function fixture(initialState = 'running', pendingResume = false) {
       frames.clear();
       callbacks.forEach(callback => callback(now));
     },
-    gesture() {
-      events.get('pointerdown')?.(new Event('pointerdown'));
+    gesture(name = 'pointerdown') {
+      events.get(name)?.(new Event(name));
     }
   };
 }
@@ -179,6 +179,20 @@ test('позднее появление и замена track не требую�
   f.replaceTrack({ readyState: 'ended', enabled: true });
   f.frame();
   expect(f.meter.audioLevel.value).toBe(0);
+  f.meter.dispose();
+});
+
+test('click повторяет разблокировку после pointerdown с незавершённым resume', () => {
+  const f = fixture('suspended', true);
+  f.gesture();
+  expect(f.resumeCalls).toBe(1);
+  f.enabled.value = true;
+  expect(f.meter.ready.value).toBe(false);
+  f.gesture('click');
+  expect(f.resumeCalls).toBe(2);
+  f.frame();
+  expect(f.meter.ready.value).toBe(true);
+  expect(f.meter.audioLevel.value).toBeCloseTo(0.1);
   f.meter.dispose();
 });
 

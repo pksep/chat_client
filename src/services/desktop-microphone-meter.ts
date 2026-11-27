@@ -134,6 +134,8 @@ export function createDesktopMicrophoneMeter(options: {
     if (options.enabled.value && frame === null) sample();
   };
   host.addEventListener('pointerdown', wake, true);
+  // WebKit может разблокировать звук только на завершающем click того же жеста.
+  host.addEventListener('click', wake, true);
   host.addEventListener('keydown', wake, true);
   host.addEventListener('focus', wake);
   host.addEventListener('pageshow', wake);
@@ -148,6 +150,7 @@ export function createDesktopMicrophoneMeter(options: {
       unwatch();
       stopFrames();
       host.removeEventListener('pointerdown', wake, true);
+      host.removeEventListener('click', wake, true);
       host.removeEventListener('keydown', wake, true);
       host.removeEventListener('focus', wake);
       host.removeEventListener('pageshow', wake);

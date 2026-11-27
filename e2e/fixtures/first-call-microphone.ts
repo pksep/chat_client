@@ -104,7 +104,13 @@ Object.assign(window, {
         measuredLevel: host?.context.microphoneLevel.value,
         measuredSpeaking: host?.context.microphoneSpeaking.value,
         focused: target.document.hasFocus(),
-        visibility: target.document.visibilityState
+        visibility: target.document.visibilityState,
+        contexts: ((target as any).fixtureAudioContexts || []).map(
+          (context: AudioContext) => ({
+            state: context.state,
+            time: context.currentTime
+          })
+        )
       };
     },
     async stop() {
