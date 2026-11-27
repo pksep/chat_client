@@ -138,6 +138,8 @@ pub fn create_main_window<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> 
                 .title("Звонок — СЭП Чат")
                 .inner_size(960.0, 720.0)
                 .min_inner_size(420.0, 400.0)
+                // На macOS первый клик должен управлять звонком, а не только активировать окно.
+                .accept_first_mouse(true)
                 .decorations(false)
                 .visible(false),
             )

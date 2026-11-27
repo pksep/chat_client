@@ -19,9 +19,14 @@
 
     <div class="call-modal__group-panel-content">
       <div class="call-modal__group-panel-actions">
-        <button class="call-modal__group-panel-copy" @click="handleCopyLink">
+        <button
+          class="call-modal__group-panel-copy"
+          :aria-disabled="isCopying"
+          :aria-busy="isCopying"
+          @click="handleCopyLink"
+        >
           <LinkIcon />
-          <span>Скопировать ссылку</span>
+          <span>{{ isCopying ? 'Копируем…' : 'Скопировать ссылку' }}</span>
         </button>
         <button
           v-if="props.showOpenChat && props.onOpenChat"
@@ -32,6 +37,13 @@
           <span>Перейти в чат</span>
         </button>
       </div>
+      <p
+        v-if="copyStatus"
+        :role="copyFailed ? 'alert' : 'status'"
+        class="call-modal__group-panel-copy-status"
+      >
+        {{ copyStatus }}
+      </p>
 
       <div class="call-modal__group-panel-background-select">
         <div
@@ -162,10 +174,12 @@
           <div class="call-modal__group-panel-actions">
             <button
               class="call-modal__group-panel-copy"
+              :aria-disabled="isCopying"
+              :aria-busy="isCopying"
               @click="handleCopyLink"
             >
               <LinkIcon />
-              <span>Скопировать ссылку</span>
+              <span>{{ isCopying ? 'Копируем…' : 'Скопировать ссылку' }}</span>
             </button>
             <button
               v-if="props.showOpenChat && props.onOpenChat"
@@ -176,6 +190,13 @@
               <span>Перейти в чат</span>
             </button>
           </div>
+          <p
+            v-if="copyStatus"
+            :role="copyFailed ? 'alert' : 'status'"
+            class="call-modal__group-panel-copy-status"
+          >
+            {{ copyStatus }}
+          </p>
 
           <div class="call-modal__group-panel-background-select">
             <div
@@ -289,7 +310,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { useDesktopCallWindowContext } from '../Desktop/call-window-context';
 import {
   Button,
@@ -342,6 +363,15 @@ const {
 const callBackgroundInputRef = ref<HTMLInputElement | null>(null);
 const callBackgroundError = ref('');
 const isCallBackgroundMenuOpen = ref(false);
+const isCopying = ref(false);
+const copyStatus = ref('');
+const copyFailed = ref(false);
+watch(
+  () => props.open,
+  () => {
+    copyStatus.value = '';
+  }
+);
 
 const resolveCustomWallpaperUploadError = (file: File): string => {
   const isSupportedFile =
@@ -366,20 +396,29 @@ const notifyCopied = () => {
   });
 };
 
-const handleCopyLink = async () => {
+const handleCopyLink = async (event: MouseEvent) => {
+  if (isCopying.value) return;
+  const renderWindow = (event.currentTarget as HTMLElement).ownerDocument
+    .defaultView;
+  isCopying.value = true;
+  copyStatus.value = '';
+  copyFailed.value = false;
   try {
     if (props.onCopyLink) {
       const result = await props.onCopyLink();
-      if (result !== false) {
-        notifyCopied();
-      }
-      return;
+      if (result === false) throw new Error('Ссылка на встречу недоступна');
+    } else {
+      if (!renderWindow) throw new Error('Окно звонка недоступно');
+      await copyTextToClipboard(window.location.href, renderWindow);
     }
-
-    await copyTextToClipboard(window.location.href);
+    copyStatus.value = 'Ссылка на встречу скопирована';
     notifyCopied();
   } catch (error) {
     console.warn('Failed to copy group call link', error);
+    copyFailed.value = true;
+    copyStatus.value = 'Не удалось скопировать ссылку. Попробуйте ещё раз.';
+  } finally {
+    isCopying.value = false;
   }
 };
 

@@ -1,4 +1,4 @@
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, shallowRef } from 'vue';
 import type { IUser } from '../components/interfaces/interfaces';
 import type { AudioOutputRoute } from './useAudioOutput';
 
@@ -58,6 +58,7 @@ export const requestCallPresentation = () => {
 };
 export const isRemoteVideoActive = ref(false);
 export const localVideoStream = ref<MediaStream | null>(null);
+export const localMicrophoneTrack = shallowRef<MediaStreamTrack | null>(null);
 export const localScreenShareStream = ref<MediaStream | null>(null);
 export const handRaisedParticipants = ref<Record<string, boolean>>({});
 export const participantReactions = ref<

@@ -125,6 +125,7 @@ import {
   isModalVisible,
   isRemoteVideoActive,
   localScreenShareStream,
+  localMicrophoneTrack,
   localVideoStream,
   open,
   participantReactions,
@@ -2902,6 +2903,7 @@ const stopLocalMediaTracks = () => {
 
 const syncLocalTrackState = () => {
   if (!room) {
+    localMicrophoneTrack.value = null;
     localTrackStreamCache.clear();
     localVideoStream.value = null;
     localScreenShareStream.value = null;
@@ -2913,6 +2915,13 @@ const syncLocalTrackState = () => {
     }
     return;
   }
+
+  const microphone = Array.from(
+    room.localParticipant.audioTrackPublications.values()
+  ).find(publication => publication.source === Track.Source.Microphone)?.track
+    ?.mediaStreamTrack;
+  localMicrophoneTrack.value =
+    microphone?.readyState === 'live' ? microphone : null;
 
   const localVideoPublication = Array.from(
     room.localParticipant.videoTrackPublications.values()
@@ -3823,6 +3832,7 @@ const setLocalMicrophoneEnabled = async (
   );
 
   await applyLocalMicrophoneVoiceIsolation(publication);
+  if (activeRoom === room) syncLocalTrackState();
 
   return publication;
 };
@@ -5577,6 +5587,7 @@ const resetMediaState = () => {
   requestedVideoActive = false;
   videoToggleOperation = null;
   clearLocalScreenShareRecoveryState();
+  localMicrophoneTrack.value = null;
   localVideoStream.value = null;
   localScreenShareStream.value = null;
   clearRemoteExplicitlyLeftParticipants();
@@ -6927,16 +6938,23 @@ export const syncActiveCalls = async (
   });
 };
 
-export const copyInvitedGroupCallLink = async () => {
+export const getInvitedGroupCallLink = async (): Promise<string | null> => {
   const sdk = getChatSDK();
   const activeRoomId = roomId.value;
 
-  if (!sdk || !activeRoomId) return false;
+  if (!sdk || !activeRoomId) return null;
 
   const invite = await sdk.createGroupCallInvite(activeRoomId);
-  if (!invite) return false;
+  if (!invite?.inviteToken || !invite.roomId) return null;
 
-  await copyTextToClipboard(buildInviteUrl(invite));
+  return buildInviteUrl(invite);
+};
+
+export const copyInvitedGroupCallLink = async () => {
+  const url = await getInvitedGroupCallLink();
+  if (!url) return false;
+
+  await copyTextToClipboard(url);
   return true;
 };
 

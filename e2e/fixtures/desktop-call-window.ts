@@ -54,6 +54,17 @@ window.addEventListener(
 const pinia = createPinia();
 useThemeStore(pinia).setTheme(false);
 authedUser.value = { id: 'local-preview', initials: 'Вы' } as any;
+if (new URLSearchParams(location.search).has('clipboard')) {
+  const { initializeChat } = await import('../../src/services/useChat');
+  const { ChatSDK } = await import('../../src/services/useChatSDK');
+  ChatSDK.prototype.connect = () => new Promise<void>(() => {});
+  await initializeChat({
+    userId: 'local-preview',
+    token: 'clipboard-fixture-token',
+    apiUrl: `${location.origin}/call-fixture-api`,
+    wsUrl: 'ws://127.0.0.1:65530'
+  });
+}
 call.user.value = {
   id: 'ac7dbd0b-6e93-41ad-acf5-4e3b1dcc6a6f',
   initials: 'Проверка звонка'

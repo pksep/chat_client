@@ -863,6 +863,8 @@ import {
 import { Capacitor } from '@capacitor/core';
 import { useDesktopCallWindowContext } from '../Desktop/call-window-context';
 import { desktopCallPageSize } from '../../services/desktop-call-layout';
+import { createDesktopMicrophoneMeter } from '../../services/desktop-microphone-meter';
+import { copyTextToClipboard } from '../../utils/copyTextToClipboard';
 import { MAX_W_MD } from '../../utils/constants';
 import { useResizeState } from '../../composables/useResizeState';
 import CachedAvatar from '../UI/CachedAvatar.vue';
@@ -895,6 +897,7 @@ import {
   isRemoteVideoActive,
   invitedGroupCall,
   localVideoStream,
+  localMicrophoneTrack,
   localScreenShareStream,
   open as isCallOpen,
   remoteParticipants,
@@ -965,11 +968,34 @@ const isMobile = computed(() =>
 const isFullscreen = computed(
   () => callWindow?.fullscreen.value ?? liveKitState.isFullScreen
 );
+const localMicrophoneMeter =
+  !callWindow && !Capacitor.isNativePlatform()
+    ? createDesktopMicrophoneMeter({
+        renderWindow,
+        enabled: computed(
+          () => isCallOpen.value && liveKitState.isMicActive && !isMobile.value
+        ),
+        getTrack: () => localMicrophoneTrack.value
+      })
+    : null;
+onBeforeUnmount(() => localMicrophoneMeter?.dispose());
 const microphoneLevel = computed(
-  () => callWindow?.microphoneLevel.value ?? liveKitState.audioLevel
+  () =>
+    callWindow?.microphoneLevel.value ??
+    (localMicrophoneMeter?.ready.value &&
+    !isMobile.value &&
+    localMicrophoneTrack.value
+      ? localMicrophoneMeter.audioLevel.value
+      : liveKitState.audioLevel)
 );
 const microphoneSpeaking = computed(
-  () => callWindow?.microphoneSpeaking.value ?? liveKitState.isSpeaking
+  () =>
+    callWindow?.microphoneSpeaking.value ??
+    (localMicrophoneMeter?.ready.value &&
+    !isMobile.value &&
+    localMicrophoneTrack.value
+      ? localMicrophoneMeter.speaking.value
+      : liveKitState.isSpeaking)
 );
 const toggleFullscreen = () => {
   if (callWindow) void callWindow.toggleFullscreen();
@@ -1000,9 +1026,13 @@ const leaveCall = async () => {
 };
 
 const copyInviteGroupCallLink = async () => {
-  const { copyInvitedGroupCallLink } = await loadLiveKit();
-
-  return copyInvitedGroupCallLink();
+  const link = loadLiveKit().then(async ({ getInvitedGroupCallLink }) => {
+    const url = await getInvitedGroupCallLink();
+    if (!url) throw new Error('Ссылка на встречу недоступна');
+    return url;
+  });
+  await copyTextToClipboard(link, renderWindow);
+  return true;
 };
 
 const refreshAudioOutputRoutes = async () => {

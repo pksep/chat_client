@@ -611,6 +611,15 @@ body .tooltip-yui-kit__hint[data-testid^='CallModal-'][data-testid$='Tooltip'] {
 .call-modal__group-panel-actions> :only-child {
   grid-column: 1 / -1;
 }
+.call-modal__group-panel-copy-status {
+  margin: 0 18px 8px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-secondary);
+}
+.call-modal__group-panel-copy-status[role='alert'] {
+  color: var(--error-color);
+}
 
 .call-modal__group-panel-title {
   flex: 1;
