@@ -3,6 +3,7 @@ import { createPinia } from 'pinia';
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import { LogicalSize } from '@tauri-apps/api/dpi';
+import { desktopCallPageSize } from '../../src/services/desktop-call-layout';
 import { openDesktopCallWindow } from '../../src/services/desktop-call-window';
 import { authedUser } from '../../src/composables/useAuth';
 import { setConfig } from '../../src/services/useConfig';
@@ -210,7 +211,9 @@ try {
     area: area?.toJSON(),
     count: doc.querySelectorAll('.call-modal__remote-tile').length
   });
-  const expectedTiles = area && area.width >= 924 && area.height >= 534 ? 9 : 6;
+  const expectedTiles = area
+    ? desktopCallPageSize(area.width, area.height - 40)
+    : 6;
   await wait(
     () =>
       doc.querySelectorAll('.call-modal__remote-tile').length === expectedTiles,

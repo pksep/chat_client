@@ -9,7 +9,7 @@
   >
     <div class="desktop-titlebar__brand">
       <ChatIcon />
-      <span>СЭП Чат</span>
+      <span class="desktop-titlebar__name">СЭП Чат</span>
     </div>
     <div class="desktop-titlebar__space" aria-hidden="true" />
     <div
@@ -267,9 +267,16 @@ onBeforeUnmount(() => {
   font-size: 12px;
   font-weight: 600;
   pointer-events: none;
+  min-width: 0;
+  white-space: nowrap;
+}
+.desktop-titlebar__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .desktop-titlebar__brand .chat-icon {
+  flex-shrink: 0;
   width: 20px;
   height: 20px;
 }
@@ -283,6 +290,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 2px;
+  flex-shrink: 0;
 }
 
 .desktop-titlebar__sharing {

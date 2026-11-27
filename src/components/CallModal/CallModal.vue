@@ -1508,15 +1508,12 @@ const bindFocusedScreenShareFitClass = (video: HTMLVideoElement | null) => {
 };
 const maxParticipantsPerPage = computed(() => {
   if (isMobile.value) return 4;
-  if (isFullscreen.value) return 9;
   // Область участников уже исключает шапку и управление. Резерв пагинации
   // не даёт размеру страницы колебаться при появлении/скрытии её кнопок.
-  return callWindow
-    ? desktopCallPageSize(
-        callGridArea.value.width,
-        callGridArea.value.height - 40
-      )
-    : 6;
+  return desktopCallPageSize(
+    callGridArea.value.width,
+    callGridArea.value.height - 40
+  );
 });
 const isScreenShareUnavailableOnMobile = computed(() => {
   // Захват из дочернего WKWebView выполняет нативный контроллер звонка.

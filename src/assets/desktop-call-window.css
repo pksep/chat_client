@@ -20,3 +20,9 @@ html.desktop-call-window {
 .desktop-call-window .mic-icon__audio-wave {
   transition: none;
 }
+
+@media (max-width: 300px) {
+  .desktop-call-window .desktop-titlebar__name {
+    display: none;
+  }
+}

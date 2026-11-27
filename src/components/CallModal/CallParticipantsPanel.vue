@@ -80,7 +80,7 @@
         </div>
         <ConnectionQualityIndicator :quality="participant.connectionQuality" />
         <div class="call-modal__remote-name">
-          <span>{{ participant.name }}</span>
+          <span :title="participant.name">{{ participant.name }}</span>
           <MicIcon
             v-if="participant.isMicActive"
             :audio-level="participant.audioLevel"
@@ -96,6 +96,8 @@
     >
       <button
         class="call-modal__pagination-arrow"
+        type="button"
+        aria-label="Предыдущие участники"
         :disabled="currentPage === 0"
         @click="goToPage(currentPage - 1)"
       >
@@ -103,9 +105,12 @@
       </button>
       <div class="call-modal__pagination-dots">
         <button
-          v-for="page in totalPages"
+          v-for="page in visiblePages"
           :key="page"
           class="call-modal__pagination-dot"
+          type="button"
+          :aria-label="`Страница участников ${page} из ${totalPages}`"
+          :aria-current="currentPage === page - 1 ? 'page' : undefined"
           :class="{
             'call-modal__pagination-dot--active': currentPage === page - 1
           }"
@@ -114,6 +119,8 @@
       </div>
       <button
         class="call-modal__pagination-arrow"
+        type="button"
+        aria-label="Следующие участники"
         :disabled="currentPage === totalPages - 1"
         @click="goToPage(currentPage + 1)"
       >
@@ -124,7 +131,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, type CSSProperties } from 'vue';
+import { computed, ref, watch, type CSSProperties } from 'vue';
 import { Icon, IconNameEnum } from '@pksep/yui';
 import HandRaiseIcon from './UI/HandRaiseIcon.vue';
 import MicDisableIcon from './UI/MicDisableIcon.vue';
@@ -196,6 +203,15 @@ const props = defineProps<{
   setRemoteVideoRef: (identity: string, el: Element | null) => void;
 }>();
 
+const visiblePages = computed(() => {
+  const count = Math.min(5, props.totalPages);
+  const first = Math.max(
+    1,
+    Math.min(props.currentPage - 1, props.totalPages - count + 1)
+  );
+  return Array.from({ length: count }, (_, index) => first + index);
+});
+
 let swipe: { id: number; x: number; y: number; horizontal: boolean } | null =
   null;
 let suppressClickUntil = 0;
@@ -261,6 +277,115 @@ const suppressSwipeClick = (event: MouseEvent) => {
 }
 .call-modal__remote-grid {
   touch-action: pan-y pinch-zoom;
+}
+.call-modal__remote-grid.call-modal__remote-grid--quad {
+  min-height: 0;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+}
+.call-modal__remote-grid--quad .call-modal__remote-tile {
+  min-height: 0;
+}
+.call-modal__remote-tile {
+  container: call-participant / size;
+}
+.call-modal__pagination-dots {
+  margin: 0 auto 2px;
+}
+.call-modal__pagination-dot {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  background: transparent;
+}
+.call-modal__pagination-dot::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--blue12);
+}
+.call-modal__pagination-dot--active::before {
+  background: var(--text-link);
+}
+.call-modal__pagination-dot:focus-visible,
+.call-modal__pagination-arrow:focus-visible {
+  outline: 2px solid var(--text-link);
+  outline-offset: 1px;
+}
+.call-modal__pagination-arrow {
+  width: 32px;
+  height: 32px;
+}
+.call-modal__pagination-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+@container call-participants (max-height: 320px) {
+  .call-modal__pagination {
+    margin-top: 6px;
+  }
+}
+@container call-participant (max-height: 140px) {
+  .call-modal__remote-placeholder {
+    box-sizing: border-box;
+    padding-bottom: 24px;
+  }
+  .call-modal__remote-grid .call-modal__avatar {
+    --size-avatar: 16px;
+  }
+  .call-modal__remote-grid .call-modal__avatar :deep(.avatar-yui-kit__text) {
+    font-size: 20px;
+  }
+  .call-modal__remote-name {
+    left: 4px;
+    bottom: 4px;
+    max-width: calc(100% - 8px);
+    padding: 2px 6px;
+    font-size: 10px;
+  }
+  .call-modal__remote-name :deep(svg) {
+    width: 14px;
+    height: 14px;
+  }
+}
+@container call-participant (max-height: 80px) {
+  .call-modal__remote-grid .call-modal__avatar {
+    --size-avatar: 12px;
+  }
+  .call-modal__remote-grid .call-modal__avatar :deep(.avatar-yui-kit__text) {
+    font-size: 16px;
+  }
+}
+@container call-participant (max-height: 64px) {
+  .call-modal__remote-grid .call-modal__avatar {
+    --size-avatar: 8px;
+  }
+  .call-modal__remote-grid .call-modal__avatar :deep(.avatar-yui-kit__text) {
+    font-size: 12px;
+  }
+}
+@container call-participant (max-width: 120px) {
+  .call-modal__connection-quality {
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 16px;
+    padding: 2px 5px;
+  }
+  .call-modal__connection-quality
+    :deep(.call-modal__connection-quality-bar:nth-child(1)) {
+    height: 4px;
+  }
+  .call-modal__connection-quality
+    :deep(.call-modal__connection-quality-bar:nth-child(2)) {
+    height: 7px;
+  }
+  .call-modal__connection-quality
+    :deep(.call-modal__connection-quality-bar:nth-child(3)) {
+    height: 10px;
+  }
 }
 .call-modal__remote-grid.call-modal__remote-grid--group-duo {
   min-height: 0;
