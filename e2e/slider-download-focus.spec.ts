@@ -5,7 +5,7 @@ const WEBP_BODY = Buffer.from(
   'base64'
 );
 
-test('скачивание картинки из слайдера сохраняет фокус и не открывает вкладку', async ({
+test('скачивание картинки из слайдера сохраняет чат и открытый просмотрщик', async ({
   page,
   context
 }) => {
@@ -46,6 +46,9 @@ test('скачивание картинки из слайдера сохраня
         ]);
     }, port);
     const initialUrl = page.url();
+    const ios = await page.evaluate(() =>
+      /iPhone|iPad|iPod/.test(navigator.userAgent)
+    );
     let popups = 0;
     context.on('page', () => popups++);
     for (let index = 0; index < 2; index++) {
@@ -60,7 +63,7 @@ test('скачивание картинки из слайдера сохраня
       await expect(page.locator('dialog[open]')).toBeVisible();
     }
     expect(downloadRequests).toBe(2);
-    expect(popups).toBe(0);
+    expect(popups).toBe(ios ? 2 : 0);
     expect(page.url()).toBe(initialUrl);
     expect(await page.evaluate(() => (window as any).downloadFocusLosses)).toBe(
       0

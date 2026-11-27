@@ -1,3 +1,5 @@
+import { isIosWeb } from './ios-pwa-viewport';
+
 const DOWNLOAD_FRAME_LIFETIME_MS = 10 * 60_000;
 
 // Ответ media/object с downloadName уже имеет Content-Disposition: attachment:
@@ -22,6 +24,14 @@ export const initBrowserMediaDownloads = (): (() => void) => {
       !url.searchParams.get('downloadName')
     )
       return;
+
+    // Safari на iOS может игнорировать attachment в скрытом iframe.
+    // Оставляем переход по ссылке в рамках клика, сохраняя вкладку чата и звонок.
+    if (isIosWeb()) {
+      link.target = '_blank';
+      link.rel = 'noopener';
+      return;
+    }
 
     event.preventDefault();
     const frame = document.createElement('iframe');

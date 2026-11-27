@@ -92,8 +92,17 @@
                   </span>
                 </template>
                 <template v-else>
+                  <template v-if="isNativeFileDownloading(media)">
+                    <FileDownloadProgressText
+                      :percent="getFileIconPercent(media)"
+                    />
+                    <span>·</span>
+                    <span>{{ getFileFormattedSize(media) }}</span>
+                  </template>
                   <span
-                    v-if="getNativeFileDownloadState(media).phase === 'opening'"
+                    v-else-if="
+                      getNativeFileDownloadState(media).phase === 'opening'
+                    "
                     role="status"
                     >Открываем…</span
                   >
@@ -213,6 +222,7 @@ import { MediaType } from '@pksep/zod-shared-chat';
 import MessageStatusIcons from './MessageStatusIcons.vue';
 import FileIcon from '../UI/FileIcon.vue';
 import FileDownloadProgressButton from '../UI/FileDownloadProgressButton.vue';
+import FileDownloadProgressText from '../UI/FileDownloadProgressText.vue';
 import UploadProgressText from '../UI/UploadProgressText.vue';
 import PinIcon from '../UI/PinIcon.vue';
 import MessageEmojies from './MessageEmojies.vue';

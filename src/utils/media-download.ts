@@ -1,3 +1,5 @@
+import { isIosWeb } from './ios-pwa-viewport';
+
 const isLocalObjectUrl = (url: string): boolean =>
   /^(blob:|data:|file:\/\/)/i.test(url);
 
@@ -29,6 +31,10 @@ export const triggerBrowserDownload = (url: string, fileName: string): void => {
 
   link.href = buildMediaDownloadUrl(url, fileName);
   link.download = fileName || 'file';
+  if (isIosWeb()) {
+    link.target = '_blank';
+    link.rel = 'noopener';
+  }
   document.body.appendChild(link);
   link.click();
   link.remove();

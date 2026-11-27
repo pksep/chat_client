@@ -72,7 +72,13 @@ async function openFiles(page: Page, query = '') {
     };
   });
   await page.goto('/e2e/fixtures/file-download-cancel.html' + query);
-  await expect(page.getByTestId('CancelFile-Content')).toHaveCount(2);
+  await expect(
+    page.getByTestId(
+      query.includes('attachments')
+        ? 'CancelFile-FileItem1'
+        : 'CancelFile-Content'
+    )
+  ).toHaveCount(query.includes('attachments') ? 1 : 2);
 }
 
 const startDownload = (page: Page, name = 'Документ.docx') =>
@@ -85,6 +91,28 @@ const cancelButton = (page: Page, name = 'Документ.docx') =>
     exact: true
   });
 
+test('проценты скачивания видны и в списке вложений', async ({ page }) => {
+  await openFiles(page, '?attachments&theme=dark');
+  const row = page.getByTestId('CancelFile-FileItem1');
+  await row.click();
+  const progress = row.getByRole('progressbar', { name: 'Скачивание файла' });
+  await expect(progress).toHaveText('Скачиваем…');
+  await page.evaluate(() => {
+    const win = window as any;
+    win.emitFileProgress(win.fileAttempts[0].options.requestId, 54);
+  });
+  await expect(progress).toHaveText('54%');
+  await expect(row).toContainText('1.0 MB');
+  await page.evaluate(() => {
+    (window as any).fileAttempts[0].resolve({
+      path: 'C:/Downloads/test.docx',
+      fileName: 'Документ.docx',
+      mimeType: 'application/octet-stream'
+    });
+  });
+  await expect(progress).toHaveCount(0);
+});
+
 test('крестик внутри прогресса запрашивает подтверждение, отказ и Escape сохраняют загрузку', async ({
   page
 }, testInfo) => {
@@ -92,10 +120,18 @@ test('крестик внутри прогресса запрашивает по
   await startDownload(page);
   const button = cancelButton(page);
   await expect(button).toBeVisible();
+  const progress = page.getByRole('progressbar', { name: 'Скачивание файла' });
+  await expect(progress).toHaveText('Скачиваем…');
+  await expect(progress).not.toHaveAttribute('aria-valuenow');
   await page.evaluate(() => {
     const win = window as any;
     win.emitFileProgress(win.fileAttempts[0].options.requestId, 37);
   });
+  await expect(progress).toHaveText('37%');
+  await expect(progress).toHaveAttribute('aria-valuenow', '37');
+  await expect(page.getByTestId('CancelFile-Content').first()).toContainText(
+    '1.0 MB'
+  );
   const geometry = await button.evaluate(element => {
     const outer = element.getBoundingClientRect();
     const cross = element
@@ -128,9 +164,15 @@ test('крестик внутри прогресса запрашивает по
   await confirmation.getByRole('button', { name: 'Нет', exact: true }).click();
   await expect(confirmation).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).fileCancels.length)).toBe(0);
+  await page.evaluate(() => {
+    const win = window as any;
+    win.emitFileProgress(win.fileAttempts[0].options.requestId, 82);
+  });
+  await expect(progress).toHaveText('82%');
   await button.click();
   await confirmation.getByRole('button', { name: 'Да', exact: true }).click();
   await expect(button).toHaveCount(0);
+  await expect(progress).toHaveCount(0);
   expect(
     await page.evaluate(
       () => (window as any).fileDownloadFixture.state(0).phase

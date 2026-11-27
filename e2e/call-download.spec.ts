@@ -108,6 +108,9 @@ for (const mode of ['same-origin', 'cross-origin', 'programmatic'] as const) {
         { mode, port }
       );
       const initialUrl = page.url();
+      const ios = await page.evaluate(() =>
+        /iPhone|iPad|iPod/.test(navigator.userAgent)
+      );
       const downloadPromise = page.waitForEvent('download');
       void downloadPromise.catch(() => {});
       await page.locator('#download').click();
@@ -116,7 +119,14 @@ for (const mode of ['same-origin', 'cross-origin', 'programmatic'] as const) {
       expect(download.suggestedFilename()).toBe('call-attachment.dump');
       expect(await download.failure()).toBeNull();
       expect(page.url()).toBe(initialUrl);
-      expect(context.pages()).toHaveLength(1);
+      expect(context.pages()).toHaveLength(
+        ios && mode !== 'same-origin' ? 2 : 1
+      );
+      if (ios) {
+        await expect(
+          page.locator('iframe[title="Скачивание вложения"]')
+        ).toHaveCount(0);
+      }
       expect(
         await page.evaluate(() => ({
           unloads: (window as any).callDownloadUnloads,

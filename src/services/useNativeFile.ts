@@ -133,7 +133,8 @@ const ensureNativeProgressListener = async () => {
         ...currentState,
         phase: 'downloading',
         percent:
-          typeof payload.percent === 'number'
+          typeof payload.percent === 'number' &&
+          Number.isFinite(payload.percent)
             ? Math.max(0, Math.min(100, payload.percent))
             : currentState.percent
       };

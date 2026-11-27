@@ -113,6 +113,12 @@
               {{ getShortName(item.media.originName || 'Файл') }}
             </span>
             <span class="profile-attachments__file-properties">
+              <template v-if="isNativeFileDownloading(item.media)">
+                <FileDownloadProgressText
+                  :percent="getFileIconPercent(item.media)"
+                />
+                <span aria-hidden="true">·</span>
+              </template>
               <span
                 v-if="
                   item.media.size ||
@@ -329,6 +335,7 @@ import { useMessageMedia } from './Messages/composables/useMessageMedia';
 import ForwardModal from './Messages/ForwardModal.vue';
 import ConfirmModal from './UI/ConfirmModal.vue';
 import FileIcon from './UI/FileIcon.vue';
+import FileDownloadProgressText from './UI/FileDownloadProgressText.vue';
 import SkeletonBlock from './UI/SkeletonBlock.vue';
 import ForwardIcon from './UI/ForwardIcon.vue';
 import PlayIcon from './UI/PlayIcon.vue';
@@ -1290,7 +1297,9 @@ const shouldUseNativeFileState = (media: IMedia): boolean =>
 
 const isNativeFileDownloading = (media: IMedia): boolean =>
   shouldUseNativeFileState(media) &&
-  getNativeFileDownloadState(media).phase === 'downloading';
+  ['downloading', 'cancelling'].includes(
+    getNativeFileDownloadState(media).phase
+  );
 
 const isFileIconLoaded = (media: IMedia): boolean =>
   !media.isLoading && !isNativeFileDownloading(media);
