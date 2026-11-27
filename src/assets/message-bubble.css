@@ -1614,7 +1614,8 @@ div.message-content__file {
 .message-bubble-tail {
   position: absolute;
   transform: scaleX(-1);
-  left: -6px;
+  /* Перекрытие убирает просвет на дробных пикселях при масштабировании окна. */
+  left: -5px;
   bottom: 0;
   color: var(--message-background-color, var(--surface-overlay));
   pointer-events: none;
@@ -1623,7 +1624,7 @@ div.message-content__file {
 .message-bubble-tail--outgoing {
   transform: scaleX(1);
   left: auto;
-  right: -6px;
+  right: -5px;
   transform-origin: center;
 }
 
