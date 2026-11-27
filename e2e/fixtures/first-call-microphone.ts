@@ -108,7 +108,8 @@ Object.assign(window, {
         contexts: ((target as any).fixtureAudioContexts || []).map(
           (context: AudioContext) => ({
             state: context.state,
-            time: context.currentTime
+            time: context.currentTime,
+            clock: String(context.currentTime)
           })
         )
       };

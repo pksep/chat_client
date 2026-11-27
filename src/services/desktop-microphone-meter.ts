@@ -23,13 +23,7 @@ export function createDesktopMicrophoneMeter(options: {
   let lastSpeechAt = -Infinity;
   let resumePending = false;
   let lastResumeAt = -Infinity;
-  // Готовим анализатор при открытии звонка, чтобы первое включение микрофона
-  // не ждало запуска AudioContext и первого фонового кадра.
-  try {
-    context = new host.AudioContext({ latencyHint: 'interactive' });
-  } catch {
-    /* Повторим при появлении трека. */
-  }
+  let lastContextAttemptAt = -Infinity;
 
   const resume = (gesture = false) => {
     if (!context || !['suspended', 'interrupted'].includes(context.state))
@@ -39,11 +33,12 @@ export function createDesktopMicrophoneMeter(options: {
     if (!gesture && (resumePending || now - lastResumeAt < 1000)) return;
     resumePending = true;
     lastResumeAt = now;
-    void context
+    const resuming = context;
+    void resuming
       .resume()
       .catch(() => {})
       .finally(() => {
-        resumePending = false;
+        if (context === resuming) resumePending = false;
       });
   };
   const detach = () => {
@@ -56,15 +51,41 @@ export function createDesktopMicrophoneMeter(options: {
     track = null;
     ready.value = false;
   };
+  const ensureContext = (gesture = false) => {
+    if (
+      context &&
+      (context.state === 'closed' || !Number.isFinite(context.currentTime))
+    ) {
+      detach();
+      void context.close().catch(() => {});
+      context = null;
+      resumePending = false;
+      lastResumeAt = -Infinity;
+    }
+    if (context) return context;
+    const now = host.performance.now();
+    if (!gesture && now - lastContextAttemptAt < 1000) return null;
+    lastContextAttemptAt = now;
+    try {
+      // Раннее создание в скрытом окне WebKit ARM может дать running с NaN-часами.
+      context = new host.AudioContext({ latencyHint: 'interactive' });
+      if (Number.isFinite(context.currentTime)) return context;
+      void context.close().catch(() => {});
+      context = null;
+    } catch (error) {
+      console.warn('Не удалось создать локальный аудиоанализатор:', error);
+    }
+    return null;
+  };
   const sample = () => {
     frame = null;
     if (disposed || host.closed) return;
     const nextTrack = options.getTrack();
+    if (nextTrack?.readyState === 'live') ensureContext();
     if (nextTrack !== track) {
       detach();
-      if (nextTrack?.readyState === 'live') {
+      if (nextTrack?.readyState === 'live' && context) {
         try {
-          context ??= new host.AudioContext({ latencyHint: 'interactive' });
           analyser = context.createAnalyser();
           analyser.fftSize = 256;
           analyser.smoothingTimeConstant = 0;
@@ -130,6 +151,8 @@ export function createDesktopMicrophoneMeter(options: {
   );
   const wake = () => {
     if (disposed) return;
+    if (context || options.enabled.value || options.getTrack())
+      ensureContext(true);
     resume(true);
     if (options.enabled.value && frame === null) sample();
   };

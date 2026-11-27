@@ -23,6 +23,7 @@ function fixture(initialState = 'running', pendingResume = false) {
   let context: any;
   class Context {
     state = initialState;
+    currentTime = 0;
     destination = {};
     constructor() {
       context = this;
@@ -103,7 +104,9 @@ function fixture(initialState = 'running', pendingResume = false) {
     frames,
     streams,
     sinks,
-    context,
+    get context() {
+      return context;
+    },
     events,
     get resumeCalls() {
       return resumeCalls;
@@ -207,4 +210,19 @@ test('возврат фокуса будит прерванный анализа
   f.meter.dispose();
   expect(f.frames.size).toBe(0);
   expect(f.events.size).toBe(0);
+});
+
+test('WebKit running с NaN-часами пересоздаётся без перезапуска RTC-track', () => {
+  const f = fixture();
+  f.enabled.value = true;
+  const broken = f.context;
+  broken.currentTime = NaN;
+  f.gesture('click');
+  f.frame();
+  expect(f.context).not.toBe(broken);
+  expect(f.closed).toBe(1);
+  expect(f.meter.ready.value).toBe(true);
+  expect(f.meter.audioLevel.value).toBeCloseTo(0.1);
+  expect(f.streams).toHaveLength(2);
+  f.meter.dispose();
 });
