@@ -1181,19 +1181,6 @@ dialog.chat-folder-delete-modal .confirm__modal__title {
     font-size: 20px;
   }
 
-  .chat-folders-panel--with-rail {
-    grid-template-rows:
-      var(--menu-section-heading-height) auto calc(
-        var(--menu-section-search-height) + 20px
-      )
-      minmax(0, 1fr);
-  }
-
-  .chat-folders-panel__rail {
-    min-width: 0;
-    margin-top: 10px;
-  }
-
   .chat-folders-panel--mobile .chat-folders-panel__search {
     margin: 10px 0;
     padding: 0 16px;

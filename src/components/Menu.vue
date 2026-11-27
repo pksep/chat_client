@@ -11,7 +11,7 @@
     />
 
     <ChatFolderRail
-      v-if="!isCollapse && !isShareSelectionActive"
+      v-if="showFolderRail"
       :scope="
         activeSection === 'ai'
           ? 'ai'
@@ -525,11 +525,22 @@ const handleSendSharedFiles = async (): Promise<void> => {
   await sendSharedFiles(selectedTopics);
 };
 
+const showFolderRail = computed(
+  () =>
+    !isCollapse.value &&
+    !isShareSelectionActive.value &&
+    !(activeSection.value === 'ai'
+      ? isManagingAiFolders.value
+      : activeSection.value === 'clients'
+        ? isManagingClientFolders.value
+        : isManagingFolders.value)
+);
+
 const menuClasses = computed(() => [
   'menu',
   {
     'menu--collapse': isCollapse.value,
-    'menu--folders': !isCollapse.value && !isShareSelectionActive.value
+    'menu--folders': showFolderRail.value
   },
   props.class
 ]);

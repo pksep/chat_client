@@ -298,6 +298,7 @@ const { closeFolderManager, isManagingFolders: isManagingChatFolders } =
   useChatFolders();
 const { isManagingFolders: isManagingClientFolders } =
   useChatFolders('clients');
+const { isManagingFolders: isManagingAiFolders } = useChatFolders('ai');
 useManagerInboxSubscription();
 const { backgroundActivities, selectSession } = useAiAssistant();
 const { rawCallHistory } = useCallHistoryStore();
@@ -514,6 +515,7 @@ const handleSection = (section: ChatMenuSection): void => {
   const animate =
     !isManagingChatFolders.value &&
     !isManagingClientFolders.value &&
+    !isManagingAiFolders.value &&
     !route.value.id;
   closeFolderManager();
   if (section === 'calls') markCallsSeen(Date.now(), authUser.value?.id);

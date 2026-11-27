@@ -1,5 +1,26 @@
 import { expect, test, type Page } from '@playwright/test';
 
+test('менеджер папок в desktop-оболочке убирает боковую полосу и возвращает её при выходе', async ({
+  page,
+  isMobile
+}) => {
+  test.skip(isMobile, 'Desktop-оболочка');
+  await page.addInitScript(() =>
+    sessionStorage.setItem('menu-collapse', 'false')
+  );
+  await openFixture(page, { shell: true });
+  const rail = page.locator('.menu > .chat-folder-rail');
+  await expect(rail).toBeVisible();
+  await rail.getByTestId('ChatFolders-Rail-Manage').click();
+  await expect(page.getByTestId('ChatFolders-Panel')).toBeVisible();
+  await expect(rail).toHaveCount(0);
+  await expect(page.locator('.menu')).not.toHaveClass(/menu--folders/);
+  await page.locator('[data-testid$="MenuBottomNav-Chats"]:visible').click();
+  await expect(page.getByTestId('ChatFolders-Panel')).toHaveCount(0);
+  await expect(rail).toBeVisible();
+  await expect(page.locator('.menu')).toHaveClass(/menu--folders/);
+});
+
 const names = [
   'Важное',
   'Работа',
@@ -15,6 +36,7 @@ async function openFixture(
     dark?: boolean;
     empty?: boolean;
     many?: boolean;
+    shell?: boolean;
   } = {}
 ) {
   const scope = options.clients ? 'clients' : 'chats';
@@ -80,9 +102,9 @@ async function openFixture(
     })
   );
   await page.goto(
-    `/e2e/fixtures/mobile-folders.html?${options.clients ? 'clients&' : ''}${options.dark ? 'dark' : ''}`
+    `/e2e/fixtures/mobile-folders.html?${options.shell ? 'shell&' : ''}${options.clients ? 'clients&' : ''}${options.dark ? 'dark' : ''}`
   );
-  await expect(page.locator('.chats-toolbar__search')).toBeVisible({
+  await expect(page.locator('.chats-toolbar__search:visible')).toBeVisible({
     timeout: 30000
   });
   return saves;

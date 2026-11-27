@@ -91,6 +91,102 @@ test.afterEach(async ({ page }) => {
   expect(pageErrors.get(page) || []).toEqual([]);
 });
 
+for (const theme of ['light', 'dark']) {
+  test(`замечания 26 ноября: компактный статус и отступ профиля, ${theme}`, async ({
+    page
+  }, testInfo) => {
+    await page.goto('/e2e/fixtures/ios-pwa.html?kind=profile');
+    await page.evaluate(theme => {
+      document.documentElement.classList.toggle('theme-dark', theme === 'dark');
+      document.documentElement.classList.toggle(
+        'theme-light',
+        theme === 'light'
+      );
+    }, theme);
+    const identity = page.locator('.menu-profile__identity');
+    await expect(identity).toBeVisible();
+    const spacing = await page.evaluate(() => {
+      const header = document
+        .querySelector('.menu-profile__header')!
+        .getBoundingClientRect();
+      const row = document
+        .querySelector('.menu-profile__row_theme')!
+        .getBoundingClientRect();
+      return row.top - header.bottom;
+    });
+    expect(spacing).toBeCloseTo(10, 0);
+    await page
+      .getByRole('button', { name: 'Установить статус', exact: true })
+      .tap();
+    await page.getByRole('button', { name: 'Свой вариант', exact: true }).tap();
+    const editor = page.locator('.menu-profile__status-custom');
+    const box = (await editor.boundingBox())!;
+    expect(box.width).toBeLessThanOrEqual(320);
+    expect(box.x).toBeGreaterThanOrEqual(10);
+    expect(box.x + box.width).toBeLessThanOrEqual(380);
+    const inputGroup = editor.locator(
+      '.menu-profile__status-custom__input__group'
+    );
+    const expected = await inputGroup.evaluate(element => {
+      const probe = document.createElement('span');
+      probe.style.backgroundColor = 'var(--surface-input-secondary)';
+      element.append(probe);
+      const color = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return color;
+    });
+    await expect(inputGroup).toHaveCSS('background-color', expected);
+    await page
+      .getByRole('textbox', { name: 'Текст статуса' })
+      .fill('Проверка iPhone');
+    expect(
+      await inputGroup.evaluate(
+        element => element.scrollWidth <= element.clientWidth
+      )
+    ).toBe(true);
+    const field = (await page
+      .getByRole('textbox', { name: 'Текст статуса' })
+      .boundingBox())!;
+    const group = (await inputGroup.boundingBox())!;
+    expect(field.height).toBeLessThanOrEqual(group.height);
+    expect(field.x + field.width).toBeLessThanOrEqual(group.x + group.width);
+    await page.screenshot({
+      path: testInfo.outputPath('compact-profile-status.png')
+    });
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+  });
+}
+
+for (const scope of ['chats', 'clients', 'ai'] as const) {
+  test(`замечания 26 ноября: в управлении папками нет лишней панели, возврат снизу — ${scope}`, async ({
+    page
+  }) => {
+    await page.route('**/e2e/ios-api/users/me/access', route =>
+      route.fulfill({
+        json: {
+          userId: 'ios-pwa-test-user',
+          effective: { ai: true, client: true }
+        }
+      })
+    );
+    await page.goto('/e2e/fixtures/ios-pwa.html?kind=menu&access=all');
+    await page.locator('[data-testid$="MenuBottomNav-Chats"]').waitFor();
+    const suffix = { chats: 'Chats', clients: 'Clients', ai: 'AI' }[scope];
+    await page.locator(`[data-testid$="MenuBottomNav-${suffix}"]`).tap();
+    await page
+      .getByRole('button', { name: 'Открыть папки', exact: true })
+      .filter({ visible: true })
+      .tap();
+    const panel = page.locator('.chat-folders-panel:visible');
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('.chat-folder-rail')).toHaveCount(0);
+    await expect(panel.getByTestId('ChatFolders-Search')).toBeVisible();
+    await page.locator(`[data-testid$="MenuBottomNav-${suffix}"]`).tap();
+    await expect(panel).toHaveCount(0);
+  });
+}
+
 for (const metadata of ['', '&missing-call-meta']) {
   test(`замечания 29 октября: меню звонилки открывается касанием ${metadata}`, async ({
     page
@@ -289,9 +385,9 @@ test('PWA: уведомление появляется ниже системно
   await page.evaluate(async () => {
     document.documentElement.style.setProperty('--ios-safe-top', '47px');
     (window as any).setIosViewport(500, 180);
-    const path = '/src/composables/useNotifications.ts';
-    const { showErrorNotification } = await import(/* @vite-ignore */ path);
-    showErrorNotification('Обновите историю звонков и попробуйте снова.');
+    (window as any).showIosFixtureError(
+      'Обновите историю звонков и попробуйте снова.'
+    );
   });
   const notification = page.getByRole('alert');
   await expect(notification).toBeVisible();
@@ -1179,8 +1275,8 @@ for (const standalone of [true, false]) {
     const badge = nav.locator('.menu-bottom-nav__unread-count');
     await expect(badge).toBeVisible();
     const badgeBox = (await badge.boundingBox())!;
-    expect(badgeBox.height).toBe(18);
-    expect(badgeBox.width).toBe(18);
+    expect(badgeBox.height).toBe(20);
+    expect(badgeBox.width).toBe(20);
     const chats = page.locator('.mobile-list-container__section--chats');
     for (const index of [3, 17, 30]) {
       const row = chats.locator(

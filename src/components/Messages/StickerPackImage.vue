@@ -1,7 +1,7 @@
 <template>
   <span ref="host" class="sticker-pack-image" aria-hidden="true">
     <img
-      v-if="failed || !animated"
+      v-if="failed || !animated || !loaded"
       :src="
         buildStickerAssetUrl(
           !animated && !failed && thumbnail ? thumbnail.path : previewPath

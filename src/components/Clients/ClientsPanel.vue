@@ -22,23 +22,7 @@
       @close="closeFolderManager"
       @select-folder="selectFolder"
       @select-topic="openTopic"
-    >
-      <template v-if="isMobile" #folders>
-        <ClientsFolderRail
-          :loading="isFoldersLoading"
-          :folders="clientFolders"
-          :topics="folderTopics"
-          :selected-folder-id="activeFolderId"
-          is-managing
-          :selected-system-folder="mobileSystemFolder"
-          :system-folders="mobileSystemFolders"
-          :auth-user-id="getAuthUser()?.id"
-          @select="selectFolder"
-          @select-system="selectMobileSystemFolder"
-          @manage="closeFolderManager"
-        />
-      </template>
-    </ChatFoldersPanel>
+    />
     <ChatsToolbar
       v-else-if="!isCollapse"
       v-model="search"

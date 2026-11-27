@@ -3,7 +3,8 @@ import { createPinia } from 'pinia';
 import '../../src/assets/chat-container.css';
 import MobileList from '../../src/components/ContactList/MobileList.vue';
 import HeaderMenu from '../../src/components/Header/HeaderMenu.vue';
-import { authedUser } from '../../src/composables/useAuth';
+import { authedUser, saveChatAuthSession } from '../../src/composables/useAuth';
+import { setAuthToken } from '../../src/composables/useLogin';
 import { useChatMenu } from '../../src/composables/useChatMenu';
 import { refreshChatAccess } from '../../src/composables/useChatAccess';
 import { emojiDirective } from '../../src/directives/emoji';
@@ -22,6 +23,13 @@ authedUser.value = {
   initials: 'Проверка iPhone',
   avatarUrl: '/e2e/ios-api/avatar.svg'
 } as any;
+if (params.get('access') === 'all') {
+  setAuthToken('ios-pwa-fixture-token');
+  saveChatAuthSession(
+    { token: 'ios-pwa-fixture-token', user: authedUser.value },
+    false
+  );
+}
 setTopics(
   Array.from({ length: 60 }, (_, index) => ({
     id: `iphone-chat-${index}`,

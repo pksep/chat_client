@@ -1,6 +1,7 @@
 import { createApp, h, nextTick } from 'vue';
 import { createPinia } from 'pinia';
 import NotificationStack from '../../src/components/UI/NotificationStack.vue';
+import { showErrorNotification } from '../../src/composables/useNotifications';
 import '../../src/assets/chat-container.css';
 import type {
   IMessage,
@@ -9,6 +10,7 @@ import type {
 } from '../../src/components/interfaces/interfaces';
 
 const params = new URLSearchParams(location.search);
+Object.assign(window, { showIosFixtureError: showErrorNotification });
 if (params.has('native-platform')) {
   const { Capacitor } = await import('@capacitor/core');
   Capacitor.getPlatform = () => params.get('native-platform')!;

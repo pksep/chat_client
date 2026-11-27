@@ -64,13 +64,19 @@ setTopics(topics);
 const state = useChatFolders(clients ? 'clients' : 'chats');
 if (params.has('background')) void state.loadFolders();
 else await state.loadFolders();
-if (clients) {
+if (clients || params.has('shell')) {
   await refreshChatAccess();
+}
+if (clients) {
   await refreshManagerInquiries();
 }
+const ShellMenu = params.has('shell')
+  ? (await import('../../src/components/Menu.vue')).default
+  : null;
 
 createApp({
   setup() {
+    if (ShellMenu) return () => h(ShellMenu);
     const search = ref('');
     const { state: toolbar, setFilter } = useChatsToolbarState();
     const { selectedFilter: clientFilter } = useChatListSelection('clients');

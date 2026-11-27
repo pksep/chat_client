@@ -1,7 +1,7 @@
 <template>
   <span class="sticker-picker-image">
     <img
-      v-if="!renderAnimation || failed"
+      v-if="!renderAnimation || !loaded || failed"
       :src="buildStickerAssetUrl(sticker.previewPath)"
       :alt="sticker.label"
       width="60"

@@ -3,8 +3,7 @@
     :class="[
       'chat-folders-panel',
       {
-        'chat-folders-panel--mobile': props.mobile,
-        'chat-folders-panel--with-rail': props.mobile && !!$slots.folders
+        'chat-folders-panel--mobile': props.mobile
       }
     ]"
     data-testid="ChatFolders-Panel"
@@ -23,10 +22,6 @@
         <Icon :name="IconNameEnum.plus" viewBox="0 0 24 24" />
       </Button>
     </MenuSectionHeading>
-
-    <div v-if="props.mobile && $slots.folders" class="chat-folders-panel__rail">
-      <slot name="folders" />
-    </div>
 
     <MenuSearch
       v-model="folderSearch"

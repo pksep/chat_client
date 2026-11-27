@@ -14,6 +14,60 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
+test('стикеры и обложки видны статично, пока медленная анимация загружается', async ({
+  page
+}) => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  await page.route(/\/stickers\/assets\/.*\.tgs$/, async route => {
+    await gate;
+    await route.fallback();
+  });
+  try {
+    await page.goto('/e2e/fixtures/stickers.html?catalog=1');
+    await page.locator('.smile-button:visible').click();
+    await page.getByRole('button', { name: 'Стикеры', exact: true }).click();
+    const picker = page.getByRole('region', { name: 'Каталог стикеров' });
+    await picker
+      .getByRole('button', { name: 'Рыба Прометей', exact: true })
+      .click();
+    const sticker = picker.locator('[data-sticker-id="fishprometheus-0"]');
+    const preview = sticker.locator(
+      '.sticker-picker-image > img:not(.sticker-picker-image__animation)'
+    );
+    const cover = picker
+      .getByRole('button', { name: 'Рыба Прометей', exact: true })
+      .locator('.sticker-pack-image > img');
+    await expect(preview).toBeVisible();
+    await expect(cover).toBeVisible();
+    for (const image of [preview, cover]) {
+      await expect
+        .poll(() =>
+          image.evaluate(
+            (element: HTMLImageElement) =>
+              element.complete && element.naturalWidth > 0
+          )
+        )
+        .toBe(true);
+    }
+    release();
+    await expect(
+      sticker.locator('.sticker-picker-image__animation')
+    ).toHaveClass(/--loaded/);
+    await expect(preview).toHaveCount(0);
+    await expect(
+      picker
+        .getByRole('button', { name: 'Рыба Прометей', exact: true })
+        .locator('.sticker-pack-image__animation')
+    ).toHaveClass(/--loaded/);
+    await expect(cover).toHaveCount(0);
+  } finally {
+    release();
+  }
+});
+
 test('первый клик по вкладке сохраняется до появления асинхронного body пикера', async ({
   page
 }) => {

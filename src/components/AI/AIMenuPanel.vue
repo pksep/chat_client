@@ -11,22 +11,7 @@
     @close="closeFolderManager"
     @select-folder="selectAiFolder"
     @select-choice="handleFolderChoiceSelect"
-  >
-    <template v-if="isMobile" #folders>
-      <ChatFolderRail
-        mobile
-        scope="ai"
-        :folders="aiFolders"
-        :topics="[]"
-        :selected-folder-id="activeAiFolderId"
-        is-active
-        is-managing
-        all-label="Все"
-        @select="selectAiFolder"
-        @manage="closeFolderManager"
-      />
-    </template>
-  </ChatFoldersPanel>
+  />
   <section
     v-else
     :class="[
