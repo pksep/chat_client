@@ -1,3 +1,16 @@
+## [1.59.3](https://github.com/pksep/chat_client/compare/v1.59.2...v1.59.3) (2026-11-27)
+
+
+### Bug Fixes
+
+* address profile, folder and sticker complaints on iPhone and desktop [skip ci] ([0702223](https://github.com/pksep/chat_client/commit/07022237745e098153decbd9fd9d870628083b36))
+* keep small call windows readable with a two-by-two grid [skip ci] ([b0e4cfb](https://github.com/pksep/chat_client/commit/b0e4cfbd1bbc747b015bbdeb94dd30c0ef0e2ad2))
+* recreate WebKit microphone meters with invalid audio clocks [skip ci] ([3746704](https://github.com/pksep/chat_client/commit/3746704cc539b3045fe12368b6a5ab6382d4b313))
+* restore image downloads and show copy and download feedback [skip ci] ([0af1909](https://github.com/pksep/chat_client/commit/0af1909cfd853cdfb9d260f1486f9eb2d94db6fc))
+* restore Mac call microphone feedback and popup link copy [skip ci] ([4560f5b](https://github.com/pksep/chat_client/commit/4560f5b61dcfe994b55f4f2006c0b5676ea7c588))
+* resume Mac call audio meter on the completed click gesture [skip ci] ([7d1a987](https://github.com/pksep/chat_client/commit/7d1a987e9f6e96c4fe6a9f850d37e1e1757191f1))
+* show file download percentages and hand iOS downloads to Safari [skip ci] ([9bcbc0a](https://github.com/pksep/chat_client/commit/9bcbc0ad4d0f746bac0049461bd8a4175b3d0282))
+
 ## [1.59.2](https://github.com/pksep/chat_client/compare/v1.59.1...v1.59.2) (2026-11-26)
 
 
