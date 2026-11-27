@@ -94,6 +94,19 @@ watch(
 Object.assign(window, {
   firstMicFixture: {
     state: call.state,
+    diagnostics() {
+      return {
+        sourceState: audio?.state,
+        sourceTime: audio?.currentTime,
+        trackState: call.localMicrophoneTrack.value?.readyState,
+        trackEnabled: call.localMicrophoneTrack.value?.enabled,
+        microphoneEnabled: call.state.isMicActive,
+        measuredLevel: host?.context.microphoneLevel.value,
+        measuredSpeaking: host?.context.microphoneSpeaking.value,
+        focused: target.document.hasFocus(),
+        visibility: target.document.visibilityState
+      };
+    },
     async stop() {
       call.open.value = false;
       mounted.value = false;

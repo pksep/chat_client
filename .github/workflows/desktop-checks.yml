@@ -41,6 +41,10 @@ on:
         description: 'Optional Playwright test name pattern for UI checks'
         default: ''
         type: string
+      repeat_each:
+        description: 'Repeat every UI scenario without retrying failed checks'
+        default: '1'
+        type: string
       call_native_only:
         description: 'Check real call windows on Windows, macOS and Linux without publishing'
         default: false
@@ -264,7 +268,8 @@ jobs:
       - name: Verify dialog layout and pinned navigation
         env:
           UI_TEST_FILTER: ${{ inputs.test_filter }}
-        run: bunx playwright test e2e/creation-modal-desktop.spec.ts e2e/forward-modal-desktop.spec.ts e2e/macos-desktop.spec.ts e2e/macos-form-styles.spec.ts e2e/image-editor-desktop.spec.ts e2e/file-download-cancel.spec.ts e2e/pinned-messages-list.spec.ts e2e/call-link-clipboard.spec.ts e2e/first-call-microphone.spec.ts --project=webkit-desktop --workers=1 --reporter=line --trace=retain-on-failure --grep "$UI_TEST_FILTER" --output=test-results/dialog-layout
+          UI_REPEAT_EACH: ${{ inputs.repeat_each || '1' }}
+        run: bunx playwright test e2e/creation-modal-desktop.spec.ts e2e/forward-modal-desktop.spec.ts e2e/macos-desktop.spec.ts e2e/macos-form-styles.spec.ts e2e/image-editor-desktop.spec.ts e2e/file-download-cancel.spec.ts e2e/pinned-messages-list.spec.ts e2e/call-link-clipboard.spec.ts e2e/first-call-microphone.spec.ts --project=webkit-desktop --workers=1 --reporter=line --trace=retain-on-failure --grep "$UI_TEST_FILTER" --repeat-each="$UI_REPEAT_EACH" --retries=0 --output=test-results/dialog-layout
       - uses: actions/upload-artifact@v4
         if: always()
         with:

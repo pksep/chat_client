@@ -51,6 +51,23 @@ for (const separate of [false, true]) {
     );
     const target = opened ? await opened : page;
     await target.bringToFront();
+    // Поверхность звонка появляется раньше, чем стенд привяжет источник звука.
+    await expect
+      .poll(() => page.evaluate(() => !!(window as any).firstMicFixture))
+      .toBe(true);
+    const diagnostics = () =>
+      page.evaluate(() => (window as any).firstMicFixture.diagnostics());
+    const expectWave = async () => {
+      try {
+        await expect(wave).toHaveAttribute('opacity', '1');
+      } catch (error) {
+        await test.info().attach('microphone-state', {
+          body: JSON.stringify(await diagnostics(), null, 2),
+          contentType: 'application/json'
+        });
+        throw error;
+      }
+    };
     const enabled = target.getByRole('button', {
       name: 'Выключить микрофон',
       exact: true
@@ -61,7 +78,7 @@ for (const separate of [false, true]) {
         .getByRole('button', { name: 'Включить микрофон', exact: true })
         .click();
       await expect(enabled).toBeVisible();
-      await expect(wave).toHaveAttribute('opacity', '1');
+      await expectWave();
       expect(
         await page.evaluate(
           () => (window as any).firstMicFixture.state.audioLevel
@@ -79,7 +96,7 @@ for (const separate of [false, true]) {
         await blank.bringToFront();
         await target.bringToFront();
         await blank.close();
-        await expect(wave).toHaveAttribute('opacity', '1');
+        await expectWave();
       }
       await enabled.click();
       await expect(wave).toHaveCount(0);
