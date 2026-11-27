@@ -10,6 +10,7 @@ import { buildMediaObjectUrl } from '../../../utils/media-url';
 
 interface MessageMediaHelpers {
   getFullMediaPath: (media: IMedia, isThumb?: boolean) => string;
+  getDownloadMediaPath: (media: IMedia) => string;
   getSliderMediaPath: (media: IMedia) => string;
   isSliderContentUrl: (
     fileUrl: string,
@@ -124,6 +125,11 @@ export function useMessageMedia(): MessageMediaHelpers {
     return isThumb ? buildBrowserCompatibleImageUrl(sourceUrl) : sourceUrl;
   };
 
+  const getDownloadMediaPath = (media: IMedia): string =>
+    media.path && !isInquiryFile(media.path)
+      ? buildMediaObjectUrl(config.CHAT_PATH_TO_FILE_CDN, media.path)
+      : getFullMediaPath(media, false);
+
   const getSliderMediaPath = (media: IMedia): string => {
     const sliderPath = buildBrowserCompatibleImageUrl(
       getFullMediaPath(media, false)
@@ -204,6 +210,7 @@ export function useMessageMedia(): MessageMediaHelpers {
 
   return {
     getFullMediaPath,
+    getDownloadMediaPath,
     getSliderMediaPath,
     isSliderContentUrl,
     handleDragStart,

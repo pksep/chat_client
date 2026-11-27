@@ -1,19 +1,13 @@
 <template>
   <Teleport :to="target">
-    <PushNotification
+    <AppNotification
       v-for="(notification, index) in state.items"
       :key="notification.key"
       ref="notificationRefs"
       class="app-notification-stack__item"
       :style="getNotificationStyle(index)"
-      :title="notification.title"
-      :push-key="notification.key"
-      :description="notification.description"
-      :type="notification.type"
-      :timeout="0"
+      :notification="notification"
       :data-testid="props.dataTestid"
-      role="alert"
-      @click="handleNotificationClick($event, notification.key)"
       @pointerenter="pauseNotificationTimeout(notification.key)"
       @pointerleave="resumeNotificationTimeout(notification.key)"
       @close="closeNotification(notification.key)"
@@ -30,7 +24,7 @@ import {
   shallowRef,
   watch
 } from 'vue';
-import { PushNotification } from '@pksep/yui';
+import AppNotification from './AppNotification.vue';
 import { useNotifications } from '../../composables/useNotifications';
 
 const props = withDefaults(defineProps<{ dataTestid?: string }>(), {
@@ -43,18 +37,13 @@ const {
   resumeNotificationTimeout
 } = useNotifications();
 const target = shallowRef<HTMLElement | string>('body');
-const notificationRefs = ref<{ showPopover: () => void }[]>([]);
+const notificationRefs = ref<
+  { showPopover: () => void; element: HTMLElement | null }[]
+>([]);
+const heights = ref<number[]>([]);
+let resizeObserver: ResizeObserver | undefined;
 let dialogs: HTMLDialogElement[] = [];
 let observer: MutationObserver | undefined;
-
-const handleNotificationClick = (event: MouseEvent, key: number) => {
-  // Кнопка YUI скрывает native popover, но не всегда отправляет close.
-  if (
-    event.target instanceof Element &&
-    event.target.closest('.notification-yui-kit__exit')
-  )
-    closeNotification(key);
-};
 
 const trackDialog = (dialog: HTMLDialogElement) => {
   if (dialog.matches(':modal') && !dialogs.includes(dialog))
@@ -62,6 +51,11 @@ const trackDialog = (dialog: HTMLDialogElement) => {
 };
 
 onMounted(() => {
+  resizeObserver = new ResizeObserver(() => {
+    heights.value = notificationRefs.value.map(
+      item => item.element?.offsetHeight || 48
+    );
+  });
   document
     .querySelectorAll<HTMLDialogElement>('dialog:modal')
     .forEach(trackDialog);
@@ -98,19 +92,29 @@ onMounted(() => {
 });
 
 watch(
-  [target, () => state.items.length],
+  [target, () => state.items.map(item => item.key).join(',')],
   async () => {
     await nextTick();
     notificationRefs.value.forEach(notification => notification.showPopover());
+    resizeObserver?.disconnect();
+    notificationRefs.value.forEach(notification => {
+      if (notification.element) resizeObserver?.observe(notification.element);
+    });
+    heights.value = notificationRefs.value.map(
+      item => item.element?.offsetHeight || 48
+    );
   },
-  { flush: 'post' }
+  { flush: 'post', immediate: true }
 );
 
-onBeforeUnmount(() => observer?.disconnect());
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  resizeObserver?.disconnect();
+});
 
 const getNotificationStyle = (index: number) => ({
   position: 'fixed',
-  top: `calc(var(--notification-viewport-top, 0px) + ${16 + index * 88}px)`,
+  top: `calc(var(--notification-viewport-top, 0px) + ${16 + heights.value.slice(0, index).reduce((sum, height) => sum + height + 8, 0)}px)`,
   right: '16px',
   left: 'auto',
   bottom: 'auto',
@@ -118,23 +122,3 @@ const getNotificationStyle = (index: number) => ({
   zIndex: `${3000 - index}`
 });
 </script>
-
-<style scoped>
-.app-notification-stack__item {
-  width: min(305px, calc(100vw - 32px));
-  min-height: 77px;
-  box-sizing: border-box;
-  box-shadow: 0 4px 9.8px rgb(0 0 0 / 5%);
-  pointer-events: auto;
-}
-
-.app-notification-stack__item.push-notification-yui-kit_info {
-  --text-brand: var(--action-primary-bg);
-}
-
-.app-notification-stack__item :deep(.notification-yui-kit) {
-  box-shadow: none;
-  -webkit-user-select: text;
-  user-select: text;
-}
-</style>

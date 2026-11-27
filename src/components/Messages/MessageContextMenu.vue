@@ -410,7 +410,8 @@ import {
   showNativeFileInFolder
 } from '../../services/useNativeFile';
 import { useMessageMedia } from './composables/useMessageMedia';
-import { showErrorNotification } from '../../composables/useNotifications';
+import { copyWithFeedback } from '../../utils/clipboard-feedback';
+import { copyTextToClipboard } from '../../utils/copyTextToClipboard';
 import { MediaType } from '@pksep/zod-shared-chat';
 import PinIcon from '../UI/PinIcon.vue';
 import UnpinIcon from '../UI/UnpinIcon.vue';
@@ -1332,15 +1333,26 @@ const handleCopyMessage = async () => {
   const selectedText = selectedReplyQuote.value.copyText;
 
   if (selectedText) {
-    await navigator.clipboard.writeText(selectedText);
-    handleClosePopover();
+    if (
+      await copyWithFeedback(
+        () => copyTextToClipboard(selectedText),
+        'Текст скопирован'
+      )
+    )
+      handleClosePopover();
     return;
   }
 
   const textToCopy = stripHtml(props.message);
 
   if (textToCopy) {
-    await navigator.clipboard.writeText(textToCopy);
+    if (
+      !(await copyWithFeedback(
+        () => copyTextToClipboard(textToCopy),
+        'Текст скопирован'
+      ))
+    )
+      return;
   }
 
   handleClosePopover();
@@ -1357,17 +1369,20 @@ const handleCopyContent = async () => {
     (media?.type === MediaType.Image
       ? getFullMediaPath(media, false)
       : undefined);
-  try {
-    await writeChatClipboardContent(
-      content,
-      source,
-      preview,
-      copyPreparation.value || undefined
-    );
+  const copied = await copyWithFeedback(
+    () =>
+      writeChatClipboardContent(
+        content,
+        source,
+        preview,
+        copyPreparation.value || undefined
+      ),
+    'Вложение скопировано'
+  );
+  if (copied) {
     handleClosePopover();
-  } catch {
+  } else {
     copyUnavailable.value = true;
-    showErrorNotification('Не удалось скопировать вложение');
   }
 };
 

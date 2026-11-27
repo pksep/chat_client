@@ -1,8 +1,17 @@
+diff --git a/node_modules/@pksep/yui/.bun-tag-6fa63ce5c18bebd2 b/.bun-tag-6fa63ce5c18bebd2
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/node_modules/@pksep/yui/.bun-tag-7b9e57f2dd6466b1 b/.bun-tag-7b9e57f2dd6466b1
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@pksep/yui/.bun-tag-d819b02e474c0b30 b/.bun-tag-d819b02e474c0b30
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@pksep/yui/.bun-tag-f160bfd1f0cfa405 b/.bun-tag-f160bfd1f0cfa405
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/dist/sep-yui.mjs b/dist/sep-yui.mjs
-index 237a4b0119319a49fdfc364e3d967fd661d221ea..0999b74adfef36a63bfa11ac69f722b54762e9ec 100644
+index 237a4b0119319a49fdfc364e3d967fd661d221ea..0bf07c9205f60b5569c4f636fcac3c245114c875 100644
 --- a/dist/sep-yui.mjs
 +++ b/dist/sep-yui.mjs
 @@ -10826,7 +10826,7 @@ const aAg = ["data-testid"], dAg = ["data-testid"], cAg = ["open", "data-testid"
@@ -45,3 +54,83 @@ index 237a4b0119319a49fdfc364e3d967fd661d221ea..0999b74adfef36a63bfa11ac69f722b5
      }, T = () => {
        V && (window.removeEventListener("scroll", u, !0), window.removeEventListener("resize", u), V = !1);
      }, L = () => {
+@@ -79510,6 +79510,11 @@ const S$g = () => {
+     });
+     return;
+   }
++  if (t && e && IB(e) && t.downloadBase64) {
++    const source = I || await (await fetch(e)).blob();
++    await t.downloadBase64({ base64Data: await GF(source), fileName: g, mimeType: source.type || void 0 });
++    return;
++  }
+   if (e) {
+     const s = document.createElement("a");
+     s.href = e, s.download = g, s.target = "_blank", s.rel = "noopener", document.body.appendChild(s), s.click(), document.body.removeChild(s);
+@@ -81116,14 +81121,17 @@ const ngI = (C) => {
+         style: wg,
+         imageStyle: Qg
+       });
+-    }, hs = () => {
+-      var q;
+-      (q = i.file) != null && q.path && L$g(
+-        i.file.path,
+-        i.file.name,
+-        i.file.file,
+-        i.file.downloadPath
+-      );
++    }, chatDownloadPending = K(false), hs = async () => {
++      if (!i.file?.path || chatDownloadPending.value) return;
++      chatDownloadPending.value = true;
++      const feedback = window.__CHAT_NATIVE_FILE__?.beginDownload?.();
++      try {
++        await L$g(i.file.path, i.file.name, i.file.file, i.file.downloadPath);
++        feedback?.success();
++      } catch (error) {
++        feedback?.error(error);
++        console.error("Failed to download media", error);
++      } finally { chatDownloadPending.value = false; }
+     }, gA = (q, wg = !1) => {
+       var _g;
+       const Qg = q.target;
+@@ -81427,12 +81435,19 @@ const ngI = (C) => {
+         const yI = bI(i.file);
+         return yI && typeof document.execCommand == "function" && Vo(yI) ? !0 : (console.error("Clipboard write failed", _g), !1);
+       }
+-    }, td = () => {
++    }, chatCopyPending = K(false), td = () => {
++      if (chatCopyPending.value) return;
++      chatCopyPending.value = true;
++      const feedback = window.__CHAT_NATIVE_FILE__?.beginCopy?.();
+       Cm().then((q) => {
+-        q && e("file-copied");
++        if (q) {
++          e("file-copied");
++          feedback?.success();
++        } else feedback?.error();
+       }).catch((q) => {
++        feedback?.error(q);
+         console.error("Failed to copy media to clipboard", q);
+-      });
++      }).finally(() => { chatCopyPending.value = false; });
+     }, id = (q) => {
+       var _g;
+       if (!((q.ctrlKey || q.metaKey) && (q.code === "KeyC" || q.key.toLowerCase() === "c")) || it(q.target)) return;
+@@ -81788,6 +81803,9 @@ const ngI = (C) => {
+                     $("button", {
+                       class: "slider-modal__side-button",
+                       disabled: mI.value,
++                      "aria-disabled": chatDownloadPending.value,
++                      "aria-label": "Скачать файл",
++                      "aria-busy": chatDownloadPending.value,
+                       onClick: hs
+                     }, [
+                       mg(Ug, {
+@@ -81801,6 +81819,8 @@ const ngI = (C) => {
+                       class: "slider-modal__side-button",
+                       "aria-label": We.value,
+                       disabled: WC.value,
++                      "aria-disabled": chatCopyPending.value,
++                      "aria-busy": chatCopyPending.value,
+                       onClick: td
+                     }, [
+                       mg(Ug, {

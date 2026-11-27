@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import type { NativeFilePlugin } from './native-file-bridge';
 import { buildMediaDownloadUrl } from '../utils/media-download';
 import { deferWebUpdateReload } from './web-update-activity';
+import { startOperationNotification } from '../composables/useNotifications';
 
 type FileOptions = Parameters<NativeFilePlugin['getFileStatus']>[0];
 type FileStatus = Awaited<ReturnType<NativeFilePlugin['getFileStatus']>>;
@@ -18,7 +19,8 @@ const normalizeFileOptions = <T extends FileOptions>(options: T): T => {
 
 const invokeFileAction = async (
   command: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  notifyError = true
 ): Promise<FileStatus> => {
   const finish = deferWebUpdateReload();
   try {
@@ -26,10 +28,12 @@ const invokeFileAction = async (
   } catch (error) {
     if ((error as { code?: string })?.code === 'FILE_DOWNLOAD_CANCELLED')
       throw error;
-    const { showErrorNotification } = await import(
-      '../composables/useNotifications'
-    );
-    showErrorNotification(error);
+    if (notifyError) {
+      const { showErrorNotification } = await import(
+        '../composables/useNotifications'
+      );
+      showErrorNotification(error);
+    }
     throw error;
   } finally {
     finish();
@@ -46,12 +50,16 @@ export const TauriFile = {
   downloadFileToDownloads: (
     options: Parameters<NativeFilePlugin['downloadFileToDownloads']>[0]
   ) =>
-    invokeFileAction('desktop_file_download', {
-      options: {
-        ...normalizeFileOptions(options),
-        url: buildMediaDownloadUrl(options.url, options.fileName)
-      }
-    }),
+    invokeFileAction(
+      'desktop_file_download',
+      {
+        options: {
+          ...normalizeFileOptions(options),
+          url: buildMediaDownloadUrl(options.url, options.fileName)
+        }
+      },
+      false
+    ),
   openDownloadedFile: (
     options: FileOptions
   ): ReturnType<NativeFilePlugin['openDownloadedFile']> =>
@@ -59,23 +67,29 @@ export const TauriFile = {
       options: normalizeFileOptions(options)
     }),
   async downloadFile(options: FileOptions) {
-    const result = await TauriFile.downloadFileToDownloads({
-      ...options,
-      requestId: options.url
-    });
-    return { downloadId: 0, fileName: result.fileName };
+    return (await import('./useNativeFile')).downloadNativeFileFromUrl(options);
   },
   async downloadBase64(
     options: Parameters<NativeFilePlugin['downloadBase64']>[0]
   ) {
-    const result = await invokeFileAction('desktop_file_save', { options });
-    return { uri: result.path, fileName: result.fileName };
+    const feedback = startOperationNotification(
+      `Сохраняем ${options.fileName || 'файл'}…`
+    );
+    try {
+      const result = await invokeFileAction(
+        'desktop_file_save',
+        { options },
+        false
+      );
+      feedback.success(`Файл скачан: ${result.fileName}`);
+      return { uri: result.path, fileName: result.fileName };
+    } catch (error) {
+      feedback.error(error);
+      throw error;
+    }
   },
   async openFile(options: FileOptions) {
-    await TauriFile.downloadFileToDownloads({
-      ...options,
-      requestId: options.url
-    });
+    await TauriFile.downloadFile(options);
     return TauriFile.openDownloadedFile(options);
   },
   async addListener(

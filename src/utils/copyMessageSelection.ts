@@ -1,4 +1,6 @@
 import { sanitizeMessageHtml } from './sanitizeMessageHtml';
+import { showNotification } from '../composables/useNotifications';
+import { MessageTypeEnum } from '@pksep/yui';
 
 export const copyMessageSelection = (event: ClipboardEvent): void => {
   const root = event.currentTarget;
@@ -45,4 +47,9 @@ export const copyMessageSelection = (event: ClipboardEvent): void => {
     sanitizeMessageHtml(container.innerHTML)
   );
   event.preventDefault();
+  showNotification({
+    title: '',
+    description: 'Текст скопирован',
+    type: MessageTypeEnum.success
+  });
 };

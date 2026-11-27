@@ -4,6 +4,12 @@ import {
   type PluginListenerHandle
 } from '@capacitor/core';
 import { isTauri } from '@tauri-apps/api/core';
+import { startOperationNotification } from '../composables/useNotifications';
+
+interface SliderOperationFeedback {
+  success: () => void;
+  error: (error?: unknown) => void;
+}
 
 interface NativeFileDownloadProgress {
   requestId: string;
@@ -93,6 +99,8 @@ export interface NativeFilePlugin {
 declare global {
   interface Window {
     __CHAT_NATIVE_FILE__?: {
+      beginCopy?: () => SliderOperationFeedback;
+      beginDownload?: () => SliderOperationFeedback | null;
       isAndroidNativePlatform: () => boolean;
       downloadFile: (options: {
         url: string;
@@ -119,6 +127,22 @@ export const registerNativeFileBridge = () => {
   }
 
   window.__CHAT_NATIVE_FILE__ = {
+    beginCopy: () => {
+      const feedback = startOperationNotification('Копируем…');
+      return {
+        success: () => feedback.success('Скопировано'),
+        error: () => feedback.error('Не удалось скопировать вложение')
+      };
+    },
+    beginDownload: () => {
+      // В Tauri основной загрузчик сам показывает проценты и итог сохранения.
+      if (isTauri()) return null;
+      const feedback = startOperationNotification('Начинаем скачивание…');
+      return {
+        success: () => feedback.success('Скачивание начато'),
+        error: () => feedback.error('Не удалось скачать файл')
+      };
+    },
     // UI-kit использует это историческое имя для проверки нативных скачиваний.
     isAndroidNativePlatform: () => isAndroidNativePlatform() || isTauri(),
     downloadFile: async options =>

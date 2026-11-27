@@ -1484,6 +1484,10 @@ div.message-content__file {
 }
 
 .message-media__caption {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 10px;
+  row-gap: 2px;
   max-width: 100%;
   align-items: end;
   width: 100%;
@@ -1493,7 +1497,9 @@ div.message-content__file {
   cursor: text;
 }
 
-.message-media__caption-text {
+.message-media__caption .message-media__caption-text {
+  display: block;
+  flex: 1 1 auto;
   min-width: 0;
   line-height: 17px;
   font-size: 14px;
@@ -1514,6 +1520,9 @@ div.message-content__file {
 }
 
 .message-media__caption-time {
+  float: none;
+  flex: 0 0 auto;
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1578,6 +1587,7 @@ div.message-content__file {
 }
 
 .message-media__caption .message-footer-row {
+  flex: 1 0 100%;
   margin-top: 4px;
 }
 

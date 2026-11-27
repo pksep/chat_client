@@ -19,6 +19,14 @@ const openDownloadedFile = mock(async (_options: Record<string, unknown>) => ({
   mimeType: 'application/pdf'
 }));
 const recordTelemetryEvent = mock((_event: any) => {});
+mock.module('../src/composables/useNotifications', () => ({
+  startOperationNotification: () => ({
+    progress() {},
+    success() {},
+    error() {},
+    close() {}
+  })
+}));
 mock.module('../src/services/useTelemetry', () => ({
   createTelemetryTraceId: () => 'file-open-test',
   recordTelemetryEvent

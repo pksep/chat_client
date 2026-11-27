@@ -10,6 +10,7 @@ interface INotificationPayload {
   description: unknown;
   type?: MessageTypeEnum;
   diagnostics?: NotificationDiagnostics;
+  busy?: boolean;
 }
 
 export interface INotificationItem extends INotificationPayload {
@@ -64,7 +65,8 @@ const pauseNotificationTimeout = (key: number): void => {
 };
 
 const resumeNotificationTimeout = (key: number): void => {
-  if (!state.items.some(item => item.key === key)) return;
+  const item = state.items.find(item => item.key === key);
+  if (!item || item.busy) return;
 
   pauseNotificationTimeout(key);
   closeNotificationTimeouts.set(
@@ -88,13 +90,15 @@ export const showNotification = ({
   title,
   description,
   type = MessageTypeEnum.error,
-  diagnostics
+  diagnostics,
+  busy = false
 }: INotificationPayload) => {
   const notification: INotificationItem = {
     key: nextNotificationKey,
     title,
     description: formatNotificationDescription(description),
-    type
+    type,
+    busy
   };
 
   nextNotificationKey += 1;
@@ -111,6 +115,61 @@ export const showNotification = ({
       stack: new Error().stack
     });
   }
+  return notification.key;
+};
+
+export const updateNotification = (
+  key: number,
+  payload: INotificationPayload
+): void => {
+  const item = state.items.find(item => item.key === key);
+  if (!item) return;
+  pauseNotificationTimeout(key);
+  Object.assign(item, payload, {
+    description: formatNotificationDescription(payload.description),
+    type: payload.type ?? item.type,
+    busy: payload.busy ?? false
+  });
+  resumeNotificationTimeout(key);
+  if (payload.type === MessageTypeEnum.error)
+    recordErrorNotification({
+      title: payload.title,
+      description: payload.description,
+      error: payload.diagnostics?.error ?? payload.description,
+      source: payload.diagnostics?.source,
+      stack: new Error().stack
+    });
+};
+
+export const startOperationNotification = (message: string) => {
+  const key = showNotification({
+    title: '',
+    description: message,
+    type: MessageTypeEnum.info,
+    busy: true
+  });
+  return {
+    progress: (description: string) =>
+      updateNotification(key, {
+        title: '',
+        description,
+        type: MessageTypeEnum.info,
+        busy: true
+      }),
+    success: (description: string) =>
+      updateNotification(key, {
+        title: '',
+        description,
+        type: MessageTypeEnum.success
+      }),
+    error: (description: unknown) =>
+      updateNotification(key, {
+        title: 'Ошибка',
+        description,
+        type: MessageTypeEnum.error
+      }),
+    close: () => closeNotification(key)
+  };
 };
 
 export const showErrorNotification = (

@@ -163,6 +163,7 @@ import {
 } from '../../composables/useContextMenu';
 import type { IMessageBubbleProps } from './interface/interface';
 import { SliderModal } from '@pksep/yui';
+import { downloadBrowserFilesWithFeedback } from '../../services/browser-download-feedback';
 import { createLiveSliderItem } from '../../utils/live-slider-item';
 import { MediaType } from '@pksep/zod-shared-chat';
 import { IMedia } from '../interfaces/interfaces';
@@ -198,11 +199,7 @@ import {
 } from '../../composables/useBackButton';
 import { setReactionMessage } from '../../services/useChat';
 import { parseCallTopicDefaultMessageEx } from '../../utils/call-topic';
-import {
-  buildMediaDownloadUrl,
-  triggerBrowserDownload,
-  triggerBrowserDownloads
-} from '../../utils/media-download';
+import { buildMediaDownloadUrl } from '../../utils/media-download';
 import { VIDEO_FALLBACK_THUMBNAIL } from '../../utils/mediaPreview';
 import {
   ensureMediaObjectUrl,
@@ -247,6 +244,7 @@ const messageArticlesStyles = computed(() => ({
 
 const {
   getFullMediaPath,
+  getDownloadMediaPath,
   getRemoteThumbnailUrl,
   getSliderMediaPath,
   isSliderContentUrl
@@ -362,7 +360,7 @@ const buildSliderItem = (
   createLiveSliderItem(() => {
     const media =
       props.media?.find(item => item.id === initialMedia.id) || initialMedia;
-    const originalPath = getFullMediaPath(media, false);
+    const originalPath = getDownloadMediaPath(media);
     const sliderPath = getSliderMediaPath(media);
     const fallbackPath =
       getRemoteThumbnailUrl(media) ||
@@ -393,7 +391,7 @@ const downloadMediaFile = async (media: IMedia) => {
 
   const fallbackUrl = getFullMediaPath(media, false);
   const fileName = media.originName || 'file';
-  triggerBrowserDownload(fallbackUrl, fileName);
+  await downloadBrowserFilesWithFeedback([{ url: fallbackUrl, fileName }]);
 };
 
 const prepareInquiryMedias = async (medias: IMedia[]): Promise<boolean> => {
@@ -422,7 +420,7 @@ const handleDownloadMessageMedia = async (mediaId?: string): Promise<void> => {
   if (!(await prepareInquiryMedias(mediaFiles))) return;
 
   if (!mediaFiles.some(isNativeFileMediaSupported)) {
-    await triggerBrowserDownloads(
+    await downloadBrowserFilesWithFeedback(
       mediaFiles.map(media => ({
         url: getFullMediaPath(media, false),
         fileName: media.originName || 'file'

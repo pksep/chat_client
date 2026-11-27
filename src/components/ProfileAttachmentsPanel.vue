@@ -271,6 +271,7 @@
 
 <script setup lang="ts">
 import { Capacitor } from '@capacitor/core';
+import { downloadBrowserFilesWithFeedback } from '../services/browser-download-feedback';
 import { MediaType } from '@pksep/zod-shared-chat';
 import {
   Button,
@@ -438,6 +439,7 @@ const { addHandler: addBackHandler, removeHandler: removeBackHandler } =
   useBackButton();
 const {
   getFullMediaPath,
+  getDownloadMediaPath,
   getRemoteThumbnailUrl,
   getSliderMediaPath,
   isSliderContentUrl,
@@ -1364,7 +1366,7 @@ const buildSliderItem = (initialMedia: IMedia) =>
       cachedMedia?.ex?.mediaProcessing?.status === 'ready'
         ? cachedMedia
         : attachment?.media || initialMedia;
-    const originalPath = getFullMediaPath(media, false);
+    const originalPath = getDownloadMediaPath(media);
     const sliderPath = getSliderMediaPath(media);
     const fallbackPath =
       getRemoteThumbnailUrl(media) ||
@@ -1395,7 +1397,7 @@ const downloadMediaFile = async (media: IMedia): Promise<void> => {
 
   const fallbackUrl = getFullMediaPath(media, false);
   const fileName = media.originName || 'file';
-  triggerBrowserDownload(fallbackUrl, fileName);
+  await downloadBrowserFilesWithFeedback([{ url: fallbackUrl, fileName }]);
 };
 
 const openSlider = async (

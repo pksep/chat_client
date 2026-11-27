@@ -7,6 +7,11 @@ import { isAndroidNativePlatform, NativeFile } from './native-file-bridge';
 import { getConfig } from './useConfig';
 import { buildMediaObjectUrl } from '../utils/media-url';
 import { createTelemetryTraceId, recordTelemetryEvent } from './useTelemetry';
+import {
+  getNativeDownloadSize,
+  nativeFileUrlKey
+} from '../utils/native-file-options';
+import { startOperationNotification } from '../composables/useNotifications';
 
 type NativeDownloadPhase =
   | 'unknown'
@@ -32,7 +37,14 @@ const nativeFileDownloadStates = reactive<
 const pendingNativeDownloads = new Map<string, Promise<boolean>>();
 const nativeDownloadAttempts = new Map<
   string,
-  { key: string; requestId: string; cancelled: boolean; started: boolean }
+  {
+    key: string;
+    requestId: string;
+    cancelled: boolean;
+    started: boolean;
+    feedback: ReturnType<typeof startOperationNotification>;
+    fileName: string;
+  }
 >();
 const pendingNativeChecks = new Map<string, Promise<boolean>>();
 const pendingNativeOpens = new Map<string, Promise<boolean>>();
@@ -91,7 +103,9 @@ const guessMimeType = (media: IMedia) => {
 };
 
 const getNativeFileKey = (media: IMedia) =>
-  (isTauri() && media.path ? buildAbsoluteFileUrl(media.path) : media.path) ||
+  (isTauri() && media.path
+    ? nativeFileUrlKey(buildAbsoluteFileUrl(media.path))
+    : media.path) ||
   media.id ||
   media.originName ||
   '';
@@ -100,7 +114,7 @@ const getNativeFileOptions = (media: IMedia) => ({
   url: buildAbsoluteFileUrl(media.path),
   fileName: media.originName || 'file',
   mimeType: guessMimeType(media),
-  size: media.size
+  size: getNativeDownloadSize(media)
 });
 
 const ensureNativeProgressListener = async () => {
@@ -138,6 +152,10 @@ const ensureNativeProgressListener = async () => {
             ? Math.max(0, Math.min(100, payload.percent))
             : currentState.percent
       };
+      const percent = nativeFileDownloadStates[key].percent;
+      attempt?.feedback.progress(
+        `Скачиваем ${attempt.fileName}${percent === null ? '…' : `: ${Math.floor(percent)}%`}`
+      );
     })
     .catch(error => {
       console.warn('Failed to listen native file download progress:', error);
@@ -256,7 +274,11 @@ export const downloadNativeFileToDownloads = async (
     key,
     requestId: isTauri() ? crypto.randomUUID() : key,
     cancelled: false,
-    started: false
+    started: false,
+    fileName: media.originName || 'файл',
+    feedback: startOperationNotification(
+      `Скачиваем ${media.originName || 'файл'}…`
+    )
   };
   nativeDownloadAttempts.set(key, attempt);
 
@@ -264,6 +286,7 @@ export const downloadNativeFileToDownloads = async (
     try {
       await ensureNativeProgressListener();
       if (attempt.cancelled) {
+        attempt.feedback.close();
         nativeFileDownloadStates[key] = {
           phase: 'not-downloaded',
           percent: null
@@ -284,12 +307,15 @@ export const downloadNativeFileToDownloads = async (
         mimeType: downloadedFile.mimeType
       };
       nativeStatusCheckedAt.set(key, Date.now());
+      attempt.feedback.success(`Файл скачан: ${downloadedFile.fileName}`);
 
       return true;
     } catch (error) {
       const cancelled =
         (error as { code?: string })?.code === 'FILE_DOWNLOAD_CANCELLED';
       if (!cancelled) console.warn('Failed to download native file:', error);
+      if (cancelled) attempt.feedback.close();
+      else attempt.feedback.error(error);
       nativeFileDownloadStates[key] = {
         phase: cancelled ? 'not-downloaded' : 'error',
         percent: null
@@ -495,6 +521,34 @@ export const downloadNativeFile = async (media: IMedia): Promise<boolean> => {
   }
 
   return true;
+};
+
+export const downloadNativeFileFromUrl = async (options: {
+  url: string;
+  fileName?: string;
+  mimeType?: string;
+  size?: number;
+}): Promise<{ downloadId: number; fileName: string }> => {
+  const media = {
+    id: nativeFileUrlKey(options.url),
+    path: options.url,
+    originName: options.fileName || 'file',
+    size: options.size
+  } as IMedia;
+  if (!(await downloadNativeFileToDownloads(media))) {
+    const cancelled =
+      getNativeFileDownloadState(media).phase === 'not-downloaded';
+    throw Object.assign(
+      new Error(cancelled ? 'Скачивание отменено' : 'Не удалось скачать файл'),
+      {
+        code: cancelled ? 'FILE_DOWNLOAD_CANCELLED' : 'FILE_DOWNLOAD_FAILED'
+      }
+    );
+  }
+  return {
+    downloadId: 0,
+    fileName: getNativeFileDownloadState(media).fileName || media.originName
+  };
 };
 
 export const canShowNativeFileInFolder = (media?: IMedia | null): boolean =>

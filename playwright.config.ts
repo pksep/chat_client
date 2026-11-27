@@ -49,6 +49,7 @@ export default defineConfig({
         'compact-call-layout.spec.ts',
         'call-link-clipboard.spec.ts',
         'first-call-microphone.spec.ts',
+        'file-operation-feedback.spec.ts',
         'pinned-messages-list.spec.ts',
         'desktop-shell.spec.ts',
         'file-download-cancel.spec.ts',
